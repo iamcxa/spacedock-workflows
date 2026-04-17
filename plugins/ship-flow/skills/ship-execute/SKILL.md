@@ -269,6 +269,29 @@ Log result to `## Execution Log`.
 
 ---
 
+## Token Tracking
+
+After every Agent dispatch (implementation or review), read the `<usage>` metadata from the result:
+
+```
+total_tokens → estimate cost using:
+  opus:   input $5/MTok + output $25/MTok
+  sonnet: input $3/MTok + output $15/MTok
+  haiku:  input $0.25/MTok + output $1.25/MTok
+```
+
+Accumulate into entity frontmatter `token_actual` (running total in USD).
+
+Add a column to `## Execution Log`:
+
+```
+| Task | Model | Status | Files | Retries | Review | Cost |
+|------|-------|--------|-------|---------|--------|------|
+| 1    | haiku | done   | ...   | 0       | approved | $0.03 |
+```
+
+**Budget check**: After each dispatch, if `token_actual > token_budget × 2` → pause execution, log warning in `## Execution Log`, notify captain. Do NOT silently continue.
+
 ## Circuit Breakers
 
 - Per-task implementation retry: max 3 attempts
@@ -277,4 +300,5 @@ Log result to `## Execution Log`.
 - NEEDS_CONTEXT rounds: max 2, then reclassify as BLOCKED
 - Total blocked tasks: > 50% of tasks blocked → escalate to captain
 - Wave integrity: dependency violation → return to plan, never silent reorder
+- Token overrun: token_actual > token_budget × 2 → pause, ask captain
 - Token tracking: log each agent dispatch cost to entity frontmatter `token_actual`

@@ -273,7 +273,33 @@ token_actual: {total}
 
 Note: Do NOT set `status: done` or `completed:` or `verdict:` — the FO advances to `done` (terminal) after this stage completes, which triggers the merge hook.
 
-Update ROADMAP.md: move entity from "In-Flight" to "Shipped".
+### ROADMAP.md Update
+
+Read `ROADMAP.md` from project root. If it exists:
+
+1. Find the entity in `## In-Flight` table (match by entity slug or title)
+2. Remove that row from `## In-Flight`
+3. Append a new row to `## Shipped` table:
+   ```
+   | {id} | {title} | {one-sentence "why it exists" from ## Problem} | {today's date} |
+   ```
+4. If `## Cost Calibration` table exists, update the size row's sample count
+
+If ROADMAP.md doesn't exist → skip (no error).
+
+### Token Cost Summary
+
+Read `token_actual` from entity frontmatter (accumulated by FO during dispatch).
+Read `token_budget` from `## Size Assessment`.
+
+```markdown
+## Token Summary
+Budget: ${token_budget}
+Actual: ${token_actual}
+Ratio: {actual/budget}x
+```
+
+If ratio > 2.0 → note in Ship Report as "⚠️ over budget".
 
 Notify captain:
 
