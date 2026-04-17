@@ -1,0 +1,53 @@
+## Ship-Flow Pipeline Template
+## Discovered by spacedock:workflow-adopt to bootstrap via commission.
+## MVP — 4 stages, zero fancy features. Phase 2 adds calibration, learning, Feynman.
+
+name: ship-flow
+description: "Ship-focused pipeline. SHARP once with captain, then agents autonomously plan → execute → ship."
+plugin: ship-flow
+
+entity:
+  type: feature
+  label: feature
+  label_plural: features
+  description: "a feature, bugfix, or improvement to ship"
+
+defaults:
+  worktree: true
+  concurrency: 2
+
+stages:
+  - name: draft
+    initial: true
+    worktree: false
+    manual: true
+    description: "Captain captures idea. Advance to sharp when ready."
+
+  - name: sharp
+    worktree: false
+    gate: true
+    skill: ship-flow:ship-sharp
+    model: opus
+    description: "Captain-facing. Reads ROADMAP.md, Musk audit (fastest path? purpose? what if we don't?), size triage (S/M/L), scoring gate. Only human gate in the pipeline."
+
+  - name: plan
+    skill: ship-flow:ship-plan
+    model: sonnet
+    description: "Agent-autonomous. Size-adaptive research + plan writing + self-review loop. Max 3 iterations."
+
+  - name: execute
+    skill: ship-flow:ship-execute
+    model: sonnet
+    description: "Agent-autonomous. Dispatch ensign per task, quality check per task (build+test+typecheck), review loop. Non-blocking issues auto-create new entities."
+
+  - name: ship
+    terminal: true
+    worktree: false
+    skill: ship-flow:ship-review
+    model: sonnet
+    description: "Agent-autonomous. UAT verification (tiered), final review, PR creation, notify captain."
+
+gates:
+  - sharp
+
+location_default: "docs/ship-flow/"
