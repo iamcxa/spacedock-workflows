@@ -156,12 +156,12 @@ Tasks: {done}/{total} ({failed} failed, {issues} auto-issues created)
 
 Update entity frontmatter:
 ```yaml
-status: shipped
-completed: {ISO 8601}
-verdict: shipped
+status: ship
 pr: "{pr-number}"
 token_actual: {total}
 ```
+
+Note: Do NOT set `status: done` or `completed:` or `verdict:` — the FO advances to `done` (terminal) after this stage completes, which triggers the merge hook. The merge hook handles the final frontmatter updates.
 
 Update ROADMAP.md: move entity from "In-Flight" to "Shipped".
 
