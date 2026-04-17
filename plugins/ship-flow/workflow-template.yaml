@@ -26,9 +26,10 @@ stages:
   - name: sharp
     worktree: false
     gate: true
+    manual: true
     skill: ship-flow:ship-sharp
     model: opus
-    description: "Captain-facing. Reads ROADMAP.md, Musk audit (fastest path? purpose? what if we don't?), size triage (S/M/L), scoring gate. Only human gate in the pipeline."
+    description: "Captain-facing. FO invokes skill directly (not via ensign) for interactive Musk audit. Reads ROADMAP.md, size triage (S/M/L), scoring gate. Only human gate in the pipeline."
 
   - name: plan
     skill: ship-flow:ship-plan
