@@ -7,7 +7,16 @@ argument-hint: "[entity-slug]"
 
 # Ship-Review — Verify and Ship
 
-You are running the SHIP stage of ship-flow. No captain interaction — verify the work, create the PR, notify captain.
+You are running the SHIP stage of ship-flow. No captain interaction — verify the work, create the PR, notify captain. After this stage, FO advances to `done` (terminal) which triggers the merge hook.
+
+## Entity Body Contract
+
+**Reads:** `## Done Criteria`, `## Execution Log`, `## Issues Found`, `## Size Assessment`
+**Writes (all mandatory):**
+- `## UAT Results` — tiered verification results (T1/T2/T3) + done criteria checklist
+- `## Ship Report` — verdict, PR link, token actual, task summary
+**Optional writes:**
+- `## Learnings` — insights discovered during review (append-only)
 
 ## Step 1: Read Execution Results
 

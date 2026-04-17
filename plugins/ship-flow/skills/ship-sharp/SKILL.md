@@ -11,10 +11,24 @@ You are running the SHARP stage of ship-flow. This is the captain's ONLY interac
 
 Your job: make sure we're building the right thing, the smallest version of it, and that it's worth doing at all.
 
+## Entity Body Contract
+
+**Reads:** entity frontmatter (title, status), `ROADMAP.md` (if exists), recent shipped entities
+**Writes (all mandatory):**
+- `## Roadmap Position` — where this fits in the project
+- `## Problem` — specific problem statement
+- `## Done Criteria` — testable, observable acceptance criteria (checkbox format)
+- `## Size Assessment` — S/M/L with reasoning + token budget estimate
+- `## Musk Audit` — fastest path, purpose, what if we don't
+- `## Scoring Gate` — pass/fail + score
+- `## Project Skills` — available project-scope skills relevant to this entity
+**Optional writes:**
+- `## Learnings` — any insights discovered during sharp (append-only, cross-cutting)
+
 ## Step 1: Load Context
 
 1. Read the entity file (from slug or current dispatch)
-2. Read `ROADMAP.md` from project root (if exists) — understand the "castle"
+2. Read `ROADMAP.md` from project root **if it exists** — understand the "castle". Do NOT create ROADMAP.md if missing — skip this context and note "no ROADMAP.md found" in ## Roadmap Position.
 3. Read recent shipped entities (last 5) for pattern awareness
 4. Scan project-scope plugins for available domain skills:
    ```bash

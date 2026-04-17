@@ -9,6 +9,16 @@ argument-hint: "[entity-slug]"
 
 You are running the PLAN stage of ship-flow. No captain interaction — you research, write, review, and iterate until the plan is solid enough for agents to execute autonomously.
 
+## Entity Body Contract
+
+**Reads:** `## Problem`, `## Done Criteria`, `## Size Assessment`, `## Project Skills`
+**Writes (all mandatory):**
+- `## Research Summary` — key findings from researchers, or "Size S — no research needed"
+- `## Plan` — tasks with files, steps, verification commands, model hints (haiku/sonnet)
+- `## Plan Review` — iterations count, gaps, estimated task count, model split
+**Optional writes:**
+- `## Learnings` — insights discovered during planning (append-only)
+
 ## Step 1: Read Sharp Output
 
 Read the entity file. Extract:

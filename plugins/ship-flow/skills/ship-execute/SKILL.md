@@ -9,6 +9,15 @@ argument-hint: "[entity-slug]"
 
 You are running the EXECUTE stage of ship-flow. No captain interaction — dispatch agents for each task, verify each one, handle failures automatically.
 
+## Entity Body Contract
+
+**Reads:** `## Plan` (tasks, files, steps, model hints), `## Size Assessment`, `## Project Skills`
+**Writes (all mandatory):**
+- `## Execution Log` — per-task table: agent, model, status, files changed, retries, review result
+- `## Issues Found` — non-blocking findings → auto entity refs
+**Optional writes:**
+- `## Learnings` — insights discovered during execution (append-only)
+
 ## Step 1: Read Plan
 
 Read the entity file. Extract `## Plan` section — parse all tasks with their files, steps, verification commands, and model hints.
@@ -45,22 +54,50 @@ Agent(
     5. If verification fails → fix and retry (max 3 attempts)
     6. Report: DONE | FAILED (with details) | BLOCKED (what you need)
 
-    ## Quality Check (mandatory before reporting DONE)
-    Run: bun build 2>&1; tsc --noEmit 2>&1; bun test 2>&1
-    All must pass. If any fail, fix before reporting DONE.
+    ## Quality Check — Tiered (mandatory before reporting DONE)
+
+    ### Tier 1 (always, ~30s):
+    Run ALL of these. ALL must pass:
+    ```bash
+    bun build 2>&1
+    tsc --noEmit 2>&1
+    bun test 2>&1
+    ```
+    If any fail → fix and retry (counts toward your 3 attempts).
+
+    ### Tier 2 (only if your task touched frontend files — ui/, app/, components/, pages/, *.tsx):
+    ```bash
+    timeout 30 bun dev &
+    sleep 5
+    curl -sf http://localhost:3000 > /dev/null && echo "T2: root OK" || echo "T2: root FAIL"
+    # Check 2-3 key routes affected by your change
+    curl -sf http://localhost:3000/{affected-route} > /dev/null && echo "T2: route OK" || echo "T2: route FAIL"
+    kill %1 2>/dev/null
+    ```
+    If T2 fails → fix before reporting DONE. T2 failures count toward retries.
+
+    ### Detect frontend changes:
+    ```bash
+    git diff HEAD~1 --name-only | grep -E '^(ui/|app/|components/|pages/|src/.*\.tsx)'
+    ```
+    Output = run T2. No output = skip T2.
+
+    Report T1 and T2 results in your status.
 
     Work from: {project_root}
 )
 ```
 
-## Step 3: Review Each Task
+## Step 3: Review Each Task (Immediate — Do NOT batch)
 
-After each task agent reports DONE, dispatch a review subagent:
+**Every task gets reviewed immediately after completion.** Do NOT wait for all tasks to finish then batch review. The loop is: implement → review → fix → re-review → next task.
+
+Dispatch a review subagent right after the implementation agent reports DONE:
 
 ```
 Agent(
   description: "Review Task {N}: {name}",
-  model: haiku,  // Reviews are mechanical — haiku is fine
+  model: haiku,  // Reviews are mechanical — haiku is sufficient
   prompt: |
     Review the changes from Task {N}: {name}.
 
@@ -70,16 +107,38 @@ Agent(
     ## What changed
     Run: git diff HEAD~1 --stat && git diff HEAD~1
     
-    ## Check
+    ## Check (all 5 mandatory)
     1. Does the diff match what the task requested? (no more, no less)
     2. Are there obvious bugs, missing error handling, or broken imports?
     3. Do tests exist for new functionality?
+    4. Did the implementation agent report T1 quality check PASS?
+    5. If frontend change: did T2 smoke check PASS?
     
-    Report: APPROVED | NEEDS_FIX (list specific issues)
+    ## Non-blocking findings
+    If you find issues that don't affect THIS task's correctness
+    (tech debt, style improvements, refactor opportunities):
+    - List them under "## Non-Blocking" 
+    - Do NOT mark as NEEDS_FIX
+    - These will be auto-created as separate entities
+    
+    Report: APPROVED | NEEDS_FIX (list specific BLOCKING issues only)
 )
 ```
 
-If NEEDS_FIX → dispatch fix agent (same model as original task) with specific issues. Then re-review. Max 3 rounds.
+**Review loop:**
+- NEEDS_FIX → dispatch fix agent (same model as original task) with specific issues
+- Fix agent commits → re-dispatch review agent
+- Max 3 rounds per task
+- Round 3 still NEEDS_FIX → log as failed, create auto-issue entity
+
+**Non-blocking findings → auto entity:**
+If review agent reports non-blocking findings, create a new entity:
+```
+Entity: {slug}-improve-{task-N}
+Status: draft
+Source: "auto:ship-flow review"
+Body: ## Problem\n{non-blocking findings}\n## Context\n{original task}
+```
 
 ## Step 4: Handle Failures
 
