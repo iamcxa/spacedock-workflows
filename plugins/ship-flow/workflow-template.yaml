@@ -45,7 +45,8 @@ stages:
     worktree: false
     skill: ship-flow:ship-review
     model: sonnet
-    description: "Agent-autonomous. UAT verification (tiered), final review, PR creation. Advances to done on success."
+    dispatch: debate-driven
+    description: "Agent-autonomous. Quality gate, debate-driven themed review, done criteria UAT, PR creation. Advances to done on success."
 
   - name: done
     terminal: true

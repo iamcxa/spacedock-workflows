@@ -91,90 +91,45 @@ Verdict: exit code 0 or no formatter → PASS. Otherwise → FAIL (advisory, not
 
 ---
 
-## Step 3: Themed Review Dispatch (Size-Adaptive)
+## Step 3: Themed Review — Read and Classify
 
-Compute review scope:
-```bash
-git diff {execute_base}..HEAD --stat
-```
+The ship stage uses `dispatch: debate-driven`. This means:
+- **FO handles reviewer dispatch** — FO creates themed reviewer teammates, they debate via SendMessage, then FO dispatches YOU (the ensign) to classify their findings.
+- **You do NOT dispatch reviewers yourself.** You read the findings that are already in the entity file from the debate phase.
 
-### Size S (< 5 changed files) — Lite Review
+### Pre-Scan (Inline — Before Reading Reviewer Findings)
 
-Dispatch one review subagent:
-
-```
-Agent(
-  description: "Review: {entity-slug}",
-  model: sonnet,
-  prompt: |
-    Review git diff {execute_base}..HEAD for entity: {title}
-
-    ## Problem: {from entity}
-    ## Done Criteria: {from entity}
-
-    Check:
-    1. Do changes solve the stated problem? (no more, no less)
-    2. Security: hardcoded secrets, injection, XSS?
-    3. Dead code or debug artifacts left behind?
-    4. Error cases handled?
-    5. Stale references to removed symbols?
-
-    Report: SHIP IT | NEEDS_FIX (list specific blocking issues only)
-    Style preferences are NOT blocking.
-)
-```
-
-### Size M (5-15 files) — Standard Review
-
-Dispatch 2 themed reviewers in parallel:
-
-```
-Agent 1 — Correctness:
-  Focus: bugs, error handling, logic errors, silent failures, regressions
-  Check: diff matches plan, no unhandled errors, tests cover new paths
-
-Agent 2 — Style + Types:
-  Focus: clarity, type design, complexity, test coverage gaps
-  Check: types are well-designed, no unnecessary complexity, tests exist
-```
-
-### Size L (> 15 files) — Full Review
-
-Dispatch 3 themed reviewers in parallel:
-
-```
-Agent 1 — Security:
-  Focus: unsafe defaults, injection, hardcoded secrets, attack surface
-  
-Agent 2 — Correctness:
-  Focus: bugs, error handling, logic errors, silent failures
-
-Agent 3 — Style + Types:
-  Focus: clarity, type design, complexity, test coverage
-```
-
-### Pre-Scan (All Sizes, Inline Before Dispatch)
-
-Before dispatching reviewers, run these mechanical checks inline:
+Run these mechanical checks yourself:
 
 1. **Stale references**: For every symbol removed by the diff, grep for remaining references. Hit outside the diff = stale reference finding.
 2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
 
+### Read Reviewer Findings
+
+Read `## Review Debate` from the entity file (written by FO from debate output). Parse each finding.
+
+If `## Review Debate` is missing (FO fell back to bare mode, or Size S with no debate):
+- Run a single inline review yourself using the diff:
+  ```bash
+  git diff {execute_base}..HEAD
+  ```
+  Check: (1) changes match plan, (2) security, (3) dead code, (4) error handling, (5) stale refs.
+
 ### Finding Classification
 
-For each finding from reviewers, classify:
+For each finding (from debate or inline review), classify:
 
 | Severity | Routing |
 |----------|---------|
-| **BLOCKING** — security hole, broken functionality, data loss risk | NEEDS_FIX → dispatch fix agent |
+| **BLOCKING** — security hole, broken functionality, data loss risk | NEEDS_FIX → request FO dispatch fix agent |
 | **WARNING** — potential bug, missing edge case, weak error handling | Log, proceed if no BLOCKING |
 | **NIT** — style, naming, minor improvement | Log as non-blocking, auto-create draft entity if warranted |
 
-**Review loop:**
-- NEEDS_FIX → dispatch fix agent (sonnet) with specific issues
-- Fix agent commits → re-dispatch review
-- Max 2 rounds
-- Round 2 still NEEDS_FIX → escalate to captain
+**If BLOCKING findings exist:**
+- Write classification to `## Review Findings`
+- Report NEEDS_FIX to FO with specific blocking issues
+- FO dispatches fix agent → debate reviewers re-review → you re-classify
+- Max 2 rounds, then escalate to captain
 
 ```markdown
 ## Review Findings
