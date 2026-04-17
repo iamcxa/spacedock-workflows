@@ -1,29 +1,115 @@
 ---
 name: ship-sharp
-description: "Use when sharpening a feature before autonomous pipeline execution. Captain-facing stage: reads ROADMAP.md, applies Musk-style critical questioning, assigns size (S/M/L), scoring gate. Only human touchpoint in ship-flow."
+description: "Use when sharpening a feature before autonomous pipeline execution. Captain-facing stage: auto-detects directive maturity (shape vs sharp path), applies Musk-style critical questioning, assigns size (S/M/L), scoring gate. Only human touchpoint in ship-flow."
 user-invocable: true
 argument-hint: "[entity-slug]"
 ---
 
-# Ship-Sharp — Define What to Ship and Why
+# Ship-Sharp — Shape + Sharp: Define What to Ship and Why
 
 You are running the SHARP stage of ship-flow. This is the captain's ONLY interaction with the pipeline — after this, agents run autonomously to ship.
+
+**Shape and sharp are different actions combined in one stage:**
+- **Shape** = expand a vague idea into concrete form (problem statement, user stories, scope boundary). Clay, forming.
+- **Sharp** = challenge and reduce a concrete directive to its minimum (Musk questioning, scoring gate, size triage). Knife, sharpening.
 
 Your job: make sure we're building the right thing, the smallest version of it, and that it's worth doing at all.
 
 ## Entity Body Contract
 
 **Reads:** entity frontmatter (title, status), `ROADMAP.md` (if exists), recent shipped entities
-**Writes (all mandatory):**
+**Writes (conditional on path):**
+- `## Shape Output` — **only written when Step 0 routes to shape path** (vague directive)
+  - `Problem Statement:` — 3-6 sentence gap description
+  - `User Stories:` — 3-5 stories in "As a {role}, I want {action}, so that {value}" format
+  - `Scope In/Out:` — concrete deliverables vs explicit exclusions
+**Writes (all mandatory, both paths):**
 - `## Roadmap Position` — where this fits in the project
-- `## Problem` — specific problem statement
+- `## Problem` — sharp extracts from Shape Output (shape path) or directly from directive (sharp-only path)
 - `## Done Criteria` — testable, observable acceptance criteria (checkbox format)
 - `## Size Assessment` — S/M/L with reasoning + token budget estimate
-- `## Musk Audit` — fastest path, purpose, what if we don't
+- `## Musk Audit` — fastest path, purpose, what if we don't, gap-to-goal analysis, per-bullet KEEP/DEFER/DELETE
 - `## Scoring Gate` — pass/fail + score
 - `## Project Skills` — available project-scope skills relevant to this entity
 **Optional writes:**
 - `## Learnings` — any insights discovered during sharp (append-only, cross-cutting)
+
+---
+
+## Step 0: Detect Directive Maturity (Shape vs Sharp Router)
+
+Read the directive text. Apply hedge-word detection to determine maturity:
+
+**Concrete signals** (→ skip shape, go directly to Step 1 Sharp):
+- References specific file paths, line numbers, or function names
+- Describes a specific bug with reproduction steps
+- Contains testable acceptance criteria
+- Uses precise technical language ("POST /api/X returns 201", "fix race condition in Y")
+
+**Vague signals** (→ run shape first, then sharp):
+- Hedge words: "改善", "更好", "可能需要", "improve", "better experience", "explore", "might need"
+- Abstract goals without measurable outcomes
+- No file paths, no specific behavior described
+- Problem framing unclear ("make collaboration better", "improve the workflow")
+
+**Escape hatch** (→ skip entire stage):
+- Directive is < 80 chars AND contains: `fix`, `typo`, `rename`, `bump`, `patch`, `bugfix`, `hotfix` as whole word
+- Emit: `sharp unnecessary — run ship-plan directly with inline sharp`
+- EXIT. Do NOT create shape or sharp output.
+
+**Decision output**: Announce the path to captain:
+- "Directive is concrete — proceeding directly to sharp."
+- "Directive needs shaping — running shape phase first to define scope."
+- "Small fix detected — skipping sharp, route to plan."
+
+---
+
+## Shape Phase (Steps S1-S3) — Only When Step 0 Routes Here
+
+### Step S1: Frame the Problem
+
+Ask the captain to clarify the problem space. Present 2-3 candidate problem statements:
+
+Each candidate is a 3-6 sentence paragraph describing:
+- The gap (what's missing or broken)
+- Who experiences it (specific role/persona)
+- Why it matters now (urgency driver)
+
+**Do NOT include solution language in problem statements.**
+
+Present candidates in the chat thread with full text, then ask:
+- "Which problem statement frames this best?" (options: A / B / C / revise)
+
+If captain picks "revise" — iterate with their feedback until they accept. Write accepted statement.
+
+### Step S2: Generate User Stories
+
+Based on the accepted problem statement, generate 3-5 user stories:
+- Literal format: "As a {role}, I want {action}, so that {value}"
+- Numbered US-1 through US-N
+
+Present all stories, then for each ask: Accept / Edit / Drop.
+- If captain drops below 3 stories, generate replacements.
+- Final accepted set must be 3-5 stories.
+
+### Step S3: Draft Scope Boundary
+
+Based on problem + stories, draft two lists:
+
+**Scope: In** — concrete deliverables, each specific enough to verify. Bias toward MINIMAL viable scope:
+- Prefer reuse over greenfield
+- Prefer hook points over new architecture
+- Each bullet must be verifiable
+
+**Scope: Out** — explicit exclusions with WHY in parenthetical. At least 3 items of the form "could expand to X but not doing X because Y".
+
+**Self-check**: After drafting, answer internally: "If I cut this In list in half, what drops first? Do those belong in Out?" Move items accordingly.
+
+Present In/Out to captain. Ask: "Accept all / Edit / Prune" for each list.
+
+**Write `## Shape Output`** with accepted Problem Statement, User Stories, and Scope In/Out.
+
+---
 
 ## Step 1: Load Context
 
@@ -35,11 +121,12 @@ Your job: make sure we're building the right thing, the smallest version of it, 
    claude plugins list --scope project 2>/dev/null
    ```
 
-## Step 2: Musk Audit
+## Step 2: Musk Audit (Expanded)
 
 Ask the captain these questions. Do NOT skip any. Wait for answers one at a time.
 
 **Question 1 — Problem**: What specific problem does this solve? Who feels the pain today?
+- If shape ran: "The Shape Output says {problem statement} — is that still accurate?"
 
 **Question 2 — Fastest Path**: Is this the shortest path to solving that pain? What's the version that ships in 1 day instead of 1 week?
 
@@ -51,6 +138,33 @@ After each answer, push back if the answer is vague. Use concrete follow-ups:
 - "You said 'improve performance' — what's the current latency and what's the target?"
 - "You said 'users need this' — which user asked for it and when?"
 - "You said 'it's important' — more important than {top In-Flight item}?"
+
+### Step 2.5: Gap-to-Goal Pressure Test
+
+After the 4 Musk questions, run this 3-question pressure test:
+
+1. **Goal restatement**: "Based on everything above, state in one sentence what goal you're reaching for. Is that still what you want?"
+2. **Current gap**: "Given the current codebase, what is the *specific* gap between now and that goal?"
+3. **Fastest path?**: "Does the current scope close that gap the fastest way? Consider: (a) reuse an existing primitive, (b) push work upstream, (c) defer scope to a later entity, (d) pick a subset that unblocks 80% of the goal."
+
+If captain identifies a simpler path → loop back to revise scope (or Shape Output if shape ran).
+
+### Step 2.7: Per-Bullet Musk Reverse-Thinking (M/L only)
+
+**Skip for Size S** (≤ 3 scope bullets — already minimal).
+
+For each scope bullet (from Shape Output's Scope: In, or from captain's answers):
+
+Apply 3 questions:
+1. Is this delivering a real outcome, or shipping an empty framework?
+2. Does this require evidence that doesn't exist yet (dogfood, user feedback)? → DEFER
+3. If I delete this, does the 80% path still work?
+
+Rate each bullet: **KEEP / DEFER / DELETE** with one-line rationale.
+
+Present to captain: "Accept recommendations / Keep original / Partial — specify"
+- DEFER items → note for Phase 2
+- DELETE items → discard (not moved to Out)
 
 ## Step 3: Size Triage
 
@@ -92,6 +206,8 @@ Present the full assessment:
 > **Size**: {S/M/L} — estimated {budget}
 > **Done Criteria**: {list}
 > **Roadmap Position**: {where it fits}
+> **Shape path**: {ran shape / skipped — direct sharp}
+> **Musk verdict**: {bullets kept/deferred/deleted if M/L}
 >
 > **Ship this?** (yes → advance to plan / no → reject to draft / split → decompose)
 
@@ -106,11 +222,23 @@ If captain says **yes** — advance.
 Write these sections to the entity file:
 
 ```markdown
+## Shape Output          ← only if shape phase ran
+Problem Statement: {accepted statement}
+User Stories:
+- US-1: As a {role}, I want {action}, so that {value}
+- ...
+Scope In:
+- {bullet 1}
+- ...
+Scope Out:
+- {exclusion 1} (why)
+- ...
+
 ## Roadmap Position
 {Where this fits in the project, dependencies, related shipped features}
 
 ## Problem
-{Specific problem statement from Musk audit}
+{Specific problem statement — from Shape Output if shape ran, or from Musk audit Q1}
 
 ## Done Criteria
 - [ ] {criterion 1}
@@ -126,6 +254,8 @@ Reasoning: {why this size}
 - Fastest path: {captain's answer}
 - Purpose: {what happens if we don't}
 - Position: {roadmap fit}
+- Gap-to-goal: {goal → gap → path assessment}
+- Per-bullet audit: {KEEP/DEFER/DELETE verdicts, or "S — skipped"}
 
 ## Scoring Gate
 Result: PASS
@@ -137,6 +267,8 @@ Score: {0.0-1.0}
 
 Update ROADMAP.md: add entity to "In-Flight" section.
 
-## Circuit Breaker
+## Circuit Breakers
 
-If captain can't answer Question 1 (what problem?) after 2 attempts → suggest the entity isn't ready. Move back to draft.
+- If captain can't answer Question 1 (what problem?) after 2 attempts → suggest the entity isn't ready. Move back to draft.
+- Shape phase: if captain rejects all 3 problem statements and can't articulate what they want → "This directive needs more thinking. Save as draft and revisit."
+- Decomposition: if shape reveals N distinct features → emit "decomposition recommended — directive spans N features. Split into N entities and sharp each."
