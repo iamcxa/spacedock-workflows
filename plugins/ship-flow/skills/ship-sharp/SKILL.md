@@ -185,6 +185,28 @@ Present to captain: "Accept recommendations / Keep original / Partial — specif
 - DEFER items → note for Phase 2
 - DELETE items → discard (not moved to Out)
 
+### Step 2.8: User Journey Walkthrough (M/L only)
+
+**Skip for Size S** — S-size directives don't have cross-boundary integration risk.
+
+After scope bullets are finalized (KEEP/DEFER/DELETE), narrate the complete end-to-end user journey assuming the feature is shipped:
+
+> "Walk me through this: {persona} wants to {goal}. Starting from {entry point}, step by step, what happens?"
+
+For each step in the journey, check:
+1. **Does the architecture support this step?** If not → flag as architecture gap
+2. **Where does data cross a boundary?** (cross-repo, cross-service, auth handoff, API call) → flag as integration risk
+3. **Is there a simpler alternative revealed by the journey?** (e.g., "if we already git push, do we need a sync mechanism?")
+
+**Present findings to captain:**
+
+> Journey walkthrough revealed:
+> - Step {N}: {issue description} — {architecture gap | integration risk | simpler alternative}
+>
+> Revise scope? (yes → loop back to scope / no → proceed)
+
+**Why this step exists:** Scope bullets are atomic — they pass review individually but may not compose. User journeys are integration tests for the DESIGN. They catch cross-boundary issues that per-bullet analysis misses. Proven on entity 010: user journey eliminated an entire sync mechanism and discovered OAuth-as-ACL that 4 scope bullets missed.
+
 ## Step 3: Size Triage (Evidence-Based)
 
 **Do NOT ask the captain to guess.** Run a 10-second probe, present evidence, then classify.
