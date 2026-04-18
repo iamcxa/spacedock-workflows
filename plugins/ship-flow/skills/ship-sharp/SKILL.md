@@ -389,6 +389,16 @@ Score: {0.0-1.0}
 
 **PRODUCT.md** — do NOT modify during sharp. Only ship-review writes to PRODUCT.md after verification passes.
 
+## Stage Cost
+
+Sharp is captain-interactive (no subagent dispatch). Write at end of entity body:
+
+```
+stage_cost: $0.50 (1 session: opus interactive)
+```
+
+FO reads this line and adds to `token_actual` accumulation.
+
 ## Circuit Breakers
 
 - If captain can't answer Question 1 (what problem?) after 2 attempts → suggest the entity isn't ready. Move back to draft.

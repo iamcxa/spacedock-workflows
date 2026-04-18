@@ -149,7 +149,10 @@ Tasks: {done}/{total} ({failed} failed, {issues} auto-issues created)
 Verify: PASS (quality {5/5}, review {verdict}, UAT {all pass})
 ROADMAP.md: updated (Now → Shipped)
 PRODUCT.md: updated ({N} capabilities added)
+stage_cost: ${ship_cost} (1 dispatch: sonnet)
 ```
+
+FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
 
 Update entity frontmatter:
 ```yaml

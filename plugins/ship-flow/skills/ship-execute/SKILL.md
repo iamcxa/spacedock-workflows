@@ -356,13 +356,13 @@ After each Agent dispatch (implementation, review, or escalation), add the model
 execute_cost = sum of all dispatches in this stage
 ```
 
-Write `execute_cost` to `## Execution Log` at the end of the stage. FO accumulates across stages:
+Write at the end of `## Execution Log`:
 
 ```
-token_actual = sharp_cost + plan_cost + execute_cost + verify_cost
+stage_cost: ${execute_cost} ({N} dispatches: {breakdown by model})
 ```
 
-FO writes `token_actual` to entity frontmatter after each stage completes.
+FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
 
 ### Budget Check
 
