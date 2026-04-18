@@ -374,7 +374,10 @@ Reviewer verdict: {APPROVED | REVISE → fixed}
 Scope anchoring: {all tasks mapped | gaps noted}
 Estimated tasks: {count}
 Estimated model split: {N haiku, M sonnet}
+Plan stage cost: ~${plan_cost} ({N} researcher dispatches + {M} reviewer dispatches)
 ```
+
+FO reads `Plan stage cost` and adds it to entity frontmatter `token_actual` accumulation.
 
 ## Circuit Breakers
 

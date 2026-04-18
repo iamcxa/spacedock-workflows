@@ -315,7 +315,10 @@ Review: {verdict from Step 3}
 UAT: {all done criteria pass | N failed}
 Blocking issues: {none | list}
 Knowledge capture: {D1: N written, D2: M candidates | skipped}
+Verify stage cost: ~${verify_cost} ({N} haiku reviewers × ~$0.05 + sonnet ensign ~$0.50)
 ```
+
+FO reads `Verify stage cost` and adds it to entity frontmatter `token_actual` accumulation.
 
 If verdict PASS → FO advances to ship.
 If verdict FAIL → FO routes feedback-to execute with Verify Report as context.

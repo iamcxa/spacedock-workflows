@@ -336,26 +336,46 @@ Ship-review stage surfaces `[D2-candidate]` items to captain during finalization
 
 ## Token Tracking
 
-After every Agent dispatch (implementation or review), read the `<usage>` metadata from the result:
+### Per-Stage Cost Estimation
+
+Agent dispatch cost is estimated (not metered — Claude Code Agent tool does not return usage metadata). Use dispatch-count heuristics per model tier:
+
+| Model | Estimated cost per dispatch |
+|-------|---------------------------|
+| opus | ~$2.00 (heavy reasoning, large context) |
+| sonnet | ~$0.50 (standard tasks) |
+| haiku | ~$0.05 (mechanical review, classification) |
+
+These are order-of-magnitude estimates based on typical agent context sizes (~50K input + ~5K output tokens). Actual costs vary by task complexity.
+
+### Accumulation
+
+After each Agent dispatch (implementation, review, or escalation), add the model's estimated cost to a running total:
 
 ```
-total_tokens → estimate cost using:
-  opus:   input $5/MTok + output $25/MTok
-  sonnet: input $3/MTok + output $15/MTok
-  haiku:  input $0.25/MTok + output $1.25/MTok
+execute_cost = sum of all dispatches in this stage
 ```
 
-Accumulate into entity frontmatter `token_actual` (running total in USD).
-
-Add a column to `## Execution Log`:
+Write `execute_cost` to `## Execution Log` at the end of the stage. FO accumulates across stages:
 
 ```
-| Task | Model | Status | Files | Retries | Review | Cost |
-|------|-------|--------|-------|---------|--------|------|
-| 1    | haiku | done   | ...   | 0       | approved | $0.03 |
+token_actual = sharp_cost + plan_cost + execute_cost + verify_cost
 ```
 
-**Budget check**: After each dispatch, if `token_actual > token_budget × 2` → pause execution, log warning in `## Execution Log`, notify captain. Do NOT silently continue.
+FO writes `token_actual` to entity frontmatter after each stage completes.
+
+### Budget Check
+
+After each dispatch, compute running total. If `execute_cost + prior_stages_cost > token_budget × 2` → pause execution, log warning in `## Execution Log`, notify captain. Do NOT silently continue.
+
+### Cost Column in Execution Log
+
+```
+| Task | Model | Status | Files | Retries | Review | Est. Cost |
+|------|-------|--------|-------|---------|--------|-----------|
+| 1    | haiku | done   | ...   | 0       | approved | ~$0.10 |
+| 2    | sonnet | done  | ...   | 1       | approved | ~$1.50 |
+```
 
 ## Circuit Breakers
 

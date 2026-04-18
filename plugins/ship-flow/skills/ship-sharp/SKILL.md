@@ -271,6 +271,30 @@ Example:
 - [ ] bun test passes with new test covering the notification path
 ```
 
+## Step 4.5: Dependencies and Tracking
+
+### Dependencies
+Ask captain:
+- "Does this depend on any other entity finishing first?" → populate `depends-on` in frontmatter
+- "Is this part of a larger epic?" → populate `parent` in frontmatter
+
+If captain names dependencies, verify they exist:
+```bash
+ls docs/ship-flow/{dependency-slug}.md 2>/dev/null
+```
+If dependency doesn't exist → warn captain ("Entity {slug} not found — create it first?").
+
+### Issue Tracker Binding
+Ask captain:
+- "Link to an existing issue? (GitHub #number, Linear PROJ-123, or skip)"
+
+If provided:
+- Detect provider from format: `#42` or `owner/repo#42` → `tracker: gh`. `PROJ-123` pattern → `tracker: linear`.
+- Write `tracker`, `issue`, and `external_id` to frontmatter.
+- If `tracker: linear` and Linear MCP is available, verify the issue exists via `mcp__claude_ai_Linear__get_issue`.
+
+If skipped → leave fields empty (entity is captain-only, no external tracker).
+
 ## Step 5: Scoring Gate
 
 Present the full assessment:
@@ -282,6 +306,9 @@ Present the full assessment:
 > **Roadmap Position**: {where it fits}
 > **Shape path**: {ran shape / skipped — direct sharp}
 > **Musk verdict**: {bullets kept/deferred/deleted if M/L}
+> **Dependencies**: {depends-on list, or "none"}
+> **Parent epic**: {parent ID, or "standalone"}
+> **Tracker**: {gh #42 / linear PROJ-123 / none}
 >
 > **Ship this?** (yes → advance to plan / no → reject to draft / split → decompose)
 
@@ -323,6 +350,21 @@ Scope Out:
 Size: {S/M/L}
 Token budget: {estimate}
 Reasoning: {why this size}
+```
+
+Update entity frontmatter:
+```yaml
+token_budget: {estimate in USD}
+parent: "{epic entity ID, or omit}"
+depends-on: ["{entity-id-1}", "{entity-id-2}"]  # or omit if none
+tracker: "{gh|linear}"  # or omit if no external tracker
+issue: "{#42 or PROJ-123}"  # or omit
+external_id: "{full external reference}"  # or omit
+```
+
+Continue writing body sections:
+
+```markdown
 
 ## Musk Audit
 - Fastest path: {captain's answer}
