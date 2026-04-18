@@ -1,9 +1,8 @@
 ## Ship-Flow Pipeline Template
 ## Discovered by spacedock:workflow-adopt to bootstrap via commission.
-## MVP — 4 stages, zero fancy features. Phase 2 adds calibration, learning, Feynman.
 
 name: ship-flow
-description: "Ship-focused pipeline. SHARP once with captain, then agents autonomously plan → execute → ship."
+description: "Ship-focused pipeline. SHARP once with captain, then agents autonomously plan → execute → verify → ship."
 plugin: ship-flow
 
 entity:
@@ -29,7 +28,7 @@ stages:
     manual: true
     skill: ship-flow:ship-sharp
     model: opus
-    description: "Captain-facing. FO invokes skill directly (not via ensign) for interactive Musk audit. Reads ROADMAP.md, size triage (S/M/L), scoring gate. Only human gate in the pipeline."
+    description: "Captain-facing. FO invokes skill directly (not via ensign) for interactive Musk audit. Reads PRODUCT.md + ROADMAP.md, size triage (S/M/L), scoring gate. Only human gate in the pipeline."
 
   - name: plan
     skill: ship-flow:ship-plan
@@ -39,14 +38,22 @@ stages:
   - name: execute
     skill: ship-flow:ship-execute
     model: sonnet
-    description: "Agent-autonomous. Dispatch ensign per task, quality check per task (build+test+typecheck), review loop. Non-blocking issues auto-create new entities."
+    description: "Agent-autonomous. Wave-parallel dispatch with per-task model hints, implementer→reviewer loop, BLOCKED escalation ladder."
+
+  - name: verify
+    gate: true
+    worktree: false
+    skill: ship-flow:ship-verify
+    model: sonnet
+    dispatch: debate-driven
+    feedback-to: execute
+    description: "Agent gate. 5-check quality gate, debate-driven themed review, done criteria UAT. PASS → ship. FAIL → feedback to execute."
 
   - name: ship
     worktree: false
     skill: ship-flow:ship-review
     model: sonnet
-    dispatch: debate-driven
-    description: "Agent-autonomous. Quality gate, debate-driven themed review, done criteria UAT, PR creation. Advances to done on success."
+    description: "Agent-autonomous. PR creation, ROADMAP.md + PRODUCT.md updates, token cost summary. Advances to done."
 
   - name: done
     terminal: true
@@ -55,5 +62,6 @@ stages:
 
 gates:
   - sharp
+  - verify
 
 location_default: "docs/ship-flow/"

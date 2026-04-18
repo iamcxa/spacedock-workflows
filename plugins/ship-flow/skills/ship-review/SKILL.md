@@ -1,185 +1,45 @@
 ---
 name: ship-review
-description: "Use when all execute tasks are complete and the entity is ready for final verification + PR. Agent-autonomous: 5-check quality gate, themed review dispatch, done criteria UAT, PR creation."
+description: "Use when verify stage passed and entity is ready for PR creation + documentation updates. Agent-autonomous: creates PR, updates ROADMAP.md and PRODUCT.md, reports token cost."
 user-invocable: false
 argument-hint: "[entity-slug]"
 ---
 
-# Ship-Review — Quality Gate, Review, and Ship
+# Ship-Review — PR and Documentation
 
-You are running the REVIEW stage of ship-flow. No captain interaction — run full-project quality checks, dispatch themed reviewers, verify done criteria, create the PR. After this stage, FO advances to `done` (terminal) which triggers the merge hook.
+You are running the SHIP stage of ship-flow. Verify has already passed — quality, review, and UAT are done. Your job: create the PR, update project documentation, report costs.
 
-This stage combines three concerns that were separate in the build pipeline:
-- **Quality** (build-quality) — mechanical full-project verification
-- **Review** (build-review) — judgment-bearing code review with themed reviewers
-- **UAT** (build-uat) — done criteria verification against captain's acceptance
+After this stage, FO advances to `done` (terminal) which triggers the merge hook.
 
 ## Entity Body Contract
 
-**Reads:** `## Done Criteria`, `## Execution Log`, `## Issues Found`, `## Size Assessment`, `## Plan`
+**Reads:** `## Problem`, `## Done Criteria`, `## Execution Log`, `## Verify Report`, `## Size Assessment`, `## Shape Output` (if exists), `PRODUCT.md`, `ROADMAP.md`
 **Writes (all mandatory):**
-- `## Quality Gate` — 5-check results (test/lint/typecheck/build/format)
-- `## Review Findings` — classified findings from themed reviewers
-- `## UAT Results` — done criteria checklist with verification evidence
 - `## Ship Report` — verdict, PR link, token actual, task summary
+- `## Token Summary` — budget vs actual with ratio
+**Side effects:**
+- `ROADMAP.md` — entity moves from Now → Shipped
+- `PRODUCT.md` — new capability + user stories appended
 **Optional writes:**
-- `## Learnings` — insights discovered during review (append-only)
+- `## Learnings` — insights discovered during ship (append-only)
 
 ---
 
-## Step 1: Read Execution Results
+## Step 1: Read Verify Results
 
 Read the entity file. Extract:
-- `## Done Criteria` — what must be true
-- `## Execution Log` — what was done, commit SHAs
-- `## Issues Found` — any auto-created entities
-- `## Size Assessment` — determines review depth
-- `## Plan` — for `files_modified` cross-check
+- `## Verify Report` — must have `Verdict: PASS`
+- `## Execution Log` — for PR body (task summary, commit SHAs)
+- `## Done Criteria` — for PR body (checkmarks)
+- `## Problem` — for PR body
+- `## Shape Output` — for user stories to add to PRODUCT.md (if shape ran)
+- `## Size Assessment` — for cost summary
 
-**Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. Set verdict to `blocked`, notify captain.
-
-Capture execute base SHA from `## Execution Log` (first task's parent commit).
-
----
-
-## Step 2: Quality Gate — 5-Check Full-Project Verification
-
-Run ALL 5 checks against the full project. **No scope narrowing** — even if execute only touched one file, quality checks the entire project. Binary pass/fail per check, no judgment.
-
-### Check 1: Tests
-```bash
-bun test 2>&1
-```
-Verdict: exit code 0 and no failing tests → PASS. Otherwise → FAIL.
-
-### Check 2: Lint
-```bash
-bun lint 2>&1
-```
-Verdict: exit code 0 → PASS. Warnings-only → PASS. Errors → FAIL.
-
-### Check 3: Type Check
-```bash
-bunx tsc --noEmit 2>&1
-```
-Verdict: exit code 0 and no `error TS` lines → PASS. Otherwise → FAIL.
-
-### Check 4: Build
-```bash
-bun build 2>&1
-```
-Verdict: exit code 0 → PASS. Otherwise → FAIL.
-
-### Check 5: Format (if formatter configured)
-```bash
-bunx prettier --check "src/**/*.{ts,tsx}" 2>&1 || echo "no formatter configured"
-```
-Verdict: exit code 0 or no formatter → PASS. Otherwise → FAIL (advisory, not blocking).
-
-**Capture last 40 lines of each check's output as evidence.**
-
-**Any of checks 1-4 FAIL → feedback to execute.** Do NOT proceed to review. Max 2 feedback rounds, then escalate to captain.
-
-```markdown
-## Quality Gate
-- tests: PASS (142 pass, 0 fail)
-- lint: PASS
-- typecheck: PASS
-- build: PASS
-- format: PASS (advisory)
-```
+**Pre-check**: If `## Verify Report` verdict is not PASS → do NOT proceed. Report back to FO.
 
 ---
 
-## Step 3: Themed Review — Read and Classify
-
-The ship stage uses `dispatch: debate-driven`. This means:
-- **FO handles reviewer dispatch** — FO creates themed reviewer teammates, they debate via SendMessage, then FO dispatches YOU (the ensign) to classify their findings.
-- **You do NOT dispatch reviewers yourself.** You read the findings that are already in the entity file from the debate phase.
-
-### Pre-Scan (Inline — Before Reading Reviewer Findings)
-
-Run these mechanical checks yourself:
-
-1. **Stale references**: For every symbol removed by the diff, grep for remaining references. Hit outside the diff = stale reference finding.
-2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
-
-### Read Reviewer Findings
-
-Read `## Review Debate` from the entity file (written by FO from debate output). Parse each finding.
-
-If `## Review Debate` is missing (FO fell back to bare mode, or Size S with no debate):
-- Run a single inline review yourself using the diff:
-  ```bash
-  git diff {execute_base}..HEAD
-  ```
-  Check: (1) changes match plan, (2) security, (3) dead code, (4) error handling, (5) stale refs.
-
-### Finding Classification
-
-For each finding (from debate or inline review), classify:
-
-| Severity | Routing |
-|----------|---------|
-| **BLOCKING** — security hole, broken functionality, data loss risk | NEEDS_FIX → request FO dispatch fix agent |
-| **WARNING** — potential bug, missing edge case, weak error handling | Log, proceed if no BLOCKING |
-| **NIT** — style, naming, minor improvement | Log as non-blocking, auto-create draft entity if warranted |
-
-**If BLOCKING findings exist:**
-- Write classification to `## Review Findings`
-- Report NEEDS_FIX to FO with specific blocking issues
-- FO dispatches fix agent → debate reviewers re-review → you re-classify
-- Max 2 rounds, then escalate to captain
-
-```markdown
-## Review Findings
-Scope: {N} files, {M} reviewers dispatched
-
-### Pre-scan
-- Stale references: {none | list}
-- Plan consistency: {all files match | discrepancies}
-
-### Reviewer findings
-| Severity | File:Line | Description | Reviewer |
-|----------|-----------|-------------|----------|
-| BLOCKING | src/api.ts:42 | Silent swallow of 4xx | correctness |
-| WARNING | src/types.ts:10 | Stale comment | style |
-
-Verdict: {SHIP IT | NEEDS_FIX round N | escalated}
-```
-
----
-
-## Step 4: Done Criteria UAT
-
-For each criterion in `## Done Criteria`:
-- Run the verification command or check
-- Record pass/fail with evidence
-- Classify failures:
-  - **Infra-fail** — command not found, server not running, binary missing → feedback to execute
-  - **Assertion-fail** — command ran but output doesn't match → specific failure logged
-
-```markdown
-## UAT Results
-
-### Quality Gate
-{from Step 2}
-
-### Done Criteria
-- [x] POST /api/comments returns 201 with comment ID — `curl -s localhost:3000/api/comments -X POST | jq .id` → "abc123"
-- [x] Claude receives notification within 5s — verified via test
-- [x] bun test passes with new test — 143 pass, 0 fail
-
-### Frontend Smoke (if applicable)
-- Route /: 200 PASS
-- Route /entity: 200 PASS
-```
-
-If any Done Criterion fails → feedback to execute with specific failure. Max 2 rounds.
-
----
-
-## Step 5: Create PR
+## Step 2: Create PR
 
 ```bash
 BRANCH=$(git branch --show-current)
@@ -188,61 +48,64 @@ git push origin "${BRANCH}"
 gh pr create \
   --title "{entity title}" \
   --body "## Problem
-{from entity}
+{from entity ## Problem}
 
 ## Done Criteria
-{from entity, with checkmarks}
+{from entity, with checkmarks from ## UAT Results}
 
 ## Changes
-{from execution log — task summary}
+{from ## Execution Log — task summary with commit SHAs}
 
-## Quality
-{5-check results}
+## Verification
+{from ## Verify Report — quality/review/UAT summary}
 
 Entity: #{entity-id}
-Ship-flow: sharp → plan → execute → review (autonomous)" \
+Ship-flow: sharp → plan → execute → verify → ship (autonomous)" \
   --base main
 ```
 
 ---
 
-## Step 6: Write Entity Sections + Finalize
-
-```markdown
-## Ship Report
-Verdict: shipped
-PR: {pr-url}
-Token actual: {cumulative from all stages}
-Tasks: {done}/{total} ({failed} failed, {issues} auto-issues created)
-Quality: {5/5 pass}
-Review: {verdict from Step 3}
-UAT: {all done criteria pass}
-```
-
-Update entity frontmatter:
-```yaml
-status: ship
-pr: "{pr-number}"
-token_actual: {total}
-```
-
-Note: Do NOT set `status: done` or `completed:` or `verdict:` — the FO advances to `done` (terminal) after this stage completes, which triggers the merge hook.
-
-### ROADMAP.md Update
+## Step 3: Update ROADMAP.md
 
 Read `ROADMAP.md` from project root. If it exists:
 
-1. Find the entity in `## In-Flight` table (match by entity slug or title)
-2. Remove that row from `## In-Flight`
+1. Find the entity in `## Now` table (match by entity slug or title)
+2. Remove that row from `## Now`
 3. Append a new row to `## Shipped` table:
    ```
-   | {id} | {title} | {one-sentence "why it exists" from ## Problem} | {today's date} |
+   | {id} | {title} | {one-sentence from ## Problem} | {today's date} | ⏳ 待驗證 |
    ```
-4. If `## Cost Calibration` table exists, update the size row's sample count
+4. If `## Cost Calibration` table exists and `token_actual` is known:
+   - Increment the size row's Sample count
+   - Recalculate Median actual if sample ≥ 3
 
 If ROADMAP.md doesn't exist → skip (no error).
 
-### Token Cost Summary
+---
+
+## Step 4: Update PRODUCT.md
+
+Read `PRODUCT.md` from project root. If it exists:
+
+1. **Add capability**: Find the `## Current Capabilities` section. Identify which domain subsection this feature belongs to (match by topic — session management, communication, access, etc.). Append a bullet:
+   ```
+   - {feature one-liner} (#{entity-id})
+   ```
+   If no matching domain subsection exists → create one.
+
+2. **Add user stories** (if `## Shape Output` exists with user stories):
+   - Extract accepted user stories from Shape Output
+   - Append to PRODUCT.md's relevant section (deduplicate against existing)
+
+3. **Update constraints** (if the feature changes any constraint):
+   - Rare, but if the feature explicitly relaxes or adds a constraint, update the Constraints table
+
+If PRODUCT.md doesn't exist → skip (no error).
+
+---
+
+## Step 5: Token Cost Summary
 
 Read `token_actual` from entity frontmatter (accumulated by FO during dispatch).
 Read `token_budget` from `## Size Assessment`.
@@ -256,23 +119,46 @@ Ratio: {actual/budget}x
 
 If ratio > 2.0 → note in Ship Report as "⚠️ over budget".
 
+---
+
+## Step 6: Write Ship Report + Finalize
+
+```markdown
+## Ship Report
+Verdict: shipped
+PR: {pr-url}
+Token budget: ${token_budget}
+Token actual: ${token_actual}
+Tasks: {done}/{total} ({failed} failed, {issues} auto-issues created)
+Verify: PASS (quality {5/5}, review {verdict}, UAT {all pass})
+ROADMAP.md: updated (Now → Shipped)
+PRODUCT.md: updated ({N} capabilities added)
+```
+
+Update entity frontmatter:
+```yaml
+status: ship
+pr: "{pr-number}"
+token_actual: {total}
+```
+
+Note: Do NOT set `status: done` or `completed:` or `verdict:` — the FO advances to `done` (terminal) after this stage completes, which triggers the merge hook.
+
 Notify captain:
 
 > **Shipped: {title}**
 > PR: {pr-url}
 > Done criteria: {all pass}
-> Quality: {5/5 checks pass}
-> Review: {N findings, M blocking → resolved}
-> Cost: ${token_actual}
+> Cost: ${token_actual} (budget: ${token_budget})
+> ROADMAP: ✅ updated
+> PRODUCT: ✅ updated
 > Issues found: {count, with entity refs}
 
 ---
 
 ## Circuit Breakers
 
-- Quality gate fail → execute feedback: max 2 rounds
-- Review NEEDS_FIX → fix + re-review: max 2 rounds
-- Done criteria fail → execute feedback: max 2 rounds
-- After all max retries exhausted → escalate to captain
-- Token overrun: if token_actual > token_budget × 2 → pause, notify captain
-- Infra-fail vs assertion-fail: infra routes to execute automatically, assertion requires specific evidence
+- Verify Report not PASS → do not proceed, report back to FO
+- PR creation fails → retry once, then escalate to captain
+- ROADMAP/PRODUCT update fails → log as Learning, proceed (non-blocking)
+- Token overrun: if token_actual > token_budget × 2 → note in Ship Report

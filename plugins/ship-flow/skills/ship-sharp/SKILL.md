@@ -17,7 +17,7 @@ Your job: make sure we're building the right thing, the smallest version of it, 
 
 ## Entity Body Contract
 
-**Reads:** entity frontmatter (title, status), `ROADMAP.md` (if exists), recent shipped entities
+**Reads:** entity frontmatter (title, status), `PRODUCT.md` (if exists — current capabilities, constraints, personas), `ROADMAP.md` (if exists — Now/Next/Later, Not Doing, North Star), recent shipped entities
 **Writes (conditional on path):**
 - `## Shape Output` — **only written when Step 0 routes to shape path** (vague directive)
   - `Problem Statement:` — 3-6 sentence gap description
@@ -114,12 +114,15 @@ Present In/Out to captain. Ask: "Accept all / Edit / Prune" for each list.
 ## Step 1: Load Context
 
 1. Read the entity file (from slug or current dispatch)
-2. Read `ROADMAP.md` from project root **if it exists** — understand the "castle". Do NOT create ROADMAP.md if missing — skip this context and note "no ROADMAP.md found" in ## Roadmap Position.
-3. Read recent shipped entities (last 5) for pattern awareness
-4. Scan project-scope plugins for available domain skills:
+2. Read `PRODUCT.md` from project root **if it exists** — understand what the product IS now (capabilities, constraints, personas, vision). Do NOT create if missing.
+3. Read `ROADMAP.md` from project root **if it exists** — understand where the product is GOING (Now/Next/Later, Not Doing, North Star). Do NOT create if missing. Note in ## Roadmap Position if either file is absent.
+4. Read recent shipped entities (last 5) for pattern awareness
+5. Scan project-scope plugins for available domain skills:
    ```bash
    claude plugins list --scope project 2>/dev/null
    ```
+
+**Context usage**: PRODUCT.md tells you "does this feature fit the current product?" (constraints, personas, architecture). ROADMAP.md tells you "does this feature fit the plan?" (Not Doing conflicts, dependency on unshipped work, North Star alignment).
 
 ## Step 2: Musk Audit (Expanded)
 
@@ -265,7 +268,13 @@ Score: {0.0-1.0}
 {List available project-scope skills relevant to this feature}
 ```
 
-Update ROADMAP.md: add entity to "In-Flight" section.
+### Side Effects (after writing entity sections)
+
+**ROADMAP.md** (if exists):
+1. Add entity to `## Now` table: `| {slug} | {size} | {one-sentence from Problem} | {today} |`
+2. If entity was in `## Next` or `## Later` → remove it from there
+
+**PRODUCT.md** — do NOT modify during sharp. Only ship-review writes to PRODUCT.md after verification passes.
 
 ## Circuit Breakers
 
