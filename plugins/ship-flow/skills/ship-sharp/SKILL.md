@@ -111,6 +111,22 @@ Present In/Out to captain. Ask: "Accept all / Edit / Prune" for each list.
 
 ---
 
+## Step 0.5: Entity ID Validation
+
+If the entity file has no `id` field or `id` is empty in frontmatter, assign one:
+
+```bash
+python3 {spacedock_plugin_dir}/skills/commission/bin/status --workflow-dir {workflow_dir} --next-id
+```
+
+Write the returned ID into the entity frontmatter. This prevents ID collisions across concurrent sessions.
+
+If `id` is already set, verify it's not already used:
+```bash
+grep -rl "^id: \"{entity_id}\"" {workflow_dir}/*.md | grep -v {entity_file}
+```
+If collision found → reassign via `--next-id`.
+
 ## Step 1: Load Context
 
 1. Read the entity file (from slug or current dispatch)
@@ -169,22 +185,57 @@ Present to captain: "Accept recommendations / Keep original / Partial — specif
 - DEFER items → note for Phase 2
 - DELETE items → discard (not moved to Out)
 
-## Step 3: Size Triage
+## Step 3: Size Triage (Evidence-Based)
 
-Based on the captain's answers, classify:
+**Do NOT ask the captain to guess.** Run a 10-second probe, present evidence, then classify.
 
-| Size | Criteria | Pipeline behavior |
-|------|----------|------------------|
-| **S** | Single file, <30 min, clear fix | Plan: inline (no research). Execute: single agent. |
-| **M** | Multi-file, 1-4 hours, known approach | Plan: 1-2 researchers → plan + review. Execute: ensign swarm. |
-| **L** | Cross-module, 4+ hours, needs exploration | Plan: full research team → plan + review loop. Execute: large swarm. |
+### Step 3.1: Quick Codebase Probe
 
-Present the classification to captain with reasoning. Captain can override.
+Extract keywords from `## Problem` (function names, file names, module names, error messages). Then:
 
-Estimate token budget from size:
-- S: ~$2-5
-- M: ~$8-15
-- L: ~$30-50
+```bash
+# Count affected files
+grep -rl "{keyword1}\|{keyword2}\|{keyword3}" {project_root}/src/ {project_root}/lib/ {project_root}/plugins/ 2>/dev/null | sort -u | wc -l
+
+# Count affected directories (modules)
+grep -rl "{keyword1}\|{keyword2}" {project_root}/src/ {project_root}/lib/ {project_root}/plugins/ 2>/dev/null | xargs -I{} dirname {} | sort -u | wc -l
+
+# Check if tests exist
+grep -rl "{keyword1}\|{keyword2}" {project_root}/tests/ {project_root}/**/*.test.* 2>/dev/null | wc -l
+```
+
+### Step 3.2: Auto-Classify from Evidence
+
+| Evidence | Size | Pipeline behavior |
+|----------|------|------------------|
+| ≤ 3 files, 1 directory, tests exist | **S** | Plan: inline (no research). Execute: single agent. |
+| 4-15 files, 2-4 directories | **M** | Plan: 1-2 researchers + reviewer. Execute: ensign swarm. |
+| > 15 files, or 5+ directories, or no tests (need to build test infra) | **L** | Plan: full research team + reviewer. Execute: large swarm. |
+
+### Step 3.3: Present to Captain
+
+Show the probe evidence and classification:
+
+> **Size probe:**
+> - Files matching: {N} ({list top 5})
+> - Directories: {N} ({list})
+> - Existing tests: {N files}
+>
+> **Auto-classification: {S/M/L}** — {reasoning from evidence}
+>
+> Confirm, or override with reason?
+
+Captain can override but must give a reason (not just "feels like S").
+
+### Step 3.4: Token Budget
+
+| Size | Budget | Agent dispatches |
+|------|--------|-----------------|
+| S | ~$2-5 | 1-2 |
+| M | ~$8-15 | 5-8 |
+| L | ~$30-50 | 12-20 |
+
+Note: plan stage may re-evaluate size after research (Step 2.5 in ship-plan). This is the initial estimate.
 
 ## Step 4: Done Criteria
 
