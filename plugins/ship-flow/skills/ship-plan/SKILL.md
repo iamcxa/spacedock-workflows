@@ -34,6 +34,26 @@ Also read `PRODUCT.md` if it exists — check `## Architecture` and `## Constrai
 
 **Input validation**: If `## Problem` or `## Done Criteria` is missing, write `## Plan Review` with `status: blocked, reason: missing sharp output` and return. Do NOT plan on partial input.
 
+## Step 1.5: Assumption Re-Validation
+
+Sharp-stage assumptions may reference codebase state that changed between sharp and plan (other merges, concurrent work, manual edits). Before planning, verify that sharp's evidence still holds.
+
+**Procedure:**
+
+1. Scan `## Musk Audit` and `## Shape Output` (if exists) for file:line citations — any reference of the form `path/to/file.ts:NN` or `path/to/file.ts lines NN-MM`.
+2. For each citation, Read the file at the cited line range.
+3. Compare current content against what sharp assumed:
+
+| Result | Action |
+|--------|--------|
+| Evidence holds — content supports the assumption | Proceed silently |
+| Evidence stale — line shifted but claim still plausible | Note `(⚠ stale-evidence: {file}:{line})` inline, proceed with caution |
+| Evidence contradicted — content shows the opposite | **BLOCKER** — write `## Plan Review` with `status: blocked, reason: sharp assumption contradicted` and return. Do NOT plan on stale premises. |
+
+**Skip when:** No file:line citations found in sharp output (common for S-size entities with simple directives). Log "Step 1.5: skipped — no file:line citations in sharp output" and proceed.
+
+**Why this matters:** Planning on stale assumptions is the most expensive failure mode — the plan looks correct, execute dispatches agents, and tasks BLOCK because the codebase doesn't match what the plan expected. One Read per citation at plan start costs seconds; a stale-assumption BLOCKED task costs minutes + escalation ladder.
+
 ## Step 2: Research (size-adaptive, produce+review team)
 
 ### Size S — Skip Research
