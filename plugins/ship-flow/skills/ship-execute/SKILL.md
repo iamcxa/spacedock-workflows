@@ -40,9 +40,9 @@ If any violation found → write `## Execution Log` with `status: blocked, reaso
 
 ## Self-Drive Rule (Anti-Idle)
 
-**CRITICAL — Do NOT idle between tasks.** After completing one task (DONE, commit, review), immediately proceed to the next task in the current wave or advance to the next wave. Do NOT wait for external input between tasks. The entire execute stage is a single continuous run — you have all the context you need from the Plan section.
+**Do not idle between tasks.** After completing one task (DONE, commit, review), immediately proceed to the next task in the current wave or advance to the next wave. Do not wait for external input between tasks. The entire execute stage is a single continuous run — you have all the context you need from the Plan section.
 
-If you find yourself at a turn boundary with remaining tasks, your next action MUST be dispatching or implementing the next task. Pausing between tasks wastes time and risks session-level idle timeout.
+If you find yourself at a turn boundary with remaining tasks, your next action must be dispatching or implementing the next task. Pausing between tasks wastes time and risks session-level idle timeout.
 
 ---
 
@@ -81,6 +81,11 @@ Agent(
     **DONE**: Task completed, verification passed. Return:
     - changed_files: [list of files modified]
     - verification_output: {command output}
+
+    **DONE_WITH_CONCERNS**: Task completed and verification passed, but you have doubts. Return:
+    - changed_files: [list of files modified]
+    - verification_output: {command output}
+    - concerns: {what worries you — correctness doubt, edge case, scope question}
 
     **NEEDS_CONTEXT**: Cannot proceed — need specific information. Return:
     - missing: {what you need — be specific}
@@ -132,6 +137,12 @@ For each task return, process by status:
 ### DONE
 1. Schedule for commit in Step 3.5
 2. Dispatch immediate review (see Step 4)
+
+### DONE_WITH_CONCERNS
+1. Read the concerns before proceeding
+2. If concerns are about **correctness or scope** (e.g., "not sure this handles the edge case", "might conflict with X") → address the concern before review. Options: re-dispatch with clarification, or note the concern for reviewer to check specifically.
+3. If concerns are **observations** (e.g., "this file is getting large", "naming could be better") → note in `## Issues Found` and proceed to commit + review as normal DONE.
+4. Log concerns in `## Execution Log` under the task's row as `concerns: {text}`.
 
 ### NEEDS_CONTEXT
 1. Gather the missing information from the entity body, plan, or worktree
@@ -207,7 +218,7 @@ Agent(
     5. If frontend change: did T2 smoke check PASS?
     
     ## Non-blocking findings
-    Issues that don't affect THIS task's correctness
+    Issues that don't affect this task's correctness
     (tech debt, style improvements, refactor opportunities):
     - List under "## Non-Blocking" — do NOT mark as NEEDS_FIX
     
@@ -231,9 +242,26 @@ Source: "auto:ship-flow review"
 
 ---
 
-## Step 5: Wave Completion and Frontend Smoke
+## Step 5: Wave Completion, AC Verification, and Frontend Smoke
 
-After all waves complete, check if frontend files were touched:
+After all waves complete:
+
+### 5.1: AC Verification (First-Pass)
+
+For each criterion in `## Done Criteria`, run the verification command and record the result. This is the execute-stage first-pass — verify stage will re-run independently as a second opinion.
+
+```
+For each Done Criterion:
+  1. Extract or derive a runnable verify command
+  2. Run it via Bash
+  3. Record: criterion text, command, pass/fail with evidence
+```
+
+If any criterion fails → this is a signal that execute missed something. Log the failure but do NOT block — verify stage is the authoritative gate.
+
+### 5.2: Frontend Smoke
+
+Check if frontend files were touched:
 
 ```bash
 git diff {execute_start_sha}..HEAD --name-only | grep -E '^(ui/|app/|components/|pages/|src/.*\.tsx)'
@@ -270,6 +298,12 @@ Log result to `## Execution Log`.
 
 ### Scope observations
 {benign-drift auto-proceeds, if any}
+
+### AC Verification (first-pass — verify stage re-runs independently)
+| Done Criterion | Verify Command | Result |
+|----------------|---------------|--------|
+| POST /api/comments returns 201 | `curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/api/comments` | 201 PASS |
+| bun test passes with new test | `bun test` | 143 pass, 0 fail PASS |
 
 ## Issues Found
 - {non-blocking findings} → auto-created entity #{slug}-improve-N
