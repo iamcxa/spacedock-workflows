@@ -46,38 +46,86 @@ Capture execute base SHA from `## Execute Output → ### Execution Log` (first t
 
 ---
 
+## Runtime Detection Preamble
+
+Before running any quality check, resolve the runtime tool by reading the project context:
+
+### Step R1: Detect Package Manager
+
+Check for lockfiles in the project root (in priority order):
+```bash
+ls bun.lock bun.lockb 2>/dev/null && echo "runner=bun" || \
+ls pnpm-lock.yaml 2>/dev/null && echo "runner=pnpm" || \
+ls yarn.lock 2>/dev/null && echo "runner=yarn" || \
+ls package-lock.json 2>/dev/null && echo "runner=npm" || \
+ls Cargo.toml 2>/dev/null && echo "runner=cargo" || \
+ls go.mod 2>/dev/null && echo "runner=go" || \
+echo "runner=unknown"
+```
+
+### Step R2: Check README Frontmatter Override
+
+Read the workflow README at `docs/{workflow}/README.md`. If the frontmatter contains a `commands:` block, those values override auto-detection:
+```yaml
+commands:
+  test: "npm test"           # overrides auto-detected test command
+  build: "npm run build"     # overrides auto-detected build command
+  typecheck: "npx tsc --noEmit"
+  lint: "npm run lint"
+  dev: "npm run dev"
+```
+
+### Step R3: Resolve Command Variables
+
+Based on detected runner (or README override), set:
+
+| Variable | bun | pnpm | yarn | npm | cargo | go |
+|----------|-----|------|------|-----|-------|----|
+| `{commands.test}` | `bun test` | `pnpm test` | `yarn test` | `npm test` | `cargo test` | `go test ./...` |
+| `{commands.build}` | `bun build` | `pnpm run build` | `yarn run build` | `npm run build` | `cargo build` | `go build ./...` |
+| `{commands.typecheck}` | `bunx tsc --noEmit` | `pnpm exec tsc --noEmit` | `yarn dlx tsc --noEmit` | `npx tsc --noEmit` | `cargo check` | `go vet ./...` |
+| `{commands.lint}` | `bun lint` | `pnpm run lint` | `yarn run lint` | `npm run lint` | `cargo clippy` | `go vet ./...` |
+| `{commands.prettier}` | `bunx prettier` | `pnpm exec prettier` | `yarn dlx prettier` | `npx prettier` | N/A | N/A |
+
+If runner is `unknown` → stop and ask captain to add `commands:` to workflow README frontmatter.
+
+README frontmatter `commands:` takes precedence over the table above.
+
+---
+
 ## Step 2: Quality Gate — 5-Check Full-Project Verification
 
 Run ALL 5 checks against the full project. **No scope narrowing** — even if execute only touched one file, quality checks the entire project. Binary pass/fail per check, no judgment.
 
 ### Check 1: Tests
 ```bash
-bun test 2>&1
+{commands.test} 2>&1
 ```
 Verdict: exit code 0 and no failing tests → PASS. Otherwise → FAIL.
 
 ### Check 2: Lint
 ```bash
-bun lint 2>&1
+{commands.lint} 2>&1
 ```
 Verdict: exit code 0 → PASS. Warnings-only → PASS. Errors → FAIL.
 
 ### Check 3: Type Check
 ```bash
-bunx tsc --noEmit 2>&1
+{commands.typecheck} 2>&1
 ```
 Verdict: exit code 0 and no `error TS` lines → PASS. Otherwise → FAIL.
 
 ### Check 4: Build
 ```bash
-bun build 2>&1
+{commands.build} 2>&1
 ```
 Verdict: exit code 0 → PASS. Otherwise → FAIL.
 
 ### Check 5: Format (if formatter configured)
 ```bash
-bunx prettier --check "src/**/*.{ts,tsx}" 2>&1 || echo "no formatter configured"
+{commands.prettier} --check "src/**/*.{ts,tsx}" 2>&1 || echo "no formatter configured"
 ```
+(Note: For cargo/go projects where {commands.prettier} is N/A, skip Check 5 entirely — it is advisory only.)
 Verdict: exit code 0 or no formatter → PASS. Otherwise → FAIL (advisory, not blocking).
 
 **Capture last 40 lines of each check's output as evidence.**
