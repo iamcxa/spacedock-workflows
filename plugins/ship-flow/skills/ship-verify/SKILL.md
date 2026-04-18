@@ -31,16 +31,16 @@ This stage combines three verification concerns:
 ## Step 1: Read Execution Results
 
 Read the entity file. Extract:
-- `## Done Criteria` — what must be true
-- `## Execution Log` — what was done, commit SHAs
-- `## Issues Found` — any auto-created entities
-- `## Size Assessment` — determines review depth
-- `## Plan` — for `files_modified` cross-check
+- `## Sharp Output → ### Done Criteria` — what must be true
+- `## Execute Output → ### Execution Log` — what was done, commit SHAs
+- `## Execute Output → ### Issues Found` — any auto-created entities
+- `## Sharp Output → ### Size Assessment` — determines review depth
+- `## Plan Output → ### Plan` — for `files_modified` cross-check
 - `PRODUCT.md` — constraints to verify against (if exists)
 
 **Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. Set verdict to `blocked`, notify captain.
 
-Capture execute base SHA from `## Execution Log` (first task's parent commit).
+Capture execute base SHA from `## Execute Output → ### Execution Log` (first task's parent commit).
 
 ---
 
@@ -83,7 +83,7 @@ Verdict: exit code 0 or no formatter → PASS. Otherwise → FAIL (advisory, not
 **Any of checks 1-4 FAIL → feedback to execute.** Do NOT proceed to review. Max 2 feedback rounds, then escalate to captain.
 
 ```markdown
-## Quality Gate
+### Quality Gate
 - tests: PASS (142 pass, 0 fail)
 - lint: PASS
 - typecheck: PASS
@@ -112,7 +112,7 @@ Before reading haiku findings, run these mechanical checks AND determine which r
 **Mechanical pre-scan:**
 
 1. **Stale references**: For every symbol removed by the diff, grep for remaining references. Hit outside the diff = stale reference finding.
-2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
+2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan Output → ### Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
 3. **Constraint check**: If `PRODUCT.md` has `## Constraints`, verify changes don't violate any.
 4. **CLAUDE.md rule walk**: For each changed file in the diff, walk dirname upward from the file to the repo root, collecting every `CLAUDE.md` encountered. Read each collected CLAUDE.md. For every rule it defines, check whether the diff violates it.
 
@@ -129,7 +129,7 @@ Before reading haiku findings, run these mechanical checks AND determine which r
 
 **Reviewer selection matrix (FO uses this to decide which haiku agents to dispatch):**
 
-Read `## Size Assessment` from entity and diff content:
+Read `## Sharp Output → ### Size Assessment` from entity and diff content:
 
 ```bash
 DIFF_FILES=$(git diff {execute_base}..HEAD --name-only)
@@ -231,13 +231,13 @@ For each surviving finding (from haiku agents, pre-scan, or inline review), YOU 
 | **NIT** — style, naming, minor improvement | Log as non-blocking, auto-create draft entity if warranted |
 
 **If BLOCKING findings exist:**
-- Write classification to `## Review Findings`
+- Write classification to `### Review Findings`
 - Report NEEDS_FIX to FO with specific blocking issues
 - FO dispatches fix agent → re-dispatches haiku reviewers → you re-classify
 - Max 2 rounds, then escalate to captain
 
 ```markdown
-## Review Findings
+### Review Findings
 Scope: {N} files, {M} haiku reviewers dispatched (or "inline review — bare mode")
 
 ### Pre-scan
@@ -262,7 +262,7 @@ Verdict: {SHIP IT | NEEDS_FIX round N | escalated}
 
 **You are running every verification procedure independently.** Do NOT trust execute's first-pass results — re-run each procedure yourself.
 
-Read `## Verification Spec` from plan output. For each row, run the Verify Procedure by type (same dispatch table as execute Step 5.1):
+Read `## Plan Output → ### Verification Spec`. For each row, run the Verify Procedure by type (same dispatch table as execute Step 5.1):
 
 | Type | How to run |
 |------|-----------|
@@ -276,10 +276,10 @@ Read `## Verification Spec` from plan output. For each row, run the Verify Proce
 - **Infra-fail** — command not found, server not running, binary missing, e2e infra unavailable → feedback to execute (automated, no captain)
 - **Assertion-fail** — command ran but output doesn't match expected → specific failure logged with evidence
 
-**Cross-check with execute's first-pass:** Compare your results against `## Execution Log → AC Verification`. If execute passed but you fail → the feature broke between execute and verify (possible: another stage's commit, or a flaky test). Note the discrepancy.
+**Cross-check with execute's first-pass:** Compare your results against `## Execute UAT`. If execute passed but you fail → the feature broke between execute and verify (possible: another stage's commit, or a flaky test). Note the discrepancy.
 
 ```markdown
-## UAT Results
+## Verify UAT
 
 | DC | Type | Assertion | Verify Procedure | Execute 1st | Verify 2nd | Evidence |
 |----|------|-----------|-----------------|-------------|------------|----------|
@@ -299,12 +299,12 @@ If any Done Criterion fails → feedback to execute with: DC number, type, proce
 Scan all findings from quality gate, review, and UAT. Classify findings that **generalize beyond this entity**:
 
 **D1 — Skill-Level Pattern** (auto-write):
-Tag `[D1]` in `## Learnings`. Examples:
+Tag `[D1]` in `### Knowledge Captures`. Examples:
 - "Haiku agent `type-design-analyzer` hallucinated 60% — prefer `code-reviewer` for type checks"
 - "Quality gate: `bun lint` requires `--fix` run before commit in this project"
 
 **D2 — Project-Level Candidate** (staged for captain):
-Tag `[D2-candidate]` in `## Learnings`. Examples:
+Tag `[D2-candidate]` in `### Knowledge Captures`. Examples:
 - "All new API routes need rate limiting middleware — entity X shipped without it"
 - "Frontend routes must handle SSR — `window` access broke quality gate"
 
