@@ -38,6 +38,14 @@ If any violation found → write `## Execution Log` with `status: blocked, reaso
 
 ---
 
+## Self-Drive Rule (Anti-Idle)
+
+**CRITICAL — Do NOT idle between tasks.** After completing one task (DONE, commit, review), immediately proceed to the next task in the current wave or advance to the next wave. Do NOT wait for external input between tasks. The entire execute stage is a single continuous run — you have all the context you need from the Plan section.
+
+If you find yourself at a turn boundary with remaining tasks, your next action MUST be dispatching or implementing the next task. Pausing between tasks wastes time and risks session-level idle timeout.
+
+---
+
 ## Step 2: Execute Tasks (Wave-by-Wave)
 
 Iterate waves sequentially. Inside each wave, dispatch implementation subagents:
