@@ -13,6 +13,44 @@ Captain invokes this when a PR reviewer marks "Changes requested." This skill re
 
 ---
 
+## VCS Detection Preamble
+
+Before running any PR management command, resolve the VCS tool:
+
+### Step V1: Detect VCS Provider
+
+```bash
+git remote -v 2>/dev/null | grep -q "github\.com" && echo "vcs=github" || \
+git remote -v 2>/dev/null | grep -q "gitlab\.com" && echo "vcs=gitlab" || \
+echo "vcs=unknown"
+```
+
+### Step V2: Check README Frontmatter Override
+
+Read the workflow README at `docs/{workflow}/README.md`. If the frontmatter contains a `commands:` block with VCS commands, those values override auto-detection:
+```yaml
+commands:
+  pr_create: "gh pr create"   # overrides auto-detected VCS command
+  pr_view: "gh pr view"
+  pr_comment: "gh pr comment"
+  pr_close: "gh pr close"
+```
+
+### Step V3: Resolve VCS Command Variables
+
+| Variable | github | gitlab |
+|----------|--------|--------|
+| `{commands.pr_create}` | `gh pr create` | `glab mr create` |
+| `{commands.pr_view}` | `gh pr view` | `glab mr view` |
+| `{commands.pr_comment}` | `gh pr comment` | `glab mr comment` |
+| `{commands.pr_close}` | `gh pr close` | `glab mr close` |
+
+If vcs is `unknown` → stop and ask captain to add `commands:` VCS block to workflow README frontmatter.
+
+README frontmatter `commands:` takes precedence over the table above.
+
+---
+
 ## Step 1: Load Entity and PR
 
 Read the entity file from slug. Extract:
@@ -27,7 +65,7 @@ If no `pr` field → ask captain for PR number.
 Verify the PR exists and has review comments:
 
 ```bash
-gh pr view {pr-number} --json state,reviews,comments
+{commands.pr_view} {pr-number} --json state,reviews,comments
 ```
 
 If PR state is "MERGED" → refuse: "PR already merged. Open a new entity for follow-up fixes."
@@ -40,10 +78,12 @@ If no reviews with "CHANGES_REQUESTED" → warn: "No changes requested on this P
 Fetch all review comments:
 
 ```bash
-gh pr view {pr-number} --json reviews --jq '.reviews[] | select(.state == "CHANGES_REQUESTED") | .body'
-gh pr view {pr-number} --json comments --jq '.comments[].body'
-# Also inline review comments (file-level)
-gh api repos/{owner}/{repo}/pulls/{pr-number}/comments --jq '.[] | "\(.path):\(.line) — \(.body)"'
+{commands.pr_view} {pr-number} --json reviews --jq '.reviews[] | select(.state == "CHANGES_REQUESTED") | .body'
+{commands.pr_view} {pr-number} --json comments --jq '.comments[].body'
+# Also inline review comments (file-level — GitHub only):
+# For GitHub: gh api repos/{owner}/{repo}/pulls/{pr-number}/comments --jq '.[] | "\(.path):\(.line) — \(.body)"'
+# For GitLab: glab api projects/{project}/merge_requests/{mr-iid}/notes --jq '.[] | "\(.position.new_path):\(.position.new_line) — \(.body)"'
+# Run the appropriate command based on detected VCS provider from Step V1.
 ```
 
 Collect all comments into a list with:
@@ -116,8 +156,9 @@ pr_feedback_round: {N}    # increment from previous, or 1 if first feedback
 ### 5.2: Close Current PR
 
 ```bash
-gh pr close {pr-number} --comment "Rolling back to {execute|plan} for fixes based on review feedback. See entity ## PR Review Feedback for details."
+{commands.pr_close} {pr-number} --comment "Rolling back to {execute|plan} for fixes based on review feedback. See entity ## PR Review Feedback for details."
 ```
+(Note: For GitLab, `glab mr close` does not support `--comment` flag. If VCS is gitlab, first add a comment via `glab mr comment {pr-number} --message "Rolling back to {execute|plan} for fixes based on review feedback."`, then close with `glab mr close {pr-number}`.)
 
 **Do NOT delete the branch.** The next execute cycle will add commits to the same branch, and ship will open a new PR.
 
