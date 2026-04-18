@@ -94,63 +94,94 @@ Verdict: exit code 0 or no formatter → PASS. Otherwise → FAIL (advisory, not
 
 ---
 
-## Step 3: Themed Review — Read and Classify
+## Step 3: Code Review — Haiku Agents + Sonnet Integration
 
-The verify stage uses `dispatch: debate-driven`. This means:
-- **FO handles reviewer dispatch** — FO creates themed reviewer teammates, they debate via SendMessage, then FO dispatches YOU (the ensign) to classify their findings.
-- **You do NOT dispatch reviewers yourself.** You read the findings that are already in the entity file from the debate phase.
+The verify stage uses `dispatch: debate-driven`. FO dispatches haiku review agents (cheap, specialized) BEFORE dispatching you (sonnet, integration). You read their raw findings and classify.
 
-**Size S exception:** For S-size entities (< 5 changed files), FO may skip debate dispatch and fall back to bare mode. This is by design — a 2-file fix doesn't warrant 3 themed reviewers debating. When debate is skipped, you run an inline review yourself (see "Read Reviewer Findings" below). Note this in `## Review Findings` as `"Size S — bare mode inline review (no debate dispatched)."`
+**Architecture:**
+```
+FO dispatches:
+  ├── haiku-1: code-reviewer (diff correctness)
+  ├── haiku-2: silent-failure-hunter (error handling gaps)
+  ├── haiku-3: type-design-analyzer (type quality)
+  │   ↓ all write raw findings to entity ## Review Findings
+  └── YOU (sonnet): read findings → spot-check → classify → verdict
+```
 
-### Pre-Scan (Inline — Before Reading Reviewer Findings)
+**Size S exception:** FO may dispatch only 1 haiku reviewer (code-reviewer) instead of 3. If no haiku findings in entity file → you run inline review yourself.
 
-Run these mechanical checks yourself:
+### Step 3.1: Pre-Scan (Inline — You Do This Yourself)
+
+Before reading haiku findings, run these mechanical checks:
 
 1. **Stale references**: For every symbol removed by the diff, grep for remaining references. Hit outside the diff = stale reference finding.
 2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
-3. **Constraint check**: If `PRODUCT.md` has `## Constraints`, verify changes don't violate any (e.g., "channel-only" constraint → no standalone mode code added).
+3. **Constraint check**: If `PRODUCT.md` has `## Constraints`, verify changes don't violate any.
 
-### Read Reviewer Findings
+### Step 3.2: Read Haiku Review Findings
 
-Read `## Review Debate` from the entity file (written by FO from debate output). Parse each finding.
+Read `## Haiku Review` from the entity file (written by FO-dispatched haiku agents). Each haiku agent was instructed to report raw findings only — no severity, no fix recommendations.
 
-If `## Review Debate` is missing (FO fell back to bare mode, or Size S with no debate):
+Expected finding format from each haiku agent:
+```
+### {agent-name}
+- file:line — {code snippet} — {check that triggered}
+- file:line — {code snippet} — {check that triggered}
+```
+
+If `## Haiku Review` is missing (FO skipped dispatch, or bare mode):
 - Run a single inline review yourself using the diff:
   ```bash
   git diff {execute_base}..HEAD
   ```
   Check: (1) changes match plan, (2) security, (3) dead code, (4) error handling, (5) stale refs.
 
-### Finding Classification
+### Step 3.3: Spot-Check Haiku Citations (Hallucination Guard)
 
-For each finding (from debate or inline review), classify:
+**Before classifying ANY haiku finding, spot-check 2-3 citations:**
+
+1. Pick 2-3 findings at random from haiku output
+2. Read the cited file:line
+3. Does the code snippet match what's actually in the file?
+
+| Result | Action |
+|--------|--------|
+| All spot-checks match | Proceed to classification |
+| 1 mismatch | Drop that finding, mark `⚠️ hallucination dropped`, check 2 more from same agent |
+| > 50% mismatches from one agent | **Discard ALL findings from that agent**, log as Learning: `"haiku {agent-name} hallucinated > 50% — all findings dropped"` |
+
+### Step 3.4: Classify Findings
+
+For each surviving finding (from haiku agents, pre-scan, or inline review), YOU assign severity:
 
 | Severity | Routing |
 |----------|---------|
-| **BLOCKING** — security hole, broken functionality, data loss risk | NEEDS_FIX → request FO dispatch fix agent |
+| **BLOCKING** — security hole, broken functionality, data loss risk | NEEDS_FIX → report to FO |
 | **WARNING** — potential bug, missing edge case, weak error handling | Log, proceed if no BLOCKING |
 | **NIT** — style, naming, minor improvement | Log as non-blocking, auto-create draft entity if warranted |
 
 **If BLOCKING findings exist:**
 - Write classification to `## Review Findings`
 - Report NEEDS_FIX to FO with specific blocking issues
-- FO dispatches fix agent → debate reviewers re-review → you re-classify
+- FO dispatches fix agent → re-dispatches haiku reviewers → you re-classify
 - Max 2 rounds, then escalate to captain
 
 ```markdown
 ## Review Findings
-Scope: {N} files, {M} reviewers dispatched (or "inline review — bare mode")
+Scope: {N} files, {M} haiku reviewers dispatched (or "inline review — bare mode")
 
 ### Pre-scan
 - Stale references: {none | list}
 - Plan consistency: {all files match | discrepancies}
 - Constraint check: {all constraints respected | violations}
 
-### Reviewer findings
-| Severity | File:Line | Description | Reviewer |
-|----------|-----------|-------------|----------|
-| BLOCKING | src/api.ts:42 | Silent swallow of 4xx | correctness |
-| WARNING | src/types.ts:10 | Stale comment | style |
+### Haiku review (spot-checked)
+Spot-check: {N}/{M} citations verified — {all match | N hallucinations dropped}
+
+| Severity | File:Line | Description | Source |
+|----------|-----------|-------------|--------|
+| BLOCKING | src/api.ts:42 | Silent swallow of 4xx | silent-failure-hunter |
+| WARNING | src/types.ts:10 | Loose union type | type-design-analyzer |
 
 Verdict: {SHIP IT | NEEDS_FIX round N | escalated}
 ```

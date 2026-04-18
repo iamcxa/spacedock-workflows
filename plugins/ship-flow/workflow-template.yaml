@@ -47,7 +47,7 @@ stages:
     model: sonnet
     dispatch: debate-driven
     feedback-to: execute
-    description: "Agent gate. 5-check quality gate, debate-driven themed review, done criteria UAT. PASS → ship. FAIL → feedback to execute."
+    description: "Agent gate. FO dispatches haiku review agents (code-reviewer, silent-failure-hunter, type-design-analyzer) then sonnet verify ensign integrates: spot-checks citations, classifies findings, runs 5-check quality gate + done criteria UAT. PASS → ship. FAIL → feedback to execute."
 
   - name: ship
     worktree: false
