@@ -18,30 +18,29 @@ This stage combines three verification concerns:
 
 ## Entity Body Contract
 
-**Reads:** `## Done Criteria`, `## Execution Log`, `## Issues Found`, `## Size Assessment`, `## Plan`, `PRODUCT.md` (constraints check)
-**Writes (all mandatory):**
-- `## Quality Gate` — 5-check results (test/lint/typecheck/build/format)
-- `## Review Findings` — classified findings from themed reviewers
-- `## UAT Results` — done criteria checklist with verification evidence
-- `## Verify Report` — verdict (PASS/FAIL), blocking issues, feedback routing
-**Optional writes:**
-- `## Learnings` — insights discovered during verification (append-only)
+**Schema:** `references/entity-body-schema.yaml` → `stages.verify`
+
+**Reads:** `## Execute Output` (all subsections), `## Plan Output` → Verification Spec, `## Sharp Output` → Done Criteria, `PRODUCT.md` → Constraints
+**Writes:**
+- `## Verify Output` — subsections: Quality Gate (5 checks), Review Findings (classified), Knowledge Captures (D1/D2)
+- `## Verify Report` — status, stage_cost, quality, review, uat, blocking issues, knowledge capture
+- `## Verify UAT` — independent second-pass (authoritative — determines PASS/FAIL)
 
 ---
 
 ## Step 1: Read Execution Results
 
 Read the entity file. Extract:
-- `## Done Criteria` — what must be true
-- `## Execution Log` — what was done, commit SHAs
-- `## Issues Found` — any auto-created entities
-- `## Size Assessment` — determines review depth
-- `## Plan` — for `files_modified` cross-check
+- `## Sharp Output → ### Done Criteria` — what must be true
+- `## Execute Output → ### Execution Log` — what was done, commit SHAs
+- `## Execute Output → ### Issues Found` — any auto-created entities
+- `## Sharp Output → ### Size Assessment` — determines review depth
+- `## Plan Output → ### Plan` — for `files_modified` cross-check
 - `PRODUCT.md` — constraints to verify against (if exists)
 
 **Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. Set verdict to `blocked`, notify captain.
 
-Capture execute base SHA from `## Execution Log` (first task's parent commit).
+Capture execute base SHA from `## Execute Output → ### Execution Log` (first task's parent commit).
 
 ---
 
@@ -84,7 +83,7 @@ Verdict: exit code 0 or no formatter → PASS. Otherwise → FAIL (advisory, not
 **Any of checks 1-4 FAIL → feedback to execute.** Do NOT proceed to review. Max 2 feedback rounds, then escalate to captain.
 
 ```markdown
-## Quality Gate
+### Quality Gate
 - tests: PASS (142 pass, 0 fail)
 - lint: PASS
 - typecheck: PASS
@@ -113,12 +112,24 @@ Before reading haiku findings, run these mechanical checks AND determine which r
 **Mechanical pre-scan:**
 
 1. **Stale references**: For every symbol removed by the diff, grep for remaining references. Hit outside the diff = stale reference finding.
-2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
+2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan Output → ### Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
 3. **Constraint check**: If `PRODUCT.md` has `## Constraints`, verify changes don't violate any.
+4. **CLAUDE.md rule walk**: For each changed file in the diff, walk dirname upward from the file to the repo root, collecting every `CLAUDE.md` encountered. Read each collected CLAUDE.md. For every rule it defines, check whether the diff violates it.
+
+   ```
+   Example: changed file is src/domain/session/watcher.ts
+   Walk: src/domain/session/CLAUDE.md → src/domain/CLAUDE.md → src/CLAUDE.md → CLAUDE.md
+   Each CLAUDE.md may define rules like "no direct DB access from domain layer",
+   "always use Zod for external input validation", etc.
+   ```
+
+   Any violation = pre-scan finding with: the CLAUDE.md path, the rule text, the violating file:line from the diff. Severity: BLOCKING (rule uses "must"/"never"/"always") or WARNING (rule uses "prefer"/"should"/"consider").
+
+   **Dedup**: if multiple changed files share the same parent CLAUDE.md, read it once. Cache CLAUDE.md contents during the walk.
 
 **Reviewer selection matrix (FO uses this to decide which haiku agents to dispatch):**
 
-Read `## Size Assessment` from entity and diff content:
+Read `## Sharp Output → ### Size Assessment` from entity and diff content:
 
 ```bash
 DIFF_FILES=$(git diff {execute_base}..HEAD --name-only)
@@ -170,10 +181,10 @@ You are a specialized code reviewer. Load Skill("{skill-name}") and apply it to 
 git diff {execute_base}..HEAD
 
 ## Rules
-- Report raw findings ONLY — no severity, no fix recommendations
-- Each finding MUST include: file:line, exact code snippet (copy-paste, not paraphrased), check name
+- Report raw findings only — no severity, no fix recommendations
+- Each finding must include: file:line, exact code snippet (copy-paste, not paraphrased), check name
 - Do NOT assign severity — the sonnet verify ensign classifies
-- Return EMPTY array [] if no checks trigger
+- Return empty array [] if no checks trigger
 - A false finding is worse than no finding — you will be spot-checked
 ```
 
@@ -220,13 +231,13 @@ For each surviving finding (from haiku agents, pre-scan, or inline review), YOU 
 | **NIT** — style, naming, minor improvement | Log as non-blocking, auto-create draft entity if warranted |
 
 **If BLOCKING findings exist:**
-- Write classification to `## Review Findings`
+- Write classification to `### Review Findings`
 - Report NEEDS_FIX to FO with specific blocking issues
 - FO dispatches fix agent → re-dispatches haiku reviewers → you re-classify
 - Max 2 rounds, then escalate to captain
 
 ```markdown
-## Review Findings
+### Review Findings
 Scope: {N} files, {M} haiku reviewers dispatched (or "inline review — bare mode")
 
 ### Pre-scan
@@ -247,29 +258,59 @@ Verdict: {SHIP IT | NEEDS_FIX round N | escalated}
 
 ---
 
-## Step 4: Done Criteria UAT
+## Step 4: Done Criteria UAT (Independent Second-Pass)
 
-For each criterion in `## Done Criteria`:
-- Run the verification command or check
-- Record pass/fail with evidence
-- Classify failures:
-  - **Infra-fail** — command not found, server not running, binary missing → feedback to execute
-  - **Assertion-fail** — command ran but output doesn't match → specific failure logged
+**You are running every verification procedure independently.** Do NOT trust execute's first-pass results — re-run each procedure yourself.
+
+Read `## Plan Output → ### Verification Spec`. For each row, run the Verify Procedure by type (same dispatch table as execute Step 5.1):
+
+| Type | How to run |
+|------|-----------|
+| `cli` | Bash: run command, check exit code + output |
+| `api` | Bash: run curl command, check status + response |
+| `ui` | Bash: curl route + grep content. If e2e flow exists → `Skill("e2e-pipeline:e2e-test")` |
+| `skill` | `Skill("{skill-name}")` with probe prompt, check output shape |
+| `e2e` | `Skill("e2e-pipeline:e2e-test")` if available, otherwise degrade to `ui` + warn |
+
+**Classify failures:**
+- **Infra-fail** — command not found, server not running, binary missing, e2e infra unavailable → feedback to execute (automated, no captain)
+- **Assertion-fail** — command ran but output doesn't match expected → specific failure logged with evidence
+
+**Cross-check with execute's first-pass:** Compare your results against `## Execute UAT`. If execute passed but you fail → the feature broke between execute and verify (possible: another stage's commit, or a flaky test). Note the discrepancy.
 
 ```markdown
-## UAT Results
+## Verify UAT
 
-### Done Criteria
-- [x] POST /api/comments returns 201 with comment ID — `curl -s localhost:3000/api/comments -X POST | jq .id` → "abc123"
-- [x] Claude receives notification within 5s — verified via test
-- [x] bun test passes with new test — 143 pass, 0 fail
-
-### Frontend Smoke (if applicable)
-- Route /: 200 PASS
-- Route /entity: 200 PASS
+| DC | Type | Assertion | Verify Procedure | Execute 1st | Verify 2nd | Evidence |
+|----|------|-----------|-----------------|-------------|------------|----------|
+| DC-1 | ui | Detail page with panel | `curl ... \| grep` | ✅ | ✅ | "comment-panel" found |
+| DC-2 | ui | Input + submit button | `curl ... \| grep` | ✅ | ✅ | "comment-input" found |
+| DC-3 | api | POST returns 201 | `curl -s -w "%{http_code}" ...` | ✅ | ✅ | 201, {"id":"abc"} |
+| DC-4 | e2e | Comment appears (SSE) | `e2e-test flows/comment-sse.yaml` | ⚠️ degraded to ui | ⚠️ degraded to ui | curl check only |
+| DC-5 | cli | Notification test | `bun test tests/notification.test.ts` | ✅ | ✅ | exit 0 |
 ```
 
-If any Done Criterion fails → feedback to execute with specific failure. Max 2 rounds.
+If any Done Criterion fails → feedback to execute with: DC number, type, procedure, expected vs actual. Max 2 rounds.
+
+---
+
+## Step 4.5: Knowledge Capture (Conditional)
+
+Scan all findings from quality gate, review, and UAT. Classify findings that **generalize beyond this entity**:
+
+**D1 — Skill-Level Pattern** (auto-write):
+Tag `[D1]` in `### Knowledge Captures`. Examples:
+- "Haiku agent `type-design-analyzer` hallucinated 60% — prefer `code-reviewer` for type checks"
+- "Quality gate: `bun lint` requires `--fix` run before commit in this project"
+
+**D2 — Project-Level Candidate** (staged for captain):
+Tag `[D2-candidate]` in `### Knowledge Captures`. Examples:
+- "All new API routes need rate limiting middleware — entity X shipped without it"
+- "Frontend routes must handle SSR — `window` access broke quality gate"
+
+Ship-review stage surfaces `[D2-candidate]` items to captain.
+
+**Skip when**: All findings are entity-specific. Log: `Knowledge capture: skipped — no findings met D1/D2 threshold`
 
 ---
 
@@ -282,7 +323,11 @@ Quality: {5/5 pass}
 Review: {verdict from Step 3}
 UAT: {all done criteria pass | N failed}
 Blocking issues: {none | list}
+Knowledge capture: {D1: N written, D2: M candidates | skipped}
+stage_cost: ${verify_cost} ({N} dispatches: {breakdown by model})
 ```
+
+FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
 
 If verdict PASS → FO advances to ship.
 If verdict FAIL → FO routes feedback-to execute with Verify Report as context.

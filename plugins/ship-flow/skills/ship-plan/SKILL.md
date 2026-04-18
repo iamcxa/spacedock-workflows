@@ -11,28 +11,46 @@ You are running the PLAN stage of ship-flow. No captain interaction — you rese
 
 ## Entity Body Contract
 
-**Reads:** `## Problem`, `## Done Criteria`, `## Size Assessment`, `## Project Skills`, `## Shape Output` (if shape ran), `## Musk Audit`, `PRODUCT.md` (architecture + constraints)
-**Writes (all mandatory):**
-- `## Research Summary` — key findings from researchers, or "Size S — no research needed"
-- `## Size Re-evaluation` — confirmed or adjusted size after research
-- `## Plan` — TDD tasks with files, steps, verification commands, model hints, wave assignments
-- `## Plan Review` — iterations count, gaps, estimated task count, model split, plan-checker + reviewer results
-**Optional writes:**
-- `## Learnings` — insights discovered during planning (append-only)
+**Schema:** `references/entity-body-schema.yaml` → `stages.plan`
+
+**Reads:** `## Sharp Output` (all subsections), `PRODUCT.md` (architecture + constraints)
+**Writes:**
+- `## Plan Output` — subsections: Research Summary, Size Re-evaluation, Verification Spec, Plan (TDD tasks with waves)
+- `## Plan Report` — status, stage_cost, iterations, dimensions, reviewer verdict, scope anchoring, task count, model split
 
 ## Step 1: Read Sharp Output
 
-Read the entity file. Extract:
-- `## Problem` — what to solve
-- `## Done Criteria` — what "shipped" looks like
-- `## Size Assessment` — S/M/L determines your INITIAL approach (may change after research)
-- `## Project Skills` — domain skills available
-- `## Shape Output` — scope in/out (if shape phase ran) — these are your scope anchors
-- `## Musk Audit` — gap-to-goal analysis, KEEP/DEFER/DELETE verdicts
+Read the entity file. Extract from `## Sharp Output`:
+- `### Problem` — what to solve
+- `### Done Criteria` — what "shipped" looks like
+- `### Size Assessment` — S/M/L determines your INITIAL approach (may change after research)
+- `### Project Skills` — domain skills available
+- `### Shape Output` — scope in/out (if shape phase ran) — these are your scope anchors
+- `### Musk Audit` — gap-to-goal analysis, KEEP/DEFER/DELETE verdicts
 
 Also read `PRODUCT.md` if it exists — check `## Architecture` and `## Constraints` for solution constraints.
 
-**Input validation**: If `## Problem` or `## Done Criteria` is missing, write `## Plan Review` with `status: blocked, reason: missing sharp output` and return. Do NOT plan on partial input.
+**Input validation**: If `## Sharp Output → ### Problem` or `## Sharp Output → ### Done Criteria` is missing, write `## Plan Report` with `status: blocked, reason: missing sharp output` and return. Do NOT plan on partial input.
+
+## Step 1.5: Assumption Re-Validation
+
+Sharp-stage assumptions may reference codebase state that changed between sharp and plan (other merges, concurrent work, manual edits). Before planning, verify that sharp's evidence still holds.
+
+**Procedure:**
+
+1. Scan `## Sharp Output → ### Musk Audit` and `### Shape Output` (if exists) for file:line citations — any reference of the form `path/to/file.ts:NN` or `path/to/file.ts lines NN-MM`.
+2. For each citation, Read the file at the cited line range.
+3. Compare current content against what sharp assumed:
+
+| Result | Action |
+|--------|--------|
+| Evidence holds — content supports the assumption | Proceed silently |
+| Evidence stale — line shifted but claim still plausible | Note `(⚠ stale-evidence: {file}:{line})` inline, proceed with caution |
+| Evidence contradicted — content shows the opposite | **BLOCKER** — write `## Plan Report` with `status: blocked, reason: sharp assumption contradicted` and return. Do NOT plan on stale premises. |
+
+**Skip when:** No file:line citations found in sharp output (common for S-size entities with simple directives). Log "Step 1.5: skipped — no file:line citations in sharp output" and proceed.
+
+**Why this matters:** Planning on stale assumptions is the most expensive failure mode — the plan looks correct, execute dispatches agents, and tasks BLOCK because the codebase doesn't match what the plan expected. One Read per citation at plan start costs seconds; a stale-assumption BLOCKED task costs minutes + escalation ladder.
 
 ## Step 2: Research (size-adaptive, produce+review team)
 
@@ -118,7 +136,7 @@ Same review checklist as M-size, plus:
 
 If GAPS → dispatch specific producers again. Max 1 round.
 
-**Contradiction handling**: When findings conflict, write BOTH verbatim in `## Research Summary` as an Open Question. Do NOT silently pick one. The plan must address contradictions explicitly.
+**Contradiction handling**: When findings conflict, write BOTH verbatim in `### Research Summary` (under `## Plan Output`) as an Open Question. Do NOT silently pick one. The plan must address contradictions explicitly.
 
 Collect all research + review outputs.
 
@@ -138,9 +156,9 @@ Count the actual affected files from research findings. Compare to sharp's size 
 | M | > 15 files | **Upgrade to L** — run remaining research domains if not covered |
 | L | any | Confirmed L (already ran full research) |
 
-Write `## Size Re-evaluation`:
+Write `### Size Re-evaluation` (under `## Plan Output`):
 ```markdown
-## Size Re-evaluation
+### Size Re-evaluation
 Sharp estimate: {original}
 Research evidence: {N} files affected, {reasoning}
 Adjusted size: {confirmed | upgraded to M | downgraded to S}
@@ -154,8 +172,8 @@ If size changed → update entity frontmatter `size:` field.
 **Skip for Size S.**
 
 Before writing tasks, cross-reference against scope:
-- If `## Shape Output` has Scope In → every task must map to a Scope In bullet
-- If no Shape Output → every task must map to a `## Done Criteria` item
+- If `## Sharp Output → ### Shape Output` has Scope In → every task must map to a Scope In bullet
+- If no Shape Output → every task must map to a `## Sharp Output → ### Done Criteria` item
 
 Produce a mapping table:
 
@@ -166,20 +184,20 @@ Produce a mapping table:
 | Task 2 | Done Criteria #3 |
 ```
 
-**Halt condition**: any task with no mapping → drop the task (out of scope) or note a scope gap in `## Plan Review`. Do NOT silently expand scope beyond what sharp defined.
+**Halt condition**: any task with no mapping → drop the task (out of scope) or note a scope gap in `## Plan Report`. Do NOT silently expand scope beyond what sharp defined.
 
 ## Step 3: Write Plan (TDD Task Structure)
 
 Write a plan with concrete tasks. Each task must be completable by a single agent in one dispatch.
 
-**TDD enforcement: every task that produces application code MUST follow test-first order.**
+**TDD enforcement:** every task that produces application code must follow test-first order.
 
 Format:
 
 ```markdown
-## Plan
+### Plan
 
-### Task 1: {name}
+#### Task 1: {name}
 **Wave:** {0|1|2|...} — wave 0 for test infrastructure, same-wave tasks can run in parallel
 **Files:** {create/modify with exact paths}
 **Read first:** {files the agent must read before starting}
@@ -239,12 +257,45 @@ Done: `grep "validateEmail" src/models/User.ts` finds the new function
 ```
 Not: "works correctly" / "is properly implemented" / "handles all cases"
 
+## Step 3.5: Verification Spec
+
+Read `## Sharp Output → ### Done Criteria` and `## Sharp Output → ### Journey → DC Mapping` from sharp output. For each typed Done Criterion, fill in the exact verification procedure:
+
+```markdown
+### Verification Spec
+
+| DC | Type | Assertion | Verify Procedure | Expected |
+|----|------|-----------|-----------------|----------|
+| DC-1 | ui | Detail page loads with comment panel | `curl -sf localhost:3000/entity/test \| grep 'comment-panel'` | matches |
+| DC-2 | ui | Panel has input + submit | `curl -sf localhost:3000/entity/test \| grep 'comment-input'` | matches |
+| DC-3 | api | POST returns 201 | `curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/api/comments -d '{"text":"test"}'` | 201 |
+| DC-4 | ui | Comment appears without refresh | `e2e-test flows/comment-sse.yaml` (if e2e available) or manual | steps pass |
+| DC-5 | cli | Notification test passes | `bun test tests/notification.test.ts` | exit 0 |
+```
+
+**Verify Procedure rules by type:**
+
+| Type | Procedure format | Fallback if infra unavailable |
+|------|-----------------|------------------------------|
+| `cli` | Exact bash command + expected exit code/output | — (always available) |
+| `api` | `curl` command with method, URL, body, expected status + response pattern | — (always available) |
+| `ui` | `curl` route + `grep` content (T2 level). If complex interaction → `e2e-test {flow.yaml}` | curl + grep (skip interaction check) |
+| `skill` | `Skill("{skill-name}")` invoke + expected output shape | Note: can only verify in Claude Code session |
+| `e2e` | `e2e-test {flow.yaml}` with step-by-step assertions | Degrade to `ui` type (curl + grep) |
+
+**Every DC MUST have a Verify Procedure.** "Manual check" or "visually inspect" is a plan failure — find a programmatic way or degrade the type (e.g., `e2e` → `ui` with curl).
+
+The Verification Spec table is consumed by:
+- **Execute Step 5.1** — runs each procedure as first-pass
+- **Verify Step 4** — runs each procedure independently as second-pass
+- **Ship PR body** — includes procedure + results for reviewer reproduction
+
 ## Step 4: Self-Review (Plan-Checker Lite)
 
 After writing the plan, run this multi-dimensional review:
 
 ### Dimension 1 — Requirement Coverage
-Does every Done Criterion from `## Done Criteria` map to at least one task? Missing coverage = blocker.
+Does every Done Criterion from `## Sharp Output → ### Done Criteria` map to at least one task? Missing coverage = blocker.
 
 ### Dimension 2 — Task Completeness
 Does every task have: exact file paths, verification command, model hint, wave assignment? Missing fields = blocker.
@@ -269,6 +320,21 @@ For each task, ask:
 
 ### Dimension 7 — TDD Compliance
 Does every code-producing task follow test-first order (write test → verify fail → implement → verify pass)? Tasks with `TDD: skip` must have a valid reason.
+
+### Dimension 8 — Stale-Line-Anchor Check
+For every `file:line` citation in the plan (`read_first` entries, code snippets referencing specific lines, step instructions citing line numbers):
+
+1. Read the cited file and line range
+2. Does the content at that line match what the plan assumes?
+
+| Result | Action |
+|--------|--------|
+| Content matches assumption | PASS — proceed silently |
+| Line shifted but content exists nearby | WARNING — update the line number in the plan |
+| Content contradicts assumption | BLOCKER — the plan is building on stale evidence. Fix the task or flag in Plan Review |
+| File doesn't exist | BLOCKER — plan references a phantom path |
+
+**This check is cheap (just Read calls) and catches the #1 cause of execute-stage BLOCKED returns** — plans written against a codebase state that changed between plan and execute.
 
 **Fix issues inline.** Then re-review. Max 3 iterations.
 
@@ -318,28 +384,36 @@ If APPROVED → proceed to Step 5.
 ## Step 5: Write Entity Sections
 
 ```markdown
-## Research Summary
+## Plan Output
+
+### Research Summary
 {findings, or "Size S — no research needed"}
 {Open Questions from contradictory research, if any}
 {Reviewer assessment: APPROVED | GAPS addressed}
 
-## Size Re-evaluation
+### Size Re-evaluation
 Sharp estimate: {original}
 Research evidence: {N files, reasoning}
 Adjusted size: {confirmed | changed}
 
-## Plan
+### Verification Spec
+{table — written in Step 3.5}
+
+### Plan
 {tasks with TDD structure and wave assignments}
 
-## Plan Review
+## Plan Report
+status: {clean | gaps-noted}
+stage_cost: ${plan_cost} ({N} dispatches: {breakdown by model})
 Iterations: {N} (self-review) + {1} (reviewer)
-Status: {clean | gaps-noted}
-Self-review dimensions: {7 dimensions, which passed/failed}
+Dimensions: {8 dimensions, which passed/failed}
 Reviewer verdict: {APPROVED | REVISE → fixed}
 Scope anchoring: {all tasks mapped | gaps noted}
-Estimated tasks: {count}
-Estimated model split: {N haiku, M sonnet}
+Task count: {count}
+Model split: {N haiku, M sonnet}
 ```
+
+FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
 
 ## Circuit Breakers
 

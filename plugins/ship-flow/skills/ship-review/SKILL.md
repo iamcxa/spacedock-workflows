@@ -13,15 +13,15 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 ## Entity Body Contract
 
-**Reads:** `## Problem`, `## Done Criteria`, `## Execution Log`, `## Verify Report`, `## Size Assessment`, `## Shape Output` (if exists), `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md` (Shipped row + capability bullet + user story derivation formats)
-**Writes (all mandatory):**
-- `## Ship Report` — verdict, PR link, token actual, task summary
-- `## Token Summary` — budget vs actual with ratio
+**Schema:** `references/entity-body-schema.yaml` → `stages.ship`
+
+**Reads:** `## Verify Report` (must be PASS), `## Execute Output`, `## Sharp Output`, `## Verify UAT`, `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md`
+**Writes:**
+- `## Ship Output` — subsections: PR Draft, ROADMAP.md Update, PRODUCT.md Update, D2 Knowledge Candidates, Token Summary
+- `## Ship Report` — status, stage_cost, PR link, token budget/actual, tasks, verify, roadmap, product
 **Side effects:**
 - `ROADMAP.md` — entity moves from Now → Shipped
 - `PRODUCT.md` — new capability + user stories appended
-**Optional writes:**
-- `## Learnings` — insights discovered during ship (append-only)
 
 ---
 
@@ -54,17 +54,28 @@ Body:
 ## Problem
 {from entity ## Problem}
 
-## Done Criteria
-{from entity, with checkmarks from ## UAT Results}
+## User Journey
+{from entity ## User Journey — the end-to-end flow this feature enables}
+
+## Done Criteria + Verification
+{Full UAT results table from ## UAT Results — includes DC number, type, assertion, verify procedure, and result. Reviewer can copy-paste any procedure to reproduce.}
+
+| DC | Type | Assertion | Verify Procedure | Result |
+|----|------|-----------|-----------------|--------|
+| DC-1 | ui | Detail page with panel | `curl -sf localhost:3000/entity/test \| grep 'comment-panel'` | ✅ |
+| DC-2 | api | POST returns 201 | `curl -s -w "%{http_code}" -X POST ...` | ✅ 201 |
+| ... | ... | ... | ... | ... |
 
 ## Changes
 {from ## Execution Log — task summary with commit SHAs}
 
-## Verification
-{from ## Verify Report — quality/review/UAT summary}
+## Quality Gate
+{from ## Verify Report — 5-check results}
 
 Entity: #{entity-id}
 Ship-flow: sharp → plan → execute → verify → ship (autonomous)
+Tracker: {tracker + issue, if set}
+Cost: ${token_actual} (budget: ${token_budget})
 ```
 
 The merge hook reads `## PR Draft` to assemble `gh pr create` with the prepared title and body.
@@ -149,7 +160,10 @@ Tasks: {done}/{total} ({failed} failed, {issues} auto-issues created)
 Verify: PASS (quality {5/5}, review {verdict}, UAT {all pass})
 ROADMAP.md: updated (Now → Shipped)
 PRODUCT.md: updated ({N} capabilities added)
+stage_cost: ${ship_cost} (1 dispatch: sonnet)
 ```
+
+FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
 
 Update entity frontmatter:
 ```yaml
@@ -160,6 +174,24 @@ token_actual: {total}
 
 Note: Do NOT set `status: done` or `completed:` or `verdict:` — the FO advances to `done` (terminal) after this stage completes, which triggers the merge hook.
 
+### 6.1: Surface D2 Knowledge Candidates
+
+Scan `## Learnings` from the entity for `[D2-candidate]` tags (written by execute Step 5.3 and verify Step 4.5).
+
+If D2 candidates exist, include them in the captain notification with a prompt:
+
+> **Knowledge candidates** — these patterns generalized beyond this entity. Add to CLAUDE.md?
+> - {D2 candidate 1}
+> - {D2 candidate 2}
+>
+> Reply "yes" to add all, or specify which to accept.
+
+If captain approves (via the next interaction), append accepted patterns to the project's CLAUDE.md in the appropriate section.
+
+If no D2 candidates → skip silently.
+
+---
+
 Notify captain:
 
 > **Shipped: {title}**
@@ -169,6 +201,7 @@ Notify captain:
 > ROADMAP: ✅ updated
 > PRODUCT: ✅ updated
 > Issues found: {count, with entity refs}
+> Knowledge: {D1: N auto-written, D2: M candidates for review | none}
 
 ---
 

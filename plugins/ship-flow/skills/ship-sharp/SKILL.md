@@ -7,7 +7,7 @@ argument-hint: "[entity-slug]"
 
 # Ship-Sharp — Shape + Sharp: Define What to Ship and Why
 
-You are running the SHARP stage of ship-flow. This is the captain's ONLY interaction with the pipeline — after this, agents run autonomously to ship.
+You are running the SHARP stage of ship-flow. This is the captain's only interaction with the pipeline — after this, agents run autonomously to ship.
 
 **Shape and sharp are different actions combined in one stage:**
 - **Shape** = expand a vague idea into concrete form (problem statement, user stories, scope boundary). Clay, forming.
@@ -17,22 +17,12 @@ Your job: make sure we're building the right thing, the smallest version of it, 
 
 ## Entity Body Contract
 
-**Reads:** entity frontmatter (title, status), `PRODUCT.md` (if exists — current capabilities, constraints, personas), `ROADMAP.md` (if exists — Now/Next/Later, Not Doing, North Star), `references/doc-format.md` (ROADMAP Now row format), recent shipped entities
-**Writes (conditional on path):**
-- `## Shape Output` — **only written when Step 0 routes to shape path** (vague directive)
-  - `Problem Statement:` — 3-6 sentence gap description
-  - `User Stories:` — 3-5 stories in "As a {role}, I want {action}, so that {value}" format
-  - `Scope In/Out:` — concrete deliverables vs explicit exclusions
-**Writes (all mandatory, both paths):**
-- `## Roadmap Position` — where this fits in the project
-- `## Problem` — sharp extracts from Shape Output (shape path) or directly from directive (sharp-only path)
-- `## Done Criteria` — testable, observable acceptance criteria (checkbox format)
-- `## Size Assessment` — S/M/L with reasoning + token budget estimate
-- `## Musk Audit` — fastest path, purpose, what if we don't, gap-to-goal analysis, per-bullet KEEP/DEFER/DELETE
-- `## Scoring Gate` — pass/fail + score
-- `## Project Skills` — available project-scope skills relevant to this entity
-**Optional writes:**
-- `## Learnings` — any insights discovered during sharp (append-only, cross-cutting)
+**Schema:** `references/entity-body-schema.yaml` → `stages.sharp`
+
+**Reads:** entity frontmatter, `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md`, recent shipped entities
+**Writes:**
+- `## Sharp Output` — subsections: Shape Output (conditional), Roadmap Position, Problem, Done Criteria (typed), User Journey, Journey→DC Mapping, Size Assessment, Musk Audit, Scoring Gate, Project Skills
+- `## Sharp Report` — status, stage_cost, path (shape+sharp / sharp-only / escape-hatch)
 
 ---
 
@@ -96,18 +86,16 @@ Present all stories, then for each ask: Accept / Edit / Drop.
 
 Based on problem + stories, draft two lists:
 
-**Scope: In** — concrete deliverables, each specific enough to verify. Bias toward MINIMAL viable scope:
+**Scope: In** — concrete deliverables, each specific enough to verify. Bias toward minimal viable scope:
 - Prefer reuse over greenfield
 - Prefer hook points over new architecture
 - Each bullet must be verifiable
 
 **Scope: Out** — explicit exclusions with WHY in parenthetical. At least 3 items of the form "could expand to X but not doing X because Y".
 
-**Self-check**: After drafting, answer internally: "If I cut this In list in half, what drops first? Do those belong in Out?" Move items accordingly.
-
 Present In/Out to captain. Ask: "Accept all / Edit / Prune" for each list.
 
-**Write `## Shape Output`** with accepted Problem Statement, User Stories, and Scope In/Out.
+**Write `### Shape Output` (under `## Sharp Output`)** with accepted Problem Statement, User Stories, and Scope In/Out.
 
 ---
 
@@ -130,8 +118,8 @@ If collision found → reassign via `--next-id`.
 ## Step 1: Load Context
 
 1. Read the entity file (from slug or current dispatch)
-2. Read `PRODUCT.md` from project root **if it exists** — understand what the product IS now (capabilities, constraints, personas, vision). Do NOT create if missing.
-3. Read `ROADMAP.md` from project root **if it exists** — understand where the product is GOING (Now/Next/Later, Not Doing, North Star). Do NOT create if missing. Note in ## Roadmap Position if either file is absent.
+2. Read `PRODUCT.md` from project root **if it exists** — understand what the product is now (capabilities, constraints, personas, vision). Do NOT create if missing.
+3. Read `ROADMAP.md` from project root **if it exists** — understand where the product is going (Now/Next/Later, Not Doing, North Star). Do NOT create if missing. Note in ## Roadmap Position if either file is absent.
 4. Read recent shipped entities (last 5) for pattern awareness
 5. Scan project-scope plugins for available domain skills:
    ```bash
@@ -172,7 +160,7 @@ If captain identifies a simpler path → loop back to revise scope (or Shape Out
 
 **Skip for Size S** (≤ 3 scope bullets — already minimal).
 
-For each scope bullet (from Shape Output's Scope: In, or from captain's answers):
+For each scope bullet (from `### Shape Output`'s Scope: In, or from captain's answers):
 
 Apply 3 questions:
 1. Is this delivering a real outcome, or shipping an empty framework?
@@ -189,14 +177,38 @@ Present to captain: "Accept recommendations / Keep original / Partial — specif
 
 **Skip for Size S** — S-size directives don't have cross-boundary integration risk.
 
-After scope bullets are finalized (KEEP/DEFER/DELETE), narrate the complete end-to-end user journey assuming the feature is shipped:
+After scope bullets are finalized (KEEP/DEFER/DELETE), narrate the complete end-to-end user journey assuming the feature is shipped. **This journey becomes the source of Done Criteria and UAT verification.**
 
 > "Walk me through this: {persona} wants to {goal}. Starting from {entry point}, step by step, what happens?"
 
-For each step in the journey, check:
+For each step in the journey, produce a structured record:
+
+```markdown
+### User Journey
+
+Persona: {from PRODUCT.md or `### Shape Output`}
+Goal: {what they're trying to accomplish}
+Entry point: {where they start}
+
+| # | Step | Type | Boundary | Risk |
+|---|------|------|----------|------|
+| 1 | Open dashboard, see entity detail | ui | — | — |
+| 2 | Click comment panel, type text, submit | ui | — | — |
+| 3 | POST /api/comments → 201 + ID | api | frontend → API | integration |
+| 4 | Comment appears in panel (SSE update) | ui | API → SSE → frontend | integration |
+| 5 | Claude receives notification within 5s | cli | API → notification | integration |
+```
+
+**Type** is one of: `cli`, `api`, `ui`, `skill`, `e2e`. This type carries through to Done Criteria and all downstream verification.
+
+**Boundary** marks where data crosses a system boundary — these are integration risk points that need extra test coverage.
+
+For each step, check:
 1. **Does the architecture support this step?** If not → flag as architecture gap
-2. **Where does data cross a boundary?** (cross-repo, cross-service, auth handoff, API call) → flag as integration risk
-3. **Is there a simpler alternative revealed by the journey?** (e.g., "if we already git push, do we need a sync mechanism?")
+2. **Where does data cross a boundary?** → mark in Boundary column
+3. **Is there a simpler alternative?** (e.g., "if we already git push, do we need a sync mechanism?")
+
+**If shape ran**, generate one journey per user story (US-1..US-N). Multiple journeys are fine — each produces its own DC items.
 
 **Present findings to captain:**
 
@@ -205,7 +217,7 @@ For each step in the journey, check:
 >
 > Revise scope? (yes → loop back to scope / no → proceed)
 
-**Why this step exists:** Scope bullets are atomic — they pass review individually but may not compose. User journeys are integration tests for the DESIGN. They catch cross-boundary issues that per-bullet analysis misses. Proven on entity 010: user journey eliminated an entire sync mechanism and discovered OAuth-as-ACL that 4 scope bullets missed.
+**Why this step exists:** Scope bullets are atomic — they pass review individually but may not compose. User journeys are integration tests for the design. They catch cross-boundary issues that per-bullet analysis misses.
 
 ## Step 3: Size Triage (Evidence-Based)
 
@@ -213,7 +225,7 @@ For each step in the journey, check:
 
 ### Step 3.1: Quick Codebase Probe
 
-Extract keywords from `## Problem` (function names, file names, module names, error messages). Then:
+Extract keywords from `### Problem` (function names, file names, module names, error messages). Then:
 
 ```bash
 # Count affected files
@@ -259,19 +271,83 @@ Captain can override but must give a reason (not just "feels like S").
 
 Note: plan stage may re-evaluate size after research (Step 2.5 in ship-plan). This is the initial estimate.
 
-## Step 4: Done Criteria
+## Step 4: Done Criteria (Derived from Journey)
 
-Work with the captain to define testable done criteria. Each criterion must be:
-- **Observable** — can be verified by running a command or checking output
+**Done Criteria are derived from the User Journey, not invented independently.** Each journey step becomes one or more typed Done Criteria.
+
+### 4.1: Auto-Generate from Journey
+
+For each step in `### User Journey`, generate a typed Done Criterion:
+
+```markdown
+### Done Criteria
+
+- [ ] `ui` — DC-1: Entity detail page loads with comment panel visible (journey step 1)
+- [ ] `ui` — DC-2: Comment panel accepts text input and has submit button (journey step 2)
+- [ ] `api` — DC-3: POST /api/comments returns 201 with comment ID (journey step 3)
+- [ ] `ui` — DC-4: Comment appears in panel without page refresh (journey step 4)
+- [ ] `cli` — DC-5: bun test passes notification test — Claude receives within 5s (journey step 5)
+```
+
+Each criterion must be:
+- **Typed** — one of: `cli`, `api`, `ui`, `skill`, `e2e`
+- **Observable** — can be verified by running a command, hitting an endpoint, or checking a page
 - **Specific** — no "works correctly" or "is fast enough"
-- **Minimal** — only what's needed to ship, nothing aspirational
+- **Traceable** — references the journey step it came from
 
-Example:
+**For S-size** (no journey): captain defines criteria directly with types. Still typed, still traceable (to `### Problem` instead of journey).
+
+### 4.2: Journey → DC Mapping Table
+
+Write the mapping so downstream stages can trace from journey → criterion → task → verification:
+
+```markdown
+### Journey → DC Mapping
+
+| Journey Step | DC | Type | Boundary | Verify hint |
+|---|---|---|---|---|
+| 1. Open dashboard | DC-1 | ui | — | curl route, check 200 + content |
+| 2. Submit comment | DC-2, DC-3 | ui, api | frontend → API | form element check + curl POST |
+| 3. See update | DC-4 | ui | API → SSE → frontend | SSE event or poll check |
+| 4. Claude notified | DC-5 | cli | API → notification | bun test with timeout |
 ```
-- [ ] POST /api/comments returns 201 with comment ID
-- [ ] Claude receives notification within 5s of comment POST
-- [ ] bun test passes with new test covering the notification path
+
+The **Verify hint** column is a suggestion for plan stage — plan will fill in the exact command. Sharp doesn't need to know the exact command, just the verification approach.
+
+### 4.3: Captain Review
+
+Present the auto-generated criteria to captain:
+
+> **Done Criteria derived from user journey:**
+> {list}
+>
+> Add, edit, or remove any? Each must be typed (`cli`/`api`/`ui`/`skill`/`e2e`) and traceable to a journey step.
+
+Captain can add criteria not covered by the journey (e.g., `cli` — "existing tests don't regress"). These get `(added by captain)` instead of a journey step reference.
+
+## Step 4.5: Dependencies and Tracking
+
+### Dependencies
+Ask captain:
+- "Does this depend on any other entity finishing first?" → populate `depends-on` in frontmatter
+- "Is this part of a larger epic?" → populate `parent` in frontmatter
+
+If captain names dependencies, verify they exist:
+```bash
+ls docs/ship-flow/{dependency-slug}.md 2>/dev/null
 ```
+If dependency doesn't exist → warn captain ("Entity {slug} not found — create it first?").
+
+### Issue Tracker Binding
+Ask captain:
+- "Link to an existing issue? (GitHub #number, Linear PROJ-123, or skip)"
+
+If provided:
+- Detect provider from format: `#42` or `owner/repo#42` → `tracker: gh`. `PROJ-123` pattern → `tracker: linear`.
+- Write `tracker`, `issue`, and `external_id` to frontmatter.
+- If `tracker: linear` and Linear MCP is available, verify the issue exists via `mcp__claude_ai_Linear__get_issue`.
+
+If skipped → leave fields empty (entity is captain-only, no external tracker).
 
 ## Step 5: Scoring Gate
 
@@ -284,6 +360,9 @@ Present the full assessment:
 > **Roadmap Position**: {where it fits}
 > **Shape path**: {ran shape / skipped — direct sharp}
 > **Musk verdict**: {bullets kept/deferred/deleted if M/L}
+> **Dependencies**: {depends-on list, or "none"}
+> **Parent epic**: {parent ID, or "standalone"}
+> **Tracker**: {gh #42 / linear PROJ-123 / none}
 >
 > **Ship this?** (yes → advance to plan / no → reject to draft / split → decompose)
 
@@ -298,7 +377,9 @@ If captain says **yes** — advance.
 Write these sections to the entity file:
 
 ```markdown
-## Shape Output          ← only if shape phase ran
+## Sharp Output
+
+### Shape Output          ← only if shape phase ran
 Problem Statement: {accepted statement}
 User Stories:
 - US-1: As a {role}, I want {action}, so that {value}
@@ -310,34 +391,49 @@ Scope Out:
 - {exclusion 1} (why)
 - ...
 
-## Roadmap Position
+### Roadmap Position
 {Where this fits in the project, dependencies, related shipped features}
 
-## Problem
-{Specific problem statement — from Shape Output if shape ran, or from Musk audit Q1}
+### Problem
+{Specific problem statement — from ### Shape Output if shape ran, or from Musk audit Q1}
 
-## Done Criteria
+### Done Criteria
 - [ ] {criterion 1}
 - [ ] {criterion 2}
 - [ ] {criterion 3}
 
-## Size Assessment
+### Size Assessment
 Size: {S/M/L}
 Token budget: {estimate}
 Reasoning: {why this size}
+```
 
-## Musk Audit
+Update entity frontmatter:
+```yaml
+token_budget: {estimate in USD}
+parent: "{epic entity ID, or omit}"
+depends-on: ["{entity-id-1}", "{entity-id-2}"]  # or omit if none
+tracker: "{gh|linear}"  # or omit if no external tracker
+issue: "{#42 or PROJ-123}"  # or omit
+external_id: "{full external reference}"  # or omit
+```
+
+Continue writing body sections:
+
+```markdown
+
+### Musk Audit
 - Fastest path: {captain's answer}
 - Purpose: {what happens if we don't}
 - Position: {roadmap fit}
 - Gap-to-goal: {goal → gap → path assessment}
 - Per-bullet audit: {KEEP/DEFER/DELETE verdicts, or "S — skipped"}
 
-## Scoring Gate
+### Scoring Gate
 Result: PASS
 Score: {0.0-1.0}
 
-## Project Skills
+### Project Skills
 {List available project-scope skills relevant to this feature}
 ```
 
@@ -348,6 +444,19 @@ Score: {0.0-1.0}
 2. If entity was in `## Next` or `## Later` → remove it from there
 
 **PRODUCT.md** — do NOT modify during sharp. Only ship-review writes to PRODUCT.md after verification passes.
+
+## Stage Cost
+
+Sharp is captain-interactive (no subagent dispatch). Write `## Sharp Report` at end of entity body:
+
+```
+## Sharp Report
+status: passed
+stage_cost: $0.50 (1 session: opus interactive)
+path: {shape+sharp | sharp-only | escape-hatch}
+```
+
+FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_actual` accumulation.
 
 ## Circuit Breakers
 
