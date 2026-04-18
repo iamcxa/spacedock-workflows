@@ -115,6 +115,18 @@ Before reading haiku findings, run these mechanical checks AND determine which r
 1. **Stale references**: For every symbol removed by the diff, grep for remaining references. Hit outside the diff = stale reference finding.
 2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
 3. **Constraint check**: If `PRODUCT.md` has `## Constraints`, verify changes don't violate any.
+4. **CLAUDE.md rule walk**: For each changed file in the diff, walk dirname upward from the file to the repo root, collecting every `CLAUDE.md` encountered. Read each collected CLAUDE.md. For every rule it defines, check whether the diff violates it.
+
+   ```
+   Example: changed file is src/domain/session/watcher.ts
+   Walk: src/domain/session/CLAUDE.md → src/domain/CLAUDE.md → src/CLAUDE.md → CLAUDE.md
+   Each CLAUDE.md may define rules like "no direct DB access from domain layer",
+   "always use Zod for external input validation", etc.
+   ```
+
+   Any violation = pre-scan finding with: the CLAUDE.md path, the rule text, the violating file:line from the diff. Severity: BLOCKING (rule uses "must"/"never"/"always") or WARNING (rule uses "prefer"/"should"/"consider").
+
+   **Dedup**: if multiple changed files share the same parent CLAUDE.md, read it once. Cache CLAUDE.md contents during the walk.
 
 **Reviewer selection matrix (FO uses this to decide which haiku agents to dispatch):**
 
