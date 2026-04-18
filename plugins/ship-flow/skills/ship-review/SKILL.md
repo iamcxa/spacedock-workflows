@@ -29,11 +29,11 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 Read the entity file. Extract:
 - `## Verify Report` — must have `Verdict: PASS`
-- `## Execution Log` — for PR body (task summary, commit SHAs)
-- `## Done Criteria` — for PR body (checkmarks)
-- `## Problem` — for PR body
-- `## Shape Output` — for user stories to add to PRODUCT.md (if shape ran)
-- `## Size Assessment` — for cost summary
+- `## Execute Output → ### Execution Log` — for PR body (task summary, commit SHAs)
+- `## Sharp Output → ### Done Criteria` — for PR body (checkmarks)
+- `## Sharp Output → ### Problem` — for PR body
+- `## Sharp Output → ### Shape Output` — for user stories to add to PRODUCT.md (if shape ran)
+- `## Sharp Output → ### Size Assessment` — for cost summary
 
 **Pre-check**: If `## Verify Report` verdict is not PASS → do NOT proceed. Report back to FO.
 
@@ -43,22 +43,22 @@ Read the entity file. Extract:
 
 **Do NOT push or create the PR directly.** The `done` stage's merge hook (pr-merge mod) handles push + PR creation + captain approval. Your job is to prepare the PR body and write it to the entity file so the merge hook can use it.
 
-Write `## PR Draft` to the entity file:
+Write `### PR Draft` (under `## Ship Output`) to the entity file:
 
 ```markdown
-## PR Draft
+### PR Draft
 
 Title: {entity title}
 
 Body:
 ## Problem
-{from entity ## Problem}
+{from ## Sharp Output → ### Problem}
 
 ## User Journey
-{from entity ## User Journey — the end-to-end flow this feature enables}
+{from ## Sharp Output → ### User Journey — the end-to-end flow this feature enables}
 
 ## Done Criteria + Verification
-{Full UAT results table from ## UAT Results — includes DC number, type, assertion, verify procedure, and result. Reviewer can copy-paste any procedure to reproduce.}
+{Full UAT results table from ## Verify UAT — includes DC number, type, assertion, verify procedure, and result. Reviewer can copy-paste any procedure to reproduce.}
 
 | DC | Type | Assertion | Verify Procedure | Result |
 |----|------|-----------|-----------------|--------|
@@ -67,10 +67,10 @@ Body:
 | ... | ... | ... | ... | ... |
 
 ## Changes
-{from ## Execution Log — task summary with commit SHAs}
+{from ## Execute Output → ### Execution Log — task summary with commit SHAs}
 
 ## Quality Gate
-{from ## Verify Report — 5-check results}
+{from ## Verify Output → ### Quality Gate — 5-check results}
 
 Entity: #{entity-id}
 Ship-flow: sharp → plan → execute → verify → ship (autonomous)
@@ -78,7 +78,7 @@ Tracker: {tracker + issue, if set}
 Cost: ${token_actual} (budget: ${token_budget})
 ```
 
-The merge hook reads `## PR Draft` to assemble `gh pr create` with the prepared title and body.
+The merge hook reads `## Ship Output → ### PR Draft` to assemble `gh pr create` with the prepared title and body.
 
 ---
 
@@ -90,7 +90,7 @@ Read `ROADMAP.md` from project root. If it exists:
 2. Remove that row from `## Now`
 3. Append a new row to `## Shipped` table. Use the entity's `id` from frontmatter — do NOT invent a new number:
    ```
-   | {entity.id} | {entity.title} | {one-sentence from ## Problem, present tense per doc-format.md} | {today's date} | ⏳ |
+   | {entity.id} | {entity.title} | {one-sentence from ### Problem, present tense per doc-format.md} | {today's date} | ⏳ |
    ```
    If `{entity.id}` already exists in the Shipped table (cross-workflow collision), append the workflow dir name as suffix: `{id}-{workflow-dir-name}` (e.g., `005-ship-flow`).
 4. If `## Cost Calibration` table exists and `token_actual` is known:
@@ -110,12 +110,12 @@ Read `PRODUCT.md` from project root. If it exists:
 1. **Add capability bullet** to `## Current Capabilities`:
    - Find the matching domain subsection (session management, communication, access, etc.)
    - Format: `- {What it does} — {why it matters in ≤10 words} (#{entity-id})`
-   - Derivation: if shape ran → from US-1 "I want" clause. If not → from `## Problem` first sentence rewritten as capability.
+   - Derivation: if shape ran → from US-1 "I want" clause. If not → from `### Problem` first sentence rewritten as capability.
    - If no matching subsection exists → create one.
 
 2. **Add user story** (JTBD format):
-   - If shape ran → copy accepted stories from `## Shape Output`
-   - If shape didn't run → generate ONE story from `## Problem` + `## Done Criteria`:
+   - If shape ran → copy accepted stories from `## Sharp Output → ### Shape Output`
+   - If shape didn't run → generate ONE story from `## Sharp Output → ### Problem` + `## Sharp Output → ### Done Criteria`:
      - Persona: match from PRODUCT.md "Who It Serves" (default: Captain)
      - Action: from Done Criteria's primary observable change
      - Outcome: from Problem's "why it matters"
@@ -135,10 +135,10 @@ If PRODUCT.md doesn't exist → skip (no error).
 ## Step 5: Token Cost Summary
 
 Read `token_actual` from entity frontmatter (accumulated by FO during dispatch).
-Read `token_budget` from `## Size Assessment`.
+Read `token_budget` from `## Sharp Output → ### Size Assessment`.
 
 ```markdown
-## Token Summary
+### Token Summary
 Budget: ${token_budget}
 Actual: ${token_actual}
 Ratio: {actual/budget}x
@@ -176,7 +176,7 @@ Note: Do NOT set `status: done` or `completed:` or `verdict:` — the FO advance
 
 ### 6.1: Surface D2 Knowledge Candidates
 
-Scan `## Learnings` from the entity for `[D2-candidate]` tags (written by execute Step 5.3 and verify Step 4.5).
+Scan `### Knowledge Captures` sections (in both `## Execute Output` and `## Verify Output`) for `[D2-candidate]` tags (written by execute Step 5.3 and verify Step 4.5).
 
 If D2 candidates exist, include them in the captain notification with a prompt:
 
