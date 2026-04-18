@@ -7,7 +7,7 @@ argument-hint: "[entity-slug]"
 
 # Ship-Sharp — Shape + Sharp: Define What to Ship and Why
 
-You are running the SHARP stage of ship-flow. This is the captain's ONLY interaction with the pipeline — after this, agents run autonomously to ship.
+You are running the SHARP stage of ship-flow. This is the captain's only interaction with the pipeline — after this, agents run autonomously to ship.
 
 **Shape and sharp are different actions combined in one stage:**
 - **Shape** = expand a vague idea into concrete form (problem statement, user stories, scope boundary). Clay, forming.
@@ -96,14 +96,12 @@ Present all stories, then for each ask: Accept / Edit / Drop.
 
 Based on problem + stories, draft two lists:
 
-**Scope: In** — concrete deliverables, each specific enough to verify. Bias toward MINIMAL viable scope:
+**Scope: In** — concrete deliverables, each specific enough to verify. Bias toward minimal viable scope:
 - Prefer reuse over greenfield
 - Prefer hook points over new architecture
 - Each bullet must be verifiable
 
 **Scope: Out** — explicit exclusions with WHY in parenthetical. At least 3 items of the form "could expand to X but not doing X because Y".
-
-**Self-check**: After drafting, answer internally: "If I cut this In list in half, what drops first? Do those belong in Out?" Move items accordingly.
 
 Present In/Out to captain. Ask: "Accept all / Edit / Prune" for each list.
 
@@ -130,8 +128,8 @@ If collision found → reassign via `--next-id`.
 ## Step 1: Load Context
 
 1. Read the entity file (from slug or current dispatch)
-2. Read `PRODUCT.md` from project root **if it exists** — understand what the product IS now (capabilities, constraints, personas, vision). Do NOT create if missing.
-3. Read `ROADMAP.md` from project root **if it exists** — understand where the product is GOING (Now/Next/Later, Not Doing, North Star). Do NOT create if missing. Note in ## Roadmap Position if either file is absent.
+2. Read `PRODUCT.md` from project root **if it exists** — understand what the product is now (capabilities, constraints, personas, vision). Do NOT create if missing.
+3. Read `ROADMAP.md` from project root **if it exists** — understand where the product is going (Now/Next/Later, Not Doing, North Star). Do NOT create if missing. Note in ## Roadmap Position if either file is absent.
 4. Read recent shipped entities (last 5) for pattern awareness
 5. Scan project-scope plugins for available domain skills:
    ```bash
@@ -205,7 +203,7 @@ For each step in the journey, check:
 >
 > Revise scope? (yes → loop back to scope / no → proceed)
 
-**Why this step exists:** Scope bullets are atomic — they pass review individually but may not compose. User journeys are integration tests for the DESIGN. They catch cross-boundary issues that per-bullet analysis misses. Proven on entity 010: user journey eliminated an entire sync mechanism and discovered OAuth-as-ACL that 4 scope bullets missed.
+**Why this step exists:** Scope bullets are atomic — they pass review individually but may not compose. User journeys are integration tests for the design. They catch cross-boundary issues that per-bullet analysis misses. Proven on entity 010: user journey eliminated an entire sync mechanism and discovered OAuth-as-ACL that 4 scope bullets missed.
 
 ## Step 3: Size Triage (Evidence-Based)
 

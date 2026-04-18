@@ -170,10 +170,10 @@ You are a specialized code reviewer. Load Skill("{skill-name}") and apply it to 
 git diff {execute_base}..HEAD
 
 ## Rules
-- Report raw findings ONLY — no severity, no fix recommendations
-- Each finding MUST include: file:line, exact code snippet (copy-paste, not paraphrased), check name
+- Report raw findings only — no severity, no fix recommendations
+- Each finding must include: file:line, exact code snippet (copy-paste, not paraphrased), check name
 - Do NOT assign severity — the sonnet verify ensign classifies
-- Return EMPTY array [] if no checks trigger
+- Return empty array [] if no checks trigger
 - A false finding is worse than no finding — you will be spot-checked
 ```
 
