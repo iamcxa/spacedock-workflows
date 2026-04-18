@@ -17,22 +17,12 @@ Your job: make sure we're building the right thing, the smallest version of it, 
 
 ## Entity Body Contract
 
-**Reads:** entity frontmatter (title, status), `PRODUCT.md` (if exists — current capabilities, constraints, personas), `ROADMAP.md` (if exists — Now/Next/Later, Not Doing, North Star), `references/doc-format.md` (ROADMAP Now row format), recent shipped entities
-**Writes (conditional on path):**
-- `## Shape Output` — **only written when Step 0 routes to shape path** (vague directive)
-  - `Problem Statement:` — 3-6 sentence gap description
-  - `User Stories:` — 3-5 stories in "As a {role}, I want {action}, so that {value}" format
-  - `Scope In/Out:` — concrete deliverables vs explicit exclusions
-**Writes (all mandatory, both paths):**
-- `## Roadmap Position` — where this fits in the project
-- `## Problem` — sharp extracts from Shape Output (shape path) or directly from directive (sharp-only path)
-- `## Done Criteria` — testable, observable acceptance criteria (checkbox format)
-- `## Size Assessment` — S/M/L with reasoning + token budget estimate
-- `## Musk Audit` — fastest path, purpose, what if we don't, gap-to-goal analysis, per-bullet KEEP/DEFER/DELETE
-- `## Scoring Gate` — pass/fail + score
-- `## Project Skills` — available project-scope skills relevant to this entity
-**Optional writes:**
-- `## Learnings` — any insights discovered during sharp (append-only, cross-cutting)
+**Schema:** `references/entity-body-schema.yaml` → `stages.sharp`
+
+**Reads:** entity frontmatter, `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md`, recent shipped entities
+**Writes:**
+- `## Sharp Output` — subsections: Shape Output (conditional), Roadmap Position, Problem, Done Criteria (typed), User Journey, Journey→DC Mapping, Size Assessment, Musk Audit, Scoring Gate, Project Skills
+- `## Sharp Report` — status, stage_cost, path (shape+sharp / sharp-only / escape-hatch)
 
 ---
 

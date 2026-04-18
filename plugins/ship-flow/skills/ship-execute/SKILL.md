@@ -11,12 +11,13 @@ You are running the EXECUTE stage of ship-flow. No captain interaction — dispa
 
 ## Entity Body Contract
 
-**Reads:** `## Plan` (tasks, files, steps, model hints, waves), `## Size Assessment`, `## Project Skills`
-**Writes (all mandatory):**
-- `## Execution Log` — per-task table: agent, model, status, files changed, retries, review result, commit SHA
-- `## Issues Found` — non-blocking findings → auto entity refs
-**Optional writes:**
-- `## Learnings` — insights discovered during execution (append-only)
+**Schema:** `references/entity-body-schema.yaml` → `stages.execute`
+
+**Reads:** `## Plan Output` (all subsections), `## Sharp Output` → Done Criteria
+**Writes:**
+- `## Execute Output` — subsections: Execution Log (per-task table), Issues Found, Knowledge Captures (D1/D2)
+- `## Execute Report` — status, stage_cost, tasks summary, knowledge capture
+- `## Execute UAT` — first-pass AC verification (not authoritative — verify re-runs independently)
 
 ---
 

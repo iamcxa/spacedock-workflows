@@ -18,14 +18,13 @@ This stage combines three verification concerns:
 
 ## Entity Body Contract
 
-**Reads:** `## Done Criteria`, `## Execution Log`, `## Issues Found`, `## Size Assessment`, `## Plan`, `PRODUCT.md` (constraints check)
-**Writes (all mandatory):**
-- `## Quality Gate` — 5-check results (test/lint/typecheck/build/format)
-- `## Review Findings` — classified findings from themed reviewers
-- `## UAT Results` — done criteria checklist with verification evidence
-- `## Verify Report` — verdict (PASS/FAIL), blocking issues, feedback routing
-**Optional writes:**
-- `## Learnings` — insights discovered during verification (append-only)
+**Schema:** `references/entity-body-schema.yaml` → `stages.verify`
+
+**Reads:** `## Execute Output` (all subsections), `## Plan Output` → Verification Spec, `## Sharp Output` → Done Criteria, `PRODUCT.md` → Constraints
+**Writes:**
+- `## Verify Output` — subsections: Quality Gate (5 checks), Review Findings (classified), Knowledge Captures (D1/D2)
+- `## Verify Report` — status, stage_cost, quality, review, uat, blocking issues, knowledge capture
+- `## Verify UAT` — independent second-pass (authoritative — determines PASS/FAIL)
 
 ---
 

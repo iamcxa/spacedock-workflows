@@ -13,15 +13,15 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 ## Entity Body Contract
 
-**Reads:** `## Problem`, `## Done Criteria`, `## Execution Log`, `## Verify Report`, `## Size Assessment`, `## Shape Output` (if exists), `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md` (Shipped row + capability bullet + user story derivation formats)
-**Writes (all mandatory):**
-- `## Ship Report` — verdict, PR link, token actual, task summary
-- `## Token Summary` — budget vs actual with ratio
+**Schema:** `references/entity-body-schema.yaml` → `stages.ship`
+
+**Reads:** `## Verify Report` (must be PASS), `## Execute Output`, `## Sharp Output`, `## Verify UAT`, `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md`
+**Writes:**
+- `## Ship Output` — subsections: PR Draft, ROADMAP.md Update, PRODUCT.md Update, D2 Knowledge Candidates, Token Summary
+- `## Ship Report` — status, stage_cost, PR link, token budget/actual, tasks, verify, roadmap, product
 **Side effects:**
 - `ROADMAP.md` — entity moves from Now → Shipped
 - `PRODUCT.md` — new capability + user stories appended
-**Optional writes:**
-- `## Learnings` — insights discovered during ship (append-only)
 
 ---
 
