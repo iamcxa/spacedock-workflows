@@ -100,33 +100,92 @@ The verify stage uses `dispatch: debate-driven`. FO dispatches haiku review agen
 
 **Architecture:**
 ```
-FO dispatches:
-  ├── haiku-1: code-reviewer (diff correctness)
-  ├── haiku-2: silent-failure-hunter (error handling gaps)
-  ├── haiku-3: type-design-analyzer (type quality)
-  │   ↓ all write raw findings to entity ## Review Findings
-  └── YOU (sonnet): read findings → spot-check → classify → verdict
+FO dispatches (selected by pre-scan):
+  ├── haiku agents: pr-review-toolkit + trailofbits skills
+  │   ↓ all write raw findings to entity ## Haiku Review
+  └── YOU (sonnet): pre-scan → read findings → spot-check → classify → verdict
 ```
 
-**Size S exception:** FO may dispatch only 1 haiku reviewer (code-reviewer) instead of 3. If no haiku findings in entity file → you run inline review yourself.
+### Step 3.1: Pre-Scan + Reviewer Selection (Inline — You Do This Yourself)
 
-### Step 3.1: Pre-Scan (Inline — You Do This Yourself)
+Before reading haiku findings, run these mechanical checks AND determine which reviewers FO should have dispatched:
 
-Before reading haiku findings, run these mechanical checks:
+**Mechanical pre-scan:**
 
 1. **Stale references**: For every symbol removed by the diff, grep for remaining references. Hit outside the diff = stale reference finding.
 2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
 3. **Constraint check**: If `PRODUCT.md` has `## Constraints`, verify changes don't violate any.
 
+**Reviewer selection matrix (FO uses this to decide which haiku agents to dispatch):**
+
+Read `## Size Assessment` from entity and diff content:
+
+```bash
+DIFF_FILES=$(git diff {execute_base}..HEAD --name-only)
+DIFF_CONTENT=$(git diff {execute_base}..HEAD)
+```
+
+#### Always dispatch (all sizes):
+
+| Agent | Skill | What it checks |
+|-------|-------|---------------|
+| `code-reviewer` | `pr-review-toolkit:code-reviewer` | Diff correctness, match to plan, regressions |
+
+#### Dispatch for M/L:
+
+| Agent | Skill | What it checks |
+|-------|-------|---------------|
+| `silent-failure-hunter` | `pr-review-toolkit:silent-failure-hunter` | Empty catch blocks, swallowed errors, fallbacks that hide failures |
+| `pr-test-analyzer` | `pr-review-toolkit:pr-test-analyzer` | Test coverage quality, missing edge case tests |
+
+#### Dispatch based on diff content (any size):
+
+| Agent | Skill | Trigger condition | Detection |
+|-------|-------|------------------|-----------|
+| `type-design-analyzer` | `pr-review-toolkit:type-design-analyzer` | New/modified types | `echo "$DIFF_CONTENT" \| grep -E '^\+.*(type \|interface \|enum )' ` |
+| `comment-analyzer` | `pr-review-toolkit:comment-analyzer` | Significant comment/doc changes | `echo "$DIFF_CONTENT" \| grep -cE '^\+.*(\/\*\*\|\/\/\/ \|@param\|@returns)' > 3` |
+| `code-simplifier` | `pr-review-toolkit:code-simplifier` | Large additions (>100 lines added) | `echo "$DIFF_CONTENT" \| grep -c '^+[^+]' > 100` |
+| `insecure-defaults` | `trailofbits:insecure-defaults` | Auth/config/env/secret changes | `echo "$DIFF_FILES" \| grep -iE 'auth\|config\|env\|secret\|middleware\|cors\|csp'` |
+| `sharp-edges` | `trailofbits:sharp-edges` | API/route/handler changes | `echo "$DIFF_FILES" \| grep -iE 'route\|api\|handler\|endpoint\|server'` |
+| `variant-analysis` | `trailofbits:variant-analysis` | Entity is a bug fix | `grep -i 'source:.*bug\|source:.*fix\|bugfix\|hotfix' {entity_frontmatter}` |
+| `differential-review` | `trailofbits:differential-review` | Files with prior changes in last 30 days | `git log --since="30 days ago" --name-only --pretty=format: -- $DIFF_FILES \| sort -u \| wc -l > 0` |
+
+#### Summary by size:
+
+| Size | Mandatory | Content-triggered | Total range |
+|------|-----------|-------------------|-------------|
+| S (≤3 files) | code-reviewer (1) | 0-4 based on content | 1-5 agents |
+| M (4-15 files) | code-reviewer + silent-failure-hunter + pr-test-analyzer (3) | 0-4 based on content | 3-7 agents |
+| L (>15 files) | code-reviewer + silent-failure-hunter + pr-test-analyzer + comment-analyzer + code-simplifier (5) | 0-4 based on content | 5-9 agents |
+
+**Cost estimate:** haiku ~$0.05/agent → S: $0.05-0.25, M: $0.15-0.35, L: $0.25-0.45
+
+**Haiku agent prompt template (FO uses this for each dispatched reviewer):**
+
+Each haiku agent receives:
+```
+You are a specialized code reviewer. Load Skill("{skill-name}") and apply it to this diff.
+
+## Diff
+git diff {execute_base}..HEAD
+
+## Rules
+- Report raw findings ONLY — no severity, no fix recommendations
+- Each finding MUST include: file:line, exact code snippet (copy-paste, not paraphrased), check name
+- Do NOT assign severity — the sonnet verify ensign classifies
+- Return EMPTY array [] if no checks trigger
+- A false finding is worse than no finding — you will be spot-checked
+```
+
 ### Step 3.2: Read Haiku Review Findings
 
-Read `## Haiku Review` from the entity file (written by FO-dispatched haiku agents). Each haiku agent was instructed to report raw findings only — no severity, no fix recommendations.
+Read `## Haiku Review` from the entity file (written by FO-dispatched haiku agents).
 
 Expected finding format from each haiku agent:
 ```
-### {agent-name}
-- file:line — {code snippet} — {check that triggered}
-- file:line — {code snippet} — {check that triggered}
+### {agent-name} ({skill-name})
+- file:line — `{exact code snippet}` — {check that triggered}
+- file:line — `{exact code snippet}` — {check that triggered}
 ```
 
 If `## Haiku Review` is missing (FO skipped dispatch, or bare mode):
