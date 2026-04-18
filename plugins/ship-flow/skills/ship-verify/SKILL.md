@@ -7,7 +7,9 @@ argument-hint: "[entity-slug]"
 
 # Ship-Verify — Quality Gate, Review, and UAT
 
-You are running the VERIFY stage of ship-flow. No captain interaction — run full-project quality checks, classify review findings, verify done criteria. This stage is a gate: PASS advances to ship, FAIL feeds back to execute.
+You are running the VERIFY stage of ship-flow. No captain interaction — run full-project quality checks, review the diff, verify done criteria. This stage is a gate: PASS advances to ship, FAIL feeds back to execute.
+
+**You are NOT the author of this code.** You are a fresh agent reviewing work done by a different execute-stage ensign. Review the diff as an independent reviewer — do not assume correctness.
 
 This stage combines three verification concerns:
 - **Quality** — mechanical full-project verification (5 checks)
