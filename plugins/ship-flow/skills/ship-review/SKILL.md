@@ -41,6 +41,44 @@ Read the entity file. Extract:
 
 ---
 
+## VCS Detection Preamble
+
+Before any PR-related operation, resolve the VCS tool by reading the project context:
+
+### Step V1: Detect VCS Provider
+
+```bash
+git remote -v 2>/dev/null | grep -q "github\.com" && echo "vcs=github" || \
+git remote -v 2>/dev/null | grep -q "gitlab\.com" && echo "vcs=gitlab" || \
+echo "vcs=unknown"
+```
+
+### Step V2: Check README Frontmatter Override
+
+Read the workflow README at `docs/{workflow}/README.md`. If the frontmatter contains a `commands:` block with VCS commands, those values override auto-detection:
+```yaml
+commands:
+  pr_create: "gh pr create"   # overrides auto-detected VCS command
+  pr_view: "gh pr view"
+  pr_comment: "gh pr comment"
+  pr_close: "gh pr close"
+```
+
+### Step V3: Resolve VCS Command Variables
+
+| Variable | github | gitlab |
+|----------|--------|--------|
+| `{commands.pr_create}` | `gh pr create` | `glab mr create` |
+| `{commands.pr_view}` | `gh pr view` | `glab mr view` |
+| `{commands.pr_comment}` | `gh pr comment` | `glab mr comment` |
+| `{commands.pr_close}` | `gh pr close` | `glab mr close` |
+
+If vcs is `unknown` → stop and ask captain to add `commands:` VCS block to workflow README frontmatter.
+
+README frontmatter `commands:` takes precedence over the table above.
+
+---
+
 ## Step 2: Create PR
 
 **Do NOT push or create the PR directly.** The `done` stage's merge hook (pr-merge mod) handles push + PR creation + captain approval. Your job is to prepare the PR body and write it to the entity file so the merge hook can use it.
@@ -80,7 +118,7 @@ Tracker: {tracker + issue, if set}
 Cost: ${token_actual} (budget: ${token_budget})
 ```
 
-The merge hook reads `## Ship Output → ### PR Draft` to assemble `gh pr create` with the prepared title and body.
+The merge hook reads `## Ship Output → ### PR Draft` to assemble the PR creation command (resolved via VCS Detection Preamble in pr-merge mod) with the prepared title and body.
 
 ---
 
