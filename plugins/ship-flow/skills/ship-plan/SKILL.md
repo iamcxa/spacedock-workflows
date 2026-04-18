@@ -1,6 +1,6 @@
 ---
 name: ship-plan
-description: "Use when writing an implementation plan for a sharpened entity. Agent-autonomous: size-adaptive research, plan generation with self-review loop. No captain gate."
+description: "Use when writing an implementation plan for a sharpened entity. Agent-autonomous: size-adaptive research with produce+review team, TDD task structure, plan reviewed by separate agent. No captain gate."
 user-invocable: false
 argument-hint: "[entity-slug]"
 ---
@@ -11,11 +11,12 @@ You are running the PLAN stage of ship-flow. No captain interaction — you rese
 
 ## Entity Body Contract
 
-**Reads:** `## Problem`, `## Done Criteria`, `## Size Assessment`, `## Project Skills`, `## Shape Output` (if shape ran), `## Musk Audit`
+**Reads:** `## Problem`, `## Done Criteria`, `## Size Assessment`, `## Project Skills`, `## Shape Output` (if shape ran), `## Musk Audit`, `PRODUCT.md` (architecture + constraints)
 **Writes (all mandatory):**
 - `## Research Summary` — key findings from researchers, or "Size S — no research needed"
-- `## Plan` — tasks with files, steps, verification commands, model hints (haiku/sonnet), wave assignments
-- `## Plan Review` — iterations count, gaps, estimated task count, model split, plan-checker results
+- `## Size Re-evaluation` — confirmed or adjusted size after research
+- `## Plan` — TDD tasks with files, steps, verification commands, model hints, wave assignments
+- `## Plan Review` — iterations count, gaps, estimated task count, model split, plan-checker + reviewer results
 **Optional writes:**
 - `## Learnings` — insights discovered during planning (append-only)
 
@@ -24,52 +25,131 @@ You are running the PLAN stage of ship-flow. No captain interaction — you rese
 Read the entity file. Extract:
 - `## Problem` — what to solve
 - `## Done Criteria` — what "shipped" looks like
-- `## Size Assessment` — S/M/L determines your approach
+- `## Size Assessment` — S/M/L determines your INITIAL approach (may change after research)
 - `## Project Skills` — domain skills available
 - `## Shape Output` — scope in/out (if shape phase ran) — these are your scope anchors
 - `## Musk Audit` — gap-to-goal analysis, KEEP/DEFER/DELETE verdicts
 
+Also read `PRODUCT.md` if it exists — check `## Architecture` and `## Constraints` for solution constraints.
+
 **Input validation**: If `## Problem` or `## Done Criteria` is missing, write `## Plan Review` with `status: blocked, reason: missing sharp output` and return. Do NOT plan on partial input.
 
-## Step 2: Research (size-adaptive)
+## Step 2: Research (size-adaptive, produce+review team)
 
 ### Size S — Skip Research
-The problem is clear and small. Go directly to Step 3.
+The problem is clear and small. Go directly to Step 2.7.
 
-### Size M — Targeted Research
-Dispatch 1-2 researcher subagents in parallel:
+### Size M — Targeted Research (2 agents: produce + review)
+
+**Agent A (Producer)** — dispatch as subagent:
 
 ```
-Agent 1: "Explore the codebase for files affected by: {problem}.
-  Read existing patterns. Report: affected files, current approach,
-  suggested approach. Under 200 words."
+Agent(
+  description: "Research: {problem summary}",
+  model: sonnet,
+  prompt: |
+    Research two topics for planning. Report findings with file:line citations.
 
-Agent 2: "Check library/API constraints for: {relevant tech}.
-  Report: version requirements, breaking changes, gotchas. Under 200 words."
+    ## Topic 1: Codebase Impact
+    Explore the codebase for files affected by: {problem}.
+    Read existing patterns. Report: affected files with paths, current approach,
+    dependencies, suggested approach.
+
+    ## Topic 2: Library/API Constraints
+    Check library/API constraints for: {relevant tech}.
+    Report: version requirements, breaking changes, gotchas.
+
+    {If project skills: "This project has {skill} — load it and check for existing patterns."}
+
+    ## Output Format
+    For each topic: 3-5 bullet findings, each with file:line citation.
+    Flag any contradictions between topics.
+    Under 400 words total.
+)
 ```
 
-If project skills are listed in `## Project Skills`, instruct researchers:
-"This project has {skill} — check it for existing patterns before proposing new ones."
+**Agent B (Reviewer)** — dispatch AFTER Agent A returns:
 
-### Size L — Full Research
-Dispatch 3-5 researcher subagents (capped at 5):
-- Agent 1: Codebase mapping (affected files, dependencies, layer classification)
-- Agent 2: Library/API constraints
-- Agent 3: Existing similar implementations in the codebase
-- Agent 4+: Per specific unknowns from `## Problem`
+```
+Agent(
+  description: "Review research: {problem summary}",
+  model: sonnet,
+  prompt: |
+    Review these research findings for a plan about: {problem}
 
-**Research topic domains** (from build-plan):
-1. **Upstream Constraints** — project rules that constrain the solution (CLAUDE.md, existing decisions)
+    ## Research Findings
+    {Agent A's full output}
+
+    ## Review Checklist
+    1. Are file:line citations real? (spot-check 2-3 by reading the actual files)
+    2. Are there codebase areas the research MISSED? (check imports, callers, tests)
+    3. Do the findings contradict each other? (flag explicitly)
+    4. Is the "suggested approach" feasible given the constraints?
+    5. What's the actual file count that would change? (for size re-evaluation)
+
+    Report:
+    - APPROVED: findings are solid
+    - GAPS: {list specific gaps to investigate}
+    - CONTRADICTION: {list conflicting findings}
+
+    Under 300 words.
+)
+```
+
+If GAPS → dispatch Agent A again with specific gap questions. Max 1 round.
+
+### Size L — Full Research (3+ producers + 1 reviewer)
+
+Dispatch 3-5 producer subagents in parallel (capped at 5), each covering one domain:
+
+1. **Upstream Constraints** — project rules (CLAUDE.md, existing decisions, PRODUCT.md constraints)
 2. **Existing Patterns** — how similar problems are already solved (2+ consistent usages)
 3. **Library/API Surface** — third-party behavior, version pinning, public API contracts
 4. **Known Gotchas** — landmines, race conditions, non-obvious interactions
 5. **Reference Examples** — one-shot examples the plan will copy from
 
-**Contradiction handling**: When two researchers return conflicting findings on the same topic, write BOTH findings verbatim in `## Research Summary` as an Open Question. Do NOT silently pick one. Do NOT dispatch a tiebreaker. The contradiction is a first-class output that the plan must address explicitly.
+Each producer: sonnet, under 200 words, file:line citations mandatory.
 
-Collect all research outputs.
+**Reviewer** — dispatch AFTER all producers return:
 
-## Step 2.5: Scope Anchoring (M/L only)
+Same review checklist as M-size, plus:
+- Cross-domain consistency check (does the constraint researcher's finding conflict with the pattern researcher's approach?)
+- Coverage check (does every Done Criterion have at least one research finding supporting it?)
+
+If GAPS → dispatch specific producers again. Max 1 round.
+
+**Contradiction handling**: When findings conflict, write BOTH verbatim in `## Research Summary` as an Open Question. Do NOT silently pick one. The plan must address contradictions explicitly.
+
+Collect all research + review outputs.
+
+## Step 2.5: Size Re-evaluation
+
+After research completes (skip for Size S with no research):
+
+Count the actual affected files from research findings. Compare to sharp's size estimate:
+
+| Sharp estimate | Actual files | Action |
+|---|---|---|
+| S | ≤ 3 files | Confirmed S |
+| S | 4-10 files | **Upgrade to M** — update ## Size Re-evaluation, adjust approach |
+| S | > 10 files | **Upgrade to L** — update ## Size Re-evaluation, run full research if not already done |
+| M | ≤ 3 files | **Downgrade to S** — simplify plan accordingly |
+| M | 4-15 files | Confirmed M |
+| M | > 15 files | **Upgrade to L** — run remaining research domains if not covered |
+| L | any | Confirmed L (already ran full research) |
+
+Write `## Size Re-evaluation`:
+```markdown
+## Size Re-evaluation
+Sharp estimate: {original}
+Research evidence: {N} files affected, {reasoning}
+Adjusted size: {confirmed | upgraded to M | downgraded to S}
+Token budget: {updated if changed}
+```
+
+If size changed → update entity frontmatter `size:` field.
+
+## Step 2.7: Scope Anchoring (M/L only)
 
 **Skip for Size S.**
 
@@ -88,17 +168,15 @@ Produce a mapping table:
 
 **Halt condition**: any task with no mapping → drop the task (out of scope) or note a scope gap in `## Plan Review`. Do NOT silently expand scope beyond what sharp defined.
 
-## Step 3: Write Plan
+## Step 3: Write Plan (TDD Task Structure)
 
 Write a plan with concrete tasks. Each task must be completable by a single agent in one dispatch.
+
+**TDD enforcement: every task that produces application code MUST follow test-first order.**
 
 Format:
 
 ```markdown
-## Research Summary
-{Key findings from researchers, or "Size S — no research needed"}
-{Any Open Questions from contradictory research — with both findings verbatim}
-
 ## Plan
 
 ### Task 1: {name}
@@ -106,17 +184,34 @@ Format:
 **Files:** {create/modify with exact paths}
 **Read first:** {files the agent must read before starting}
 **Steps:**
-1. {specific action with code}
-2. {test to write}
-3. {verification command}
-**Done:** {how to verify this task is complete — runnable command}
+1. Write the failing test:
+   ```typescript
+   // test code
+   ```
+2. Run test to verify it fails:
+   `bun test {test-file} -- --grep "{test-name}"`
+   Expected: FAIL with "{expected error}"
+3. Write minimal implementation:
+   ```typescript
+   // implementation code
+   ```
+4. Run test to verify it passes:
+   `bun test {test-file}`
+   Expected: PASS
+5. Run quality check: `bun build && tsc --noEmit`
+**Done:** {runnable verification command}
 **Model:** haiku | sonnet
-{haiku for: single-file, clear spec, mechanical}
-{sonnet for: multi-file, judgment needed, integration}
-
-### Task 2: {name}
-...
 ```
+
+### TDD Exceptions (non-code tasks)
+
+Tasks that don't produce application code skip TDD:
+- Config file changes (tsconfig, package.json)
+- Pure refactor with existing test coverage
+- Documentation-only tasks
+- Migration/seed scripts (test via execution, not unit test)
+
+Mark these as `**TDD:** skip — {reason}` in the task.
 
 ### Plan Writing Rules (No Placeholders)
 
@@ -144,7 +239,7 @@ Done: `grep "validateEmail" src/models/User.ts` finds the new function
 ```
 Not: "works correctly" / "is properly implemented" / "handles all cases"
 
-## Step 4: Self-Review Loop (Plan-Checker Lite)
+## Step 4: Self-Review (Plan-Checker Lite)
 
 After writing the plan, run this multi-dimensional review:
 
@@ -172,9 +267,53 @@ For each task, ask:
 2. Is this scaffolding (setup, imports, empty files) that should collapse into the task that uses it?
 3. Are there nice-to-haves not in Done Criteria? Drop them.
 
+### Dimension 7 — TDD Compliance
+Does every code-producing task follow test-first order (write test → verify fail → implement → verify pass)? Tasks with `TDD: skip` must have a valid reason.
+
 **Fix issues inline.** Then re-review. Max 3 iterations.
 
-If after 3 iterations the plan still has blocker-level gaps → write `## Plan Review` with `status: gaps-noted` and proceed. Execute stage will surface real problems faster than more planning.
+## Step 4.5: Plan Review by Separate Agent
+
+After self-review passes, dispatch a **review agent** to challenge the plan:
+
+```
+Agent(
+  description: "Review plan: {entity-slug}",
+  model: sonnet,
+  prompt: |
+    Review this implementation plan. You did NOT write it — challenge it.
+
+    ## Problem
+    {from entity}
+
+    ## Done Criteria
+    {from entity}
+
+    ## Plan
+    {full plan text}
+
+    ## Challenge Checklist
+    1. Can each task be completed by a SINGLE agent in ONE dispatch?
+       (If a task requires reading the output of its own earlier steps → split it)
+    2. Are the TDD test cases testing BEHAVIOR, not implementation?
+       (Testing "function exists" is useless. Testing "input X → output Y" is useful.)
+    3. Will a haiku-tier agent succeed at haiku-marked tasks?
+       (If the task requires reading 3+ files to understand context → upgrade to sonnet)
+    4. Are there missing tasks? (Read Done Criteria — is every criterion verifiable from the plan?)
+    5. Is scope creep present? (Tasks that don't map to Done Criteria or Scope In → flag)
+
+    Report:
+    - APPROVED: plan is solid
+    - REVISE: {list specific issues with fix suggestions}
+
+    Be specific. "Task 3 could be better" is not actionable.
+    "Task 3 should split — step 2 depends on step 1's output file" is actionable.
+)
+```
+
+If REVISE → fix issues inline, re-run self-review (Step 4) once. Do NOT dispatch reviewer again — max 1 reviewer round.
+
+If APPROVED → proceed to Step 5.
 
 ## Step 5: Write Entity Sections
 
@@ -182,15 +321,21 @@ If after 3 iterations the plan still has blocker-level gaps → write `## Plan R
 ## Research Summary
 {findings, or "Size S — no research needed"}
 {Open Questions from contradictory research, if any}
+{Reviewer assessment: APPROVED | GAPS addressed}
+
+## Size Re-evaluation
+Sharp estimate: {original}
+Research evidence: {N files, reasoning}
+Adjusted size: {confirmed | changed}
 
 ## Plan
-{tasks with wave assignments}
+{tasks with TDD structure and wave assignments}
 
 ## Plan Review
-Iterations: {N}
+Iterations: {N} (self-review) + {1} (reviewer)
 Status: {clean | gaps-noted}
-Dimensions checked: {list which passed/failed}
-Gaps: {any remaining, or "none"}
+Self-review dimensions: {7 dimensions, which passed/failed}
+Reviewer verdict: {APPROVED | REVISE → fixed}
 Scope anchoring: {all tasks mapped | gaps noted}
 Estimated tasks: {count}
 Estimated model split: {N haiku, M sonnet}
@@ -198,7 +343,10 @@ Estimated model split: {N haiku, M sonnet}
 
 ## Circuit Breakers
 
-- Research subagent timeout: 2 minutes per agent
+- Research producer timeout: 2 minutes per agent
+- Research reviewer: max 1 gap-fill round
 - Self-review loop: max 3 iterations → proceed with gaps noted
-- Total plan stage: if > 15 minutes elapsed → write what you have and proceed
-- Research contradictions: write both, never silently resolve, never dispatch tiebreaker
+- Plan reviewer: max 1 round (no re-dispatch)
+- Total plan stage: if > 20 minutes elapsed → write what you have and proceed
+- Research contradictions: write both, never silently resolve
+- Size re-evaluation: if upgraded, re-run missing research domains before planning
