@@ -187,14 +187,38 @@ Present to captain: "Accept recommendations / Keep original / Partial — specif
 
 **Skip for Size S** — S-size directives don't have cross-boundary integration risk.
 
-After scope bullets are finalized (KEEP/DEFER/DELETE), narrate the complete end-to-end user journey assuming the feature is shipped:
+After scope bullets are finalized (KEEP/DEFER/DELETE), narrate the complete end-to-end user journey assuming the feature is shipped. **This journey becomes the source of Done Criteria and UAT verification.**
 
 > "Walk me through this: {persona} wants to {goal}. Starting from {entry point}, step by step, what happens?"
 
-For each step in the journey, check:
+For each step in the journey, produce a structured record:
+
+```markdown
+## User Journey
+
+Persona: {from PRODUCT.md or Shape Output}
+Goal: {what they're trying to accomplish}
+Entry point: {where they start}
+
+| # | Step | Type | Boundary | Risk |
+|---|------|------|----------|------|
+| 1 | Open dashboard, see entity detail | ui | — | — |
+| 2 | Click comment panel, type text, submit | ui | — | — |
+| 3 | POST /api/comments → 201 + ID | api | frontend → API | integration |
+| 4 | Comment appears in panel (SSE update) | ui | API → SSE → frontend | integration |
+| 5 | Claude receives notification within 5s | cli | API → notification | integration |
+```
+
+**Type** is one of: `cli`, `api`, `ui`, `skill`, `e2e`. This type carries through to Done Criteria and all downstream verification.
+
+**Boundary** marks where data crosses a system boundary — these are integration risk points that need extra test coverage.
+
+For each step, check:
 1. **Does the architecture support this step?** If not → flag as architecture gap
-2. **Where does data cross a boundary?** (cross-repo, cross-service, auth handoff, API call) → flag as integration risk
-3. **Is there a simpler alternative revealed by the journey?** (e.g., "if we already git push, do we need a sync mechanism?")
+2. **Where does data cross a boundary?** → mark in Boundary column
+3. **Is there a simpler alternative?** (e.g., "if we already git push, do we need a sync mechanism?")
+
+**If shape ran**, generate one journey per user story (US-1..US-N). Multiple journeys are fine — each produces its own DC items.
 
 **Present findings to captain:**
 
@@ -203,7 +227,7 @@ For each step in the journey, check:
 >
 > Revise scope? (yes → loop back to scope / no → proceed)
 
-**Why this step exists:** Scope bullets are atomic — they pass review individually but may not compose. User journeys are integration tests for the design. They catch cross-boundary issues that per-bullet analysis misses. Proven on entity 010: user journey eliminated an entire sync mechanism and discovered OAuth-as-ACL that 4 scope bullets missed.
+**Why this step exists:** Scope bullets are atomic — they pass review individually but may not compose. User journeys are integration tests for the design. They catch cross-boundary issues that per-bullet analysis misses.
 
 ## Step 3: Size Triage (Evidence-Based)
 
@@ -257,19 +281,59 @@ Captain can override but must give a reason (not just "feels like S").
 
 Note: plan stage may re-evaluate size after research (Step 2.5 in ship-plan). This is the initial estimate.
 
-## Step 4: Done Criteria
+## Step 4: Done Criteria (Derived from Journey)
 
-Work with the captain to define testable done criteria. Each criterion must be:
-- **Observable** — can be verified by running a command or checking output
+**Done Criteria are derived from the User Journey, not invented independently.** Each journey step becomes one or more typed Done Criteria.
+
+### 4.1: Auto-Generate from Journey
+
+For each step in `## User Journey`, generate a typed Done Criterion:
+
+```markdown
+## Done Criteria
+
+- [ ] `ui` — DC-1: Entity detail page loads with comment panel visible (journey step 1)
+- [ ] `ui` — DC-2: Comment panel accepts text input and has submit button (journey step 2)
+- [ ] `api` — DC-3: POST /api/comments returns 201 with comment ID (journey step 3)
+- [ ] `ui` — DC-4: Comment appears in panel without page refresh (journey step 4)
+- [ ] `cli` — DC-5: bun test passes notification test — Claude receives within 5s (journey step 5)
+```
+
+Each criterion must be:
+- **Typed** — one of: `cli`, `api`, `ui`, `skill`, `e2e`
+- **Observable** — can be verified by running a command, hitting an endpoint, or checking a page
 - **Specific** — no "works correctly" or "is fast enough"
-- **Minimal** — only what's needed to ship, nothing aspirational
+- **Traceable** — references the journey step it came from
 
-Example:
+**For S-size** (no journey): captain defines criteria directly with types. Still typed, still traceable (to `## Problem` instead of journey).
+
+### 4.2: Journey → DC Mapping Table
+
+Write the mapping so downstream stages can trace from journey → criterion → task → verification:
+
+```markdown
+## Journey → DC Mapping
+
+| Journey Step | DC | Type | Boundary | Verify hint |
+|---|---|---|---|---|
+| 1. Open dashboard | DC-1 | ui | — | curl route, check 200 + content |
+| 2. Submit comment | DC-2, DC-3 | ui, api | frontend → API | form element check + curl POST |
+| 3. See update | DC-4 | ui | API → SSE → frontend | SSE event or poll check |
+| 4. Claude notified | DC-5 | cli | API → notification | bun test with timeout |
 ```
-- [ ] POST /api/comments returns 201 with comment ID
-- [ ] Claude receives notification within 5s of comment POST
-- [ ] bun test passes with new test covering the notification path
-```
+
+The **Verify hint** column is a suggestion for plan stage — plan will fill in the exact command. Sharp doesn't need to know the exact command, just the verification approach.
+
+### 4.3: Captain Review
+
+Present the auto-generated criteria to captain:
+
+> **Done Criteria derived from user journey:**
+> {list}
+>
+> Add, edit, or remove any? Each must be typed (`cli`/`api`/`ui`/`skill`/`e2e`) and traceable to a journey step.
+
+Captain can add criteria not covered by the journey (e.g., `cli` — "existing tests don't regress"). These get `(added by captain)` instead of a journey step reference.
 
 ## Step 4.5: Dependencies and Tracking
 

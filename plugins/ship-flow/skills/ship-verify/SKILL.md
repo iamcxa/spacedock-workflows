@@ -259,29 +259,39 @@ Verdict: {SHIP IT | NEEDS_FIX round N | escalated}
 
 ---
 
-## Step 4: Done Criteria UAT
+## Step 4: Done Criteria UAT (Independent Second-Pass)
 
-For each criterion in `## Done Criteria`:
-- Run the verification command or check
-- Record pass/fail with evidence
-- Classify failures:
-  - **Infra-fail** — command not found, server not running, binary missing → feedback to execute
-  - **Assertion-fail** — command ran but output doesn't match → specific failure logged
+**You are running every verification procedure independently.** Do NOT trust execute's first-pass results — re-run each procedure yourself.
+
+Read `## Verification Spec` from plan output. For each row, run the Verify Procedure by type (same dispatch table as execute Step 5.1):
+
+| Type | How to run |
+|------|-----------|
+| `cli` | Bash: run command, check exit code + output |
+| `api` | Bash: run curl command, check status + response |
+| `ui` | Bash: curl route + grep content. If e2e flow exists → `Skill("e2e-pipeline:e2e-test")` |
+| `skill` | `Skill("{skill-name}")` with probe prompt, check output shape |
+| `e2e` | `Skill("e2e-pipeline:e2e-test")` if available, otherwise degrade to `ui` + warn |
+
+**Classify failures:**
+- **Infra-fail** — command not found, server not running, binary missing, e2e infra unavailable → feedback to execute (automated, no captain)
+- **Assertion-fail** — command ran but output doesn't match expected → specific failure logged with evidence
+
+**Cross-check with execute's first-pass:** Compare your results against `## Execution Log → AC Verification`. If execute passed but you fail → the feature broke between execute and verify (possible: another stage's commit, or a flaky test). Note the discrepancy.
 
 ```markdown
 ## UAT Results
 
-### Done Criteria
-- [x] POST /api/comments returns 201 with comment ID — `curl -s localhost:3000/api/comments -X POST | jq .id` → "abc123"
-- [x] Claude receives notification within 5s — verified via test
-- [x] bun test passes with new test — 143 pass, 0 fail
-
-### Frontend Smoke (if applicable)
-- Route /: 200 PASS
-- Route /entity: 200 PASS
+| DC | Type | Assertion | Verify Procedure | Execute 1st | Verify 2nd | Evidence |
+|----|------|-----------|-----------------|-------------|------------|----------|
+| DC-1 | ui | Detail page with panel | `curl ... \| grep` | ✅ | ✅ | "comment-panel" found |
+| DC-2 | ui | Input + submit button | `curl ... \| grep` | ✅ | ✅ | "comment-input" found |
+| DC-3 | api | POST returns 201 | `curl -s -w "%{http_code}" ...` | ✅ | ✅ | 201, {"id":"abc"} |
+| DC-4 | e2e | Comment appears (SSE) | `e2e-test flows/comment-sse.yaml` | ⚠️ degraded to ui | ⚠️ degraded to ui | curl check only |
+| DC-5 | cli | Notification test | `bun test tests/notification.test.ts` | ✅ | ✅ | exit 0 |
 ```
 
-If any Done Criterion fails → feedback to execute with specific failure. Max 2 rounds.
+If any Done Criterion fails → feedback to execute with: DC number, type, procedure, expected vs actual. Max 2 rounds.
 
 ---
 

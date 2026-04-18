@@ -54,17 +54,28 @@ Body:
 ## Problem
 {from entity ## Problem}
 
-## Done Criteria
-{from entity, with checkmarks from ## UAT Results}
+## User Journey
+{from entity ## User Journey — the end-to-end flow this feature enables}
+
+## Done Criteria + Verification
+{Full UAT results table from ## UAT Results — includes DC number, type, assertion, verify procedure, and result. Reviewer can copy-paste any procedure to reproduce.}
+
+| DC | Type | Assertion | Verify Procedure | Result |
+|----|------|-----------|-----------------|--------|
+| DC-1 | ui | Detail page with panel | `curl -sf localhost:3000/entity/test \| grep 'comment-panel'` | ✅ |
+| DC-2 | api | POST returns 201 | `curl -s -w "%{http_code}" -X POST ...` | ✅ 201 |
+| ... | ... | ... | ... | ... |
 
 ## Changes
 {from ## Execution Log — task summary with commit SHAs}
 
-## Verification
-{from ## Verify Report — quality/review/UAT summary}
+## Quality Gate
+{from ## Verify Report — 5-check results}
 
 Entity: #{entity-id}
 Ship-flow: sharp → plan → execute → verify → ship (autonomous)
+Tracker: {tracker + issue, if set}
+Cost: ${token_actual} (budget: ${token_budget})
 ```
 
 The merge hook reads `## PR Draft` to assemble `gh pr create` with the prepared title and body.

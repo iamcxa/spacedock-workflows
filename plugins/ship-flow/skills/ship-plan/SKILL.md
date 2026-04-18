@@ -259,6 +259,39 @@ Done: `grep "validateEmail" src/models/User.ts` finds the new function
 ```
 Not: "works correctly" / "is properly implemented" / "handles all cases"
 
+## Step 3.5: Verification Spec
+
+Read `## Done Criteria` and `## Journey → DC Mapping` from sharp output. For each typed Done Criterion, fill in the exact verification procedure:
+
+```markdown
+## Verification Spec
+
+| DC | Type | Assertion | Verify Procedure | Expected |
+|----|------|-----------|-----------------|----------|
+| DC-1 | ui | Detail page loads with comment panel | `curl -sf localhost:3000/entity/test \| grep 'comment-panel'` | matches |
+| DC-2 | ui | Panel has input + submit | `curl -sf localhost:3000/entity/test \| grep 'comment-input'` | matches |
+| DC-3 | api | POST returns 201 | `curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/api/comments -d '{"text":"test"}'` | 201 |
+| DC-4 | ui | Comment appears without refresh | `e2e-test flows/comment-sse.yaml` (if e2e available) or manual | steps pass |
+| DC-5 | cli | Notification test passes | `bun test tests/notification.test.ts` | exit 0 |
+```
+
+**Verify Procedure rules by type:**
+
+| Type | Procedure format | Fallback if infra unavailable |
+|------|-----------------|------------------------------|
+| `cli` | Exact bash command + expected exit code/output | — (always available) |
+| `api` | `curl` command with method, URL, body, expected status + response pattern | — (always available) |
+| `ui` | `curl` route + `grep` content (T2 level). If complex interaction → `e2e-test {flow.yaml}` | curl + grep (skip interaction check) |
+| `skill` | `Skill("{skill-name}")` invoke + expected output shape | Note: can only verify in Claude Code session |
+| `e2e` | `e2e-test {flow.yaml}` with step-by-step assertions | Degrade to `ui` type (curl + grep) |
+
+**Every DC MUST have a Verify Procedure.** "Manual check" or "visually inspect" is a plan failure — find a programmatic way or degrade the type (e.g., `e2e` → `ui` with curl).
+
+The Verification Spec table is consumed by:
+- **Execute Step 5.1** — runs each procedure as first-pass
+- **Verify Step 4** — runs each procedure independently as second-pass
+- **Ship PR body** — includes procedure + results for reviewer reproduction
+
 ## Step 4: Self-Review (Plan-Checker Lite)
 
 After writing the plan, run this multi-dimensional review:

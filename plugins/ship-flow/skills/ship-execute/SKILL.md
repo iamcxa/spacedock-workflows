@@ -248,16 +248,19 @@ After all waves complete:
 
 ### 5.1: AC Verification (First-Pass)
 
-For each criterion in `## Done Criteria`, run the verification command and record the result. This is the execute-stage first-pass — verify stage will re-run independently as a second opinion.
+Read `## Verification Spec` from plan output. For each row, run the Verify Procedure by type:
 
-```
-For each Done Criterion:
-  1. Extract or derive a runnable verify command
-  2. Run it via Bash
-  3. Record: criterion text, command, pass/fail with evidence
-```
+| Type | How to run |
+|------|-----------|
+| `cli` | Bash: run command, check exit code + output |
+| `api` | Bash: run curl command, check status + response |
+| `ui` | Bash: curl route + grep content. If e2e flow exists → `Skill("e2e-pipeline:e2e-test")` |
+| `skill` | `Skill("{skill-name}")` with probe prompt, check output shape |
+| `e2e` | `Skill("e2e-pipeline:e2e-test")` if available, otherwise degrade to `ui` type + warn |
 
-If any criterion fails → this is a signal that execute missed something. Log the failure but do NOT block — verify stage is the authoritative gate.
+Record each result in the AC Verification table (see Step 6 output). This is the execute-stage first-pass — verify stage re-runs independently as a second opinion.
+
+If any criterion fails → log the failure but do NOT block. Verify stage is the authoritative gate.
 
 ### 5.2: Frontend Smoke
 
