@@ -41,13 +41,17 @@ Read the entity file. Extract:
 
 ## Step 2: Create PR
 
-```bash
-BRANCH=$(git branch --show-current)
-git push origin "${BRANCH}"
+**Do NOT push or create the PR directly.** The `done` stage's merge hook (pr-merge mod) handles push + PR creation + captain approval. Your job is to prepare the PR body and write it to the entity file so the merge hook can use it.
 
-gh pr create \
-  --title "{entity title}" \
-  --body "## Problem
+Write `## PR Draft` to the entity file:
+
+```markdown
+## PR Draft
+
+Title: {entity title}
+
+Body:
+## Problem
 {from entity ## Problem}
 
 ## Done Criteria
@@ -60,9 +64,10 @@ gh pr create \
 {from ## Verify Report — quality/review/UAT summary}
 
 Entity: #{entity-id}
-Ship-flow: sharp → plan → execute → verify → ship (autonomous)" \
-  --base main
+Ship-flow: sharp → plan → execute → verify → ship (autonomous)
 ```
+
+The merge hook reads `## PR Draft` to assemble `gh pr create` with the prepared title and body.
 
 ---
 
@@ -72,10 +77,11 @@ Read `ROADMAP.md` from project root. If it exists:
 
 1. Find the entity in `## Now` table (match by entity slug or title)
 2. Remove that row from `## Now`
-3. Append a new row to `## Shipped` table:
+3. Append a new row to `## Shipped` table. Use the entity's `id` from frontmatter — do NOT invent a new number:
    ```
-   | {id} | {title} | {one-sentence from ## Problem} | {today's date} | ⏳ 待驗證 |
+   | {entity.id} | {entity.title} | {one-sentence from ## Problem, present tense per doc-format.md} | {today's date} | ⏳ |
    ```
+   If `{entity.id}` already exists in the Shipped table (cross-workflow collision), append the workflow dir name as suffix: `{id}-{workflow-dir-name}` (e.g., `005-ship-flow`).
 4. If `## Cost Calibration` table exists and `token_actual` is known:
    - Increment the size row's Sample count
    - Recalculate Median actual if sample ≥ 3

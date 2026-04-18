@@ -98,6 +98,8 @@ The verify stage uses `dispatch: debate-driven`. This means:
 - **FO handles reviewer dispatch** — FO creates themed reviewer teammates, they debate via SendMessage, then FO dispatches YOU (the ensign) to classify their findings.
 - **You do NOT dispatch reviewers yourself.** You read the findings that are already in the entity file from the debate phase.
 
+**Size S exception:** For S-size entities (< 5 changed files), FO may skip debate dispatch and fall back to bare mode. This is by design — a 2-file fix doesn't warrant 3 themed reviewers debating. When debate is skipped, you run an inline review yourself (see "Read Reviewer Findings" below). Note this in `## Review Findings` as `"Size S — bare mode inline review (no debate dispatched)."`
+
 ### Pre-Scan (Inline — Before Reading Reviewer Findings)
 
 Run these mechanical checks yourself:
