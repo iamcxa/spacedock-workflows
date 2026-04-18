@@ -20,6 +20,8 @@ You are running the PLAN stage of ship-flow. No captain interaction — you rese
 
 ## Step 1: Read Sharp Output
 
+Record the current time as the stage start timestamp (ISO 8601 format).
+
 Read the entity file. Extract from `## Sharp Output`:
 - `### Problem` — what to solve
 - `### Done Criteria` — what "shipped" looks like
@@ -338,6 +340,16 @@ For every `file:line` citation in the plan (`read_first` entries, code snippets 
 
 **Fix issues inline.** Then re-review. Max 3 iterations.
 
+### Dimension 9 — Design Reference Compliance
+
+**Skip when:** Entity has no `## Design Reference` section.
+
+When entity has a `## Design Reference` section:
+- For each task in the plan that implements a visual element (any task whose steps describe colors, layout, SVG attributes, CSS properties, or UI structure), Read the design reference file(s) cited in `## Design Reference`
+- Cross-check key visual attributes (fill, stroke, colors, dimensions, rx, filter, font-size, font-weight) against reference values
+- Flag any deviation: "Plan says {X}, reference says {Y} — intentional? If yes, add rationale inline in the plan."
+- This catches errors where plan text or code snippets diverge from the design spec (e.g., entity 020's `fill="none"` when the reference showed `fill="bg-surface"`)
+
 ## Step 4.5: Plan Review by Separate Agent
 
 After self-review passes, dispatch a **review agent** to challenge the plan:
@@ -411,9 +423,12 @@ Reviewer verdict: {APPROVED | REVISE → fixed}
 Scope anchoring: {all tasks mapped | gaps noted}
 Task count: {count}
 Model split: {N haiku, M sonnet}
+started_at: "{ISO 8601 timestamp}"
+completed_at: "{ISO 8601 timestamp}"
+duration_minutes: {number}
 ```
 
-FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
+FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
 
 ## Circuit Breakers
 

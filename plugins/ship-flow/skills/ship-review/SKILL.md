@@ -27,6 +27,8 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 ## Step 1: Read Verify Results
 
+Record the current time as the stage start timestamp (ISO 8601 format).
+
 Read the entity file. Extract:
 - `## Verify Report` — must have `Verdict: PASS`
 - `## Execute Output → ### Execution Log` — for PR body (task summary, commit SHAs)
@@ -161,9 +163,12 @@ Verify: PASS (quality {5/5}, review {verdict}, UAT {all pass})
 ROADMAP.md: updated (Now → Shipped)
 PRODUCT.md: updated ({N} capabilities added)
 stage_cost: ${ship_cost} (1 dispatch: sonnet)
+started_at: "{ISO 8601 timestamp}"
+completed_at: "{ISO 8601 timestamp}"
+duration_minutes: {number}
 ```
 
-FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
+FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
 
 Update entity frontmatter:
 ```yaml

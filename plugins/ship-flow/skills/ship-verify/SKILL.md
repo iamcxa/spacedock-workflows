@@ -30,6 +30,8 @@ This stage combines three verification concerns:
 
 ## Step 1: Read Execution Results
 
+Record the current time as the stage start timestamp (ISO 8601 format).
+
 Read the entity file. Extract:
 - `## Sharp Output → ### Done Criteria` — what must be true
 - `## Execute Output → ### Execution Log` — what was done, commit SHAs
@@ -294,6 +296,22 @@ If any Done Criterion fails → feedback to execute with: DC number, type, proce
 
 ---
 
+## Step 4.1: Visual Verification (UI-type DCs)
+
+After all DC verification procedures pass, check if any DC has type `ui`:
+
+If yes AND `e2e-pipeline` is available (check: `claude plugins list 2>/dev/null | grep e2e-pipeline`):
+1. Dispatch `e2e-pipeline:e2e-walkthrough` in background (non-blocking) to screenshot the affected pages
+2. If entity has `## Design Reference` with screenshot paths → compare rendered screenshot against the design reference image
+3. If no `## Design Reference` → compare screenshot against DC assertions (does the rendered UI show what the DCs describe?)
+4. Report in `## Verify Report`: visual verification PASS/FAIL with screenshot evidence
+
+If `e2e-pipeline` is not available:
+- Flag in report: "⚠ Visual verification skipped — e2e-pipeline not installed. Install via marketplace for UI verification."
+- Do NOT block the pipeline — proceed with code-level verification result
+
+---
+
 ## Step 4.5: Knowledge Capture (Conditional)
 
 Scan all findings from quality gate, review, and UAT. Classify findings that **generalize beyond this entity**:
@@ -325,9 +343,12 @@ UAT: {all done criteria pass | N failed}
 Blocking issues: {none | list}
 Knowledge capture: {D1: N written, D2: M candidates | skipped}
 stage_cost: ${verify_cost} ({N} dispatches: {breakdown by model})
+started_at: "{ISO 8601 timestamp}"
+completed_at: "{ISO 8601 timestamp}"
+duration_minutes: {number}
 ```
 
-FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
+FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
 
 If verdict PASS → FO advances to ship.
 If verdict FAIL → FO routes feedback-to execute with Verify Report as context.

@@ -28,6 +28,8 @@ Your job: make sure we're building the right thing, the smallest version of it, 
 
 ## Step 0: Detect Directive Maturity (Shape vs Sharp Router)
 
+Record the current time as the stage start timestamp (ISO 8601 format).
+
 Read the directive text. Apply hedge-word detection to determine maturity:
 
 **Concrete signals** (→ skip shape, go directly to Step 1 Sharp):
@@ -339,15 +341,17 @@ ls docs/ship-flow/{dependency-slug}.md 2>/dev/null
 If dependency doesn't exist → warn captain ("Entity {slug} not found — create it first?").
 
 ### Issue Tracker Binding
-Ask captain:
-- "Link to an existing issue? (GitHub #number, Linear PROJ-123, or skip)"
 
-If provided:
+**Skip silently** if ALL of these are true:
+- Entity frontmatter `issue` field is empty or absent
+- Entity frontmatter `tracker` field is empty or absent
+- Directive text does not contain issue patterns (`#NNN`, `owner/repo#NNN`, `PROJ-NNN`)
+
+If any issue info exists → proceed:
 - Detect provider from format: `#42` or `owner/repo#42` → `tracker: gh`. `PROJ-123` pattern → `tracker: linear`.
 - Write `tracker`, `issue`, and `external_id` to frontmatter.
 - If `tracker: linear` and Linear MCP is available, verify the issue exists via `mcp__claude_ai_Linear__get_issue`.
-
-If skipped → leave fields empty (entity is captain-only, no external tracker).
+- If no issue info detected anywhere → leave `tracker`, `issue`, `external_id` fields empty and proceed silently. Do NOT ask captain.
 
 ## Step 5: Scoring Gate
 
@@ -454,9 +458,12 @@ Sharp is captain-interactive (no subagent dispatch). Write `## Sharp Report` at 
 status: passed
 stage_cost: $0.50 (1 session: opus interactive)
 path: {shape+sharp | sharp-only | escape-hatch}
+started_at: "{ISO 8601 timestamp}"
+completed_at: "{ISO 8601 timestamp}"
+duration_minutes: {number}
 ```
 
-FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_actual` accumulation.
+FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
 
 ## Circuit Breakers
 

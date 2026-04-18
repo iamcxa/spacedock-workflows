@@ -23,6 +23,8 @@ You are running the EXECUTE stage of ship-flow. No captain interaction — dispa
 
 ## Step 1: Read Plan and Build Wave Graph
 
+Record the current time as the stage start timestamp (ISO 8601 format).
+
 Read the entity file. Extract `## Plan Output → ### Plan` section — parse all tasks with their files, steps, verification commands, model hints, and **wave assignments**.
 
 Build the wave graph:
@@ -321,6 +323,9 @@ status: {passed | failed | blocked}
 stage_cost: ${execute_cost} ({N} dispatches: {breakdown by model})
 Tasks: {N done, M blocked, K needs-context-rounds}
 Knowledge capture: {D1: N, D2: M | skipped}
+started_at: "{ISO 8601 timestamp}"
+completed_at: "{ISO 8601 timestamp}"
+duration_minutes: {number}
 ```
 
 ---
@@ -374,7 +379,7 @@ status: {passed | failed | blocked}
 stage_cost: ${execute_cost} ({N} dispatches: {breakdown by model})
 ```
 
-FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_actual` accumulation.
+FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
 
 ### Budget Check
 
