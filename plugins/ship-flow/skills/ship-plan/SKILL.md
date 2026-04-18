@@ -172,7 +172,7 @@ Produce a mapping table:
 
 Write a plan with concrete tasks. Each task must be completable by a single agent in one dispatch.
 
-**TDD enforcement: every task that produces application code MUST follow test-first order.**
+**TDD enforcement:** every task that produces application code must follow test-first order.
 
 Format:
 
@@ -270,6 +270,21 @@ For each task, ask:
 ### Dimension 7 — TDD Compliance
 Does every code-producing task follow test-first order (write test → verify fail → implement → verify pass)? Tasks with `TDD: skip` must have a valid reason.
 
+### Dimension 8 — Stale-Line-Anchor Check
+For every `file:line` citation in the plan (`read_first` entries, code snippets referencing specific lines, step instructions citing line numbers):
+
+1. Read the cited file and line range
+2. Does the content at that line match what the plan assumes?
+
+| Result | Action |
+|--------|--------|
+| Content matches assumption | PASS — proceed silently |
+| Line shifted but content exists nearby | WARNING — update the line number in the plan |
+| Content contradicts assumption | BLOCKER — the plan is building on stale evidence. Fix the task or flag in Plan Review |
+| File doesn't exist | BLOCKER — plan references a phantom path |
+
+**This check is cheap (just Read calls) and catches the #1 cause of execute-stage BLOCKED returns** — plans written against a codebase state that changed between plan and execute.
+
 **Fix issues inline.** Then re-review. Max 3 iterations.
 
 ## Step 4.5: Plan Review by Separate Agent
@@ -334,7 +349,7 @@ Adjusted size: {confirmed | changed}
 ## Plan Review
 Iterations: {N} (self-review) + {1} (reviewer)
 Status: {clean | gaps-noted}
-Self-review dimensions: {7 dimensions, which passed/failed}
+Self-review dimensions: {8 dimensions, which passed/failed}
 Reviewer verdict: {APPROVED | REVISE → fixed}
 Scope anchoring: {all tasks mapped | gaps noted}
 Estimated tasks: {count}
