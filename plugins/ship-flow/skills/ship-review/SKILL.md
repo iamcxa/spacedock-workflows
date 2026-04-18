@@ -160,6 +160,24 @@ token_actual: {total}
 
 Note: Do NOT set `status: done` or `completed:` or `verdict:` — the FO advances to `done` (terminal) after this stage completes, which triggers the merge hook.
 
+### 6.1: Surface D2 Knowledge Candidates
+
+Scan `## Learnings` from the entity for `[D2-candidate]` tags (written by execute Step 5.3 and verify Step 4.5).
+
+If D2 candidates exist, include them in the captain notification with a prompt:
+
+> **Knowledge candidates** — these patterns generalized beyond this entity. Add to CLAUDE.md?
+> - {D2 candidate 1}
+> - {D2 candidate 2}
+>
+> Reply "yes" to add all, or specify which to accept.
+
+If captain approves (via the next interaction), append accepted patterns to the project's CLAUDE.md in the appropriate section.
+
+If no D2 candidates → skip silently.
+
+---
+
 Notify captain:
 
 > **Shipped: {title}**
@@ -169,6 +187,7 @@ Notify captain:
 > ROADMAP: ✅ updated
 > PRODUCT: ✅ updated
 > Issues found: {count, with entity refs}
+> Knowledge: {D1: N auto-written, D2: M candidates for review | none}
 
 ---
 
