@@ -17,7 +17,7 @@ Your job: make sure we're building the right thing, the smallest version of it, 
 
 ## Entity Body Contract
 
-**Reads:** entity frontmatter (title, status), `PRODUCT.md` (if exists — current capabilities, constraints, personas), `ROADMAP.md` (if exists — Now/Next/Later, Not Doing, North Star), recent shipped entities
+**Reads:** entity frontmatter (title, status), `PRODUCT.md` (if exists — current capabilities, constraints, personas), `ROADMAP.md` (if exists — Now/Next/Later, Not Doing, North Star), `references/doc-format.md` (ROADMAP Now row format), recent shipped entities
 **Writes (conditional on path):**
 - `## Shape Output` — **only written when Step 0 routes to shape path** (vague directive)
   - `Problem Statement:` — 3-6 sentence gap description

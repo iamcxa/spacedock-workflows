@@ -13,7 +13,7 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 ## Entity Body Contract
 
-**Reads:** `## Problem`, `## Done Criteria`, `## Execution Log`, `## Verify Report`, `## Size Assessment`, `## Shape Output` (if exists), `PRODUCT.md`, `ROADMAP.md`
+**Reads:** `## Problem`, `## Done Criteria`, `## Execution Log`, `## Verify Report`, `## Size Assessment`, `## Shape Output` (if exists), `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md` (Shipped row + capability bullet + user story derivation formats)
 **Writes (all mandatory):**
 - `## Ship Report` — verdict, PR link, token actual, task summary
 - `## Token Summary` — budget vs actual with ratio
@@ -88,18 +88,28 @@ If ROADMAP.md doesn't exist → skip (no error).
 
 Read `PRODUCT.md` from project root. If it exists:
 
-1. **Add capability**: Find the `## Current Capabilities` section. Identify which domain subsection this feature belongs to (match by topic — session management, communication, access, etc.). Append a bullet:
-   ```
-   - {feature one-liner} (#{entity-id})
-   ```
-   If no matching domain subsection exists → create one.
+**Read `references/doc-format.md` for exact formats.** Follow the derivation rules — do not improvise formats.
 
-2. **Add user stories** (if `## Shape Output` exists with user stories):
-   - Extract accepted user stories from Shape Output
-   - Append to PRODUCT.md's relevant section (deduplicate against existing)
+1. **Add capability bullet** to `## Current Capabilities`:
+   - Find the matching domain subsection (session management, communication, access, etc.)
+   - Format: `- {What it does} — {why it matters in ≤10 words} (#{entity-id})`
+   - Derivation: if shape ran → from US-1 "I want" clause. If not → from `## Problem` first sentence rewritten as capability.
+   - If no matching subsection exists → create one.
+
+2. **Add user story** (JTBD format):
+   - If shape ran → copy accepted stories from `## Shape Output`
+   - If shape didn't run → generate ONE story from `## Problem` + `## Done Criteria`:
+     - Persona: match from PRODUCT.md "Who It Serves" (default: Captain)
+     - Action: from Done Criteria's primary observable change
+     - Outcome: from Problem's "why it matters"
+   - Deduplicate against existing stories.
 
 3. **Update constraints** (if the feature changes any constraint):
    - Rare, but if the feature explicitly relaxes or adds a constraint, update the Constraints table
+
+4. **Cross-check consistency** (from doc-format.md):
+   - ROADMAP Shipped "Why it existed" ↔ PRODUCT capability "why it matters" → same idea, different format
+   - North Star in PRODUCT.md Vision ↔ ROADMAP.md North Star → must be identical text
 
 If PRODUCT.md doesn't exist → skip (no error).
 
