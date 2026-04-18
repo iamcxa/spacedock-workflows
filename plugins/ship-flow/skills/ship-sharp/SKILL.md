@@ -95,7 +95,7 @@ Based on problem + stories, draft two lists:
 
 Present In/Out to captain. Ask: "Accept all / Edit / Prune" for each list.
 
-**Write `## Shape Output`** with accepted Problem Statement, User Stories, and Scope In/Out.
+**Write `### Shape Output` (under `## Sharp Output`)** with accepted Problem Statement, User Stories, and Scope In/Out.
 
 ---
 
@@ -160,7 +160,7 @@ If captain identifies a simpler path → loop back to revise scope (or Shape Out
 
 **Skip for Size S** (≤ 3 scope bullets — already minimal).
 
-For each scope bullet (from Shape Output's Scope: In, or from captain's answers):
+For each scope bullet (from `### Shape Output`'s Scope: In, or from captain's answers):
 
 Apply 3 questions:
 1. Is this delivering a real outcome, or shipping an empty framework?
@@ -184,9 +184,9 @@ After scope bullets are finalized (KEEP/DEFER/DELETE), narrate the complete end-
 For each step in the journey, produce a structured record:
 
 ```markdown
-## User Journey
+### User Journey
 
-Persona: {from PRODUCT.md or Shape Output}
+Persona: {from PRODUCT.md or `### Shape Output`}
 Goal: {what they're trying to accomplish}
 Entry point: {where they start}
 
@@ -225,7 +225,7 @@ For each step, check:
 
 ### Step 3.1: Quick Codebase Probe
 
-Extract keywords from `## Problem` (function names, file names, module names, error messages). Then:
+Extract keywords from `### Problem` (function names, file names, module names, error messages). Then:
 
 ```bash
 # Count affected files
@@ -277,10 +277,10 @@ Note: plan stage may re-evaluate size after research (Step 2.5 in ship-plan). Th
 
 ### 4.1: Auto-Generate from Journey
 
-For each step in `## User Journey`, generate a typed Done Criterion:
+For each step in `### User Journey`, generate a typed Done Criterion:
 
 ```markdown
-## Done Criteria
+### Done Criteria
 
 - [ ] `ui` — DC-1: Entity detail page loads with comment panel visible (journey step 1)
 - [ ] `ui` — DC-2: Comment panel accepts text input and has submit button (journey step 2)
@@ -295,14 +295,14 @@ Each criterion must be:
 - **Specific** — no "works correctly" or "is fast enough"
 - **Traceable** — references the journey step it came from
 
-**For S-size** (no journey): captain defines criteria directly with types. Still typed, still traceable (to `## Problem` instead of journey).
+**For S-size** (no journey): captain defines criteria directly with types. Still typed, still traceable (to `### Problem` instead of journey).
 
 ### 4.2: Journey → DC Mapping Table
 
 Write the mapping so downstream stages can trace from journey → criterion → task → verification:
 
 ```markdown
-## Journey → DC Mapping
+### Journey → DC Mapping
 
 | Journey Step | DC | Type | Boundary | Verify hint |
 |---|---|---|---|---|
@@ -377,7 +377,9 @@ If captain says **yes** — advance.
 Write these sections to the entity file:
 
 ```markdown
-## Shape Output          ← only if shape phase ran
+## Sharp Output
+
+### Shape Output          ← only if shape phase ran
 Problem Statement: {accepted statement}
 User Stories:
 - US-1: As a {role}, I want {action}, so that {value}
@@ -389,18 +391,18 @@ Scope Out:
 - {exclusion 1} (why)
 - ...
 
-## Roadmap Position
+### Roadmap Position
 {Where this fits in the project, dependencies, related shipped features}
 
-## Problem
-{Specific problem statement — from Shape Output if shape ran, or from Musk audit Q1}
+### Problem
+{Specific problem statement — from ### Shape Output if shape ran, or from Musk audit Q1}
 
-## Done Criteria
+### Done Criteria
 - [ ] {criterion 1}
 - [ ] {criterion 2}
 - [ ] {criterion 3}
 
-## Size Assessment
+### Size Assessment
 Size: {S/M/L}
 Token budget: {estimate}
 Reasoning: {why this size}
@@ -420,18 +422,18 @@ Continue writing body sections:
 
 ```markdown
 
-## Musk Audit
+### Musk Audit
 - Fastest path: {captain's answer}
 - Purpose: {what happens if we don't}
 - Position: {roadmap fit}
 - Gap-to-goal: {goal → gap → path assessment}
 - Per-bullet audit: {KEEP/DEFER/DELETE verdicts, or "S — skipped"}
 
-## Scoring Gate
+### Scoring Gate
 Result: PASS
 Score: {0.0-1.0}
 
-## Project Skills
+### Project Skills
 {List available project-scope skills relevant to this feature}
 ```
 
@@ -445,13 +447,16 @@ Score: {0.0-1.0}
 
 ## Stage Cost
 
-Sharp is captain-interactive (no subagent dispatch). Write at end of entity body:
+Sharp is captain-interactive (no subagent dispatch). Write `## Sharp Report` at end of entity body:
 
 ```
+## Sharp Report
+status: passed
 stage_cost: $0.50 (1 session: opus interactive)
+path: {shape+sharp | sharp-only | escape-hatch}
 ```
 
-FO reads this line and adds to `token_actual` accumulation.
+FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_actual` accumulation.
 
 ## Circuit Breakers
 
