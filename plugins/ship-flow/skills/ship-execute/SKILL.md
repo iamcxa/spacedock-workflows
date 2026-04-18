@@ -307,7 +307,30 @@ Log result to `## Execution Log`.
 
 ## Issues Found
 - {non-blocking findings} → auto-created entity #{slug}-improve-N
+
+## Knowledge Captures
+{see Step 5.3}
 ```
+
+---
+
+## Step 5.3: Knowledge Capture (Conditional)
+
+After AC verification, scan all findings surfaced during execution (scope_observations, review non-blocking findings, DONE_WITH_CONCERNS concerns, escalation patterns). Classify each finding that **generalizes beyond this entity**:
+
+**D1 — Skill-Level Pattern** (auto-write, no captain gate):
+Patterns that future agents should know. Tag `[D1]` in `## Learnings`. Examples:
+- "This codebase uses `createSnapshot()` synchronously — async wrappers must preserve sync return"
+- "`bun test` needs `--preload ./setup.ts` for integration tests"
+
+**D2 — Project-Level Candidate** (staged for captain):
+Architectural decisions or constraints worth adding to CLAUDE.md. Tag `[D2-candidate]` in `## Learnings`. Examples:
+- "Dashboard must remain SSR-compatible — no `window` access in shared modules"
+- "All API routes require auth middleware — no public endpoints"
+
+Ship-review stage surfaces `[D2-candidate]` items to captain during finalization.
+
+**Skip when**: All findings are entity-specific. Log: `Knowledge capture: skipped — no findings met D1/D2 threshold`
 
 ---
 

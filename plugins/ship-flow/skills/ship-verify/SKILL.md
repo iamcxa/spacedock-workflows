@@ -285,6 +285,26 @@ If any Done Criterion fails → feedback to execute with specific failure. Max 2
 
 ---
 
+## Step 4.5: Knowledge Capture (Conditional)
+
+Scan all findings from quality gate, review, and UAT. Classify findings that **generalize beyond this entity**:
+
+**D1 — Skill-Level Pattern** (auto-write):
+Tag `[D1]` in `## Learnings`. Examples:
+- "Haiku agent `type-design-analyzer` hallucinated 60% — prefer `code-reviewer` for type checks"
+- "Quality gate: `bun lint` requires `--fix` run before commit in this project"
+
+**D2 — Project-Level Candidate** (staged for captain):
+Tag `[D2-candidate]` in `## Learnings`. Examples:
+- "All new API routes need rate limiting middleware — entity X shipped without it"
+- "Frontend routes must handle SSR — `window` access broke quality gate"
+
+Ship-review stage surfaces `[D2-candidate]` items to captain.
+
+**Skip when**: All findings are entity-specific. Log: `Knowledge capture: skipped — no findings met D1/D2 threshold`
+
+---
+
 ## Step 5: Write Verify Report
 
 ```markdown
@@ -294,6 +314,7 @@ Quality: {5/5 pass}
 Review: {verdict from Step 3}
 UAT: {all done criteria pass | N failed}
 Blocking issues: {none | list}
+Knowledge capture: {D1: N written, D2: M candidates | skipped}
 ```
 
 If verdict PASS → FO advances to ship.
