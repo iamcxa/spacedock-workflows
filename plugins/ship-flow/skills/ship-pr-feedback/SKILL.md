@@ -16,10 +16,10 @@ Captain invokes this when a PR reviewer marks "Changes requested." This skill re
 ## Step 1: Load Entity and PR
 
 Read the entity file from slug. Extract:
-- `## PR Draft` — the PR number
-- `## Done Criteria` — the typed DC items
-- `## Verification Spec` — the procedures (for reviewer to reference)
-- `## UAT Results` — what passed last time
+- `## Ship Output → ### PR Draft` — the PR number
+- `## Sharp Output → ### Done Criteria` — the typed DC items
+- `## Plan Output → ### Verification Spec` — the procedures (for reviewer to reference)
+- `## Verify UAT` — what passed last time
 - Frontmatter `pr` field
 
 If no `pr` field → ask captain for PR number.
@@ -61,7 +61,7 @@ For each comment, attempt to map to a DC item:
 
 Match comment text against DC assertions:
 - Comment mentions "POST" + "201" or "comments endpoint" → DC-3
-- Comment mentions a file:line that's in a task's `files_modified` → find which DC that task covers via `## Journey → DC Mapping`
+- Comment mentions a file:line that's in a task's `files_modified` → find which DC that task covers via `## Sharp Output → ### Journey → DC Mapping`
 - Comment mentions "test" + specific behavior → find matching DC by assertion text
 
 ### 3.2: Unmatched Comments
@@ -96,7 +96,7 @@ Read the classification table and pick the deepest rollback needed:
 
 | Classification present | Rollback to | Reason |
 |---|---|---|
-| Only `nit` | No rollback | Log as `## Issues Found`, close with comment |
+| Only `nit` | No rollback | Log as `### Issues Found` (under `## Execute Output`), close with comment |
 | `assertion-fail` or `coverage-gap` | `execute` | Need code changes, then re-verify |
 | `architecture` | `plan` | Need to re-plan the approach |
 | Mix of types | Deepest one wins | `architecture` > `assertion-fail` > `nit` |
@@ -132,7 +132,7 @@ Focus on these items — PR reviewer flagged them:
 {list of assertion-fail and coverage-gap items with DC references}
 
 Do NOT re-implement tasks that passed. Only fix the flagged items.
-Previous passing tasks: {list from ## Execution Log where status=done and not flagged}
+Previous passing tasks: {list from ## Execute Output → ### Execution Log where status=done and not flagged}
 ```
 
 If rolling back to `plan`, write:
@@ -143,7 +143,7 @@ If rolling back to `plan`, write:
 Architecture concern raised by reviewer:
 {architecture comment text}
 
-Re-plan with this constraint. Previous plan is in ## Plan (may need partial rewrite).
+Re-plan with this constraint. Previous plan is in ## Plan Output → ### Plan (may need partial rewrite).
 ```
 
 ---
