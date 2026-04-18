@@ -1,6 +1,6 @@
 {
   "name": "ship-flow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Ship-focused development pipeline. SHARP once with captain, then agents autonomously plan → execute → ship.",
   "author": { "name": "Kent" },
   "repository": "https://github.com/iamcxa/spacedock-ui",
