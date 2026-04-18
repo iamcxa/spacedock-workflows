@@ -23,7 +23,7 @@ You are running the EXECUTE stage of ship-flow. No captain interaction — dispa
 
 ## Step 1: Read Plan and Build Wave Graph
 
-Read the entity file. Extract `## Plan` section — parse all tasks with their files, steps, verification commands, model hints, and **wave assignments**.
+Read the entity file. Extract `## Plan Output → ### Plan` section — parse all tasks with their files, steps, verification commands, model hints, and **wave assignments**.
 
 Build the wave graph:
 - Group tasks by wave number (0, 1, 2, ...)
@@ -33,9 +33,9 @@ Build the wave graph:
 
 **Wave dependency sanity check**: For each task in wave N, verify that every path in its `read_first` list either (a) already exists in the worktree, or (b) is listed in `files_modified` of a task in wave < N.
 
-If any violation found → write `## Execution Log` with `status: blocked, reason: wave dependency violation — {details}` and return. **Do NOT silently reorder waves.** The plan stage owns wave topology.
+If any violation found → write `### Execution Log` (under `## Execute Output`) with `status: blocked, reason: wave dependency violation — {details}` and return. **Do NOT silently reorder waves.** The plan stage owns wave topology.
 
-**Input validation**: If `## Plan` is missing or malformed → write `## Execution Log` with `status: blocked` and return. Do NOT execute on partial input.
+**Input validation**: If `## Plan Output → ### Plan` is missing or malformed → write `### Execution Log` (under `## Execute Output`) with `status: blocked` and return. Do NOT execute on partial input.
 
 ---
 
@@ -142,8 +142,8 @@ For each task return, process by status:
 ### DONE_WITH_CONCERNS
 1. Read the concerns before proceeding
 2. If concerns are about **correctness or scope** (e.g., "not sure this handles the edge case", "might conflict with X") → address the concern before review. Options: re-dispatch with clarification, or note the concern for reviewer to check specifically.
-3. If concerns are **observations** (e.g., "this file is getting large", "naming could be better") → note in `## Issues Found` and proceed to commit + review as normal DONE.
-4. Log concerns in `## Execution Log` under the task's row as `concerns: {text}`.
+3. If concerns are **observations** (e.g., "this file is getting large", "naming could be better") → note in `### Issues Found` and proceed to commit + review as normal DONE.
+4. Log concerns in `### Execution Log` under the task's row as `concerns: {text}`.
 
 ### NEEDS_CONTEXT
 1. Gather the missing information from the entity body, plan, or worktree
@@ -156,7 +156,7 @@ BLOCKED means "cannot complete as judged by this model tier." Escalate model tie
 
 1. **First BLOCKED (on haiku)** → re-dispatch as **sonnet** with the `blocked_reason` in prompt
 2. **Second BLOCKED (on sonnet)** → re-dispatch as **opus** with accumulated blocked_reasons
-3. **Third BLOCKED (on opus)** → **terminal failure**. Log to `## Execution Log`, create auto-issue entity
+3. **Third BLOCKED (on opus)** → **terminal failure**. Log to `### Execution Log`, create auto-issue entity
 
 **This is NOT a retry loop** — each tier is a fundamentally different reasoning budget. haiku→sonnet→opus is three different strategies, not three retries of one.
 
@@ -249,7 +249,7 @@ After all waves complete:
 
 ### 5.1: AC Verification (First-Pass)
 
-Read `## Verification Spec` from plan output. For each row, run the Verify Procedure by type:
+Read `## Plan Output → ### Verification Spec`. For each row, run the Verify Procedure by type:
 
 | Type | How to run |
 |------|-----------|
@@ -279,41 +279,48 @@ curl -sf http://localhost:3000 > /dev/null && echo "T2: root OK" || echo "T2: ro
 kill %1 2>/dev/null
 ```
 
-Log result to `## Execution Log`.
+Log result to `### Execution Log`.
 
 ---
 
 ## Step 6: Write Entity Sections
 
 ```markdown
-## Execution Log
+## Execute Output
 
-| Task | Wave | Model | Status | Files Changed | Retries | Review | Commit |
-|------|------|-------|--------|---------------|---------|--------|--------|
-| 1: {name} | 1 | haiku | done | file1.ts, file2.ts | 0 | approved | abc1234 |
-| 2: {name} | 1 | sonnet | done | file3.ts | 1 | approved (round 2) | def5678 |
-| 3: {name} | 2 | haiku | blocked→sonnet done | file4.ts | 0+1 | approved | ghi9012 |
+### Execution Log
 
-### Escalations
+| Task | Wave | Model | Status | Files Changed | Retries | Review | Commit | Est. Cost |
+|------|------|-------|--------|---------------|---------|--------|--------|-----------|
+| 1: {name} | 1 | haiku | done | file1.ts, file2.ts | 0 | approved | abc1234 | ~$0.10 |
+| 2: {name} | 1 | sonnet | done | file3.ts | 1 | approved (round 2) | def5678 | ~$1.50 |
+| 3: {name} | 2 | haiku | blocked→sonnet done | file4.ts | 0+1 | approved | ghi9012 | ~$0.55 |
+
+Escalations:
 - Task 3: haiku BLOCKED ("type error in dependency") → sonnet DONE
 
-### Frontend smoke
-{PASS/FAIL/N/A}
+Frontend smoke: {PASS/FAIL/N/A}
 
-### Scope observations
-{benign-drift auto-proceeds, if any}
+Scope observations: {benign-drift auto-proceeds, if any}
 
-### AC Verification (first-pass — verify stage re-runs independently)
+### Issues Found
+- {non-blocking findings} → auto-created entity #{slug}-improve-N
+
+### Knowledge Captures
+{see Step 5.3}
+
+## Execute UAT
+
 | Done Criterion | Verify Command | Result |
 |----------------|---------------|--------|
 | POST /api/comments returns 201 | `curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/api/comments` | 201 PASS |
 | bun test passes with new test | `bun test` | 143 pass, 0 fail PASS |
 
-## Issues Found
-- {non-blocking findings} → auto-created entity #{slug}-improve-N
-
-## Knowledge Captures
-{see Step 5.3}
+## Execute Report
+status: {passed | failed | blocked}
+stage_cost: ${execute_cost} ({N} dispatches: {breakdown by model})
+Tasks: {N done, M blocked, K needs-context-rounds}
+Knowledge capture: {D1: N, D2: M | skipped}
 ```
 
 ---
@@ -323,12 +330,12 @@ Log result to `## Execution Log`.
 After AC verification, scan all findings surfaced during execution (scope_observations, review non-blocking findings, DONE_WITH_CONCERNS concerns, escalation patterns). Classify each finding that **generalizes beyond this entity**:
 
 **D1 — Skill-Level Pattern** (auto-write, no captain gate):
-Patterns that future agents should know. Tag `[D1]` in `## Learnings`. Examples:
+Patterns that future agents should know. Tag `[D1]` in `### Knowledge Captures`. Examples:
 - "This codebase uses `createSnapshot()` synchronously — async wrappers must preserve sync return"
 - "`bun test` needs `--preload ./setup.ts` for integration tests"
 
 **D2 — Project-Level Candidate** (staged for captain):
-Architectural decisions or constraints worth adding to CLAUDE.md. Tag `[D2-candidate]` in `## Learnings`. Examples:
+Architectural decisions or constraints worth adding to CLAUDE.md. Tag `[D2-candidate]` in `### Knowledge Captures`. Examples:
 - "Dashboard must remain SSR-compatible — no `window` access in shared modules"
 - "All API routes require auth middleware — no public endpoints"
 
@@ -360,17 +367,18 @@ After each Agent dispatch (implementation, review, or escalation), add the model
 execute_cost = sum of all dispatches in this stage
 ```
 
-Write at the end of `## Execution Log`:
+Write in `## Execute Report`:
 
 ```
+status: {passed | failed | blocked}
 stage_cost: ${execute_cost} ({N} dispatches: {breakdown by model})
 ```
 
-FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation.
+FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_actual` accumulation.
 
 ### Budget Check
 
-After each dispatch, compute running total. If `execute_cost + prior_stages_cost > token_budget × 2` → pause execution, log warning in `## Execution Log`, notify captain. Do NOT silently continue.
+After each dispatch, compute running total. If `execute_cost + prior_stages_cost > token_budget × 2` → pause execution, log warning in `### Execution Log`, notify captain. Do NOT silently continue.
 
 ### Cost Column in Execution Log
 
