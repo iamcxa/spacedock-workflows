@@ -22,7 +22,8 @@ frontmatter:
     started: { type: iso8601, description: "When active work began" }
     completed: { type: iso8601, description: "When terminal status reached" }
     verdict: { type: enum, values: [PASSED, REJECTED] }
-    score: { type: number, range: "0.0-1.0" }
+    priority: { type: enum, values: [P0, P1, P2, P3], description: "Captain priority. P0=drop everything, P1=this sprint (Now), P2=next sprint (Next), P3=backlog (Later)" }
+    score: { type: number, range: "0.0-1.0", description: "Sharp scoring gate objective score (problem clarity × feasibility × roadmap fit). Different from priority — score is computed, priority is captain intent." }
     worktree: { type: string, description: "Worktree path while active" }
     parent: { type: string, example: '"003"', description: "Epic/parent entity ID" }
     depends-on: { type: list, items: string, example: '["004", "005"]', description: "DAG dependency edges" }
