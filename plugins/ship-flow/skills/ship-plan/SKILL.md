@@ -13,7 +13,7 @@ You are running the PLAN stage of ship-flow. No captain interaction — you rese
 
 **Schema:** `references/entity-body-schema.yaml` → `stages.plan`
 
-**Reads:** `## Sharp Output` (all subsections), `PRODUCT.md` (architecture + constraints)
+**Reads:** `## Sharp Output` (all subsections), `## Parent Context` (if parent entity exists — `### Cross-Entity Contracts`), `PRODUCT.md` (architecture + constraints)
 **Writes:**
 - `## Plan Output` — subsections: Research Summary, Size Re-evaluation, Verification Spec, Plan (TDD tasks with waves)
 - `## Plan Report` — status, stage_cost, iterations, dimensions, reviewer verdict, scope anchoring, task count, model split
@@ -31,6 +31,19 @@ Read the entity file. Extract from `## Sharp Output`:
 - `### Musk Audit` — gap-to-goal analysis, KEEP/DEFER/DELETE verdicts
 
 Also read `PRODUCT.md` if it exists — check `## Architecture` and `## Constraints` for solution constraints.
+
+**If entity has `parent:` frontmatter set:**
+
+Read `## Parent Context` from this entity body (written by ship-sharp Step 1.1). Extract:
+- `Contracts to implement:` — these are Cross-Entity Contracts from the parent epic that this entity's plan must implement. Include them in `### Research Summary` and ensure at least one task per contract covers its implementation.
+- `Inherited decisions:` — ADRs from the parent epic that constrain the implementation approach. These override any research findings that conflict (e.g., if ADR says "use JWT tokens", a research finding suggesting session cookies is invalid).
+- `Slice scope:` — the assigned vertical slice. The plan's tasks must stay within this slice — scope creep into other children's vertical slices is a plan failure.
+
+Write a `### Cross-Entity Contracts` subsection in `## Plan Output → ### Research Summary`:
+```markdown
+### Cross-Entity Contracts (from parent epic)
+- **{contract name}**: {definition} — Task {N} implements this
+```
 
 **Input validation**: If `## Sharp Output → ### Problem` or `## Sharp Output → ### Done Criteria` is missing, write `## Plan Report` with `status: blocked, reason: missing sharp output` and return. Do NOT plan on partial input.
 
