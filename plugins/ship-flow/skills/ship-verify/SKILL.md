@@ -21,10 +21,14 @@ This stage combines three verification concerns:
 **Schema:** `references/entity-body-schema.yaml` → `stages.verify`
 
 **Reads:** `## Execute Output` (all subsections), `## Plan Output` → Verification Spec, `## Sharp Output` → Done Criteria, `PRODUCT.md` → Constraints
-**Writes:**
-- `## Verify Output` — subsections: Quality Gate (5 checks), Review Findings (classified), Knowledge Captures (D1/D2)
-- `## Verify Report` — status, stage_cost, quality, review, uat, blocking issues, knowledge capture
-- `## Verify UAT` — independent second-pass (authoritative — determines PASS/FAIL)
+**Writes:** single `## Verify` section with 5 subsections (post-2026-04-19 D1 consolidation):
+- `### Quality Gate` — 5-check full-project verification
+- `### Review Findings` — classified haiku + pre-scan output
+- `### Knowledge Captures` — D1/D2 tags
+- `### UAT` — evidence review + spot-check (mode line + results table)
+- `### Verdict` — authoritative status / cost / blocking issues / timestamps (FO grep-reads `status:` line)
+
+> Pre-2026-04-19 layout used 3 H2 sections (`## Verify Output`, `## Verify Report`, `## Verify UAT`). Ship-review and ship-pr-feedback accept both layouts; no migration of archived entities needed.
 
 ---
 
@@ -40,7 +44,7 @@ Read the entity file. Extract:
 - `## Plan Output → ### Plan` — for `files_modified` cross-check
 - `PRODUCT.md` — constraints to verify against (if exists)
 
-**Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. **Write `## Verify Output` with `### Quality Gate` showing the pre-check failure, and `## Verify Report` with `status: blocked`, `verdict: BLOCKED`** to the entity file, then notify captain. The FO output-validation gate requires these sections to exist. Never exit without writing them.
+**Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. **Write `## Verify` with `### Quality Gate` showing the pre-check failure, and `### Verdict` with `status: blocked`, `verdict: BLOCKED`** to the entity file, then notify captain. The FO output-validation gate requires the `## Verify` section with `### Verdict` subsection to exist (or legacy `## Verify Report` for older entities). Never exit without writing them.
 
 Capture execute base SHA from `## Execute Output → ### Execution Log` (first task's parent commit).
 
@@ -264,40 +268,58 @@ DIFF_FILES=$(git diff {execute_base}..HEAD --name-only)
 DIFF_CONTENT=$(git diff {execute_base}..HEAD)
 ```
 
-#### Always dispatch (all sizes):
+#### Hard skip — non-source-only diffs (no haiku at all):
+
+If the diff contains **only** non-source-code files, skip the entire haiku dispatch and run inline review (Step 3.2 fallback path):
+
+```bash
+SOURCE_FILES=$(echo "$DIFF_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|sh)$')
+if [ -z "$SOURCE_FILES" ]; then
+  echo "Diff is non-source-only (docs/config/SKILL.md/etc.) — skip haiku dispatch, sonnet inline review only"
+fi
+```
+
+> **Why** (2026-04 D1 measurement, n=2 SKILL.md entities): haiku reviewers hallucinated 50-100% of citations on prompt-text diffs because they anchor findings to pre-execute line numbers that no longer exist after restructure. Net surviving findings: 0. Inline sonnet review on the diff is strictly better here. Captain has already implicitly skipped haiku for `vercel-ci-auto-deploy` and `workflow-skill-routing` without ill effect — formalizing.
+
+#### Always dispatch (when source files present):
 
 | Agent | Skill | What it checks |
 |-------|-------|---------------|
 | `code-reviewer` | `pr-review-toolkit:code-reviewer` | Diff correctness, match to plan, regressions |
 
-#### Dispatch for M/L:
+#### Dispatch for M/L (when source files present):
 
 | Agent | Skill | What it checks |
 |-------|-------|---------------|
 | `silent-failure-hunter` | `pr-review-toolkit:silent-failure-hunter` | Empty catch blocks, swallowed errors, fallbacks that hide failures |
-| `pr-test-analyzer` | `pr-review-toolkit:pr-test-analyzer` | Test coverage quality, missing edge case tests |
+
+> **Removed from M/L mandatory** (2026-04 D1 measurement): `pr-test-analyzer` contributed 6 raw findings → 1 NIT in entity-detail-redesign (collapsed by sonnet into a single coverage-gap line). Net actionable surviving findings across n=4 sample: 0. Demoted to opt-in trigger (see Content-triggered below). `comment-analyzer` and `code-simplifier` never appeared in measured sample — also demoted to explicit opt-in pending evidence.
 
 #### Dispatch based on diff content (any size):
 
 | Agent | Skill | Trigger condition | Detection |
 |-------|-------|------------------|-----------|
-| `type-design-analyzer` | `pr-review-toolkit:type-design-analyzer` | New/modified types | `echo "$DIFF_CONTENT" \| grep -E '^\+.*(type \|interface \|enum )' ` |
-| `comment-analyzer` | `pr-review-toolkit:comment-analyzer` | Significant comment/doc changes | `echo "$DIFF_CONTENT" \| grep -cE '^\+.*(\/\*\*\|\/\/\/ \|@param\|@returns)' > 3` |
-| `code-simplifier` | `pr-review-toolkit:code-simplifier` | Large additions (>100 lines added) | `echo "$DIFF_CONTENT" \| grep -c '^+[^+]' > 100` |
-| `insecure-defaults` | `trailofbits:insecure-defaults` | Auth/config/env/secret changes | `echo "$DIFF_FILES" \| grep -iE 'auth\|config\|env\|secret\|middleware\|cors\|csp'` |
-| `sharp-edges` | `trailofbits:sharp-edges` | API/route/handler changes | `echo "$DIFF_FILES" \| grep -iE 'route\|api\|handler\|endpoint\|server'` |
+| `insecure-defaults` | `trailofbits:insecure-defaults` | Auth/config/env/secret changes in production code | `echo "$DIFF_FILES" \| grep -iE 'auth\|config\|env\|secret\|middleware\|cors\|csp' \| grep -v -E '\.test\.\|/tests?/\|\.md$'` |
+| `sharp-edges` | `trailofbits:sharp-edges` | API/route/handler changes in production code | `echo "$DIFF_FILES" \| grep -iE 'route\|api\|handler\|endpoint\|server' \| grep -v -E '\.test\.\|/tests?/\|\.md$'` |
 | `variant-analysis` | `trailofbits:variant-analysis` | Entity is a bug fix | `grep -i 'source:.*bug\|source:.*fix\|bugfix\|hotfix' {entity_frontmatter}` |
+| `pr-test-analyzer` | `pr-review-toolkit:pr-test-analyzer` | New test files added or removed (not just modified) | `git diff {execute_base}..HEAD --name-status \| grep -E '^[AD].*\.test\.'` |
+| `type-design-analyzer` | `pr-review-toolkit:type-design-analyzer` | 3+ new exported types/interfaces | `echo "$DIFF_CONTENT" \| grep -cE '^\+export (type \|interface \|enum )' \| awk '$1 >= 3'` |
+| `comment-analyzer` | `pr-review-toolkit:comment-analyzer` | OPT-IN — captain explicitly requests | grep entity body for `haiku-opt-in: comment-analyzer` |
+| `code-simplifier` | `pr-review-toolkit:code-simplifier` | OPT-IN — captain explicitly requests | grep entity body for `haiku-opt-in: code-simplifier` |
 | `differential-review` | `trailofbits:differential-review` | Files with prior changes in last 30 days | `git log --since="30 days ago" --name-only --pretty=format: -- $DIFF_FILES \| sort -u \| wc -l > 0` |
 
-#### Summary by size:
+#### Summary by diff content (post-D1 measurement):
 
-| Size | Mandatory | Content-triggered | Total range |
-|------|-----------|-------------------|-------------|
-| S (≤3 files) | code-reviewer (1) | 0-4 based on content | 1-5 agents |
-| M (4-15 files) | code-reviewer + silent-failure-hunter + pr-test-analyzer (3) | 0-4 based on content | 3-7 agents |
-| L (>15 files) | code-reviewer + silent-failure-hunter + pr-test-analyzer + comment-analyzer + code-simplifier (5) | 0-4 based on content | 5-9 agents |
+| Diff content | Mandatory | Content-triggered (likely range) | Total range |
+|---|---|---|---|
+| Non-source only (docs/SKILL.md/config) | (none — sonnet inline review) | (none) | **0 agents** |
+| S source (≤3 files) | code-reviewer (1) | 0-2 based on content | 1-3 agents |
+| M source (4-15 files) | code-reviewer + silent-failure-hunter (2) | 0-3 based on content | 2-5 agents |
+| L source (>15 files) | code-reviewer + silent-failure-hunter (2) | 0-3 based on content | 2-5 agents |
 
-**Cost estimate:** haiku ~$0.05/agent → S: $0.05-0.25, M: $0.15-0.35, L: $0.25-0.45
+**Cost estimate:** haiku ~$0.05/agent → 0: $0, S: $0.05-0.15, M: $0.10-0.25, L: $0.10-0.25 (down from $0.25-0.45 pre-D1).
+
+**Re-evaluate at next D1 sample (current + 5 entities):** if any cut/demoted agent would have caught a missed bug found in PR review or production, calibrate back. Default stance: keep cuts, append evidence to MEMORY.md.
 
 **Haiku agent prompt template (FO uses this for each dispatched reviewer):**
 
@@ -386,11 +408,30 @@ Verdict: {SHIP IT | NEEDS_FIX round N | escalated}
 
 ---
 
-## Step 4: Done Criteria UAT (Independent Second-Pass)
+## Step 4: Done Criteria UAT (Evidence Review + Spot-Check)
 
-**You are running every verification procedure independently.** Do NOT trust execute's first-pass results — re-run each procedure yourself.
+**Default: read execute's evidence and spot-check ≤2 critical DCs.** Full re-run is the fallback when evidence is unreliable, not the default.
 
-Read `## Plan Output → ### Verification Spec`. For each row, run the Verify Procedure by type (same dispatch table as execute Step 5.1):
+> **Why changed (2026-04 D1 measurement, n=31 DCs across 4 entities):** independent second-pass changed 0/31 verdicts. Re-running every DC procedure burned ~30% of verify wallclock without ever flipping a verdict. Spot-check + evidence review preserves the Bayesian update (catches execute self-deception or stale evidence) at a fraction of the cost. Full re-run remains available as fallback.
+
+### Step 4.1: Read Execute Evidence
+
+Read `## Execute UAT` (or `## Execute Output → ### Done Criteria Verification` for older entities). Verify each row has:
+- The procedure from `## Plan Output → ### Verification Spec`
+- Concrete evidence (command output excerpt, file:line citation, screenshot path) — not just "✅"
+
+**Degrade to full re-run (Step 4.3) if any of:**
+- Evidence column missing or contains only "ok" / "pass" / "✅" with no substance
+- Procedure differs from Verification Spec
+- ≥1 DC has `FAIL` or `degraded` status without explanation
+
+### Step 4.2: Spot-Check Critical DCs
+
+Pick up to 2 DCs to re-run yourself:
+1. **Highest-risk DC** — typically `e2e` > `api` > `ui` > `cli` > `skill`. If multiple at the top tier, pick the one with the most complex assertion (e.g., expects multiple grep matches, or asserts on response body shape).
+2. **One sampled at random** from the remaining DCs.
+
+Re-run their procedures via Bash/curl/Skill per type:
 
 | Type | How to run |
 |------|-----------|
@@ -400,23 +441,44 @@ Read `## Plan Output → ### Verification Spec`. For each row, run the Verify Pr
 | `skill` | `Skill("{skill-name}")` with probe prompt, check output shape |
 | `e2e` | `Skill("e2e-pipeline:e2e-test")` if available, otherwise degrade to `ui` + warn |
 
-**Classify failures:**
+Compare your spot-check result against execute's claim for those DCs:
+
+| Spot-check outcome | Action |
+|---|---|
+| Both DCs match execute | Trust the remaining DCs based on evidence review; proceed to output |
+| 1 mismatch | Re-run the mismatched DC's neighbors (same type or same code area). If neighbor also mismatches → Step 4.3 |
+| Both mismatch | Degrade to Step 4.3 — execute's evidence is unreliable across the board |
+
+### Step 4.3: Fallback — Full Re-Run
+
+Triggered only by Step 4.1 evidence gap or Step 4.2 spot-check mismatch.
+
+Re-run every DC procedure as the previous "Independent Second-Pass" mandated. Use the same type dispatch table as 4.2.
+
+### Failure classification (applies to spot-check or full re-run)
+
 - **Infra-fail** — command not found, server not running, binary missing, e2e infra unavailable → feedback to execute (automated, no captain)
 - **Assertion-fail** — command ran but output doesn't match expected → specific failure logged with evidence
 
-**Cross-check with execute's first-pass:** Compare your results against `## Execute UAT`. If execute passed but you fail → the feature broke between execute and verify (possible: another stage's commit, or a flaky test). Note the discrepancy.
+### Output
+
+Append `### UAT` subsection to the entity's `## Verify` section:
 
 ```markdown
-## Verify UAT
+### UAT
 
-| DC | Type | Assertion | Verify Procedure | Execute 1st | Verify 2nd | Evidence |
-|----|------|-----------|-----------------|-------------|------------|----------|
-| DC-1 | ui | Detail page with panel | `curl ... \| grep` | ✅ | ✅ | "comment-panel" found |
-| DC-2 | ui | Input + submit button | `curl ... \| grep` | ✅ | ✅ | "comment-input" found |
-| DC-3 | api | POST returns 201 | `curl -s -w "%{http_code}" ...` | ✅ | ✅ | 201, {"id":"abc"} |
+Mode: {spot-check | full-rerun (fallback: <reason>)}
+
+| DC | Type | Assertion | Verify Procedure | Execute 1st | Verify | Evidence |
+|----|------|-----------|-----------------|-------------|--------|----------|
+| DC-1 | ui | Detail page with panel | `curl ... \| grep` | ✅ | ✅ spot-checked | "comment-panel" found |
+| DC-2 | ui | Input + submit button | `curl ... \| grep` | ✅ | ✅ trust (evidence: log line 47) | execute log line 47 |
+| DC-3 | api | POST returns 201 | `curl -s -w "%{http_code}" ...` | ✅ | ✅ spot-checked | 201, {"id":"abc"} |
 | DC-4 | e2e | Comment appears (SSE) | `e2e-test flows/comment-sse.yaml` | ⚠️ degraded to ui | ⚠️ degraded to ui | curl check only |
-| DC-5 | cli | Notification test | `bun test tests/notification.test.ts` | ✅ | ✅ | exit 0 |
+| DC-5 | cli | Notification test | `bun test tests/notification.test.ts` | ✅ | ✅ trust | exit 0 in execute log |
 ```
+
+The `Verify` column states the verification mode for each DC: `spot-checked`, `trust (evidence: <ref>)`, or `re-run (fallback)`.
 
 If any Done Criterion fails → feedback to execute with: DC number, type, procedure, expected vs actual. Max 2 rounds.
 
@@ -430,7 +492,7 @@ If yes AND `e2e-pipeline` is available (check: `claude plugins list 2>/dev/null 
 1. Dispatch `e2e-pipeline:e2e-walkthrough` in background (non-blocking) to screenshot the affected pages
 2. If entity has `## Design Reference` with screenshot paths → compare rendered screenshot against the design reference image
 3. If no `## Design Reference` → compare screenshot against DC assertions (does the rendered UI show what the DCs describe?)
-4. Report in `## Verify Report`: visual verification PASS/FAIL with screenshot evidence
+4. Report under `## Verify → ### Verdict` (or legacy `## Verify Report`): visual verification PASS/FAIL with screenshot evidence
 
 If `e2e-pipeline` is not available:
 - Flag in report: "⚠ Visual verification skipped — e2e-pipeline not installed. Install via marketplace for UI verification."
@@ -458,14 +520,17 @@ Ship-review stage surfaces `[D2-candidate]` items to captain.
 
 ---
 
-## Step 5: Write Verify Report
+## Step 5: Write Verdict
+
+Append `### Verdict` subsection to the entity's `## Verify` section. This replaces legacy top-level `## Verify Report`.
 
 ```markdown
-## Verify Report
+### Verdict
+status: {passed | failed}
 Verdict: {PASS | FAIL}
 Quality: {5/5 pass}
 Review: {verdict from Step 3}
-UAT: {all done criteria pass | N failed}
+UAT: {all done criteria pass | N failed} (mode: {spot-check | full-rerun})
 Blocking issues: {none | list}
 Knowledge capture: {D1: N written, D2: M candidates | skipped}
 stage_cost: ${verify_cost} ({N} dispatches: {breakdown by model})
@@ -474,10 +539,14 @@ completed_at: "{ISO 8601 timestamp}"
 duration_minutes: {number}
 ```
 
-FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
+FO reads `status:` line (grep pattern `^status:`) for the authoritative gate and `stage_cost:` line for `token_actual` accumulation. The `Verdict:` line is a human-facing summary; `status:` is the machine-readable gate.
 
-If verdict PASS → FO advances to ship.
-If verdict FAIL → FO routes feedback-to execute with Verify Report as context.
+Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes.
+
+If status `passed` → FO advances to ship.
+If status `failed` → FO routes feedback-to execute with the entire `## Verify` section as context.
+
+> Backward compat: pre-2026-04-19 entities used `## Verify Report` as a top-level H2. Both layouts are accepted by ship-review and ship-pr-feedback. New entities should use `## Verify → ### Verdict`.
 
 ## Circuit Breakers
 

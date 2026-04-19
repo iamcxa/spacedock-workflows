@@ -57,7 +57,7 @@ Read the entity file from slug. Extract:
 - `## Ship Output → ### PR Draft` — the PR number
 - `## Sharp Output → ### Done Criteria` — the typed DC items
 - `## Plan Output → ### Verification Spec` — the procedures (for reviewer to reference)
-- `## Verify UAT` — what passed last time
+- `## Verify → ### UAT` (new layout) or `## Verify UAT` (legacy) — what passed last time
 - Frontmatter `pr` field
 
 If no `pr` field → ask captain for PR number.

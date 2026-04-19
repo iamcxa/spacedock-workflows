@@ -15,10 +15,17 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 **Schema:** `references/entity-body-schema.yaml` → `stages.ship`
 
-**Reads:** `## Verify Report` (must be PASS), `## Execute Output`, `## Sharp Output`, `## Verify UAT`, `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md`
-**Writes:**
-- `## Ship Output` — subsections: PR Draft, ROADMAP.md Update, PRODUCT.md Update, D2 Knowledge Candidates, Token Summary
-- `## Ship Report` — status, stage_cost, PR link, token budget/actual, tasks, verify, roadmap, product
+**Reads:** `## Verify → ### Verdict` (must have `status: passed`) — for legacy entities, fall back to `## Verify Report` H2. Also: `## Execute Output`, `## Sharp Output`, `## Verify → ### UAT` (or legacy `## Verify UAT`), `## Verify → ### Quality Gate` (or legacy `## Verify Output → ### Quality Gate`), `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md`
+**Writes:** single `## Ship` section with subsections (post-2026-04-19 D1 consolidation):
+- `### PR Draft` — title + body (consumed by pr-merge mod)
+- `### ROADMAP.md Update` — note of what was moved (conditional)
+- `### PRODUCT.md Update` — capabilities/stories added (conditional)
+- `### D2 Knowledge Candidates` — D2-tagged items surfaced from execute/verify (conditional)
+- `### Token Summary` — budget vs actual + ratio
+- `### Verdict` — status / PR link / stage cost / timestamps (replaces legacy `## Ship Report`)
+
+> Pre-2026-04-19 layout used `## Ship Output` + separate `## Ship Report`. Pr-merge mod accepts both layouts. New entities use single `## Ship`.
+
 **Side effects:**
 - `ROADMAP.md` — entity moves from Now → Shipped
 - `PRODUCT.md` — new capability + user stories appended
@@ -29,15 +36,26 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 Record the current time as the stage start timestamp (ISO 8601 format).
 
-Read the entity file. Extract:
-- `## Verify Report` — must have `Verdict: PASS`
+Read the entity file. Extract (try new layout first, fall back to legacy):
+- `## Verify → ### Verdict` — must have `status: passed` (or `Verdict: PASS`). Legacy fallback: `## Verify Report` with `Verdict: PASS`.
 - `## Execute Output → ### Execution Log` — for PR body (task summary, commit SHAs)
 - `## Sharp Output → ### Done Criteria` — for PR body (checkmarks)
 - `## Sharp Output → ### Problem` — for PR body
 - `## Sharp Output → ### Shape Output` — for user stories to add to PRODUCT.md (if shape ran)
 - `## Sharp Output → ### Size Assessment` — for cost summary
 
-**Pre-check**: If `## Verify Report` verdict is not PASS → do NOT proceed. **Write `## Ship Output` with reason (e.g., "Verify Report verdict: {actual_verdict}, expected PASS") and `## Ship Report` with `status: blocked`** to the entity file, then report back to FO. The FO output-validation gate requires these sections to exist. Never exit without writing them.
+**Layout detection** (do this once at the top of Step 1):
+```bash
+if grep -q '^## Verify$' {entity_file}; then
+  layout=new   # post-2026-04-19: ## Verify with subsections
+else
+  layout=legacy  # ## Verify Output / ## Verify Report / ## Verify UAT as separate H2
+fi
+```
+
+Use `layout` to pick the right grep target throughout Step 2.
+
+**Pre-check**: If verdict is not `passed`/`PASS` → do NOT proceed. **Write `## Ship` with `### Verdict` containing `status: blocked` and reason (e.g., "Verify verdict: {actual_verdict}, expected passed")** to the entity file, then report back to FO. The FO output-validation gate requires the `## Ship → ### Verdict` subsection to exist (or legacy `## Ship Report` for older entities). Never exit without writing them.
 
 ---
 
@@ -83,7 +101,7 @@ README frontmatter `commands:` takes precedence over the table above.
 
 **Do NOT push or create the PR directly.** The `done` stage's merge hook (pr-merge mod) handles push + PR creation + captain approval. Your job is to prepare the PR body and write it to the entity file so the merge hook can use it.
 
-Write `### PR Draft` (under `## Ship Output`) to the entity file:
+Write `### PR Draft` (under `## Ship`) to the entity file:
 
 ```markdown
 ### PR Draft
@@ -98,7 +116,7 @@ Body:
 {from ## Sharp Output → ### User Journey — the end-to-end flow this feature enables}
 
 ## Done Criteria + Verification
-{Full UAT results table from ## Verify UAT — includes DC number, type, assertion, verify procedure, and result. Reviewer can copy-paste any procedure to reproduce.}
+{Full UAT results table — from `## Verify → ### UAT` (new layout) or `## Verify UAT` (legacy). Includes DC number, type, assertion, verify procedure, and result. Reviewer can copy-paste any procedure to reproduce.}
 
 | DC | Type | Assertion | Verify Procedure | Result |
 |----|------|-----------|-----------------|--------|
@@ -110,7 +128,7 @@ Body:
 {from ## Execute Output → ### Execution Log — task summary with commit SHAs}
 
 ## Quality Gate
-{from ## Verify Output → ### Quality Gate — 5-check results}
+{from `## Verify → ### Quality Gate` (new layout) or `## Verify Output → ### Quality Gate` (legacy) — 5-check results}
 
 Entity: #{entity-id}
 Ship-flow: sharp → plan → execute → verify → ship (autonomous)
@@ -118,7 +136,7 @@ Tracker: {tracker + issue, if set}
 Cost: ${token_actual} (budget: ${token_budget})
 ```
 
-The merge hook reads `## Ship Output → ### PR Draft` to assemble the PR creation command (resolved via VCS Detection Preamble in pr-merge mod) with the prepared title and body.
+The merge hook reads `## Ship → ### PR Draft` (new layout) or `## Ship Output → ### PR Draft` (legacy) to assemble the PR creation command (resolved via VCS Detection Preamble in pr-merge mod) with the prepared title and body.
 
 ---
 
@@ -184,29 +202,33 @@ Actual: ${token_actual}
 Ratio: {actual/budget}x
 ```
 
-If ratio > 2.0 → note in Ship Report as "⚠️ over budget".
+If ratio > 2.0 → note in Verdict as "⚠️ over budget".
 
 ---
 
-## Step 6: Write Ship Report + Finalize
+## Step 6: Write Verdict + Finalize
+
+Append `### Verdict` subsection to the entity's `## Ship` section. This replaces legacy top-level `## Ship Report`.
 
 ```markdown
-## Ship Report
-Verdict: shipped
+### Verdict
+status: shipped
 PR: {pr-url}
 Token budget: ${token_budget}
 Token actual: ${token_actual}
 Tasks: {done}/{total} ({failed} failed, {issues} auto-issues created)
 Verify: PASS (quality {5/5}, review {verdict}, UAT {all pass})
-ROADMAP.md: updated (Now → Shipped)
-PRODUCT.md: updated ({N} capabilities added)
+ROADMAP.md: updated (Now → Shipped) [omit line if no update]
+PRODUCT.md: updated ({N} capabilities added) [omit line if no update]
 stage_cost: ${ship_cost} (1 dispatch: sonnet)
 started_at: "{ISO 8601 timestamp}"
 completed_at: "{ISO 8601 timestamp}"
 duration_minutes: {number}
 ```
 
-FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
+FO reads `status:` line (grep `^status:`) for the lifecycle gate and `stage_cost:` line for `token_actual` accumulation. Calculate duration from the recorded start timestamp to now.
+
+> Backward compat: pre-2026-04-19 entities used top-level `## Ship Report`. Pr-merge mod accepts both layouts. New entities use `## Ship → ### Verdict`.
 
 Update entity frontmatter:
 ```yaml
@@ -219,7 +241,7 @@ token_actual: {total}
 
 ### 6.1: Surface D2 Knowledge Candidates
 
-Scan `### Knowledge Captures` sections (in both `## Execute Output` and `## Verify Output`) for `[D2-candidate]` tags (written by execute Step 5.3 and verify Step 4.5).
+Scan `### Knowledge Captures` sections (in `## Execute Output` and `## Verify` (new layout) or `## Verify Output` (legacy)) for `[D2-candidate]` tags (written by execute Step 5.3 and verify Step 4.5).
 
 If D2 candidates exist, include them in the captain notification with a prompt:
 
@@ -250,7 +272,7 @@ Notify captain:
 
 ## Circuit Breakers
 
-- Verify Report not PASS → do not proceed, report back to FO
+- Verify verdict not `passed`/`PASS` (whether new `## Verify → ### Verdict` or legacy `## Verify Report`) → do not proceed, report back to FO
 - PR creation fails → retry once, then escalate to captain
 - ROADMAP/PRODUCT update fails → log as Learning, proceed (non-blocking)
-- Token overrun: if token_actual > token_budget × 2 → note in Ship Report
+- Token overrun: if token_actual > token_budget × 2 → note in `## Ship → ### Verdict` (or legacy `## Ship Report`)
