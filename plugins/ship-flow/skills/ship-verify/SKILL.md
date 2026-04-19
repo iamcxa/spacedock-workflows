@@ -40,7 +40,7 @@ Read the entity file. Extract:
 - `## Plan Output → ### Plan` — for `files_modified` cross-check
 - `PRODUCT.md` — constraints to verify against (if exists)
 
-**Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. Set verdict to `blocked`, notify captain.
+**Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. **Write `## Verify Output` with `### Quality Gate` showing the pre-check failure, and `## Verify Report` with `status: blocked`, `verdict: BLOCKED`** to the entity file, then notify captain. The FO output-validation gate requires these sections to exist. Never exit without writing them.
 
 Capture execute base SHA from `## Execute Output → ### Execution Log` (first task's parent commit).
 

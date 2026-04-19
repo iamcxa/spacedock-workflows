@@ -37,7 +37,7 @@ Read the entity file. Extract:
 - `## Sharp Output → ### Shape Output` — for user stories to add to PRODUCT.md (if shape ran)
 - `## Sharp Output → ### Size Assessment` — for cost summary
 
-**Pre-check**: If `## Verify Report` verdict is not PASS → do NOT proceed. Report back to FO.
+**Pre-check**: If `## Verify Report` verdict is not PASS → do NOT proceed. **Write `## Ship Output` with reason (e.g., "Verify Report verdict: {actual_verdict}, expected PASS") and `## Ship Report` with `status: blocked`** to the entity file, then report back to FO. The FO output-validation gate requires these sections to exist. Never exit without writing them.
 
 ---
 

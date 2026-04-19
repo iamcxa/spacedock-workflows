@@ -574,6 +574,6 @@ FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumu
 - Research reviewer: max 1 gap-fill round
 - Self-review loop: max 3 iterations → proceed with gaps noted
 - Plan reviewer: max 1 round (no re-dispatch)
-- Total plan stage: if > 20 minutes elapsed → write what you have and proceed
+- Total plan stage: if > 20 minutes elapsed → **write `## Plan Output` and `## Plan Report` to the entity file with whatever you have** (partial research, incomplete tasks are OK — mark gaps with `⚠️ INCOMPLETE: {reason}`), then return. The FO output-validation gate requires these sections to exist. Never exit without writing them.
 - Research contradictions: write both, never silently resolve
 - Size re-evaluation: if upgraded, re-run missing research domains before planning

@@ -509,7 +509,7 @@ FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_act
 
 ### Budget Check
 
-After each dispatch, compute running total. If `execute_cost + prior_stages_cost > token_budget × 2` → pause execution, log warning in `### Execution Log`, notify captain. Do NOT silently continue.
+After each dispatch, compute running total. If `execute_cost + prior_stages_cost > token_budget × 2` → **write `## Execute Output` (with `### Execution Log` of tasks completed so far) and `## Execute Report` with `status: paused` to the entity file**, then notify captain. The FO output-validation gate requires these sections to exist. Never exit without writing them. Do NOT silently continue.
 
 ### Cost Column in Execution Log
 
