@@ -130,6 +130,55 @@ If collision found → reassign via `--next-id`.
 
 **Context usage**: PRODUCT.md tells you "does this feature fit the current product?" (constraints, personas, architecture). ROADMAP.md tells you "does this feature fit the plan?" (Not Doing conflicts, dependency on unshipped work, North Star alignment).
 
+## Runtime Detection Preamble
+
+Before running codebase probes in Step 3.1, detect the project stack so probe commands reference the correct runner:
+
+### Step R1: Detect Stacks
+
+```bash
+detected_stacks=()
+ls bun.lock bun.lockb 2>/dev/null && detected_stacks+=("bun")
+ls pnpm-lock.yaml 2>/dev/null && detected_stacks+=("pnpm")
+ls yarn.lock 2>/dev/null && detected_stacks+=("yarn")
+ls package-lock.json 2>/dev/null && detected_stacks+=("npm")
+ls Cargo.toml 2>/dev/null && detected_stacks+=("cargo")
+ls go.mod 2>/dev/null && detected_stacks+=("go")
+ls pyproject.toml requirements.txt Pipfile 2>/dev/null | head -1 | grep -q . && detected_stacks+=("python")
+ls Gemfile 2>/dev/null && detected_stacks+=("ruby")
+ls mix.exs 2>/dev/null && detected_stacks+=("elixir")
+ls build.gradle build.gradle.kts pom.xml 2>/dev/null | head -1 | grep -q . && detected_stacks+=("jvm")
+ls Makefile GNUmakefile makefile 2>/dev/null | head -1 | grep -q . && detected_stacks+=("make")
+ls pubspec.yaml 2>/dev/null && detected_stacks+=("dart")
+echo "detected_stacks: ${detected_stacks[@]}"
+```
+
+### Step R2: Check README Frontmatter Override
+
+Read `docs/{workflow}/README.md` for any `commands:` block that overrides detection.
+
+### Step R3: Set {commands.test} for Probe Commands
+
+Use the first detected stack (or README override) to set `{commands.test}`:
+
+| Stack | {commands.test} |
+|-------|----------------|
+| bun | `bun test` |
+| pnpm | `pnpm test` |
+| yarn | `yarn test` |
+| npm | `npm test` |
+| cargo | `cargo test` |
+| go | `go test ./...` |
+| python | `pytest` |
+| ruby | `bundle exec rspec` |
+| elixir | `mix test` |
+| jvm | `./gradlew test` or `mvn test` |
+| make | `make test` |
+| dart | `dart test` |
+
+If multiple stacks detected: use `{commands.test}` from the primary stack (first detected) for size probe.
+If `detected_stacks` is empty: use `{commands.test}` = `make test` as fallback, note "runner unknown — using make test as fallback".
+
 ## Step 2: Musk Audit (Expanded)
 
 Ask the captain these questions. Do NOT skip any. Wait for answers one at a time.
