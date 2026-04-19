@@ -527,8 +527,62 @@ git commit -m "feat: ship-onboard midway mode — {project} epic + {N} child ent
 
 ## Midway Step 5: Update ROADMAP.md and PRODUCT.md
 
-{filled by Task 6}
+Update ROADMAP.md and PRODUCT.md to reflect the classified done items.
+
+### 5.1: Update ROADMAP.md
+
+Read ROADMAP.md from project root. If it exists:
+
+1. Find or create `## Shipped` table.
+2. For each PRS item classified as "done", append a row:
+   ```
+   | {epic-entity-id} | {PRS item description} | {one-sentence from PRS context, present tense} | {today's date} | ⏳ |
+   ```
+   Note: retroactive items are pre-verified by codebase evidence. Skip verify pre-check.
+3. For each draft child entity, add a row to `## Now` table (it needs pipeline work):
+   ```
+   | {child-slug} | {size estimate S/M} | {reason: partial/not-started items from PRS} |
+   ```
+
+If ROADMAP.md doesn't exist → skip (no error).
+
+### 5.2: Update PRODUCT.md
+
+Read PRODUCT.md from project root. If it exists:
+
+For each domain with all items done, add a capability bullet to the matching domain section in `## Current Capabilities`:
+```
+- {Domain capability description — what it does} — {why it matters} (#{epic-entity-id})
+```
+
+Match the domain name to an existing subsection if possible. If no matching subsection → create one.
+
+If PRODUCT.md doesn't exist → skip (no error).
+
+### 5.3: Commit doc updates
+
+```bash
+git add ROADMAP.md PRODUCT.md
+git commit -m "docs: ship-onboard midway — update ROADMAP + PRODUCT for {project} ({N} done items)"
+```
+
+### 5.4: Confirm to captain
+
+> **Midway onboard complete.**
+>
+> Created:
+> - 1 epic entity: `{epic-entity-id}`
+> - {N} done child entities
+> - {N} draft child entities (ready for `/ship-sharp`)
+> - ROADMAP.md updated ({N} shipped, {N} added to Now)
+> - PRODUCT.md updated ({N} capability bullets added)
+>
+> FO can now dispatch draft children through the pipeline with `--next`.
 
 ## Midway Circuit Breakers
 
-{filled by Task 6}
+- **PRS parsing yields 0 domains** → warn captain: "Could not group PRS items into domains. Paste a more structured PRS fragment or manually group items and re-invoke."
+- **Teammate exploration fails** (agent timeout / error) → mark all items for that domain as "not-started (exploration failed)". Include in classification table with note. Proceed.
+- **Captain adjustment loop > 2 rounds** → write what captain last confirmed. Note remaining concerns in epic entity `## Classification Evidence`.
+- **PRODUCT.md/ROADMAP.md missing** → skip update step (no error). Note in confirmation: "PRODUCT.md/ROADMAP.md not found — skipped doc updates."
+- **Duplicate epic** (captain re-runs midway mode for same project) → detect by checking if an entity with `entity_type: epic` and `source: "ship-onboard midway mode"` already exists for this project. If found → ask captain: "An existing epic for {project} was found at {path}. Continue (will add children to existing epic) or start fresh?"
