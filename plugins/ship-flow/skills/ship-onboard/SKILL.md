@@ -15,6 +15,10 @@ You are running the ONBOARD skill for ship-flow. This runs once when ship-flow i
 
 ## Pre-Check
 
+0. Detect mode: Check if captain invoked with a PRS fragment argument:
+   - If captain provided a PRS fragment (product requirements specification — a structured list of functional requirements, user stories, or feature bullets describing an existing or planned product area): → enter **midway mode** (proceed to Midway Mode section below).
+   - If no PRS provided: → enter **greenfield mode** (proceed to Step 1: Codebase Scan).
+
 1. Check if PRODUCT.md or ROADMAP.md already exist at project root:
    ```bash
    ls PRODUCT.md ROADMAP.md 2>/dev/null
@@ -22,6 +26,14 @@ You are running the ONBOARD skill for ship-flow. This runs once when ship-flow i
 2. If both exist → ask captain: "PRODUCT.md and ROADMAP.md already exist. Overwrite, merge, or skip?"
 3. If one exists → generate only the missing one.
 4. If neither exists → proceed with full generation.
+
+---
+
+## Midway Mode — Retroactive Epic Creation for Existing Projects
+
+> Use when a project is partially complete and the captain provides a PRS fragment to retroactively classify what's done, what's partial, and what remains.
+
+Jump to **Midway Step 1** below. Skip Step 1-6 (greenfield flow).
 
 ---
 
@@ -276,3 +288,29 @@ After captain approves both:
 - If README.md is missing → generate PRODUCT.md with more "to be defined" sections and warn captain.
 - Captain review: max 3 iterations per document. After 3 → write what captain last approved and note remaining concerns as comments in the file.
 - If `gh` CLI is not available → skip GitHub issue scan, note in ROADMAP.md: "GitHub issues not scanned — gh CLI not authenticated."
+
+---
+
+## Midway Step 1: Parse PRS Fragment
+
+{filled by Task 2}
+
+## Midway Step 2: Dispatch Named Teammate Agents
+
+{filled by Task 3}
+
+## Midway Step 3: Classification Review
+
+{filled by Task 5 — captain review}
+
+## Midway Step 4: Create Epic + Child Entities
+
+{filled by Task 4}
+
+## Midway Step 5: Update ROADMAP.md and PRODUCT.md
+
+{filled by Task 6}
+
+## Midway Circuit Breakers
+
+{filled by Task 6}
