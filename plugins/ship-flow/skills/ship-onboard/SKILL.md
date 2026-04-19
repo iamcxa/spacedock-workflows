@@ -400,11 +400,130 @@ Keep this table as `{classification_table}` for use in Midway Steps 3-5.
 
 ## Midway Step 3: Classification Review
 
-{filled by Task 5 — captain review}
+Before creating any entity files, present the full classification table to the captain for review.
+
+> **Classification ready for review.**
+>
+> Here's what the codebase analysis found:
+>
+> {display {classification_table} formatted as markdown table}
+>
+> **Summary:**
+> - Done: {N} items across {D} domains
+> - Partial: {N} items
+> - Not started: {N} items
+>
+> **Entity plan:**
+> - 1 epic entity: `{project}-epic`
+> - {N_done_domains} done child entities (status: done, no further pipeline work)
+> - {N_draft_domains} draft child entities (status: draft, will flow through sharp → execute normally)
+>
+> **Before I write the files:**
+> 1. Are the classifications correct? (Change any status by saying "Item 3 should be partial, not done — missing {reason}")
+> 2. Should any domains be merged or split?
+> 3. Any items to exclude from epic scope?
+>
+> Reply **"confirmed"** to proceed, or describe adjustments.
+
+**Adjustment handling:**
+- If captain changes a status → update `{classification_table}` and re-present the summary (not the full table again, just the delta)
+- Max 2 adjustment rounds before writing. After 2 rounds → write what captain last confirmed and note remaining concerns in the epic entity `## Classification Evidence` section.
+
+After captain confirms → proceed to Midway Step 4 (entity creation).
 
 ## Midway Step 4: Create Epic + Child Entities
 
-{filled by Task 4}
+Using `{classification_table}` from Midway Step 2 (after captain confirmed in Step 3), create the epic entity and all child entities.
+
+### 4.1: Create Epic Entity
+
+Create a new entity file at `docs/{workflow}/ship-onboard-{project}-epic.md` (or captain-specified path) with:
+
+```yaml
+---
+id: "{next available id}"
+title: "{project name} — {PRS section title} epic"
+status: epic
+entity_type: epic
+children: ["{child-slug-1}", "{child-slug-2}", ...]
+source: "ship-onboard midway mode"
+started: {today ISO 8601}
+completed:
+verdict:
+priority: P1
+score:
+worktree:
+parent:
+depends-on: []
+tracker:
+issue:
+external_id:
+pr:
+token_budget:
+token_actual:
+---
+```
+
+Then write `## Epic Context` to the epic entity body:
+
+```markdown
+## Epic Context
+
+### Architecture Decisions
+
+{Synthesize from teammate reports: key patterns found in the codebase — auth strategy, data model boundaries, API conventions. If no architecture patterns were found, write "No established patterns found — children should propose."}
+
+### Cross-Entity Contracts
+
+{Shared data models, shared API routes, shared types referenced across multiple PRS items. Format: "- **{contract name}**: {what it defines} — shared across {domain1}, {domain2}"}
+
+### Entity Decomposition
+
+| Child | Vertical Slice | Entry | Exit | Depends On |
+|-------|---------------|-------|------|-----------|
+{one row per domain from {domain_list}: child = "{project}-{domain}", Vertical Slice = description of the PRS items in that domain, Entry = how user/system starts, Exit = observable outcome}
+
+### Shared Research
+
+{Key codebase findings that all children should know: framework version, project conventions, test patterns, directory structure. From teammate reports.}
+```
+
+### 4.2: Create Child Entities
+
+For each domain, create a child entity file at `docs/{workflow}/{project}-{domain}.md`:
+
+**For domains where ALL items are "done":**
+```yaml
+---
+id: "{next id}"
+title: "{project} {domain} — {brief scope description}"
+status: done
+entity_type: entity
+parent: "{epic-entity-id}"
+...
+---
+```
+Body: write `## Sharp Output` with `### Problem` derived from PRS items, `### Done Criteria` from the PRS items (all pre-checked), `### Size Assessment: S` (already done). Add `## Classification Evidence` citing the teammate file:line evidence.
+
+**For domains with any "partial" or "not-started" items:**
+```yaml
+---
+id: "{next id}"
+title: "{project} {domain} — {brief scope description}"
+status: draft
+entity_type: entity
+parent: "{epic-entity-id}"
+...
+---
+```
+Body: write minimal `## Sharp Output` stub with `### Problem` and `### Done Criteria` (items not yet done). Leave `status: draft` for FO to dispatch to sharp normally.
+
+### 4.3: Commit all created files
+
+```bash
+git add docs/{workflow}/
+git commit -m "feat: ship-onboard midway mode — {project} epic + {N} child entities"
+```
 
 ## Midway Step 5: Update ROADMAP.md and PRODUCT.md
 
