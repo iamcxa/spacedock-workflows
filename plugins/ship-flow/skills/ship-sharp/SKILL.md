@@ -392,6 +392,194 @@ Captain can override but must give a reason (not just "feels like S").
 
 Note: plan stage may re-evaluate size after research (Step 2.5 in ship-plan). This is the initial estimate.
 
+## Step 3.5: Epic Mode — Decomposition (when size exceeds L)
+
+**Trigger:** Size triage result = L AND captain confirms. After Step 3.3 captain confirmation, if size is L, ask:
+
+> This directive is L-size — it may be too large for a single entity pipeline pass. Would you like to decompose it into an epic with vertical-slice child entities? (yes → epic mode / no → proceed as single L entity)
+
+If captain says **no** → skip Step 3.5, proceed to Step 4 as normal L entity.
+
+If captain says **yes** → enter epic mode:
+
+### Epic Mode Step 1: Architecture Research
+
+Dispatch two parallel research agents:
+
+**Agent A — Architecture decisions:**
+```
+Agent(
+  description: "Epic architecture research: {epic title}",
+  model: sonnet,
+  prompt: |
+    Research architecture decisions for this epic directive: {problem statement}
+
+    Identify:
+    1. Auth/authorization strategy — what pattern to use across all children
+    2. Data schema boundaries — which entities/tables are shared vs child-owned
+    3. API contract boundaries — shared endpoints, response shapes, error formats
+    4. Cross-cutting concerns — logging, error handling, feature flags that all children must respect
+
+    For each decision, provide:
+    - The decision (specific, actionable)
+    - Rationale (why this choice)
+    - Implication for children (what each child must do / must not do)
+    - File:line citation if an existing pattern in the codebase applies
+
+    Under 400 words total. No placeholders.
+)
+```
+
+**Agent B — Decomposition proposal:**
+```
+Agent(
+  description: "Epic decomposition proposal: {epic title}",
+  model: sonnet,
+  prompt: |
+    Propose vertical slice decomposition for this directive: {problem statement}
+
+    Core principle: each child entity must be a vertical E2E slice — an independently
+    deliverable journey with a clear entry point, crossing all required layers (UI, API,
+    storage), producing an observable outcome. Never split by layer (not "all API routes",
+    not "all UI components", not "all models").
+
+    Propose 3-5 child entities. For each child:
+    - slug: {kebab-case}
+    - vertical_slice: one sentence describing the full journey (entry → layers → outcome)
+    - entry: what triggers this journey
+    - exit: what observable outcome proves it shipped
+    - depends_on: list of other child slugs this depends on (or empty)
+
+    Output as a YAML list:
+    ```yaml
+    children:
+      - slug: auth-registration
+        vertical_slice: "Captain fills registration form → API creates user → DB persists → redirect to dashboard"
+        entry: "GET /register page load"
+        exit: "User record exists in DB, redirected to /dashboard"
+        depends_on: []
+      - slug: auth-login
+        vertical_slice: "Captain submits credentials → API validates → session created → redirect"
+        entry: "POST /api/auth/login"
+        exit: "Session cookie set, redirected to /dashboard"
+        depends_on: [auth-registration]
+    ```
+
+    Under 300 words total.
+)
+```
+
+Wait for both agents to complete.
+
+### Epic Mode Step 2: Present + Confirm Decomposition
+
+Present findings to captain:
+
+> **Architecture decisions:**
+> {Agent A output — ADR bullets}
+>
+> **Proposed child entities:**
+> {Agent B output — formatted as numbered list}
+>
+> Each child is a vertical E2E slice — entry point → all required layers → observable outcome.
+> Horizontal splits (by layer) are rejected: no "all API routes" or "all UI components" children.
+>
+> Accept decomposition / Modify / Reject (proceed as single L entity)
+
+If **modify** → iterate (max 2 rounds). Present updated decomposition.
+If **reject** → exit epic mode, proceed to Step 4 as L entity.
+If **accept** → proceed to Epic Mode Step 3.
+
+### Epic Mode Step 3: Auto-Create Child Entity Files
+
+For each confirmed child entity:
+
+1. Create file at `{workflow_dir}/{child.slug}.md` with this exact frontmatter:
+   ```yaml
+   ---
+   id: ""
+   title: "{child.vertical_slice}"
+   status: draft
+   source: "epic decomposition of {epic_entity_slug} — {today_date}"
+   started:
+   completed:
+   verdict:
+   priority: {same as parent}
+   score:
+   worktree:
+   parent: "{epic_entity_id}"
+   depends-on: [{child.depends_on as quoted list, or []}]
+   tracker:
+   issue:
+   external_id:
+   pr:
+   token_budget:
+   token_actual:
+   ---
+
+   Child entity of epic `{epic_entity_slug}`. Vertical slice: {child.vertical_slice}
+
+   Entry: {child.entry}
+   Exit (observable outcome): {child.exit}
+   ```
+
+2. Assign ID via:
+   ```bash
+   python3 {spacedock_plugin_dir}/skills/commission/bin/status --workflow-dir {workflow_dir} --next-id
+   ```
+   Write returned ID into child frontmatter `id:` field. Repeat for each child (IDs must be unique).
+
+3. After all children created, update the epic entity frontmatter:
+   ```yaml
+   entity_type: epic
+   children: [{child.slug1}, {child.slug2}, ...]
+   ```
+
+4. Commit:
+   ```
+   epic: decompose {epic_slug} → [{child1}, {child2}, ...]
+   ```
+
+### Epic Mode Step 4: Write ## Epic Context to Epic Entity
+
+Append to the epic entity body (after `## Sharp Output`):
+
+```markdown
+## Epic Context
+
+### Architecture Decisions
+{From Agent A output — formatted as: "- **{decision}**: {rationale} — {implication for children}"}
+
+### Cross-Entity Contracts
+{List of shared API contracts, data schemas, interface boundaries derived from Agent A output}
+- **{contract name}**: {definition} — implemented by {child-slug(s)}
+
+### Entity Decomposition
+
+| Child | Vertical Slice | Entry | Exit | Depends On |
+|-------|---------------|-------|------|------------|
+{One row per confirmed child entity}
+
+### Shared Research
+{Key codebase findings from epic-level research that children should reference to avoid duplicate work}
+- {finding with file:line citation}
+```
+
+### Epic Mode Step 5: Set Status and Exit
+
+1. Write `status: epic` to the epic entity frontmatter.
+2. Write `## Sharp Report` with `status: passed, path: epic-decomposition`.
+3. Report to captain:
+
+   > Epic created. {n} child entities in draft:
+   > {list of child slugs with titles}
+   >
+   > Epic entity is frozen at `status: epic` — FO will skip it in `--next` output.
+   > Children flow through the pipeline independently.
+   > Each child's sharp stage will inherit Architecture Decisions and Cross-Entity Contracts.
+
+4. **EXIT ship-sharp.** Do not continue to Step 4. The epic entity does not flow through plan/execute/verify/ship.
+
 ## Step 4: Done Criteria (Derived from Journey)
 
 **Done Criteria are derived from the User Journey, not invented independently.** Each journey step becomes one or more typed Done Criteria.
