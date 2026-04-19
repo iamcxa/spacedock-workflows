@@ -172,12 +172,12 @@ FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumu
 
 Update entity frontmatter:
 ```yaml
-status: ship
+status: shipped
+completed: "{today's date, YYYY-MM-DD}"
+verdict: shipped
 pr: "{pr-number}"
 token_actual: {total}
 ```
-
-Note: Do NOT set `status: done` or `completed:` or `verdict:` — the FO advances to `done` (terminal) after this stage completes, which triggers the merge hook.
 
 ### 6.1: Surface D2 Knowledge Candidates
 
