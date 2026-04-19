@@ -293,7 +293,33 @@ After captain approves both:
 
 ## Midway Step 1: Parse PRS Fragment
 
-{filled by Task 2}
+Analyze the PRS fragment the captain provided. Extract all functional requirements, user stories, and feature bullets. Group them by functional domain.
+
+**How to group by domain:**
+- Look for recurring nouns/objects (membership, voucher, payment, notification, messaging, auth...)
+- Group items that share a data model or user journey
+- Aim for 2-5 domains; merge very small domains (1-2 items) into a related domain
+- Name each domain clearly: `{project}-{domain}` (e.g., `carlove-membership`, `carlove-vouchers`)
+
+**Output format** — present to captain before proceeding:
+
+> **PRS Parsing Result:**
+>
+> Domain: `{domain-name-1}` ({N} items)
+> - {item 1}
+> - {item 2}
+> ...
+>
+> Domain: `{domain-name-2}` ({N} items)
+> - ...
+>
+> **{Total N} PRS items across {D} domains.**
+>
+> Proceeding to codebase exploration. (If you want to adjust domain groupings, say so now.)
+
+Wait for captain acknowledgement or adjustment. If captain adjusts → re-group and confirm again.
+
+Record the final domain list as `{domain_list}` for use in Midway Step 2.
 
 ## Midway Step 2: Dispatch Named Teammate Agents
 
