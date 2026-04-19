@@ -270,6 +270,76 @@ For each step, check:
 
 **Why this step exists:** Scope bullets are atomic — they pass review individually but may not compose. User journeys are integration tests for the design. They catch cross-boundary issues that per-bullet analysis misses.
 
+### Step 2.8.5: Journey Code Trace (M/L only)
+
+**Skip if**: all journey steps have Boundary = "—" (no cross-boundary steps to verify).
+
+**Trigger**: Journey contains ≥ 2 steps with Boundary ≠ "—" → must run.
+
+After the journey table is presented and captain confirms, **mechanically verify boundary-crossing steps against the actual codebase**. This is not conceptual — trace real code paths.
+
+#### Classify each boundary-crossing step
+
+| Classification | Description | Action |
+|---|---|---|
+| **MODIFY** | Step changes existing behavior (e.g., "middleware now requires auth") | Trace existing code path, verify assumptions match reality |
+| **NEW** | Step requires code that doesn't exist yet (e.g., "POST /api/projects/register") | Skip trace — obviously NOT FOUND. Scan for hidden dependencies instead |
+
+**MODIFY steps are high-value** — they catch "assumed A but reality is B" (e.g., "assumed share routes require auth, but they're actually public"). NEW steps returning NOT FOUND is noise.
+
+#### Dispatch Explore agents by code layer (not journey number)
+
+Organize by layer to avoid overlap:
+
+```
+Agent 1 — daemon/CLI layer (bin/daemon.ts, bin/cli.ts, src/):
+  "Trace these MODIFY steps in the daemon/CLI layer: {list}.
+   For each: entry file:line → boundary crossing → output file:line.
+   Also: these NEW features will be added: {list}. 
+   What existing daemon code will they need to integrate with?
+   Hidden coupling points? Under 200 words per item."
+
+Agent 2 — API/middleware layer (ui/app/api/, ui/middleware.ts):
+  Same structure for API layer MODIFY + NEW items.
+
+Agent 3 — UI component layer (ui/components/, ui/app/):
+  Same structure for UI layer MODIFY + NEW items.
+```
+
+Wait for **all agents to complete** before compiling the trace table. Do NOT pre-fill from memory.
+
+#### Compile Journey Code Trace table from agent results
+
+```markdown
+### Journey Code Trace
+
+| Journey Step | Class | Boundary | Verdict | Evidence |
+|---|---|---|---|---|
+| 3. POST /api/comments → 201 | MODIFY | frontend → API | ✅ | route.ts:12 handles POST, writes to DB |
+| 5. Middleware requires auth | MODIFY | middleware → Supabase | ❌ OPPOSITE | share routes are PUBLIC (middleware.ts:82), not auth-gated |
+| 7. Claude receives notification | MODIFY | PG → daemon → CC | ⚠️ PARTIAL | CloudClient exists (cloud-client.ts:43) but pending route data source unclear |
+| 9. New registration API | NEW | daemon → API → PG | — SCAN | No hidden coupling found; daemon already has apiFetch helper |
+```
+
+Verdicts:
+- ✅ — code path confirmed, matches journey assumption
+- ❌ — code path exists but **behaves opposite to assumption** (highest value finding)
+- ⚠️ PARTIAL — code path exists but with caveats or unclear behavior
+- — SCAN — new code; hidden dependency scan only (no trace needed)
+
+#### Present to captain
+
+**If all ✅ or — SCAN:**
+> Journey code trace: all {N} boundary crossings verified. Proceeding.
+
+**If any ❌ or ⚠️:**
+> Journey code trace found {N} issue(s):
+> - Step {X}: {what's broken/opposite and why}
+>
+> Options: (a) add fix to scope, (b) note as known gap + defer, (c) revise journey
+
+**Why this step exists:** Journey steps are design-level assertions ("data flows from A to B"). Without code tracing, broken paths survive into plan/execute where they cost 10x more to discover. Dogfood learnings from acl-sharing sharp (#039): (1) MODIFY traces caught "share routes are PUBLIC not private" — a reversed assumption that would have caused wrong middleware implementation. (2) NEW step traces returned obvious NOT FOUND — low value, replaced with dependency scan. (3) Organizing agents by code layer instead of journey number eliminated duplicate tracing of the same files.
+
 ## Step 3: Size Triage (Evidence-Based)
 
 **Do NOT ask the captain to guess.** Run a 10-second probe, present evidence, then classify.
