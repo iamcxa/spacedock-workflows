@@ -34,6 +34,8 @@ frontmatter:
     token_budget: { type: number, unit: USD }
     token_actual: { type: number, unit: USD, description: "Accumulated by FO across stages" }
     pr_feedback_round: { type: number, default: 0 }
+    entity_type: { type: enum, values: [entity, epic], default: entity, description: "entity = normal pipeline entity; epic = decomposed into children, FO skips (status: epic bypasses stage_by_name dispatch)" }
+    children: { type: list, items: string, example: '["child-slug-1", "child-slug-2"]', description: "Child entity slugs — set by ship-sharp epic mode when decomposing. Epic entity status is frozen at 'epic'; children flow through the pipeline independently." }
 
 # --- Stage Sections ---
 # Each stage defines: reads (from previous stages), output, report, uat (optional)
@@ -352,9 +354,57 @@ pr_feedback:
       columns: ["#", "Comment", "DC", "Classification", "Route to"]
       classification_values: [assertion-fail, coverage-gap, architecture, nit]
 
+# --- Epic Sections ---
+# Written by ship-sharp epic mode. Read by child entity sharp and plan stages.
+# Append-only: later stages add to subsections, never overwrite.
+
+epic_context:
+  section: "## Epic Context"
+  written_by: "ship-sharp (epic mode) — written once when epic entity is decomposed"
+  read_by: "ship-sharp (child mode Step 1), ship-plan (Step 1 — Cross-Entity Contracts)"
+  grep_pattern: 'grep -A 200 "^## Epic Context" {entity_file}'
+  subsections:
+    architecture_decisions:
+      section: "### Architecture Decisions"
+      description: "ADRs from epic-level research — auth strategy, DB schema, API boundary decisions that all children must respect"
+      fields:
+        - { name: decisions, type: list, format: "- **{decision}**: {rationale} — {implication for children}" }
+    cross_entity_contracts:
+      section: "### Cross-Entity Contracts"
+      description: "Shared API contracts, data schemas, and interface boundaries that children must implement consistently"
+      fields:
+        - { name: contracts, type: list, format: "- **{contract name}**: {definition} — implemented by {child-slug(s)}" }
+    entity_decomposition:
+      section: "### Entity Decomposition"
+      description: "Decomposition table — one row per child entity showing its vertical slice scope"
+      fields:
+        - name: table
+          type: table
+          columns: ["Child", "Vertical Slice", "Entry", "Exit", "Depends On"]
+          rules:
+            - "Each child = one complete E2E journey (entry point → observable outcome)"
+            - "No child is a horizontal layer (e.g., 'all API routes' or 'all UI components')"
+    shared_research:
+      section: "### Shared Research"
+      description: "Research findings from epic-level architecture research — referenced by children to avoid duplicate work"
+      fields:
+        - { name: findings, type: list, format: "- {finding with file:line citation}" }
+
+parent_context:
+  section: "## Parent Context"
+  written_by: "ship-sharp (child mode Step 1) — summary of what the child inherited from parent epic"
+  read_by: "ship-plan (Step 1) — for Cross-Entity Contracts awareness"
+  grep_pattern: 'grep -A 50 "^## Parent Context" {entity_file}'
+  fields:
+    - { name: epic_slug, type: string, description: "Parent entity slug" }
+    - { name: inherited_decisions, type: list, description: "ADR bullets from parent ## Epic Context → ### Architecture Decisions that apply to this child" }
+    - { name: contracts_to_implement, type: list, description: "Cross-Entity Contract bullets from parent ## Epic Context → ### Cross-Entity Contracts assigned to this child" }
+    - { name: slice_scope, type: string, description: "This child's row from parent ## Epic Context → ### Entity Decomposition" }
+
 # --- Cross-Stage Conventions ---
 conventions:
   section_naming: "## {Stage} {Block} — e.g., ## Sharp Output, ## Plan Report, ## Verify UAT"
+  vertical_slice_principle: "Entities are always vertical slices — each entity is an independently deliverable and testable E2E journey, never a horizontal layer (never 'all API routes', 'all models', 'frontend only'). A vertical slice has a clear entry point, crosses all required layers, and produces an observable outcome a captain can verify."
   grepable_fields:
     - "status: — present in every Report block, FO reads for dispatch decisions"
     - "stage_cost: — present in every Report block, FO accumulates into token_actual"
