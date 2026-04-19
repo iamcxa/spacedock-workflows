@@ -130,6 +130,38 @@ If collision found → reassign via `--next-id`.
 
 **Context usage**: PRODUCT.md tells you "does this feature fit the current product?" (constraints, personas, architecture). ROADMAP.md tells you "does this feature fit the plan?" (Not Doing conflicts, dependency on unshipped work, North Star alignment).
 
+### Step 1.1: Parent Epic Context (child entities only)
+
+**Skip when:** `parent:` frontmatter field is empty or absent.
+
+**When `parent:` is set:**
+
+1. Resolve the parent entity file:
+   ```bash
+   grep -rl "^id: \"${parent_id}\"" {workflow_dir}/*.md | head -1
+   ```
+2. Read the parent file. Extract `## Epic Context`:
+   - `### Architecture Decisions` — ADRs this child must respect
+   - `### Cross-Entity Contracts` — contracts this child must implement
+   - `### Entity Decomposition` — find this child's row (its assigned vertical slice)
+   - `### Shared Research` — prior research to reuse (avoid re-researching what the epic already covered)
+
+3. Write `## Parent Context` to the child entity body:
+   ```markdown
+   ## Parent Context
+
+   Epic: {parent_slug} (#{parent_id})
+   Inherited decisions:
+   {3-5 ADR bullets from parent ### Architecture Decisions that apply to this child}
+   Contracts to implement:
+   {contract bullets from parent ### Cross-Entity Contracts assigned to this child}
+   Slice scope: {this child's row from parent ### Entity Decomposition}
+   ```
+
+4. Use inherited decisions throughout sharp: in Musk Audit Q2 (fastest path respects ADRs), in User Journey (journey must implement assigned contracts), in Size Assessment (shared research reduces research scope).
+
+**Why:** Epic architecture decisions are not negotiable per-child — children inherit them. Reading parent context before sharp prevents contradictory implementations across child entities.
+
 ## Runtime Detection Preamble
 
 Before running codebase probes in Step 3.1, detect the project stack so probe commands reference the correct runner:
