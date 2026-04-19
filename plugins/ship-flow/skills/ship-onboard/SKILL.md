@@ -323,7 +323,80 @@ Record the final domain list as `{domain_list}` for use in Midway Step 2.
 
 ## Midway Step 2: Dispatch Named Teammate Agents
 
-{filled by Task 3}
+For each domain in `{domain_list}`, dispatch a named persistent teammate to explore the codebase. Run all teammates in parallel (one Agent per domain).
+
+**Agent dispatch template** (repeat for each domain):
+
+```
+Agent(
+  name: "{project}-{domain}-explorer",
+  description: "Codebase explorer for {domain} domain — persistent for follow-up questions",
+  model: sonnet,
+  prompt: |
+    You are the {domain} domain explorer for the {project} codebase.
+
+    ## Your Mission
+    Explore the codebase for evidence of these PRS items:
+
+    {list each PRS item in this domain, numbered}
+
+    ## Codebase Access
+    Project root: {project_root}
+    Scan these directories first: src/, lib/, plugins/, app/, {any domain-specific dirs you discover}
+
+    ## Classification Rules
+    For each PRS item, report one of:
+    - **done** — fully implemented with file:line evidence. Test coverage exists (if testable).
+    - **partial** — code exists but incomplete (missing edge cases, no tests, TODO comments, disabled feature flag, scaffolding only). Cite what exists AND what's missing.
+    - **not-started** — no implementation found. Search with at least 3 different grep terms before concluding not-started.
+
+    ## Exploration Strategy
+    1. Grep for domain-specific terms (entity names, function names, route paths)
+    2. Read top-level files in domain directories
+    3. Check test files — test coverage = strong evidence of "done"
+    4. Check for TODO/FIXME comments on partial items
+
+    ## Output Format
+    For each PRS item:
+    ```
+    Item N: {item text}
+    Status: done | partial | not-started
+    Evidence: {file:line citation} — {what was found}
+    Missing (if partial): {what's absent}
+    ```
+
+    Report all {N} items. Do not skip any.
+)
+```
+
+**Progressive follow-up via SendMessage:**
+
+After initial teammate reports arrive, ask follow-up questions without re-dispatching new agents. Use SendMessage to the existing named agent:
+
+```
+SendMessage(
+  to: "{project}-{domain}-explorer",
+  message: "Follow-up: {specific question}. For example: Is the {endpoint} route tested? Does the {feature} handle {edge case}? Check {specific file} for {specific pattern}."
+)
+```
+
+**When to send follow-ups:**
+- A "partial" item lacks clarity on what's missing → ask specifically
+- A "done" item has no test evidence → ask the teammate to check test files
+- An item was marked "not-started" but you suspect scaffolding exists → ask to check for stub/TODO patterns
+
+**Aggregate results:**
+
+After all teammates report (and follow-ups are resolved), build the classification table:
+
+| # | PRS Item | Domain | Status | Evidence |
+|---|----------|--------|--------|----------|
+| 1 | {item text} | {domain} | done / partial / not-started | {file:line} |
+| ... | ... | ... | ... | ... |
+
+Keep this table as `{classification_table}` for use in Midway Steps 3-5.
+
+**Circuit breaker:** If a teammate fails to respond within 2 minutes → mark all its items as "not-started (exploration failed)" and proceed. Do not retry the same agent.
 
 ## Midway Step 3: Classification Review
 
