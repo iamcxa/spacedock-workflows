@@ -41,6 +41,54 @@ If any violation found → write `### Execution Log` (under `## Execute Output`)
 
 ---
 
+## Runtime Detection Preamble
+
+Before running any quality check or dev server command, resolve the runtime tool by reading the project context:
+
+### Step R1: Detect Package Manager
+
+Check for lockfiles in the project root (in priority order):
+```bash
+ls bun.lock bun.lockb 2>/dev/null && echo "runner=bun" || \
+ls pnpm-lock.yaml 2>/dev/null && echo "runner=pnpm" || \
+ls yarn.lock 2>/dev/null && echo "runner=yarn" || \
+ls package-lock.json 2>/dev/null && echo "runner=npm" || \
+ls Cargo.toml 2>/dev/null && echo "runner=cargo" || \
+ls go.mod 2>/dev/null && echo "runner=go" || \
+echo "runner=unknown"
+```
+
+### Step R2: Check README Frontmatter Override
+
+Read the workflow README at `docs/{workflow}/README.md`. If the frontmatter contains a `commands:` block, those values override auto-detection:
+```yaml
+commands:
+  test: "npm test"           # overrides auto-detected test command
+  build: "npm run build"     # overrides auto-detected build command
+  typecheck: "npx tsc --noEmit"
+  lint: "npm run lint"
+  dev: "npm run dev"
+```
+
+### Step R3: Resolve Command Variables
+
+Based on detected runner (or README override), set:
+
+| Variable | bun | pnpm | yarn | npm | cargo | go |
+|----------|-----|------|------|-----|-------|----|
+| `{commands.test}` | `bun test` | `pnpm test` | `yarn test` | `npm test` | `cargo test` | `go test ./...` |
+| `{commands.build}` | `bun build` | `pnpm run build` | `yarn run build` | `npm run build` | `cargo build` | `go build ./...` |
+| `{commands.typecheck}` | `bunx tsc --noEmit` | `pnpm exec tsc --noEmit` | `yarn dlx tsc --noEmit` | `npx tsc --noEmit` | `cargo check` | `go vet ./...` |
+| `{commands.lint}` | `bun lint` | `pnpm run lint` | `yarn run lint` | `npm run lint` | `cargo clippy` | `go vet ./...` |
+| `{commands.dev}` | `bun dev` | `pnpm run dev` | `yarn run dev` | `npm run dev` | N/A | N/A |
+| `{commands.prettier}` | `bunx prettier` | `pnpm exec prettier` | `yarn dlx prettier` | `npx prettier` | N/A | N/A |
+
+If runner is `unknown` → stop and ask captain to add `commands:` to workflow README frontmatter.
+
+README frontmatter `commands:` takes precedence over the table above.
+
+---
+
 ## Self-Drive Rule (Anti-Idle)
 
 **Do not idle between tasks.** After completing one task (DONE, commit, review), immediately proceed to the next task in the current wave or advance to the next wave. Do not wait for external input between tasks. The entire execute stage is a single continuous run — you have all the context you need from the Plan section.
@@ -101,17 +149,17 @@ Agent(
     ## Quality Check — Tiered (mandatory before reporting DONE)
 
     ### Tier 1 (always, ~30s):
-    Run ALL of these. ALL must pass:
+    Run ALL of these. ALL must pass (using runtime-detected commands from Runtime Detection Preamble):
     ```bash
-    bun build 2>&1
-    tsc --noEmit 2>&1
-    bun test 2>&1
+    {commands.build} 2>&1
+    {commands.typecheck} 2>&1
+    {commands.test} 2>&1
     ```
     If any fail → fix and retry (max 3 attempts).
 
     ### Tier 2 (only if your task touched frontend files — ui/, app/, components/, pages/, *.tsx):
     ```bash
-    timeout 30 bun dev &
+    timeout 30 {commands.dev} &
     sleep 5
     curl -sf http://localhost:3000 > /dev/null && echo "T2: root OK" || echo "T2: root FAIL"
     curl -sf http://localhost:3000/{affected-route} > /dev/null && echo "T2: route OK" || echo "T2: route FAIL"
@@ -275,7 +323,7 @@ git diff {execute_start_sha}..HEAD --name-only | grep -E '^(ui/|app/|components/
 
 If yes → run Tier 2 smoke check:
 ```bash
-timeout 30 bun dev &
+timeout 30 {commands.dev} &
 sleep 5
 curl -sf http://localhost:3000 > /dev/null && echo "T2: root OK" || echo "T2: root FAIL"
 kill %1 2>/dev/null
@@ -316,7 +364,7 @@ Scope observations: {benign-drift auto-proceeds, if any}
 | Done Criterion | Verify Command | Result |
 |----------------|---------------|--------|
 | POST /api/comments returns 201 | `curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/api/comments` | 201 PASS |
-| bun test passes with new test | `bun test` | 143 pass, 0 fail PASS |
+| {commands.test} passes with new test | `{commands.test}` | 143 pass, 0 fail PASS |
 
 ## Execute Report
 status: {passed | failed | blocked}

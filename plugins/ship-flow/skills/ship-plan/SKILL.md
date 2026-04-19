@@ -34,6 +34,52 @@ Also read `PRODUCT.md` if it exists — check `## Architecture` and `## Constrai
 
 **Input validation**: If `## Sharp Output → ### Problem` or `## Sharp Output → ### Done Criteria` is missing, write `## Plan Report` with `status: blocked, reason: missing sharp output` and return. Do NOT plan on partial input.
 
+## Runtime Detection Preamble
+
+Before writing task verification commands, resolve the runtime tool for this project so that plan tasks use correct commands:
+
+### Step R1: Detect Package Manager
+
+Check for lockfiles in the project root (in priority order):
+```bash
+ls bun.lock bun.lockb 2>/dev/null && echo "runner=bun" || \
+ls pnpm-lock.yaml 2>/dev/null && echo "runner=pnpm" || \
+ls yarn.lock 2>/dev/null && echo "runner=yarn" || \
+ls package-lock.json 2>/dev/null && echo "runner=npm" || \
+ls Cargo.toml 2>/dev/null && echo "runner=cargo" || \
+ls go.mod 2>/dev/null && echo "runner=go" || \
+echo "runner=unknown"
+```
+
+### Step R2: Check README Frontmatter Override
+
+Read the workflow README at `docs/{workflow}/README.md`. If the frontmatter contains a `commands:` block, those values override auto-detection:
+```yaml
+commands:
+  test: "npm test"           # overrides auto-detected test command
+  build: "npm run build"     # overrides auto-detected build command
+  typecheck: "npx tsc --noEmit"
+  lint: "npm run lint"
+  dev: "npm run dev"
+```
+
+### Step R3: Resolve Command Variables
+
+Based on detected runner (or README override), set:
+
+| Variable | bun | pnpm | yarn | npm | cargo | go |
+|----------|-----|------|------|-----|-------|----|
+| `{commands.test}` | `bun test` | `pnpm test` | `yarn test` | `npm test` | `cargo test` | `go test ./...` |
+| `{commands.build}` | `bun build` | `pnpm run build` | `yarn run build` | `npm run build` | `cargo build` | `go build ./...` |
+| `{commands.typecheck}` | `bunx tsc --noEmit` | `pnpm exec tsc --noEmit` | `yarn dlx tsc --noEmit` | `npx tsc --noEmit` | `cargo check` | `go vet ./...` |
+| `{commands.lint}` | `bun lint` | `pnpm run lint` | `yarn run lint` | `npm run lint` | `cargo clippy` | `go vet ./...` |
+| `{commands.dev}` | `bun dev` | `pnpm run dev` | `yarn run dev` | `npm run dev` | N/A | N/A |
+| `{commands.prettier}` | `bunx prettier` | `pnpm exec prettier` | `yarn dlx prettier` | `npx prettier` | N/A | N/A |
+
+If runner is `unknown` → stop and ask captain to add `commands:` to workflow README frontmatter.
+
+README frontmatter `commands:` takes precedence over the table above.
+
 ## Step 1.5: Assumption Re-Validation
 
 Sharp-stage assumptions may reference codebase state that changed between sharp and plan (other merges, concurrent work, manual edits). Before planning, verify that sharp's evidence still holds.
@@ -209,16 +255,17 @@ Format:
    // test code
    ```
 2. Run test to verify it fails:
-   `bun test {test-file} -- --grep "{test-name}"`
+   `{commands.test} {test-file} -- --grep "{test-name}"`
+   (Resolve {commands.test} from Runtime Detection Preamble above)
    Expected: FAIL with "{expected error}"
 3. Write minimal implementation:
    ```typescript
    // implementation code
    ```
 4. Run test to verify it passes:
-   `bun test {test-file}`
+   `{commands.test} {test-file}`
    Expected: PASS
-5. Run quality check: `bun build && tsc --noEmit`
+5. Run quality check: `{commands.build} && {commands.typecheck}`
 **Done:** {runnable verification command}
 **Model:** haiku | sonnet
 ```
@@ -254,7 +301,7 @@ Every task must contain the actual content an agent needs. These are **plan fail
 
 Every task's **Done** field must contain a runnable command:
 ```
-Done: `bun test tests/x.test.ts` passes
+Done: `{commands.test} tests/x.test.ts` passes
 Done: `grep "validateEmail" src/models/User.ts` finds the new function
 ```
 Not: "works correctly" / "is properly implemented" / "handles all cases"
@@ -272,7 +319,7 @@ Read `## Sharp Output → ### Done Criteria` and `## Sharp Output → ### Journe
 | DC-2 | ui | Panel has input + submit | `curl -sf localhost:3000/entity/test \| grep 'comment-input'` | matches |
 | DC-3 | api | POST returns 201 | `curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/api/comments -d '{"text":"test"}'` | 201 |
 | DC-4 | ui | Comment appears without refresh | `e2e-test flows/comment-sse.yaml` (if e2e available) or manual | steps pass |
-| DC-5 | cli | Notification test passes | `bun test tests/notification.test.ts` | exit 0 |
+| DC-5 | cli | Notification test passes | `{commands.test} tests/notification.test.ts` | exit 0 |
 ```
 
 **Verify Procedure rules by type:**
