@@ -301,29 +301,30 @@ fi
 
 > **Removed from M/L mandatory** (2026-04 D1 measurement): `pr-test-analyzer` contributed 6 raw findings → 1 NIT in entity-detail-redesign (collapsed by sonnet into a single coverage-gap line). Net actionable surviving findings across n=4 sample: 0. Demoted to opt-in trigger (see Content-triggered below). `comment-analyzer` and `code-simplifier` never appeared in measured sample — also demoted to explicit opt-in pending evidence.
 
-#### Dispatch based on diff content (any size):
+#### Opt-in only (add `haiku-opt-in: <name>` to entity body):
 
-| Agent | Skill | Trigger condition | Detection |
-|-------|-------|------------------|-----------|
-| `insecure-defaults` | `trailofbits:insecure-defaults` | Auth/config/env/secret changes in production code | `echo "$DIFF_FILES" \| grep -iE 'auth\|config\|env\|secret\|middleware\|cors\|csp' \| grep -v -E '\.test\.\|/tests?/\|\.md$'` |
-| `sharp-edges` | `trailofbits:sharp-edges` | API/route/handler changes in production code | `echo "$DIFF_FILES" \| grep -iE 'route\|api\|handler\|endpoint\|server' \| grep -v -E '\.test\.\|/tests?/\|\.md$'` |
-| `variant-analysis` | `trailofbits:variant-analysis` | Entity is a bug fix | `grep -i 'source:.*bug\|source:.*fix\|bugfix\|hotfix' {entity_frontmatter}` |
-| `pr-test-analyzer` | `pr-review-toolkit:pr-test-analyzer` | New test files added or removed (not just modified) | `git diff {execute_base}..HEAD --name-status \| grep -E '^[AD].*\.test\.'` |
-| `type-design-analyzer` | `pr-review-toolkit:type-design-analyzer` | 3+ new exported types/interfaces | `echo "$DIFF_CONTENT" \| grep -cE '^\+export (type \|interface \|enum )' \| awk '$1 >= 3'` |
-| `comment-analyzer` | `pr-review-toolkit:comment-analyzer` | OPT-IN — captain explicitly requests | grep entity body for `haiku-opt-in: comment-analyzer` |
-| `code-simplifier` | `pr-review-toolkit:code-simplifier` | OPT-IN — captain explicitly requests | grep entity body for `haiku-opt-in: code-simplifier` |
-| `differential-review` | `trailofbits:differential-review` | Files with prior changes in last 30 days | `git log --since="30 days ago" --name-only --pretty=format: -- $DIFF_FILES \| sort -u \| wc -l > 0` |
+| Agent | Skill | Trigger |
+|-------|-------|---------|
+| `insecure-defaults` | `trailofbits:insecure-defaults` | `haiku-opt-in: insecure-defaults` |
+| `sharp-edges` | `trailofbits:sharp-edges` | `haiku-opt-in: sharp-edges` |
+| `variant-analysis` | `trailofbits:variant-analysis` | `haiku-opt-in: variant-analysis` |
+| `pr-test-analyzer` | `pr-review-toolkit:pr-test-analyzer` | `haiku-opt-in: pr-test-analyzer` |
+| `type-design-analyzer` | `pr-review-toolkit:type-design-analyzer` | `haiku-opt-in: type-design-analyzer` |
+| `comment-analyzer` | `pr-review-toolkit:comment-analyzer` | `haiku-opt-in: comment-analyzer` |
+| `code-simplifier` | `pr-review-toolkit:code-simplifier` | `haiku-opt-in: code-simplifier` |
+
+> **Demoted from content-triggered to opt-in** (2026-04 D1 measurement, n=5 ship-flow entities): `insecure-defaults`, `sharp-edges`, `variant-analysis`, `pr-test-analyzer`, `type-design-analyzer` — 0 dispatches across all 5 entities. Plugin/bash/markdown diffs do not match auth/route/bug/test/type triggers. `comment-analyzer` and `code-simplifier` were already opt-in. Net active agents: 2 defaults vs prior false complexity of 7 content-triggered rows.
 
 #### Summary by diff content (post-D1 measurement):
 
-| Diff content | Mandatory | Content-triggered (likely range) | Total range |
+| Diff content | Default | Opt-in | Total range |
 |---|---|---|---|
 | Non-source only (docs/SKILL.md/config) | (none — sonnet inline review) | (none) | **0 agents** |
-| S source (≤3 files) | code-reviewer (1) | 0-2 based on content | 1-3 agents |
-| M source (4-15 files) | code-reviewer + silent-failure-hunter (2) | 0-3 based on content | 2-5 agents |
-| L source (>15 files) | code-reviewer + silent-failure-hunter (2) | 0-3 based on content | 2-5 agents |
+| S source (≤3 files) | code-reviewer (1) | 0-7 on request | 1 agent + opt-ins |
+| M source (4-15 files) | code-reviewer + silent-failure-hunter (2) | 0-7 on request | 2 agents + opt-ins |
+| L source (>15 files) | code-reviewer + silent-failure-hunter (2) | 0-7 on request | 2 agents + opt-ins |
 
-**Cost estimate:** haiku ~$0.05/agent → 0: $0, S: $0.05-0.15, M: $0.10-0.25, L: $0.10-0.25 (down from $0.25-0.45 pre-D1).
+**Cost estimate:** haiku ~$0.05/agent → 0: $0, S: $0.05, M/L: $0.10 (down from $0.05-0.25 pre-056).
 
 **Re-evaluate at next D1 sample (current + 5 entities):** if any cut/demoted agent would have caught a missed bug found in PR review or production, calibrate back. Default stance: keep cuts, append evidence to MEMORY.md.
 
