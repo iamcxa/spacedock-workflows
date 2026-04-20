@@ -277,14 +277,27 @@ FO reads `status:` line (grep `^status:`) for the lifecycle gate and `stage_cost
 
 > Backward compat: pre-2026-04-19 entities used top-level `## Ship Report`. Pr-merge mod accepts both layouts. New entities use `## Ship → ### Verdict`.
 
-Update entity frontmatter:
+**Frontmatter write scope — ONLY `token_actual`.**
+
+The ship ensign may update exactly one frontmatter field:
+
 ```yaml
-status: shipped
-completed: "{today's date, YYYY-MM-DD}"
-verdict: shipped
-pr: "{pr-number}"
 token_actual: {total}
 ```
+
+**Do NOT write these fields** — they are FO-owned and set at terminal transition (FO advances `ship` → `done` after confirming ship-stage output is clean, or after captain approval in the pr-merge merge-hook):
+
+- `status` — FO advances via `status --set status={next_stage}` (ensign NEVER sets `shipped`; that term isn't even a valid stage in ship-flow)
+- `completed` — FO auto-fills ISO 8601 timestamp at terminal transition
+- `verdict` — FO sets `PASSED` (not `shipped`) at terminal transition
+- `pr` — pr-merge mod's merge hook sets this after `gh pr create` / `glab mr create`; ship ensign does not touch
+- `worktree` — FO clears at terminal transition
+
+**Entity body write scope — worktree copy ONLY.**
+
+Ship-stage body content (`## Ship` section with all its subsections) must be written to the **worktree copy** of the entity file (inside `.worktrees/{worker-key}-{slug}/docs/{workflow}/{slug}.md`), NEVER directly to the main-branch entity file. The FO's merge step will bring your body content onto main via the worktree merge; direct writes to main duplicate content and bypass worktree ownership.
+
+If your dispatch prompt gives you the main-branch path for the entity file, use it only for READING context (`## Sharp Output`, `## Plan Output`, `## Verify` verdict). For WRITING, use the worktree copy path explicitly.
 
 ### 6.1: Surface D2 Knowledge Candidates
 

@@ -431,6 +431,17 @@ Read `## Sharp Output → ### Done Criteria` and `## Sharp Output → ### Journe
 
 **Every DC MUST have a Verify Procedure.** "Manual check" or "visually inspect" is a plan failure — find a programmatic way or degrade the type (e.g., `e2e` → `ui` with curl).
 
+**For UI entities: include at least one structural-parity DC.** Grep-based DCs ("component X is imported and used") prove component *wiring*, not rendered *alignment*. During #048 war-room-ui-components ship, grep DC-1..6 all PASSED while captain smoke test found 3 BLOCKING bugs (CSS grid column mismatch, wrong prop passed to component, column semantics drift) — every visual-structural bug was invisible to text-based assertions. Mitigate by adding programmatic structural checks before the captain smoke-test gate:
+
+| Structural check type | Example Verify Procedure |
+|---|---|
+| Column / cell count parity | `curl -sf localhost:3637/ \| grep -c 'wr-th'` matches `curl -sf localhost:3637/ \| grep -c 'wr-tr > :first-child > *'` |
+| Grid template vs header count | `grep grid-template-columns globals.css \| awk '{print NF-1}'` equals header-span count in consumer TSX |
+| Prop-type assertion | Vitest/bun-test that imports the component and asserts prop shape matches expected variant enum (catches `intent={entity.status}` style mis-wires) |
+| Class name presence | `curl -sf localhost:3637/ \| grep -c 'pill-stage--'` > 0 (proves StagePill actually rendered, not plain text fallback) |
+
+Add at least ONE such structural DC per UI entity. Captain smoke test remains the final V3-delta judgment gate (typography weight, color shade, padding 1-2px drift), but structural bugs that break the grid or mis-wire props MUST be caught programmatically — they waste a captain cycle otherwise.
+
 The Verification Spec table is consumed by:
 - **Execute Step 5.1** — runs each procedure as first-pass
 - **Verify Step 4** — runs each procedure independently as second-pass
