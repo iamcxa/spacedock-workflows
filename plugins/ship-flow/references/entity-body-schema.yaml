@@ -223,6 +223,10 @@ stages:
           columns: ["DC", "Type", "Assertion", "Verify Procedure", "Result", "Evidence"]
 
   # ===== VERIFY =====
+  # 2026-04-19 D1 measurement consolidation: 3 sections (Output, Report, UAT) merged into one ## Verify
+  # with 5 subsections. Reduces artifact count, ship-review reads single section. Backward compat:
+  # ship-review and ship-pr-feedback also accept legacy ## Verify Output / ## Verify Report / ## Verify UAT
+  # for entities written before 2026-04-19 (no migration needed — old entities are terminal).
   verify:
     reads:
       - "## Execute Output (all subsections)"
@@ -230,7 +234,7 @@ stages:
       - "## Sharp Output → Done Criteria"
       - "PRODUCT.md ## Constraints"
     output:
-      section: "## Verify Output"
+      section: "## Verify"
       subsections:
         quality_gate:
           section: "### Quality Gate"
@@ -265,34 +269,55 @@ stages:
             - { name: d1_items, type: list, format: "[D1] {pattern}" }
             - { name: d2_items, type: list, format: "[D2-candidate] {pattern}" }
             - { name: skipped, type: boolean }
-    report:
-      section: "## Verify Report"
-      fields:
-        - { name: status, type: enum, values: [passed, failed], grepable: true }
-        - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
-        - { name: quality, type: string, description: "5/5 pass" }
-        - { name: review, type: string, description: "verdict from review findings" }
-        - { name: uat, type: string, description: "all pass | N failed" }
-        - { name: blocking_issues, type: string, description: "none | list" }
-        - { name: knowledge_capture, type: string, description: "D1: N, D2: M | skipped" }
-    uat:
-      section: "## Verify UAT"
-      description: "Independent second-pass. Authoritative — this determines PASS/FAIL."
-      fields:
-        - name: results
-          type: table
-          columns: ["DC", "Type", "Assertion", "Verify Procedure", "Execute 1st", "Verify 2nd", "Evidence"]
+        uat:
+          section: "### UAT"
+          description: "Evidence review + spot-check (D1 2026-04). Falls back to full re-run if execute evidence is unreliable."
+          fields:
+            - { name: mode, type: enum, values: [spot-check, "full-rerun"], description: "spot-check is default; full-rerun is fallback" }
+            - name: results
+              type: table
+              columns: ["DC", "Type", "Assertion", "Verify Procedure", "Execute 1st", "Verify", "Evidence"]
+              verify_column_values: ["spot-checked", "trust (evidence: <ref>)", "re-run (fallback)"]
+        verdict:
+          section: "### Verdict"
+          description: "Authoritative outcome — replaces legacy ## Verify Report. FO grep-reads `status:` line."
+          fields:
+            - { name: status, type: enum, values: [passed, failed], grepable: true }
+            - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
+            - { name: quality, type: string, description: "5/5 pass" }
+            - { name: review, type: string, description: "verdict from review findings" }
+            - { name: uat, type: string, description: "all pass | N failed" }
+            - { name: blocking_issues, type: string, description: "none | list" }
+            - { name: knowledge_capture, type: string, description: "D1: N, D2: M | skipped" }
+            - { name: started_at, type: string, format: "ISO 8601" }
+            - { name: completed_at, type: string, format: "ISO 8601" }
+            - { name: duration_minutes, type: number }
+    legacy_sections:
+      description: "Pre-2026-04-19 layout used 3 separate H2 sections. Readers (ship-review, ship-pr-feedback) accept both layouts."
+      sections:
+        - "## Verify Output (legacy → ## Verify with ### Quality Gate, ### Review Findings, ### Knowledge Captures)"
+        - "## Verify Report (legacy → ## Verify → ### Verdict)"
+        - "## Verify UAT (legacy → ## Verify → ### UAT)"
 
   # ===== SHIP =====
   ship:
     reads:
-      - "## Verify Report (must be PASS)"
+      # Primary (post-2026-04-19 layout):
+      - "## Verify → ### Verdict (status: must be passed)"
+      - "## Verify → ### UAT (results table)"
+      - "## Verify → ### Quality Gate"
+      # Legacy fallback (pre-2026-04-19): if ## Verify section absent, fall back to:
+      - "## Verify Report (legacy — must be PASS)"
+      - "## Verify UAT (legacy)"
+      - "## Verify Output → ### Quality Gate (legacy)"
+      # Always:
       - "## Execute Output → Execution Log"
       - "## Sharp Output → Problem, Done Criteria, Shape Output"
-      - "## Verify UAT"
       - "PRODUCT.md, ROADMAP.md"
     output:
-      section: "## Ship Output"
+      # 2026-04-19 D1 consolidation: ## Ship Output + ## Ship Report merged into single ## Ship.
+      # Verdict subsection replaces top-level Ship Report. Pr-merge mod accepts both layouts.
+      section: "## Ship"
       subsections:
         pr_draft:
           section: "### PR Draft"
@@ -303,16 +328,18 @@ stages:
               includes:
                 - "## Problem (from Sharp Output)"
                 - "## User Journey (from Sharp Output)"
-                - "## Done Criteria + Verification (full UAT table from Verify UAT)"
+                - "## Done Criteria + Verification (full UAT table from Verify → ### UAT, or legacy ## Verify UAT)"
                 - "## Changes (from Execute Output → Execution Log)"
-                - "## Quality Gate (from Verify Output)"
+                - "## Quality Gate (from Verify → ### Quality Gate, or legacy ## Verify Output → ### Quality Gate)"
                 - "Entity ID, tracker, cost footer"
         roadmap_update:
           section: "### ROADMAP.md Update"
+          condition: "Only when ROADMAP.md exists and was modified"
           fields:
             - { name: action, type: string, description: "Moved from Now → Shipped" }
         product_update:
           section: "### PRODUCT.md Update"
+          condition: "Only when PRODUCT.md exists and was modified"
           fields:
             - { name: capabilities_added, type: number }
             - { name: stories_added, type: number }
@@ -327,18 +354,27 @@ stages:
             - { name: budget, type: string }
             - { name: actual, type: string }
             - { name: ratio, type: string }
-    report:
-      section: "## Ship Report"
-      fields:
-        - { name: status, type: enum, values: [shipped, blocked], grepable: true }
-        - { name: stage_cost, type: string, format: "$X.XX (description)", grepable: true }
-        - { name: pr, type: string }
-        - { name: token_budget, type: string }
-        - { name: token_actual, type: string }
-        - { name: tasks, type: string, description: "done/total (failed, issues)" }
-        - { name: verify, type: string }
-        - { name: roadmap, type: string }
-        - { name: product, type: string }
+        verdict:
+          section: "### Verdict"
+          description: "Authoritative outcome — replaces legacy ## Ship Report. FO grep-reads `status:` line."
+          fields:
+            - { name: status, type: enum, values: [shipped, blocked], grepable: true }
+            - { name: stage_cost, type: string, format: "$X.XX (description)", grepable: true }
+            - { name: pr, type: string }
+            - { name: token_budget, type: string }
+            - { name: token_actual, type: string }
+            - { name: tasks, type: string, description: "done/total (failed, issues)" }
+            - { name: verify, type: string }
+            - { name: roadmap, type: string, description: "omit if no ROADMAP update" }
+            - { name: product, type: string, description: "omit if no PRODUCT update" }
+            - { name: started_at, type: string, format: "ISO 8601" }
+            - { name: completed_at, type: string, format: "ISO 8601" }
+            - { name: duration_minutes, type: number }
+    legacy_sections:
+      description: "Pre-2026-04-19 layout used ## Ship Output + separate ## Ship Report. Pr-merge mod accepts both layouts; no migration of archived entities needed."
+      sections:
+        - "## Ship Output (legacy → ## Ship with same subsections)"
+        - "## Ship Report (legacy → ## Ship → ### Verdict)"
     uat: null  # ship doesn't verify — verify already passed
 
 # --- PR Feedback (re-entry) ---
