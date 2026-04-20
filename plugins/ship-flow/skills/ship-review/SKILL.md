@@ -34,6 +34,12 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 ## Step 1: Read Verify Results
 
+**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
+```bash
+bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
+```
+Falls back to H2 boundary regex automatically for legacy (untagged) entities.
+
 Record the current time as the stage start timestamp (ISO 8601 format).
 
 Read the entity file. Extract (try new layout first, fall back to legacy):
@@ -98,6 +104,47 @@ README frontmatter `commands:` takes precedence over the table above.
 ---
 
 ## Step 2: Create PR
+
+**Section tagging (mandatory):** Wrap ## Ship and all subsections with their tags. Example:
+
+```markdown
+<!-- section:ship -->
+## Ship
+
+<!-- section:pr-draft -->
+### PR Draft
+{content}
+<!-- /section:pr-draft -->
+
+<!-- section:roadmap-update -->
+### ROADMAP.md Update
+{content}
+<!-- /section:roadmap-update -->
+
+<!-- section:product-update -->
+### PRODUCT.md Update
+{content}
+<!-- /section:product-update -->
+
+<!-- section:d2-knowledge-candidates -->
+### D2 Knowledge Candidates
+{content}
+<!-- /section:d2-knowledge-candidates -->
+
+<!-- section:token-summary -->
+### Token Summary
+{content}
+<!-- /section:token-summary -->
+
+<!-- section:ship-verdict -->
+### Verdict
+{fields}
+<!-- /section:ship-verdict -->
+
+<!-- /section:ship -->
+```
+
+Tag list: `ship` (impl), `pr-draft` (impl), `roadmap-update` (impl), `product-update` (impl), `d2-knowledge-candidates` (impl), `token-summary` (impl), `ship-verdict` (impl)
 
 **Do NOT push or create the PR directly.** The `done` stage's merge hook (pr-merge mod) handles push + PR creation + captain approval. Your job is to prepare the PR body and write it to the entity file so the merge hook can use it.
 

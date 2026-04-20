@@ -8,8 +8,15 @@
 #   - Report block always contains: status, stage_cost (grepable by FO)
 #   - UAT block uses the Verification Spec table format (typed DC)
 #   - Sections are append-only within a stage; later stages never modify earlier sections
+#
+# Section Tags (v1.1):
+#   - Each section/subsection has section_tag: and layer: fields
+#   - section_tag: used for HTML comment wrapping: <!-- section:{tag} --> ... <!-- /section:{tag} -->
+#   - layer: decision | implementation — enables layer-based filtering across entities
+#   - Tags are invisible in rendered markdown (GitHub, Claude Design, dashboard)
+#   - Extract via: bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
 
-schema_version: "1.0"
+schema_version: "1.1"
 
 # --- Frontmatter (YAML in entity file header) ---
 frontmatter:
@@ -50,9 +57,13 @@ stages:
       - "Recent shipped entities (last 5)"
     output:
       section: "## Sharp Output"
+      section_tag: sharp-output
+      layer: decision
       subsections:
         shape_output:
           section: "### Shape Output"
+          section_tag: shape-output
+          layer: decision
           condition: "Only when Step 0 routes to shape path (vague directive)"
           fields:
             - { name: "Problem Statement", type: prose, description: "3-6 sentence gap description" }
@@ -61,14 +72,20 @@ stages:
             - { name: "Scope Out", type: list, description: "Explicit exclusions with WHY" }
         roadmap_position:
           section: "### Roadmap Position"
+          section_tag: roadmap-position
+          layer: decision
           fields:
             - { name: content, type: prose, description: "Where this fits, dependencies, related shipped" }
         problem:
           section: "### Problem"
+          section_tag: problem
+          layer: decision
           fields:
             - { name: content, type: prose, description: "Specific problem statement" }
         done_criteria:
           section: "### Done Criteria"
+          section_tag: done-criteria
+          layer: decision
           fields:
             - name: items
               type: list
@@ -77,6 +94,8 @@ stages:
               description: "Typed, observable, traceable to journey step"
         user_journey:
           section: "### User Journey"
+          section_tag: user-journey
+          layer: decision
           fields:
             - { name: "Persona", type: string }
             - { name: "Goal", type: string }
@@ -87,18 +106,24 @@ stages:
               description: "Each step becomes a Done Criterion"
         journey_dc_mapping:
           section: "### Journey → DC Mapping"
+          section_tag: journey-dc-mapping
+          layer: decision
           fields:
             - name: mapping
               type: table
               columns: ["Journey Step", "DC", "Type", "Boundary", "Verify hint"]
         size_assessment:
           section: "### Size Assessment"
+          section_tag: size-assessment
+          layer: decision
           fields:
             - { name: "Size", type: enum, values: [S, M, L] }
             - { name: "Token budget", type: string }
             - { name: "Reasoning", type: prose }
         musk_audit:
           section: "### Musk Audit"
+          section_tag: musk-audit
+          layer: decision
           fields:
             - { name: "Fastest path", type: prose }
             - { name: "Purpose", type: prose }
@@ -107,15 +132,21 @@ stages:
             - { name: "Per-bullet audit", type: prose, description: "KEEP/DEFER/DELETE verdicts" }
         scoring_gate:
           section: "### Scoring Gate"
+          section_tag: scoring-gate
+          layer: decision
           fields:
             - { name: "Result", type: enum, values: [PASS, FAIL] }
             - { name: "Score", type: number, range: "0.0-1.0" }
         project_skills:
           section: "### Project Skills"
+          section_tag: project-skills
+          layer: decision
           fields:
             - { name: content, type: list, description: "Available project-scope skills" }
     report:
       section: "## Sharp Report"
+      section_tag: sharp-report
+      layer: implementation
       fields:
         - { name: status, type: enum, values: [passed, rejected, blocked], grepable: true }
         - { name: stage_cost, type: string, format: "$X.XX (description)", grepable: true }
@@ -129,15 +160,21 @@ stages:
       - "PRODUCT.md ## Architecture and ## Constraints"
     output:
       section: "## Plan Output"
+      section_tag: plan-output
+      layer: implementation
       subsections:
         research_summary:
           section: "### Research Summary"
+          section_tag: research-summary
+          layer: implementation
           fields:
             - { name: content, type: prose, description: "Key findings or 'Size S — no research needed'" }
             - { name: open_questions, type: list, condition: "If contradictory research" }
             - { name: reviewer_assessment, type: enum, values: [APPROVED, GAPS_ADDRESSED] }
         size_reevaluation:
           section: "### Size Re-evaluation"
+          section_tag: size-reevaluation
+          layer: implementation
           fields:
             - { name: "Sharp estimate", type: enum, values: [S, M, L] }
             - { name: "Research evidence", type: prose }
@@ -145,6 +182,8 @@ stages:
             - { name: "Token budget", type: string, condition: "If changed" }
         verification_spec:
           section: "### Verification Spec"
+          section_tag: verification-spec
+          layer: implementation
           description: "Exact verify procedure per Done Criterion. Consumed by execute and verify."
           fields:
             - name: spec
@@ -156,6 +195,8 @@ stages:
                 - "Type must match the DC's type"
         plan:
           section: "### Plan"
+          section_tag: plan
+          layer: implementation
           fields:
             - name: tasks
               type: list
@@ -169,6 +210,8 @@ stages:
                 **Model:** {haiku | sonnet}
     report:
       section: "## Plan Report"
+      section_tag: plan-report
+      layer: implementation
       fields:
         - { name: status, type: enum, values: [passed, gaps-noted, blocked], grepable: true }
         - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
@@ -187,9 +230,13 @@ stages:
       - "## Sharp Output → Done Criteria"
     output:
       section: "## Execute Output"
+      section_tag: execute-output
+      layer: implementation
       subsections:
         execution_log:
           section: "### Execution Log"
+          section_tag: execution-log
+          layer: implementation
           fields:
             - name: tasks
               type: table
@@ -199,16 +246,22 @@ stages:
             - { name: scope_observations, type: list, condition: "If benign-drift auto-proceeds" }
         issues_found:
           section: "### Issues Found"
+          section_tag: issues-found
+          layer: implementation
           fields:
             - { name: items, type: list, format: "{finding} → auto-created entity #{slug}" }
         knowledge_captures:
           section: "### Knowledge Captures"
+          section_tag: knowledge-captures
+          layer: implementation
           fields:
             - { name: d1_items, type: list, format: "[D1] {pattern}", description: "Skill-level, auto-write" }
             - { name: d2_items, type: list, format: "[D2-candidate] {pattern}", description: "Project-level, captain review" }
             - { name: skipped, type: boolean, description: "True if no findings met threshold" }
     report:
       section: "## Execute Report"
+      section_tag: execute-report
+      layer: implementation
       fields:
         - { name: status, type: enum, values: [passed, failed, blocked], grepable: true }
         - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
@@ -216,6 +269,8 @@ stages:
         - { name: knowledge_capture, type: string, description: "D1: N, D2: M | skipped" }
     uat:
       section: "## Execute UAT"
+      section_tag: execute-uat
+      layer: implementation
       description: "First-pass AC verification. Not authoritative — verify stage re-runs independently."
       fields:
         - name: results
@@ -235,9 +290,13 @@ stages:
       - "PRODUCT.md ## Constraints"
     output:
       section: "## Verify"
+      section_tag: verify
+      layer: implementation
       subsections:
         quality_gate:
           section: "### Quality Gate"
+          section_tag: quality-gate
+          layer: implementation
           fields:
             - name: checks
               type: list
@@ -248,6 +307,8 @@ stages:
                 - "check 5 (format) is advisory"
         review_findings:
           section: "### Review Findings"
+          section_tag: review-findings
+          layer: implementation
           fields:
             - { name: scope, type: string, description: "N files, M reviewers dispatched" }
             - name: prescan
@@ -265,12 +326,16 @@ stages:
             - { name: verdict, type: string, description: "SHIP IT | NEEDS_FIX | escalated" }
         knowledge_captures:
           section: "### Knowledge Captures"
+          section_tag: verify-knowledge-captures
+          layer: implementation
           fields:
             - { name: d1_items, type: list, format: "[D1] {pattern}" }
             - { name: d2_items, type: list, format: "[D2-candidate] {pattern}" }
             - { name: skipped, type: boolean }
         uat:
           section: "### UAT"
+          section_tag: uat
+          layer: implementation
           description: "Evidence review + spot-check (D1 2026-04). Falls back to full re-run if execute evidence is unreliable."
           fields:
             - { name: mode, type: enum, values: [spot-check, "full-rerun"], description: "spot-check is default; full-rerun is fallback" }
@@ -280,6 +345,8 @@ stages:
               verify_column_values: ["spot-checked", "trust (evidence: <ref>)", "re-run (fallback)"]
         verdict:
           section: "### Verdict"
+          section_tag: verify-verdict
+          layer: implementation
           description: "Authoritative outcome — replaces legacy ## Verify Report. FO grep-reads `status:` line."
           fields:
             - { name: status, type: enum, values: [passed, failed], grepable: true }
@@ -318,9 +385,13 @@ stages:
       # 2026-04-19 D1 consolidation: ## Ship Output + ## Ship Report merged into single ## Ship.
       # Verdict subsection replaces top-level Ship Report. Pr-merge mod accepts both layouts.
       section: "## Ship"
+      section_tag: ship
+      layer: implementation
       subsections:
         pr_draft:
           section: "### PR Draft"
+          section_tag: pr-draft
+          layer: implementation
           fields:
             - { name: title, type: string }
             - name: body
@@ -334,28 +405,38 @@ stages:
                 - "Entity ID, tracker, cost footer"
         roadmap_update:
           section: "### ROADMAP.md Update"
+          section_tag: roadmap-update
+          layer: implementation
           condition: "Only when ROADMAP.md exists and was modified"
           fields:
             - { name: action, type: string, description: "Moved from Now → Shipped" }
         product_update:
           section: "### PRODUCT.md Update"
+          section_tag: product-update
+          layer: implementation
           condition: "Only when PRODUCT.md exists and was modified"
           fields:
             - { name: capabilities_added, type: number }
             - { name: stories_added, type: number }
         d2_surfacing:
           section: "### D2 Knowledge Candidates"
+          section_tag: d2-knowledge-candidates
+          layer: implementation
           condition: "Only if [D2-candidate] items exist in execute/verify Knowledge Captures"
           fields:
             - { name: candidates, type: list, description: "Presented to captain for CLAUDE.md approval" }
         token_summary:
           section: "### Token Summary"
+          section_tag: token-summary
+          layer: implementation
           fields:
             - { name: budget, type: string }
             - { name: actual, type: string }
             - { name: ratio, type: string }
         verdict:
           section: "### Verdict"
+          section_tag: ship-verdict
+          layer: implementation
           description: "Authoritative outcome — replaces legacy ## Ship Report. FO grep-reads `status:` line."
           fields:
             - { name: status, type: enum, values: [shipped, blocked], grepable: true }
@@ -380,6 +461,8 @@ stages:
 # --- PR Feedback (re-entry) ---
 pr_feedback:
   section: "## PR Review Feedback"
+  section_tag: pr-review-feedback
+  layer: implementation
   condition: "Written by ship-pr-feedback skill when PR reviewer requests changes"
   fields:
     - { name: pr, type: string }
@@ -396,22 +479,30 @@ pr_feedback:
 
 epic_context:
   section: "## Epic Context"
+  section_tag: epic-context
+  layer: decision
   written_by: "ship-sharp (epic mode) — written once when epic entity is decomposed"
   read_by: "ship-sharp (child mode Step 1), ship-plan (Step 1 — Cross-Entity Contracts)"
   grep_pattern: 'grep -A 200 "^## Epic Context" {entity_file}'
   subsections:
     architecture_decisions:
       section: "### Architecture Decisions"
+      section_tag: architecture-decisions
+      layer: decision
       description: "ADRs from epic-level research — auth strategy, DB schema, API boundary decisions that all children must respect"
       fields:
         - { name: decisions, type: list, format: "- **{decision}**: {rationale} — {implication for children}" }
     cross_entity_contracts:
       section: "### Cross-Entity Contracts"
+      section_tag: cross-entity-contracts
+      layer: decision
       description: "Shared API contracts, data schemas, and interface boundaries that children must implement consistently"
       fields:
         - { name: contracts, type: list, format: "- **{contract name}**: {definition} — implemented by {child-slug(s)}" }
     entity_decomposition:
       section: "### Entity Decomposition"
+      section_tag: entity-decomposition
+      layer: decision
       description: "Decomposition table — one row per child entity showing its vertical slice scope"
       fields:
         - name: table
@@ -422,12 +513,16 @@ epic_context:
             - "No child is a horizontal layer (e.g., 'all API routes' or 'all UI components')"
     shared_research:
       section: "### Shared Research"
+      section_tag: shared-research
+      layer: decision
       description: "Research findings from epic-level architecture research — referenced by children to avoid duplicate work"
       fields:
         - { name: findings, type: list, format: "- {finding with file:line citation}" }
 
 parent_context:
   section: "## Parent Context"
+  section_tag: parent-context
+  layer: decision
   written_by: "ship-sharp (child mode Step 1) — summary of what the child inherited from parent epic"
   read_by: "ship-plan (Step 1) — for Cross-Entity Contracts awareness"
   grep_pattern: 'grep -A 50 "^## Parent Context" {entity_file}'
@@ -440,6 +535,8 @@ parent_context:
 # --- Cross-Stage Conventions ---
 conventions:
   section_naming: "## {Stage} {Block} — e.g., ## Sharp Output, ## Plan Report, ## Verify UAT"
+  section_tag_convention: "kebab-case matching section header with stage prefix for disambiguation (e.g., verify-verdict not verdict, ship-verdict not verdict). Extract via: bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}"
+  layer_convention: "decision = problem/journey/criteria/ADR/scoring (stable 'what/why'); implementation = plan/execute/verify/ship artifacts (derivative 'how')"
   vertical_slice_principle: "Entities are always vertical slices — each entity is an independently deliverable and testable E2E journey, never a horizontal layer (never 'all API routes', 'all models', 'frontend only'). A vertical slice has a clear entry point, crosses all required layers, and produces an observable outcome a captain can verify."
   grepable_fields:
     - "status: — present in every Report block, FO reads for dispatch decisions"
@@ -450,3 +547,4 @@ conventions:
     cost: 'grep "^stage_cost:" entity.md'
     all_uat: 'grep -A 100 "## .*UAT" entity.md'
     knowledge: 'grep "\\[D[12]" entity.md'
+    section_extract: 'bash plugins/ship-flow/lib/extract-section.sh entity.md {section-tag}'

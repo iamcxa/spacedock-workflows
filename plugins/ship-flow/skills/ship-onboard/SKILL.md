@@ -464,6 +464,37 @@ token_actual:
 ---
 ```
 
+**Section tagging (mandatory):** Wrap the Epic Context and each subsection with their tags:
+
+```markdown
+<!-- section:epic-context -->
+## Epic Context
+
+<!-- section:architecture-decisions -->
+### Architecture Decisions
+{content}
+<!-- /section:architecture-decisions -->
+
+<!-- section:cross-entity-contracts -->
+### Cross-Entity Contracts
+{content}
+<!-- /section:cross-entity-contracts -->
+
+<!-- section:entity-decomposition -->
+### Entity Decomposition
+{table}
+<!-- /section:entity-decomposition -->
+
+<!-- section:shared-research -->
+### Shared Research
+{content}
+<!-- /section:shared-research -->
+
+<!-- /section:epic-context -->
+```
+
+Tag list: `epic-context` (decision), `architecture-decisions` (decision), `cross-entity-contracts` (decision), `entity-decomposition` (decision), `shared-research` (decision)
+
 Then write `## Epic Context` to the epic entity body:
 
 ```markdown

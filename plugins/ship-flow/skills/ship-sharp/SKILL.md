@@ -119,6 +119,12 @@ If collision found → reassign via `--next-id`.
 
 ## Step 1: Load Context
 
+**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
+```bash
+bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
+```
+Falls back to H2 boundary regex automatically for legacy (untagged) entities.
+
 1. Read the entity file (from slug or current dispatch)
 2. Read `PRODUCT.md` from project root **if it exists** — understand what the product is now (capabilities, constraints, personas, vision). Do NOT create if missing.
 3. Read `ROADMAP.md` from project root **if it exists** — understand where the product is going (Now/Next/Later, Not Doing, North Star). Do NOT create if missing. Note in ## Roadmap Position if either file is absent.
@@ -716,6 +722,43 @@ If captain says **no** — set entity verdict to `rejected`, add to ROADMAP.md "
 If captain says **yes** — advance.
 
 ## Step 6: Write Entity Sections
+
+**Section tagging (mandatory):** Wrap each H2/H3 section you write with its HTML comment tag pair. Tag names come from `references/entity-body-schema.yaml` → `section_tag` field. Nest inner tags within outer tags. Example:
+
+```markdown
+<!-- section:sharp-output -->
+## Sharp Output
+
+<!-- section:problem -->
+### Problem
+{content}
+<!-- /section:problem -->
+
+<!-- section:done-criteria -->
+### Done Criteria
+{content}
+<!-- /section:done-criteria -->
+
+<!-- /section:sharp-output -->
+<!-- section:sharp-report -->
+## Sharp Report
+{fields}
+<!-- /section:sharp-report -->
+```
+
+Full tag list for this skill (from schema section_tag values):
+- `## Sharp Output` → `sharp-output` (layer: decision)
+- `### Shape Output` → `shape-output` (layer: decision)
+- `### Roadmap Position` → `roadmap-position` (layer: decision)
+- `### Problem` → `problem` (layer: decision)
+- `### Done Criteria` → `done-criteria` (layer: decision)
+- `### User Journey` → `user-journey` (layer: decision)
+- `### Journey → DC Mapping` → `journey-dc-mapping` (layer: decision)
+- `### Size Assessment` → `size-assessment` (layer: decision)
+- `### Musk Audit` → `musk-audit` (layer: decision)
+- `### Scoring Gate` → `scoring-gate` (layer: decision)
+- `### Project Skills` → `project-skills` (layer: decision)
+- `## Sharp Report` → `sharp-report` (layer: implementation)
 
 Write these sections to the entity file:
 

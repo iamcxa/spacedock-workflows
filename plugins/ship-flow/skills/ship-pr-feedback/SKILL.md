@@ -53,6 +53,12 @@ README frontmatter `commands:` takes precedence over the table above.
 
 ## Step 1: Load Entity and PR
 
+**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
+```bash
+bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
+```
+Falls back to H2 boundary regex automatically for legacy (untagged) entities.
+
 Read the entity file from slug. Extract:
 - `## Ship Output → ### PR Draft` — the PR number
 - `## Sharp Output → ### Done Criteria` — the typed DC items
@@ -113,6 +119,15 @@ Comments that don't map to any DC:
 
 ### 3.3: Write Classification Table
 
+**Section tagging (mandatory):** Wrap the PR Review Feedback section with its tag:
+
+```markdown
+<!-- section:pr-review-feedback -->
+## PR Review Feedback
+{content}
+<!-- /section:pr-review-feedback -->
+```
+
 ```markdown
 ## PR Review Feedback
 
@@ -165,6 +180,21 @@ pr_feedback_round: {N}    # increment from previous, or 1 if first feedback
 ### 5.3: Prepare Execute Context
 
 If rolling back to `execute`, write guidance for the execute stage so it knows what to fix:
+
+**Section tagging:** Also wrap guidance sections with their tags:
+```markdown
+<!-- section:execute-guidance -->
+## Execute Guidance (from PR review)
+{content}
+<!-- /section:execute-guidance -->
+```
+Or for plan rollback:
+```markdown
+<!-- section:plan-guidance -->
+## Plan Guidance (from PR review)
+{content}
+<!-- /section:plan-guidance -->
+```
 
 ```markdown
 ## Execute Guidance (from PR review)

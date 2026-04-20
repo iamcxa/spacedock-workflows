@@ -23,6 +23,12 @@ You are running the EXECUTE stage of ship-flow. No captain interaction — dispa
 
 ## Step 1: Read Plan and Build Wave Graph
 
+**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
+```bash
+bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
+```
+Falls back to H2 boundary regex automatically for legacy (untagged) entities.
+
 Record the current time as the stage start timestamp (ISO 8601 format).
 
 Read the entity file. Extract `## Plan Output → ### Plan` section — parse all tasks with their files, steps, verification commands, model hints, and **wave assignments**.
@@ -412,6 +418,40 @@ Log result to `### Execution Log`.
 ---
 
 ## Step 6: Write Entity Sections
+
+**Section tagging (mandatory):** Wrap each section you write with its HTML comment tag pair. Example structure:
+
+```markdown
+<!-- section:execute-output -->
+## Execute Output
+
+<!-- section:execution-log -->
+### Execution Log
+{table}
+<!-- /section:execution-log -->
+
+<!-- section:issues-found -->
+### Issues Found
+{list}
+<!-- /section:issues-found -->
+
+<!-- section:knowledge-captures -->
+### Knowledge Captures
+{content}
+<!-- /section:knowledge-captures -->
+
+<!-- /section:execute-output -->
+<!-- section:execute-uat -->
+## Execute UAT
+{table}
+<!-- /section:execute-uat -->
+<!-- section:execute-report -->
+## Execute Report
+{fields}
+<!-- /section:execute-report -->
+```
+
+Tag list: `execute-output` (impl), `execution-log` (impl), `issues-found` (impl), `knowledge-captures` (impl), `execute-report` (impl), `execute-uat` (impl)
 
 ```markdown
 ## Execute Output

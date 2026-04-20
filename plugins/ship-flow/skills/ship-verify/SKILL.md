@@ -34,6 +34,12 @@ This stage combines three verification concerns:
 
 ## Step 1: Read Execution Results
 
+**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
+```bash
+bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
+```
+Falls back to H2 boundary regex automatically for legacy (untagged) entities.
+
 Record the current time as the stage start timestamp (ISO 8601 format).
 
 Read the entity file. Extract:
@@ -521,6 +527,42 @@ Ship-review stage surfaces `[D2-candidate]` items to captain.
 ---
 
 ## Step 5: Write Verdict
+
+**Section tagging (mandatory):** The entire ## Verify section and each subsection must be wrapped. Example:
+
+```markdown
+<!-- section:verify -->
+## Verify
+
+<!-- section:quality-gate -->
+### Quality Gate
+{content}
+<!-- /section:quality-gate -->
+
+<!-- section:review-findings -->
+### Review Findings
+{content}
+<!-- /section:review-findings -->
+
+<!-- section:verify-knowledge-captures -->
+### Knowledge Captures
+{content}
+<!-- /section:verify-knowledge-captures -->
+
+<!-- section:uat -->
+### UAT
+{table}
+<!-- /section:uat -->
+
+<!-- section:verify-verdict -->
+### Verdict
+{fields}
+<!-- /section:verify-verdict -->
+
+<!-- /section:verify -->
+```
+
+Tag list: `verify` (impl), `quality-gate` (impl), `review-findings` (impl), `verify-knowledge-captures` (impl), `uat` (impl), `verify-verdict` (impl)
 
 Append `### Verdict` subsection to the entity's `## Verify` section. This replaces legacy top-level `## Verify Report`.
 

@@ -20,6 +20,12 @@ You are running the PLAN stage of ship-flow. No captain interaction — you rese
 
 ## Step 1: Read Sharp Output
 
+**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
+```bash
+bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
+```
+Falls back to H2 boundary regex automatically for legacy (untagged) entities.
+
 Record the current time as the stage start timestamp (ISO 8601 format).
 
 Read the entity file. Extract from `## Sharp Output`:
@@ -532,6 +538,41 @@ If REVISE → fix issues inline, re-run self-review (Step 4) once. Do NOT dispat
 If APPROVED → proceed to Step 5.
 
 ## Step 5: Write Entity Sections
+
+**Section tagging (mandatory):** Wrap each section you write with its HTML comment tag pair. Tag names from `references/entity-body-schema.yaml` → `section_tag`. Example structure:
+
+```markdown
+<!-- section:plan-output -->
+## Plan Output
+
+<!-- section:research-summary -->
+### Research Summary
+{content}
+<!-- /section:research-summary -->
+
+<!-- section:size-reevaluation -->
+### Size Re-evaluation
+{content}
+<!-- /section:size-reevaluation -->
+
+<!-- section:verification-spec -->
+### Verification Spec
+{table}
+<!-- /section:verification-spec -->
+
+<!-- section:plan -->
+### Plan
+{tasks}
+<!-- /section:plan -->
+
+<!-- /section:plan-output -->
+<!-- section:plan-report -->
+## Plan Report
+{fields}
+<!-- /section:plan-report -->
+```
+
+Tag list: `plan-output` (impl), `research-summary` (impl), `size-reevaluation` (impl), `verification-spec` (impl), `plan` (impl), `plan-report` (impl)
 
 ```markdown
 ## Plan Output
