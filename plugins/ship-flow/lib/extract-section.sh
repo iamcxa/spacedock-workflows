@@ -3,7 +3,7 @@
 # Prints the content of a named section from an entity markdown file.
 # Primary: HTML comment tags <!-- section:tag --> ... <!-- /section:tag -->
 # Fallback: H2 boundary extraction (legacy entities without tags)
-# Exit 0 on success with content on stdout; exit 1 on not found.
+# Exit 0 on success with content on stdout; exit 1 on args/not-found; exit 5 on invalid TAG format.
 set -euo pipefail
 
 ENTITY_FILE="${1:-}"
@@ -12,6 +12,12 @@ TAG="${2:-}"
 if [ -z "$ENTITY_FILE" ] || [ -z "$TAG" ]; then
   echo "Usage: extract-section.sh <entity-file> <section-tag>" >&2
   exit 1
+fi
+
+# --- TAG format validation (exit 5) ---
+if [[ ! "$TAG" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+  echo "ERROR: TAG must be kebab-case [a-z][a-z0-9-]*: '${TAG}'" >&2
+  exit 5
 fi
 
 if [ ! -f "$ENTITY_FILE" ]; then

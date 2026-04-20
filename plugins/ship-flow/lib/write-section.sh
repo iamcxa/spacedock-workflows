@@ -8,6 +8,7 @@
 #   2  tag not in schema (schema validation failure)
 #   3  entity file missing
 #   4  tag already exists in entity (duplicate — no --replace in V1)
+#   5  invalid TAG format (not kebab-case)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,6 +22,12 @@ CONTENT_ARG="${3:-}"
 if [ -z "$ENTITY_FILE" ] || [ -z "$TAG" ]; then
   echo "Usage: write-section.sh <entity-file> <section-tag> [<content>]" >&2
   exit 1
+fi
+
+# --- TAG format validation (exit 5) ---
+if [[ ! "$TAG" =~ ^[a-z]([a-z0-9-]*[a-z0-9])?$ ]]; then
+  echo "ERROR: TAG must be kebab-case [a-z][a-z0-9-]*: '${TAG}'" >&2
+  exit 5
 fi
 
 # --- Schema validation (exit 2) ---
