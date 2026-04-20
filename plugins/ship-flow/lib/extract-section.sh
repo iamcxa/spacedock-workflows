@@ -30,9 +30,9 @@ fi
 # Convert kebab-case tag to Title Case header (sharp-output → Sharp Output)
 HEADER=$(echo "$TAG" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2); print}')
 RESULT=$(awk "
-  /^## ${HEADER}[[:space:]]*\$/ { found=1 }
+  found && /^## / { exit }
   found { print }
-  /^## / { if (found && \$0 !~ /^## ${HEADER}[[:space:]]*\$/) exit }
+  /^## ${HEADER}[[:space:]]*\$/ { found=1; print }
 " "$ENTITY_FILE")
 if [ -n "$RESULT" ]; then
   printf '%s\n' "$RESULT"
