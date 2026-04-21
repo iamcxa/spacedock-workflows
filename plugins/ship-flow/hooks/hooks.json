@@ -1,0 +1,17 @@
+{
+  "description": "Ship-flow plugin hooks — warn-not-block on direct Read/Edit of active entity files (Principle #5c). See plugins/ship-flow/INVARIANTS.md.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/warn-direct-read.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
