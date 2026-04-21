@@ -94,15 +94,83 @@ check_preamble_regrowth() {
 }
 
 check_section_tag_coverage() {
-  # T7 impl target — DC-8 (map-1)
-  echo "stub: check_section_tag_coverage (T7)"
-  return 0
+  # DC-8 — Principle 5a: every H2/H3 in active entity must be wrapped in <!-- section:tag --> pair.
+  # Stack-based awk walker; nesting allowed (sharp-output → problem → scope).
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0
+  local f bn
+  for f in "$docs_dir"/*.md; do
+    [ -f "$f" ] || continue
+    bn="$(basename "$f")"
+    # Skip README and _archive entries
+    [ "$bn" = "README.md" ] && continue
+    case "$f" in *_archive*) continue ;; esac
+    local errors
+    errors=$(awk '
+      /^<!-- section:[a-z]/ { top++; next }
+      /^<!-- \/section:[a-z]/ { if (top > 0) top--; next }
+      /^## / || /^### / {
+        if (top == 0) print FILENAME ":" NR ": orphan header: " $0
+      }
+      END {
+        if (top > 0) print FILENAME ": EOF with " top " unclosed section tag(s)"
+      }
+    ' top=0 "$f" 2>&1)
+    if [ -n "$errors" ]; then
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        echo "ERROR [Principle 5a]: $line. See plugins/ship-flow/INVARIANTS.md#principle-5" >&2
+      done <<< "$errors"
+      fail=1
+    fi
+  done
+  return "$fail"
 }
 
 check_flow_map_coverage() {
-  # T7 impl target — DC-9 (map-2)
-  echo "stub: check_flow_map_coverage (T7)"
-  return 0
+  # DC-9 — Principle 5b: canonical docs in flow-map-schema.yaml must extract non-empty
+  # via lib/extract-map.sh; sections with requires_diagram: true must contain ```mermaid block.
+  # NOTE: schema parsing is hardcoded against current schema (ARCHITECTURE.md, 6 sections).
+  # When schema gains more active maps, update the loop below.
+  local schema="${ROOT}/plugins/ship-flow/references/flow-map-schema.yaml"
+  local extract_map="${ROOT}/plugins/ship-flow/lib/extract-map.sh"
+  if [ ! -f "$schema" ]; then
+    echo "WARN [Principle 5b]: flow-map-schema.yaml not found at $schema — skip" >&2
+    return 0
+  fi
+  if [ ! -x "$extract_map" ]; then
+    echo "WARN [Principle 5b]: extract-map.sh not found or not executable — skip" >&2
+    return 0
+  fi
+  local fail=0
+  # ARCHITECTURE.md — 6 sections (context/containers/components require mermaid; rest are prose-only)
+  local arch_path="${ROOT}/ARCHITECTURE.md"
+  if [ ! -f "$arch_path" ]; then
+    echo "WARN [Principle 5b]: ARCHITECTURE.md not found at $arch_path — skip" >&2
+    return 0
+  fi
+  local tag content
+  for tag in context containers components constraints dependencies decisions; do
+    content=$(cd "$ROOT" && "$extract_map" "ARCHITECTURE.md" "$tag" 2>&1) || {
+      echo "ERROR [Principle 5b]: ARCHITECTURE.md §$tag — extract-map.sh failed" >&2
+      fail=1; continue
+    }
+    if [ -z "$content" ]; then
+      echo "ERROR [Principle 5b]: ARCHITECTURE.md §$tag — empty content" >&2
+      fail=1; continue
+    fi
+    case "$tag" in
+      context|containers|components)
+        # Detect mermaid fenced code block (literal: backtick-backtick-backtick mermaid)
+        if ! echo "$content" | grep -q '^```mermaid'; then
+          echo "ERROR [Principle 5b]: ARCHITECTURE.md §$tag — requires_diagram: true but mermaid fenced block not found" >&2
+          fail=1
+        fi
+        ;;
+    esac
+  done
+  return "$fail"
 }
 
 check_direct_read_static() {
@@ -156,8 +224,9 @@ check_boolean_gate() {
 }
 
 check_rid_placeholder() {
-  # T7 impl target — DC-13 (map-3 intentional skip)
-  echo "stub: check_rid_placeholder (T7)"
+  # DC-13 — map-3 R-ID coverage placeholder. Intentional skip until spec-of-spec v1 ships.
+  # The "intentional" word in the stderr line IS the test assertion (DC-13 grep).
+  echo "map-3 R-ID coverage: skipped — spec-of-spec v1 not yet shipped (placeholder, intentional)" >&2
   return 0
 }
 
