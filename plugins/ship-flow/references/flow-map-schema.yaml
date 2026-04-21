@@ -1,0 +1,58 @@
+# Flow Map Schema — canonical contract for map-layer docs
+# Consumers: patch-map.sh, extract-map.sh
+#
+# Schema validates: section_tag presence + requires_diagram for C4 sections
+# Extract via: bash plugins/ship-flow/lib/extract-map.sh {map-file} {section-tag}
+
+schema_version: "1.0"
+
+# MADR convention for entity architecture-impact section (consumed by #060 mod)
+madr_convention:
+  title: "entity.title (frontmatter)"
+  status: "entity.status (frontmatter)"
+  context: "architecture-impact.summary (prose, 1-3 sentences)"
+  decision: "architecture-impact.after (new section content)"
+  consequences: "architecture-impact.rationale (optional)"
+
+maps:
+  ARCHITECTURE.md:
+    path: "ARCHITECTURE.md"
+    sections:
+      - section_tag: context
+        title: "Context"
+        purpose: "System boundary and external actors (C4 Level 1)"
+        requires_diagram: true
+        diagram_type: mermaid
+        diagram_kind: "C4 System Context"
+      - section_tag: containers
+        title: "Containers"
+        purpose: "Deployment units and transports (C4 Level 2)"
+        requires_diagram: true
+        diagram_type: mermaid
+        diagram_kind: "C4 Container"
+      - section_tag: components
+        title: "Components"
+        purpose: "Internal logical modules (C4 Level 3)"
+        requires_diagram: true
+        diagram_type: mermaid
+        diagram_kind: "C4 Component or layering"
+      - section_tag: constraints
+        title: "Constraints"
+        purpose: "Hard limits and non-negotiables"
+        requires_diagram: false
+      - section_tag: dependencies
+        title: "Dependencies"
+        purpose: "External dependencies and blast radius"
+        requires_diagram: false
+      - section_tag: decisions
+        title: "Decisions (ADR index)"
+        purpose: "Auto-appended ADR index by architecture-canon mod (#060)"
+        requires_diagram: false
+
+  PRODUCT.md:
+    path: "PRODUCT.md"
+    sections: []   # V1.5 — DEFERRED (see #059 Musk Audit bullet 5)
+
+  ROADMAP.md:
+    path: "ROADMAP.md"
+    sections: []   # V1.5 — DEFERRED
