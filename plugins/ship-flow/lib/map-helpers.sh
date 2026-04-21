@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # map-helpers.sh — shared functions for extract-map.sh + patch-map.sh
 # Source this file; do not execute directly.
-# Functions: sha256_of, atomic_replace, validate_mermaid, validate_schema_tag, validate_kebab_tag
+# Functions: sha256_of, atomic_replace, validate_mermaid, validate_schema_tag, validate_kebab_tag, resolve_map_path
 #
 # Mermaid directive whitelist derivation (#059 Task 3):
 # - ARCHITECTURE.md actual scan: `graph` (LR/TB variants)
