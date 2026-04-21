@@ -74,43 +74,30 @@ check_skill_count() {
 }
 
 check_preamble_regrowth() {
-  # DC-7 — Principle 1 + 6: known preambles should not appear in ≥ 2 SKILL.md files.
-  # Allowlist: signatures that ARE currently duplicated as pre-046f baseline are tolerated.
-  # 046f preamble-extraction will consolidate; once it ships, remove from allowlist.
+  # DC-7 — Principle 1 + 6: known preambles must not appear in ≥ 2 SKILL.md files.
+  # Post-046f: allowlist removed, ship-runtime-detect is canonical source. All signatures
+  # hard-enforced. Add new signatures here as shared preambles get introduced — makes
+  # regrowth visible the moment someone copies a preamble into a second SKILL.md.
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
-  # Signatures checked for regrowth. Allowlist applies per-signature:
-  # currently multi-copy signatures (046f-deferred) emit WARN; anything else emits ERROR.
-  # Add new signatures here as new shared preambles get introduced — makes regrowth visible.
   local signatures=(
     "## Runtime Detection Preamble"
     "### Step R1: Detect Stacks"
     "## Verify Stage Preamble"
     "## Journey Code Trace Preamble"
   )
-  # Pre-046f deferred signatures — scheduled for 046f preamble-extraction.
-  # When 046f ships and consolidates these, remove them from this allowlist
-  # and DC-7 will hard-enforce no-regrowth on them too.
-  local allowlist_deferred=(
-    "## Runtime Detection Preamble"
-    "### Step R1: Detect Stacks"
-  )
   local fail=0
-  local sig n is_deferred
+  local sig n
   for sig in "${signatures[@]}"; do
-    n=$(grep -lF "$sig" "$skills_dir"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+    # `{ grep || true; }` guards against set -euo pipefail:
+    # grep -lF returns rc=1 on no-match, which pipefail propagates through
+    # the pipeline and (without the guard) aborts the function via set -e.
+    # The outer brace group ensures the pipeline itself exits 0, so n receives
+    # exactly one clean integer from wc (e.g. "0" or "3"), not "0\n0".
+    n=$({ grep -lF "$sig" "$skills_dir"/*/SKILL.md 2>/dev/null || true; } | wc -l | tr -d ' ')
     if [ "$n" -ge 2 ]; then
-      # Check allowlist
-      is_deferred=0
-      for allowed in "${allowlist_deferred[@]}"; do
-        [ "$sig" = "$allowed" ] && is_deferred=1
-      done
-      if [ "$is_deferred" = "1" ]; then
-        echo "WARN [Principle 1/6]: preamble '$sig' in $n SKILL.md files — pre-046f baseline (allowlisted, will fail post-046f)" >&2
-      else
-        echo "ERROR [Principle 1/6]: preamble '$sig' appears in $n SKILL.md files (≥ 2). Consolidate via 046f preamble-extraction. See plugins/ship-flow/INVARIANTS.md#principle-1" >&2
-        fail=1
-      fi
+      echo "ERROR [Principle 1/6]: preamble '$sig' appears in $n SKILL.md files (≥ 2). See plugins/ship-flow/INVARIANTS.md#principle-1" >&2
+      fail=1
     fi
   done
   return "$fail"
