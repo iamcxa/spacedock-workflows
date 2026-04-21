@@ -156,6 +156,29 @@ If any violation found → write `### Execution Log` (under `## Execute Output`)
 
 **Input validation**: If `## Plan Output → ### Plan` is missing or malformed → write `### Execution Log` (under `## Execute Output`) with `status: blocked` and return. Do NOT execute on partial input.
 
+### Step 1.5: Architecture snippet for troop context (#060)
+
+Before dispatching troops, build an `ARCH_SNIPPET` variable holding the
+`ARCHITECTURE.md` sections the troop needs to stay consistent with canonical
+technical context:
+
+```bash
+# Always include constraints (hard limits every task must honor)
+ARCH_SNIPPET="$(bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md constraints 2>/dev/null || true)"
+
+# If entity declares architecture-impact, also include the target section
+TARGET=$(bash plugins/ship-flow/lib/extract-section.sh "$ENTITY_FILE" architecture-impact 2>/dev/null | awk '/^target_section:/ {print $2; exit}')
+if [ -n "$TARGET" ] && [ "$TARGET" != "constraints" ]; then
+  ARCH_SNIPPET="${ARCH_SNIPPET}"$'\n\n'"$(bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md \"$TARGET\" 2>/dev/null || true)"
+fi
+```
+
+Include `$ARCH_SNIPPET` in every troop's dispatch prompt under a `### Architecture context` block (see Dispatch Pattern below). This grounds task implementation in the canonical architecture — troops can reason about "what pattern does this component already follow" instead of guessing.
+
+**Skip when `ARCHITECTURE.md` absent** — some projects have not bootstrapped an ARCHITECTURE.md yet. If the file is missing, set `ARCH_SNIPPET=""` and omit the `### Architecture context` block from the prompt; tasks still run, just without architectural grounding.
+
+**Inline-mode note** — when FO is implementing tasks inline (no Agent dispatch, per the #057/058/059 precedent), FO still reads `ARCH_SNIPPET` at this step for its own contextual awareness; there is no separate "dispatch prompt" to inject into.
+
 ---
 
 ## Runtime Detection Preamble
@@ -314,6 +337,9 @@ Agent(
     Project: {project description}
     Entity: {entity title} — {problem summary}
     {If project skills relevant: "Available skill: {skill} — use it for {purpose}"}
+
+    ### Architecture context          ← include only when $ARCH_SNIPPET non-empty (Step 1.5)
+    {$ARCH_SNIPPET — constraints + optional target_section from ARCHITECTURE.md}
 
     ## Your Job
     1. Read the files listed in "Read first" before starting
