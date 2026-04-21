@@ -9,7 +9,9 @@
 # - C4 Mermaid dialect: C4Context, C4Container, C4Component, C4Dynamic, C4Deployment
 # - Future-proof standard mermaid diagrams
 set -u
+# shellcheck disable=SC2034  # version marker for future compat detection
 MAP_HELPERS_VERSION=1
+export MAP_HELPERS_VERSION
 
 MAP_HELPERS_MERMAID_DIRECTIVES='^(graph|flowchart|sequenceDiagram|stateDiagram(-v2)?|classDiagram|erDiagram|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment|gantt|pie|gitGraph|mindmap|timeline|journey|quadrantChart|xychart)'
 

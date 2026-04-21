@@ -30,7 +30,7 @@ assert_stderr_contains() {
   else echo "FAIL $name (stderr missing: $needle)"; FAIL=1; fi
 }
 
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
 ARCH="ARCHITECTURE.md"
 
 # DC-1: extract-map content
