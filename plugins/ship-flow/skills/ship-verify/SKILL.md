@@ -52,7 +52,16 @@ Read the entity file. Extract:
 
 **Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. **Write `## Verify` with `### Quality Gate` showing the pre-check failure, and `### Verdict` with `status: blocked`, `verdict: BLOCKED`** to the entity file, then notify captain. The FO output-validation gate requires the `## Verify` section with `### Verdict` subsection to exist (or legacy `## Verify Report` for older entities). Never exit without writing them.
 
-Capture execute base SHA from `## Execute Output → ### Execution Log` (first task's parent commit).
+Capture execute base SHA from `## Execute Output → ### Execution Log` (first task's parent commit). This is the merge-base for "changes introduced by THIS entity" even when `main` advanced due to parallel-session commits during execute — do NOT recompute from `main..HEAD` (MEMORY.md line 25: parallel-session churn produces reverse-subtraction artifacts).
+
+**Parallel-session filter** (when `{execute_base}..HEAD` contains interleaved commits from other entities — detectable via `git log {execute_base}..HEAD --oneline | grep -v '<this-entity-slug>'` returning non-empty): scope review-stage diff commands (Step 3.1+) to the plan's `files_modified` list rather than the full range:
+
+```bash
+# Entity-scoped diff for review (instead of full range which commingles parallel work):
+git diff {execute_base}..HEAD -- $(grep -E "^\*\*Files:" <plan-section> | sed 's/.*Files: *//' | tr -d '`')
+```
+
+Quality gate (Step 2) is NOT affected — it runs full-project per surface regardless of interleaving.
 
 ---
 
@@ -62,7 +71,34 @@ Before running any quality check, invoke `ship-flow:ship-runtime-detect` skill t
 
 ## Step 2: Quality Gate — 5-Check Full-Project Verification
 
-Run ALL 5 checks against the full project. **No scope narrowing** — even if execute only touched one file, quality checks the entire project. Binary pass/fail per check, no judgment.
+Run ALL 5 checks against the full project. Binary pass/fail per check, no judgment.
+
+### Step 2.0: Scoped-gate preamble (runtime-surface change detection)
+
+Before running checks 1-4, compute whether execute actually wrote code to each detected runtime surface. For each stack in `detected_stacks` (from the runtime-detect skill), map it to a surface directory (e.g., `bun`/`npm` at root → `./`; `bun` in `plugins/spacebridge/ui/` → that dir; `cargo` → `src/`). Then:
+
+```bash
+for SURFACE in $SURFACES; do
+  SURFACE_COMMITS=$(git log {execute_base}..HEAD --oneline -- "$SURFACE" 2>/dev/null | wc -l)
+  echo "$SURFACE: $SURFACE_COMMITS execute-introduced commits"
+done
+```
+
+**Decision**:
+- `SURFACE_COMMITS > 0` → run full quality gate for that surface (checks 1-4 normally).
+- `SURFACE_COMMITS == 0` AND any check fails on that surface → **baseline noise** (execute cannot have caused failures in a surface it didn't write). Mark check as `PASS (scoped — 0 execute commits touched $SURFACE)` and document the pre-existing failures in `### Quality Gate` for captain awareness, but do NOT block on them.
+- Both scoped gates AND any failing check in a surface WITH `SURFACE_COMMITS > 0` → FAIL normally per the "Any of checks 1-4 FAIL" rule below.
+
+**Why** (MEMORY.md line 10 precedent, generalized 2026-04-21 post-#060): execute cannot be at fault for failures in a surface where `git log <execute_base>..HEAD -- <surface>` is empty. Originally framed as "pure-rename executes" rule; #060 widened it to any polyglot project where ship-flow plugin work doesn't touch the spacebridge UI runtime surface. Evidence: #060 verify applied this 3× (bun test 7 fails / bun lint 2 errors / tsc 6 errors all in `plugins/spacebridge/ui/` which had 0 commits between `27382256..HEAD`).
+
+**Record the scoped-gate decision** in `### Quality Gate` so ship-review and captain can see which surfaces were scoped:
+
+```markdown
+### Quality Gate
+- tests (ship-flow surface): PASS
+- tests (spacebridge-ui surface): PASS (scoped — 0 execute commits touched plugins/spacebridge/ui; 7 pre-existing failures in pipeline-parse.test.ts documented)
+- lint ... etc.
+```
 
 ### Check 1: Tests
 ```bash
