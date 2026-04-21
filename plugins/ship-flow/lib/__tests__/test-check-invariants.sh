@@ -236,4 +236,29 @@ dc13_rid_placeholder() {
 if dc13_rid_placeholder 2>/dev/null; then echo "OK DC-13 R-ID placeholder intentional skip"
 else echo "FAIL DC-13 R-ID placeholder intentional skip"; FAIL=1; fi
 
+# ========== DC-14: post-046f hard-enforcement — Runtime Detection Preamble regrowth triggers ERROR ==========
+# After 046f (entity #075) empties allowlist_deferred, "## Runtime Detection Preamble" behaves
+# like any other non-allowlisted signature: 2 copies → ERROR → rc=1. Inject → assert fail →
+# revert to 1 copy → assert pass. Dogfood of the rule 046f installed.
+# (NOTE: original plan Task 1 labelled this DC-13, but DC-13 was already taken by the R-ID
+# placeholder test above — renumbered to DC-14 during execute per benign-drift auto-proceed.)
+dc14_runtime_preamble_hard_enforcement() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/sk-a" "$d/plugins/ship-flow/skills/sk-b"
+  local preamble="## Runtime Detection Preamble"
+  # Inject: 2 copies → expect rc=1
+  printf '# skill a\n\n%s\n\nsome content\n' "$preamble" > "$d/plugins/ship-flow/skills/sk-a/SKILL.md"
+  printf '# skill b\n\n%s\n\nsome content\n' "$preamble" > "$d/plugins/ship-flow/skills/sk-b/SKILL.md"
+  local rc_inject
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check preamble-regrowth >/dev/null 2>&1; rc_inject=$?
+  # Revert: 1 copy (only sk-a keeps preamble) → expect rc=0
+  printf '# skill b\n\nno preamble here\n' > "$d/plugins/ship-flow/skills/sk-b/SKILL.md"
+  local rc_revert
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check preamble-regrowth >/dev/null 2>&1; rc_revert=$?
+  rm -rf "$d"
+  [ "$rc_inject" = "1" ] && [ "$rc_revert" = "0" ]
+}
+if dc14_runtime_preamble_hard_enforcement 2>/dev/null; then echo "OK DC-14 runtime-preamble hard-enforcement (inject=fail, revert=pass)"
+else echo "FAIL DC-14 runtime-preamble hard-enforcement (inject=fail, revert=pass)"; FAIL=1; fi
+
 exit $FAIL
