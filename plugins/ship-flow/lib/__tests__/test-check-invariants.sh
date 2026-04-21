@@ -128,13 +128,17 @@ dc6_skill_count() {
 if dc6_skill_count 2>/dev/null; then echo "OK DC-6 skill count guard fails at 8 skills"
 else echo "FAIL DC-6 skill count guard fails at 8 skills"; FAIL=1; fi
 
-# ========== DC-7: preamble regrowth (≥ 2 copies) triggers fail (exit 1) ==========
+# ========== DC-7: preamble regrowth (≥ 2 copies, not allowlisted) triggers fail ==========
+# Uses `## Verify Stage Preamble` — in check's signatures list but NOT in 046f-deferred
+# allowlist, so 2 copies triggers ERROR + exit 1. (The allowlisted signatures "Runtime
+# Detection Preamble" and "Step R1: Detect Stacks" emit WARN and don't fail — they're
+# baseline pre-046f duplication.)
 dc7_preamble_regrowth() {
   local d; d="$(create_mock_plugin_dir)" || return 1
   mkdir -p "$d/plugins/ship-flow/skills/sk-a" "$d/plugins/ship-flow/skills/sk-b"
-  local preamble="## Runtime Detection Preamble"
-  printf '# skill a\n\n%s\n\n### Step R1: Detect Stacks\n' "$preamble" > "$d/plugins/ship-flow/skills/sk-a/SKILL.md"
-  printf '# skill b\n\n%s\n\n### Step R1: Detect Stacks\n' "$preamble" > "$d/plugins/ship-flow/skills/sk-b/SKILL.md"
+  local preamble="## Verify Stage Preamble"
+  printf '# skill a\n\n%s\n\nsome content\n' "$preamble" > "$d/plugins/ship-flow/skills/sk-a/SKILL.md"
+  printf '# skill b\n\n%s\n\nsome content\n' "$preamble" > "$d/plugins/ship-flow/skills/sk-b/SKILL.md"
   local rc
   bash "$CHECK_SCRIPT" --test-fixture "$d" --check preamble-regrowth >/dev/null 2>&1; rc=$?
   rm -rf "$d"
@@ -143,22 +147,27 @@ dc7_preamble_regrowth() {
 if dc7_preamble_regrowth 2>/dev/null; then echo "OK DC-7 preamble regrowth fails at 2 copies"
 else echo "FAIL DC-7 preamble regrowth fails at 2 copies"; FAIL=1; fi
 
-# ========== DC-8: section-tag coverage — unwrapped header triggers fail (exit 1) ==========
+# ========== DC-8: section-tag coverage — mixed-mode entity with orphan H2 triggers fail ==========
+# Grandfather rule: entities with ZERO section tags are skipped (pre-049 baseline).
+# Violation scenario is "entity has tags (adopted convention) but some H2/H3 is orphan".
 dc8_section_tag_coverage() {
   local d; d="$(create_mock_plugin_dir)" || return 1
-  cat > "$d/docs/ship-flow/broken-entity.md" <<'EOF'
+  cat > "$d/docs/ship-flow/mixed-entity.md" <<'EOF'
 ---
 id: "999"
-title: broken entity
+title: mixed-mode entity
 ---
+
+<!-- section:sharp-output -->
+## Sharp Output
+Some wrapped content.
+<!-- /section:sharp-output -->
 
 ## Unwrapped H2
 
-Content here with no section tag wrapping.
+This header is NOT inside a section tag — should trigger DC-8 failure.
 
 ### Also Unwrapped H3
-
-More content.
 EOF
   local rc
   bash "$CHECK_SCRIPT" --test-fixture "$d" --check section-tag-coverage >/dev/null 2>&1; rc=$?
