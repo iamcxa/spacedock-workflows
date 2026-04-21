@@ -123,8 +123,9 @@ dc1_valid_impact_patches() {
   rc=$?
   rm -rf "$d"
   [ "$rc" = "0" ] || return 1
-  echo "$out" | grep -qE "patch-map\\.sh ARCHITECTURE\\.md constraints.*--if-hash=" && \
-    echo "$out" | grep -qE '--commit-as="docs\(architecture\)'
+  # Use `-e PATTERN` to disambiguate patterns starting with `--` from grep options (macOS grep).
+  echo "$out" | grep -qE -e "patch-map\\.sh ARCHITECTURE\\.md constraints.*--if-hash=" && \
+    echo "$out" | grep -qE -e '--commit-as="docs\(architecture\)'
 }
 if dc1_valid_impact_patches 2>/dev/null; then echo "OK DC-1 valid impact → patch-map args correct"
 else echo "FAIL DC-1 valid impact → patch-map args correct"; FAIL=1; fi
@@ -262,16 +263,14 @@ if dc9_freshness_tolerates_trim 2>/dev/null; then echo "OK DC-9 freshness normal
 else echo "FAIL DC-9 freshness normalizes trim+LF"; FAIL=1; fi
 
 # ========== DC-10: shellcheck clean on test harness + mod bash ==========
+# Mod uses noop-heredoc pattern (`: <<'MARKDOWN'...MARKDOWN`) to stay human-readable
+# as markdown while remaining bash-executable — so we shellcheck the whole file
+# directly, NOT fenced ```bash blocks (which plan originally anticipated).
 dc10_shellcheck_clean() {
   command -v shellcheck >/dev/null 2>&1 || return 0  # SKIP if shellcheck missing
   shellcheck -S warning "${SCRIPT_DIR}/test-architecture-canon.sh" >/dev/null 2>&1 || return 1
   [ -f "$MOD_FILE" ] || return 1
-  local tmp; tmp="$(mktemp)"
-  awk '/^```bash$/{f=1;next} /^```$/{f=0} f' "$MOD_FILE" > "$tmp"
-  local rc=0
-  [ -s "$tmp" ] && shellcheck -S warning "$tmp" >/dev/null 2>&1 || rc=$?
-  rm -f "$tmp"
-  return $rc
+  shellcheck -S warning "$MOD_FILE" >/dev/null 2>&1
 }
 if dc10_shellcheck_clean 2>/dev/null; then echo "OK DC-10 shellcheck clean (test + mod bash)"
 else echo "FAIL DC-10 shellcheck clean (test + mod bash)"; FAIL=1; fi
