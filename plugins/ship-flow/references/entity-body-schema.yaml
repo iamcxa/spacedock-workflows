@@ -112,6 +112,34 @@ stages:
             - name: mapping
               type: table
               columns: ["Journey Step", "DC", "Type", "Boundary", "Verify hint"]
+        architecture_impact:
+          section: "### Architecture Impact"
+          section_tag: architecture-impact
+          layer: decision
+          optional: true
+          purpose: "Entity-declared architectural change. Consumed by ship-review `architecture-canon` mod to patch ARCHITECTURE.md atomically with read-first CAS (#060)."
+          fields:
+            - name: target_section
+              required: true
+              type: enum
+              values: [context, containers, components, constraints, dependencies, decisions]
+              purpose: "Which ARCHITECTURE.md section this entity patches (per flow-map-schema.yaml)"
+            - name: summary
+              required: true
+              type: string
+              purpose: "1-3 sentence prose summary of the architectural change (feeds commit message)"
+            - name: before
+              required: true
+              type: markdown
+              purpose: "Current section content (for freshness check); pre-filled by ship-sharp via extract-map.sh"
+            - name: after
+              required: true
+              type: markdown
+              purpose: "New section content to commit (must include mermaid block if target_section requires_diagram)"
+            - name: rationale
+              required: false
+              type: prose
+              purpose: "Why this decision (optional; entity body provides fuller context)"
         size_assessment:
           section: "### Size Assessment"
           section_tag: size-assessment
