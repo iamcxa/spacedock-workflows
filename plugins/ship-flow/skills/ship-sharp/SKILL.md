@@ -19,9 +19,9 @@ Your job: make sure we're building the right thing, the smallest version of it, 
 
 **Schema:** `references/entity-body-schema.yaml` → `stages.sharp`
 
-**Reads:** entity frontmatter, `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md`, recent shipped entities
+**Reads:** entity frontmatter, `PRODUCT.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `references/doc-format.md`, recent shipped entities
 **Writes:**
-- `## Sharp Output` — subsections: Shape Output (conditional), Roadmap Position, Problem, Done Criteria (typed), User Journey, Journey→DC Mapping, Size Assessment, Musk Audit, Scoring Gate, Project Skills
+- `## Sharp Output` — subsections: Shape Output (conditional), Roadmap Position, Problem, Done Criteria (typed), User Journey, Journey→DC Mapping, Architecture Impact (optional), Size Assessment, Musk Audit, Scoring Gate, Project Skills
 - `## Sharp Report` — status, stage_cost, path (shape+sharp / sharp-only / escape-hatch)
 
 ---
@@ -127,14 +127,15 @@ Falls back to H2 boundary regex automatically for legacy (untagged) entities.
 
 1. Read the entity file (from slug or current dispatch)
 2. Read `PRODUCT.md` from project root **if it exists** — understand what the product is now (capabilities, constraints, personas, vision). Do NOT create if missing.
-3. Read `ROADMAP.md` from project root **if it exists** — understand where the product is going (Now/Next/Later, Not Doing, North Star). Do NOT create if missing. Note in ## Roadmap Position if either file is absent.
-4. Read recent shipped entities (last 5) for pattern awareness
-5. Scan project-scope plugins for available domain skills:
+3. Read `ARCHITECTURE.md` from project root **if it exists** — understand how the system is built now (C4 layers: context / containers / components / constraints / dependencies / decisions). Do NOT create if missing. Note architectural impact candidates for Step 2.9.
+4. Read `ROADMAP.md` from project root **if it exists** — understand where the product is going (Now/Next/Later, Not Doing, North Star). Do NOT create if missing. Note in ## Roadmap Position if any file is absent.
+5. Read recent shipped entities (last 5) for pattern awareness
+6. Scan project-scope plugins for available domain skills:
    ```bash
    claude plugins list --scope project 2>/dev/null
    ```
 
-**Context usage**: PRODUCT.md tells you "does this feature fit the current product?" (constraints, personas, architecture). ROADMAP.md tells you "does this feature fit the plan?" (Not Doing conflicts, dependency on unshipped work, North Star alignment).
+**Context usage**: PRODUCT.md tells you "does this feature fit the current product surface?" (capabilities, personas, product-facing constraints). ARCHITECTURE.md tells you "does this feature fit the technical architecture?" (C4 layers, hard technical constraints, prior decisions — consulted by Step 2.9 when the entity modifies architecture). ROADMAP.md tells you "does this feature fit the plan?" (Not Doing conflicts, dependency on unshipped work, North Star alignment).
 
 ### Step 1.1: Parent Epic Context (child entities only)
 
@@ -377,6 +378,52 @@ Verdicts:
 > Options: (a) add fix to scope, (b) note as known gap + defer, (c) revise journey
 
 **Why this step exists:** Journey steps are design-level assertions ("data flows from A to B"). Without code tracing, broken paths survive into plan/execute where they cost 10x more to discover. Dogfood learnings from acl-sharing sharp (#039): (1) MODIFY traces caught "share routes are PUBLIC not private" — a reversed assumption that would have caused wrong middleware implementation. (2) NEW step traces returned obvious NOT FOUND — low value, replaced with dependency scan. (3) Organizing agents by code layer instead of journey number eliminated duplicate tracing of the same files.
+
+### Step 2.9: Architecture Impact Capture (optional — #060)
+
+**Skip when:** entity does not modify `ARCHITECTURE.md` (most feature entities). Skipping is silent and correct — the `architecture-canon` mod at ship-review noops on missing section (DC-2).
+
+**When to capture:** the entity changes one of the C4 layers (context / containers / components / constraints / dependencies / decisions) in a way the next captain or teammate needs to see. Typical triggers:
+
+- New container / component (e.g. a new service, a new shared lib)
+- Changed constraint (e.g. new hard limit, new dependency invariant)
+- Architectural decision reversal
+- New external dependency
+
+**Capture protocol:**
+
+1. Ask captain: "Does this entity modify `ARCHITECTURE.md`? (Y/N)". Default N — skip if uncertain. Follow-up only captures that the captain confirms.
+2. If Y, ask which `target_section` (enum from `plugins/ship-flow/references/flow-map-schema.yaml`):
+   - `context` — system boundary (requires C4 diagram)
+   - `containers` — deployment units (requires C4 diagram)
+   - `components` — internal logical modules (requires C4 diagram)
+   - `constraints` — hard limits / non-negotiables (no diagram required)
+   - `dependencies` — external deps / libraries (no diagram required)
+   - `decisions` — ADR index (auto-appended by mod — do NOT hand-edit)
+3. Pre-fill `before` by extracting the current section verbatim:
+   ```bash
+   bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <target-section>
+   ```
+   Capture stdout as-is (marker lines included — the mod compares marker-inclusive for freshness CAS).
+4. Ask captain to hand-author (or dictate) `after` — the new section content. Include 1 `summary:` sentence (feeds commit message) and optionally `rationale:`.
+5. **Mermaid guard** — if `target_section` has `requires_diagram: true` per `flow-map-schema.yaml` (context / containers / components) and `after` lacks a ```` ```mermaid ```` fence with a known directive (`graph`, `C4Container`, etc. — see `plugins/ship-flow/lib/map-helpers.sh` whitelist), warn the captain BEFORE proceeding. The mod will exit 9 at ship-review otherwise (`patch-map.sh` enforces the whitelist).
+6. Write the `architecture-impact` section to the entity body via `write-section.sh`:
+   ```bash
+   bash plugins/ship-flow/lib/write-section.sh "$ENTITY_FILE" architecture-impact <<EOF
+   target_section: ${TARGET}
+   summary: ${SUMMARY}
+   before: |
+   ${BEFORE_INDENTED}
+   after: |
+   ${AFTER_INDENTED}
+   ${RATIONALE_LINE:+rationale: ${RATIONALE}}
+   EOF
+   ```
+   where `${BEFORE_INDENTED}` / `${AFTER_INDENTED}` are the bodies with a 2-space YAML block-scalar indent on every line.
+
+**Do NOT auto-append to the Decisions table here.** That row is synthesized by the mod at ship-review from `architecture-impact.target_section`, `architecture-impact.summary`, entity id, slug, and date — keeping the index single-source-of-truth.
+
+**Cost discipline:** this step usually takes 60-120 seconds. If captain cannot articulate `after` in ≤ 5 minutes, it's a signal the architecture impact needs more thinking — defer to a dedicated entity rather than bloating this one.
 
 ## Step 3: Size Triage (Evidence-Based)
 
@@ -754,6 +801,7 @@ Full tag list for this skill (from schema section_tag values):
 - `### Done Criteria` → `done-criteria` (layer: decision)
 - `### User Journey` → `user-journey` (layer: decision)
 - `### Journey → DC Mapping` → `journey-dc-mapping` (layer: decision)
+- `### Architecture Impact` → `architecture-impact` (layer: decision, optional — only when Step 2.9 captured)
 - `### Size Assessment` → `size-assessment` (layer: decision)
 - `### Musk Audit` → `musk-audit` (layer: decision)
 - `### Scoring Gate` → `scoring-gate` (layer: decision)
@@ -787,6 +835,15 @@ Scope Out:
 - [ ] {criterion 1}
 - [ ] {criterion 2}
 - [ ] {criterion 3}
+
+### Architecture Impact          ← only if Step 2.9 captured; consumed by `architecture-canon` mod at ship-review
+target_section: {context|containers|components|constraints|dependencies|decisions}
+summary: {1-3 sentence prose for commit message}
+before: |
+  {extract-map.sh output verbatim — pre-filled by sharp}
+after: |
+  {new section content — must include ```mermaid fence for context/containers/components}
+rationale: {optional: why}
 
 ### Size Assessment
 Size: {S/M/L}
