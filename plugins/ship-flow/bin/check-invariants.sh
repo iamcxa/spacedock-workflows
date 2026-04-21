@@ -59,15 +59,38 @@ FAIL=0
 # ---- Check functions (stubs in T3; bodies filled in T6/T7/T8) ----
 
 check_skill_count() {
-  # T6 impl target — DC-6
-  echo "stub: check_skill_count (T6)"
+  # DC-6 — Principle 2: skill count ≤ 7
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  local n=0
+  if [ -d "$skills_dir" ]; then
+    # shellcheck disable=SC2012  # ls is fine here; no weird filenames expected in skills/
+    n=$(ls -1 "$skills_dir"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+  fi
+  if [ "$n" -gt 7 ]; then
+    echo "ERROR [Principle 2]: skill count > 7 (got $n). See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
+    return 1
+  fi
   return 0
 }
 
 check_preamble_regrowth() {
-  # T6 impl target — DC-7
-  echo "stub: check_preamble_regrowth (T6)"
-  return 0
+  # DC-7 — Principle 1 + 6: known preambles should not appear in ≥ 2 SKILL.md files
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  local signatures=(
+    "## Runtime Detection Preamble"
+    "### Step R1: Detect Stacks"
+  )
+  local fail=0
+  local sig n
+  for sig in "${signatures[@]}"; do
+    n=$(grep -lF "$sig" "$skills_dir"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$n" -ge 2 ]; then
+      echo "ERROR [Principle 1/6]: preamble '$sig' appears in $n SKILL.md files (≥ 2). Consolidate via 046f preamble-extraction. See plugins/ship-flow/INVARIANTS.md#principle-1" >&2
+      fail=1
+    fi
+  done
+  return "$fail"
 }
 
 check_section_tag_coverage() {
@@ -83,14 +106,46 @@ check_flow_map_coverage() {
 }
 
 check_direct_read_static() {
-  # T6 impl target — DC-10
-  echo "stub: check_direct_read_static (T6)"
-  return 0
+  # DC-10 — Principle 5c: Read(docs/ship-flow/*.md) in SKILL.md needs `# justification:` within ±2 lines
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  local pattern='Read[[:space:]]*\([^)]*docs/ship-flow/[^)]*\.md'
+  local fail=0
+  local f line_num start end
+  for f in "$skills_dir"/*/SKILL.md; do
+    [ -f "$f" ] || continue
+    # Find line numbers of matches
+    local hits
+    hits=$(grep -nE "$pattern" "$f" 2>/dev/null | cut -d: -f1 || true)
+    [ -z "$hits" ] && continue
+    while IFS= read -r line_num; do
+      [ -z "$line_num" ] && continue
+      start=$((line_num - 2))
+      end=$((line_num + 2))
+      [ "$start" -lt 1 ] && start=1
+      if ! sed -n "${start},${end}p" "$f" | grep -qF '# justification:'; then
+        echo "ERROR [Principle 5c]: direct Read/Edit on entity file at $f:$line_num (no '# justification:' within ±2 lines). Use lib/extract-section.sh or add justification comment." >&2
+        fail=1
+      fi
+    done <<< "$hits"
+  done
+  return "$fail"
 }
 
 check_fan_out_reviewer() {
-  # T6 impl target — DC-11
-  echo "stub: check_fan_out_reviewer (T6)"
+  # DC-11 — Principle 3: ship-verify Agent() dispatches > 2 without `# opt-in:` fail
+  local verify_skill="${ROOT}/plugins/ship-flow/skills/ship-verify/SKILL.md"
+  [ -f "$verify_skill" ] || return 0
+  local total opt_in unconditional
+  # Use `grep -c` with `|| var=0` fallback — `grep -c X || echo 0` would print "0\n0"
+  # when grep returns 1 (no match), breaking arithmetic. Pattern below handles both cases.
+  total=$(grep -cE '^[[:space:]]*Agent[[:space:]]*\(' "$verify_skill" 2>/dev/null) || total=0
+  opt_in=$(grep -cE '#[[:space:]]*opt-in:' "$verify_skill" 2>/dev/null) || opt_in=0
+  unconditional=$((total - opt_in))
+  if [ "$unconditional" -gt 2 ]; then
+    echo "ERROR [Principle 3]: ship-verify SKILL.md has $unconditional unconditional Agent() dispatches (cap: 2). See plugins/ship-flow/INVARIANTS.md#principle-3. Mark extras with adjacent '# opt-in: <reason>' comment." >&2
+    return 1
+  fi
   return 0
 }
 
