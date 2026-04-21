@@ -15,7 +15,7 @@ After this stage, FO advances to `done` (terminal) which triggers the merge hook
 
 **Schema:** `references/entity-body-schema.yaml` → `stages.ship`
 
-**Reads:** `## Verify → ### Verdict` (must have `status: passed`) — for legacy entities, fall back to `## Verify Report` H2. Also: `## Execute Output`, `## Sharp Output`, `## Verify → ### UAT` (or legacy `## Verify UAT`), `## Verify → ### Quality Gate` (or legacy `## Verify Output → ### Quality Gate`), `PRODUCT.md`, `ROADMAP.md`, `references/doc-format.md`
+**Reads:** `## Verify → ### Verdict` (must have `status: passed`) — for legacy entities, fall back to `## Verify Report` H2. Also: `## Execute Output`, `## Sharp Output` (including optional `### Architecture Impact`), `## Verify → ### UAT` (or legacy `## Verify UAT`), `## Verify → ### Quality Gate` (or legacy `## Verify Output → ### Quality Gate`), `PRODUCT.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `references/doc-format.md`
 **Writes:** single `## Ship` section with subsections (post-2026-04-19 D1 consolidation):
 - `### PR Draft` — title + body (consumed by pr-merge mod)
 - `### ROADMAP.md Update` — note of what was moved (conditional)
@@ -62,6 +62,44 @@ fi
 Use `layout` to pick the right grep target throughout Step 2.
 
 **Pre-check**: If verdict is not `passed`/`PASS` → do NOT proceed. **Write `## Ship` with `### Verdict` containing `status: blocked` and reason (e.g., "Verify verdict: {actual_verdict}, expected passed")** to the entity file, then report back to FO. The FO output-validation gate requires the `## Ship → ### Verdict` subsection to exist (or legacy `## Ship Report` for older entities). Never exit without writing them.
+
+---
+
+## Step 1.5: Invoke architecture-canon mod (#060)
+
+Runs BEFORE Step 2 (PR-body construction) so architectural commits land on the branch before the PR is drafted, and the PR body can reference the resulting commit SHAs.
+
+**Trigger check:**
+```bash
+bash plugins/ship-flow/lib/extract-section.sh "$ENTITY_FILE" architecture-impact 2>/dev/null | grep -qE "^after:[[:space:]]*\|"
+```
+If no `architecture-impact` section OR `after:` block is empty → skip this step silently (the mod noops internally too; double-checking here saves one subshell).
+
+**When triggered** — invoke the mod with the entity file passed via env:
+```bash
+ENTITY_FILE="$ENTITY_FILE" bash docs/ship-flow/_mods/architecture-canon.md
+```
+
+The mod:
+1. Freshness-checks the entity's captured `before` against current `ARCHITECTURE.md` (exit 1 with `freshness` diagnostic if stale)
+2. Atomically patches `target_section` via `patch-map.sh` with read-first CAS (one commit: `docs(architecture): #{id} — {summary}`)
+3. Appends a new row to the Decisions table via extract-then-patch (second commit: `docs(architecture-index): #{id}`)
+
+**On mod success (exit 0):**
+- Capture the two new commit SHAs for the PR body:
+  ```bash
+  ARCH_COMMIT=$(git log -2 --format=%H --grep='^docs(architecture): #' | head -1)
+  ADR_COMMIT=$(git log -2 --format=%H --grep='^docs(architecture-index): #' | head -1)
+  ```
+- Note for Step 2 PR body to include the `## Architecture Changes` section.
+
+**On mod failure (exit non-zero):**
+- HALT ship-review immediately. Do NOT advance to Step 2.
+- Write `## Ship → ### Verdict` with `status: blocked` and reason `"architecture-canon mod failed: exit {rc} (see journal for mod stderr)"`.
+- Entity stays at `verify` state; captain must reconcile (most commonly: re-extract `before` from current `ARCHITECTURE.md` because a parallel session patched it after sharp).
+- Exit codes: 1 = freshness / missing fields, 6 = CAS mismatch, 9 = mermaid validation.
+
+**Captain visibility** — report the two new commit SHAs (or halt reason) back to FO after this step.
 
 ---
 
@@ -173,6 +211,10 @@ Body:
 
 ## Changes
 {from ## Execute Output → ### Execution Log — task summary with commit SHAs}
+
+## Architecture Changes          ← include only if architecture-canon mod ran in Step 1.5
+- Patched `ARCHITECTURE.md` → `{target_section}`: {summary} ({ARCH_COMMIT short-SHA})
+- Appended Decisions index row for #{entity-id} ({ADR_COMMIT short-SHA})
 
 ## Quality Gate
 {from `## Verify → ### Quality Gate` (new layout) or `## Verify Output → ### Quality Gate` (legacy) — 5-check results}
