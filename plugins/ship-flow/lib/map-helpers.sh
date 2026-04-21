@@ -80,6 +80,19 @@ atomic_replace() {
   return 0
 }
 
+# resolve_map_path <plugin_slug> <map_name> — returns plugin-scoped or repo-root path
+# Usage: resolve_map_path "ship-flow" "ARCHITECTURE.md" → "plugins/ship-flow/ARCHITECTURE.md"
+#        resolve_map_path "" "ARCHITECTURE.md"          → "ARCHITECTURE.md"
+# Backward-compat: empty plugin_slug → repo-root relative (no plugins/ prefix)
+resolve_map_path() {
+  local plugin_slug="${1:-}" map_name="${2}"
+  if [ -n "$plugin_slug" ]; then
+    echo "plugins/${plugin_slug}/${map_name}"
+  else
+    echo "${map_name}"
+  fi
+}
+
 # validate_mermaid <body-file> <diagram-kind> — exit 0 OK, exit 9 missing/invalid
 # Only call when schema declares requires_diagram: true for the target section.
 validate_mermaid() {
