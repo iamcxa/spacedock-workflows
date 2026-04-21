@@ -312,6 +312,18 @@ Token budget: {updated if changed}
 
 If size changed → update entity frontmatter `size:` field.
 
+### Fold Operation LOC Heuristic (provisional, n=1 from entity 064)
+
+When the entity's scope is **folding one skill into another with a source-tag** (harness-diet cut principle #2, skill consolidation), the file-count table above does not predict DC-1-style LOC budgets accurately. Use this LOC-based heuristic instead:
+
+- **Formula**: `fold_net_loc ≈ skill_source_loc × 0.44-0.55`
+- **What to include in `fold_net_loc`**: procedural skeleton + example tables + guidance templates + circuit-breaker/rules sections + cross-reference anchors that satisfy downstream DCs. Do NOT just count the Steps-1-to-N skeleton — the overshoot comes from the tables/templates.
+- **DC-1 budget rule**: when writing DC-1 (target-skill LOC budget after fold), use `target_total_loc ≤ target_initial_loc + (source_loc × 0.55)` as worst-case. Tighter estimates will fail verification honestly.
+
+**Status**: provisional — derived from n=1 empirical sample (entity 064: source 253 LOC × 0.44 = +111 observed, plan +70 under-shot by 59%; independent verify-stage `wc -l` confirmed). **Re-calibrate after entity 046e** (next fold in the harness-diet series): if observed ratio differs by > ±30% from the 0.44-0.55 range, widen or shift it.
+
+**Source**: `docs/ship-flow/_archive/pr-feedback-fold.md` → `## Execute Output → Knowledge Captures [D2-candidate]` + `## Verify → Knowledge Captures [D1-confirmed]`.
+
 ## Step 2.7: Scope Anchoring (M/L only)
 
 **Skip for Size S.**
