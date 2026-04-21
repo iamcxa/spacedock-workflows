@@ -364,7 +364,7 @@ The Verification Spec table is consumed by:
 
 ## Step 4: Self-Review (Plan-Checker Lite)
 
-After writing the plan, run this multi-dimensional review:
+After writing the plan, run this multi-dimensional review. Steps 4 + 4.5 instantiate INVARIANTS §Captain-Gate Checklist #6 for plan documents. For supplementary strategic outputs produced during planning (e.g., research synthesis, architecture impact drafts) that contain ≥ 5 lower-confidence claims, consider an additional fresh-context verification dispatch before commit.
 
 ### Dimension 1 — Requirement Coverage
 Does every Done Criterion from `## Sharp Output → ### Done Criteria` map to at least one task? Missing coverage = blocker.

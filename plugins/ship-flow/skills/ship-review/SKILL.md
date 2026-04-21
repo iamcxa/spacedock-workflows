@@ -69,6 +69,8 @@ Use `layout` to pick the right grep target throughout Step 2.
 
 Runs BEFORE Step 2 (PR-body construction) so architectural commits land on the branch before the PR is drafted, and the PR body can reference the resulting commit SHAs.
 
+> **Verification reminder** (INVARIANTS §Captain-Gate Checklist #6): If the entity's `architecture-impact.after` substantially replaces an existing section OR contains ≥ 5 lower-confidence claims (novel pattern assertions, consumer-list enumerations, file:line citations), dispatch a fresh-context verification subagent BEFORE running the mod. Same principle applies at Steps 3 (ROADMAP update) and 4 (PRODUCT update) for substantial entries.
+
 **Trigger check:**
 ```bash
 bash plugins/ship-flow/lib/extract-section.sh "$ENTITY_FILE" architecture-impact 2>/dev/null | grep -qE "^after:[[:space:]]*\|"
