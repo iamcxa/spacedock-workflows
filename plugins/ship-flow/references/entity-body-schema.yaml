@@ -280,7 +280,7 @@ stages:
   # ===== VERIFY =====
   # 2026-04-19 D1 measurement consolidation: 3 sections (Output, Report, UAT) merged into one ## Verify
   # with 5 subsections. Reduces artifact count, ship-review reads single section. Backward compat:
-  # ship-review and ship-pr-feedback also accept legacy ## Verify Output / ## Verify Report / ## Verify UAT
+  # ship-review and ship-execute (pr-feedback mode) also accept legacy ## Verify Output / ## Verify Report / ## Verify UAT
   # for entities written before 2026-04-19 (no migration needed — old entities are terminal).
   verify:
     reads:
@@ -360,7 +360,7 @@ stages:
             - { name: completed_at, type: string, format: "ISO 8601" }
             - { name: duration_minutes, type: number }
     legacy_sections:
-      description: "Pre-2026-04-19 layout used 3 separate H2 sections. Readers (ship-review, ship-pr-feedback) accept both layouts."
+      description: "Pre-2026-04-19 layout used 3 separate H2 sections. Readers (ship-review, ship-execute pr-feedback mode) accept both layouts."
       sections:
         - "## Verify Output (legacy → ## Verify with ### Quality Gate, ### Review Findings, ### Knowledge Captures)"
         - "## Verify Report (legacy → ## Verify → ### Verdict)"
@@ -463,7 +463,7 @@ pr_feedback:
   section: "## PR Review Feedback"
   section_tag: pr-review-feedback
   layer: implementation
-  condition: "Written by ship-pr-feedback skill when PR reviewer requests changes"
+  condition: "Written by ship-execute Step 0 (pr-feedback mode) when PR reviewer requests changes"
   fields:
     - { name: pr, type: string }
     - { name: reviewer, type: string }

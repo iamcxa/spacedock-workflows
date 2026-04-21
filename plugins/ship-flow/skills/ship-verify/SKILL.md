@@ -28,7 +28,7 @@ This stage combines three verification concerns:
 - `### UAT` — evidence review + spot-check (mode line + results table)
 - `### Verdict` — authoritative status / cost / blocking issues / timestamps (FO grep-reads `status:` line)
 
-> Pre-2026-04-19 layout used 3 H2 sections (`## Verify Output`, `## Verify Report`, `## Verify UAT`). Ship-review and ship-pr-feedback accept both layouts; no migration of archived entities needed.
+> Pre-2026-04-19 layout used 3 H2 sections (`## Verify Output`, `## Verify Report`, `## Verify UAT`). Ship-review and ship-execute (pr-feedback mode) accept both layouts; no migration of archived entities needed.
 
 ---
 
@@ -589,7 +589,7 @@ Calculate duration from the recorded start timestamp to now. Write started_at, c
 If status `passed` → FO advances to ship.
 If status `failed` → FO routes feedback-to execute with the entire `## Verify` section as context.
 
-> Backward compat: pre-2026-04-19 entities used `## Verify Report` as a top-level H2. Both layouts are accepted by ship-review and ship-pr-feedback. New entities should use `## Verify → ### Verdict`.
+> Backward compat: pre-2026-04-19 entities used `## Verify Report` as a top-level H2. Both layouts are accepted by ship-review and ship-execute (pr-feedback mode). New entities should use `## Verify → ### Verdict`.
 
 ## Circuit Breakers
 

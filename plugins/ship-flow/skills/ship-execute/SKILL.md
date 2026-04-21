@@ -32,9 +32,9 @@ Before entering the normal dispatch loop, check if this invocation is a PR-feedb
 
 Otherwise → Mode A (normal execute). Skip to Step 1.
 
-### Mode B: PR-Feedback Ingestion (folded from ship-pr-feedback, 2026-04-21 — `source: pr-feedback`)
+### Mode B: PR-Feedback Ingestion (folded 2026-04-21 — `source: pr-feedback`)
 
-> **Source tag**: this block is tagged `source: pr-feedback` (mirrors the provenance field used on dispatched task metadata). The tag identifies content folded from the retired `ship-pr-feedback` skill per cut principle #2 (separate-skill-for-small-function → inline-in-parent with tag). 046e invariants CI and any future harvesting/audit tooling should grep on `source: pr-feedback` OR `<!-- section:pr-feedback-mode -->` to locate this block.
+> **Source tag**: this block is tagged `source: pr-feedback` (mirrors the provenance field used on dispatched task metadata). The tag identifies content folded from the retired PR-feedback re-entry skill per cut principle #2 (separate-skill-for-small-function → inline-in-parent with tag). 046e invariants CI and any future harvesting/audit tooling should grep on `source: pr-feedback` OR `<!-- section:pr-feedback-mode -->` to locate this block.
 
 #### B.1: Fetch and classify PR comments
 
