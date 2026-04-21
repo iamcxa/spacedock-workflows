@@ -21,7 +21,118 @@ You are running the EXECUTE stage of ship-flow. No captain interaction — dispa
 
 ---
 
+<!-- section:pr-feedback-mode -->
+## Step 0: PR-Feedback Mode Detection
+
+Before entering the normal dispatch loop, check if this invocation is a PR-feedback re-entry.
+
+**Trigger condition** — enter Mode B (PR-feedback) when BOTH are true:
+1. Entity frontmatter `pr_feedback_round` field exists AND > 0 (set by prior rollback or by captain)
+2. Entity has `pr:` frontmatter field AND no current `## PR Review Feedback` section (OR the section is stale vs current PR review state)
+
+Otherwise → Mode A (normal execute). Skip to Step 1.
+
+### Mode B: PR-Feedback Ingestion (folded from ship-pr-feedback, 2026-04-21 — `source: pr-feedback`)
+
+> **Source tag**: this block is tagged `source: pr-feedback` (mirrors the provenance field used on dispatched task metadata). The tag identifies content folded from the retired `ship-pr-feedback` skill per cut principle #2 (separate-skill-for-small-function → inline-in-parent with tag). 046e invariants CI and any future harvesting/audit tooling should grep on `source: pr-feedback` OR `<!-- section:pr-feedback-mode -->` to locate this block.
+
+#### B.1: Fetch and classify PR comments
+
+Read entity `pr:` field. Fetch reviews via VCS CLI:
+
+```bash
+# Inline VCS detection (3-line; full detection + close logic in bin/pr-feedback-rollback.sh)
+if git remote -v | grep -q github; then PR_VIEW="gh pr view"; else PR_VIEW="glab mr view"; fi
+$PR_VIEW <pr-number> --json reviews,comments
+# Also inline review comments (file:line — GitHub):
+# gh api repos/{owner}/{repo}/pulls/{pr-number}/comments --jq '.[] | "\(.path):\(.line) — \(.body)"'
+# GitLab equivalent:
+# glab api projects/{project}/merge_requests/{mr-iid}/notes --jq '.[] | "\(.position.new_path):\(.position.new_line) — \(.body)"'
+```
+
+For each CHANGES_REQUESTED review or inline comment, classify against `## Sharp Output → ### Done Criteria`:
+- Matches a DC by assertion text (or references a file:line inside a DC-bearing task's `files_modified`) → classification=`assertion-fail`, route=`execute`
+- Describes a NEW requirement not in DCs → classification=`coverage-gap`, route=`execute`
+- Raises architectural concern → classification=`architecture`, route=`plan`
+- Style/naming nit → classification=`nit`, route=no-rollback (log only)
+
+#### B.2: Write `## PR Review Feedback` classification table
+
+Tagged section `<!-- section:pr-review-feedback -->`. Columns: # / Comment / DC / Classification / Route to.
+
+```markdown
+<!-- section:pr-review-feedback -->
+## PR Review Feedback
+
+PR: #{pr-number}
+Reviewer: {author}
+Date: {ISO 8601}
+
+| # | Comment | DC | Classification | Route to |
+|---|---------|----|----|---|
+| 1 | "POST /api/comments returns 500 when body is empty" | DC-3 | assertion-fail | execute |
+| 2 | "Missing auth middleware on new route" | — | coverage-gap | execute |
+| 3 | "Should use event-driven not polling" | — | architecture | plan |
+| 4 | "Rename `handleStuff` to `handleComment`" | — | nit | — (log only) |
+<!-- /section:pr-review-feedback -->
+```
+
+#### B.3: Determine rollback target
+
+Deepest wins: `architecture` > `assertion-fail|coverage-gap` > `nit`. If ONLY nits → no rollback, close with comment explaining follow-up will be a separate entity.
+
+#### B.4: Write guidance section for next dispatch
+
+If target=execute → write `## Execute Guidance` (tagged `<!-- section:execute-guidance -->`) with flagged-item list + passing-task exclusion list:
+
+```markdown
+<!-- section:execute-guidance -->
+## Execute Guidance (from PR review)
+
+Focus on these items — PR reviewer flagged them:
+{list of assertion-fail and coverage-gap items with DC references}
+
+Do NOT re-implement tasks that passed. Only fix the flagged items.
+Previous passing tasks: {list from ## Execute Output → ### Execution Log where status=done and not flagged}
+<!-- /section:execute-guidance -->
+```
+
+If target=plan → write `## Plan Guidance` (tagged `<!-- section:plan-guidance -->`):
+
+```markdown
+<!-- section:plan-guidance -->
+## Plan Guidance (from PR review)
+
+Architecture concern raised by reviewer:
+{architecture comment text verbatim}
+
+Re-plan with this constraint. Previous plan is in ## Plan Output → ### Plan (may need partial rewrite).
+<!-- /section:plan-guidance -->
+```
+
+#### B.5: Invoke rollback helper + exit
+
+```bash
+bash plugins/ship-flow/bin/pr-feedback-rollback.sh <entity-file> <target-status> <pr-number> <round>
+```
+
+Helper flips frontmatter `status:` to target, bumps `pr_feedback_round`, closes PR via detected VCS (github/gitlab). Do NOT delete branch — next execute pass adds commits to the same branch, ship opens new PR.
+
+**Exit ship-execute after B.5.** FO sees `status: execute|plan` flip → re-dispatches ship-execute (or ship-plan if target=plan). On re-entry with `## Execute Guidance` now present, Mode A filters tasks using guidance's flagged-item list.
+
+### Circuit breaker (Mode B)
+- `pr_feedback_round` > 3 → refuse and escalate to captain ("3 PR review rounds without approval, manual intervention needed")
+- PR already merged → refuse rollback, suggest new entity for follow-up fixes
+- Only nits → log + close with comment, no rollback (nits addressed in separate entity)
+- Do NOT force-push or rebase — add fixup commits so reviewer can see what changed
+- Do NOT dismiss PR reviews — reviewer feedback is sovereign; classify and route, don't argue
+<!-- /section:pr-feedback-mode -->
+
+---
+
 ## Step 1: Read Plan and Build Wave Graph
+
+**(Mode A — normal execute. If Mode B triggered in Step 0, skill exits before reaching Step 1.)**
 
 **Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
 ```bash
