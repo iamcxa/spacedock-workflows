@@ -197,6 +197,28 @@ If you find yourself at a turn boundary with remaining tasks, your next action m
 
 Iterate waves sequentially. Inside each wave, dispatch implementation subagents:
 
+### Dispatch Discipline — No Inline Rationalization
+
+**Default path**: every task gets dispatched via the Agent tool per Dispatch Pattern below. The plan's `model:` field (haiku/sonnet) is the authoritative dispatch target.
+
+**"Agent tool not available" is a false claim in `spacedock:ensign` context.** The ensign agent definition grants `Tools: All tools` including Agent. If you are about to inline a task citing tool unavailability, you are rationalizing. Evidence required before any inline:
+
+1. Probe Agent tool with a trivial call:
+   ```
+   Agent({subagent_type: "general-purpose", model: "haiku", description: "probe", prompt: "return OK"})
+   ```
+2. If probe returns OK → Agent IS available. Proceed with dispatch per Pattern below. No inline.
+3. If probe returns an actual runtime error → record the verbatim error in `## Execute Report`, then inline only if ALL narrow-exception criteria below also hold.
+
+**Narrow inline exception** (probe must have actually failed AND all 3 must hold):
+- Task is pure file-string replacement via Edit tool
+- Spec is verbatim copy with no interpretation / judgment required
+- Single file, < 20 LOC net change
+
+**Recording rule**: any inline execution MUST log in `### Execution Log` the real error that blocked dispatch (verbatim quote, not paraphrase). Verify stage treats "Agent tool not available" without a quoted error as a dispatch-discipline violation and records it as [D2-candidate] in Knowledge Captures. Precedent: entity #078 execute ensign — inlined 3 haiku tasks with false unavailability claim; outcome was green but the rationale was fabricated.
+
+---
+
 ### Dispatch Pattern
 
 For each task in the current wave:

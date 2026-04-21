@@ -280,17 +280,25 @@ If `## Haiku Review` is missing (FO skipped dispatch, or bare mode):
 
 ### Step 3.3: Spot-Check Haiku Citations (Hallucination Guard)
 
-**Before classifying ANY haiku finding, spot-check 2-3 citations:**
+**Spot-check every finding that carries a file:line citation — 100%, not a sample.**
 
-1. Pick 2-3 findings at random from haiku output
-2. Read the cited file:line
-3. Does the code snippet match what's actually in the file?
+Haiku reviewers hallucinate prose content at plausible line numbers on prose-heavy diffs (comments, docstrings, SKILL.md text). Sampling 2-3 findings misses fabricated ones with probability ~40-60% when 1-of-5 is bogus. Precedent: entity #078 NIT-2 — haiku code-reviewer cited `map-helpers.sh:86` as containing `resolve_map_path "omitted" ...`; the string "omitted" did not exist anywhere in the file. Original 2-3 random sample missed it because the 2 sampled findings happened to be the real ones.
+
+**Procedure for each finding that cites a file:line**:
+
+1. Read the exact cited file at the cited line range (±2 lines for context).
+2. Does the quoted / described content actually exist there?
 
 | Result | Action |
 |--------|--------|
-| All spot-checks match | Proceed to classification |
-| 1 mismatch | Drop that finding, mark `⚠️ hallucination dropped`, check 2 more from same agent |
-| > 50% mismatches from one agent | **Discard ALL findings from that agent**, log as Learning: `"haiku {agent-name} hallucinated > 50% — all findings dropped"` |
+| Content matches | Keep finding, proceed to classify |
+| Line shifted but content exists within ±5 lines | Keep finding, update line number |
+| Content does NOT exist at cited location OR anywhere nearby | DROP finding, record in `### Knowledge Captures` as `[D2-candidate] haiku {agent-name} hallucinated at {file}:{line} — claimed "{quoted text}", actually "{what's there}"` |
+| > 30% of an agent's findings are hallucinated | **Discard ALL findings from that agent** for this review, mark reviewer untrusted for this diff class in Knowledge Captures |
+
+**Findings WITHOUT file:line citations** (e.g., "approach is unsafe"): qualitative spot-check — read the diff and judge. These don't need per-line verification but still face the same drop-rate threshold.
+
+**Cost**: ~30s per finding. For typical 2-5 findings per review, total spot-check cost < 3 minutes — cheap relative to a false concern landing in the permanent entity body.
 
 ### Step 3.4: Classify Findings
 
@@ -439,6 +447,44 @@ Tag `[D2-candidate]` in `### Knowledge Captures`. Examples:
 Ship-review stage surfaces `[D2-candidate]` items to captain.
 
 **Skip when**: All findings are entity-specific. Log: `Knowledge capture: skipped — no findings met D1/D2 threshold`
+
+---
+
+## Step 4.6: Auto-Fix Disposition (Before Writing Verdict)
+
+Before writing the Verdict section, **auto-fix any findings that meet ALL these criteria** — do NOT defer mechanical cosmetic fixes to captain:
+
+| Criterion | Description |
+|---|---|
+| Severity is NIT / non-blocking | BLOCKING and WARNING are NEVER auto-fixed (they need captain visibility or feedback-to-execute loop) |
+| Scope: comment / docstring / header inventory only | No logic, type, or behavior change |
+| Single file, ≤ 5 LOC net change | Larger scope = follow-up entity, not inline fix |
+| Fix is mechanical (no judgment required) | If the fix requires deciding between alternatives → captain call |
+
+**Also auto-codify knowledge captures that fit the inline-to-skill rule** (captain's principle: MEMORY is last resort, check if the lesson can be inlined into workflow/skills first):
+
+| If knowledge capture pattern | Action |
+|---|---|
+| Lesson applies to a specific skill stage at a specific step | Inline-edit the skill file (e.g., add a gate, strengthen a check). Record the skill edit commit SHA in the knowledge capture. Downgrade from [D2-candidate] to [inlined] |
+| Lesson is cross-skill / cross-project / behavioral (FO discipline) | Leave as [D2-candidate] for ship-review → CLAUDE.md candidacy |
+| Lesson is entity-specific one-off | Leave as [D1] — no upgrade |
+
+**Procedure**:
+
+1. For each eligible finding / capture, apply the fix via Edit tool.
+2. Re-run the affected quality-gate check (shellcheck / typecheck / relevant test) to confirm no regression.
+3. Commit with explicit path + pathspec lock. Message: `fix({component}): {summary} (verify NIT-{N})` for cosmetic fixes, or `harden({plugin}): codify {pattern} at {skill}:{step} (from verify capture)` for skill inlines.
+4. Record in `### Verdict` → `auto_fixes:` sub-field the list of `{finding-id | capture-id, commit-sha, before/after summary}`.
+
+**Rationale**: Captain doesn't need to review cosmetic fixes or obvious skill hardenings — they waste a round-trip cycle. Findings that CAN'T be auto-fixed (BLOCKING/WARNING, or needing judgment) remain in `### Review Findings` for captain awareness and potential feedback-to-execute.
+
+**Anti-pattern**: Do NOT auto-fix BLOCKING or WARNING severity. Do NOT auto-fix findings that touch logic. Do NOT rewrite core skill procedures (only add gates / checks / strengthen existing rules). If in doubt, don't auto-fix and leave for captain / feedback-to-execute.
+
+**Precedent**: entity #078 verify captured 2 NITs + 1 D2 dispatch-discipline observation. Post-verify captain had to manually direct "修該修的" + 3-observation MEMORY discussion before skill hardening happened. Auto-fix disposition would have:
+- Fixed NIT-1 (header inventory) inline before verdict
+- Inlined dispatch-discipline observation into ship-execute/SKILL.md before verdict
+- Left NIT-2 hallucination as [D2-candidate] (it's a reviewer-calibration note, not an entity fix)
+→ captain only sees non-auto-fixable items, shorter verify → ship path.
 
 ---
 
