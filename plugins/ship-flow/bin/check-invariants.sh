@@ -218,9 +218,27 @@ check_fan_out_reviewer() {
 }
 
 check_boolean_gate() {
-  # T8 impl target — DC-12 (Tier A spike or Tier B fallback)
-  echo "stub: check_boolean_gate (T8)"
-  return 0
+  # DC-12 — Principle 4: captain-interrupt decisions must be boolean, not enum.
+  # Tier A: grep for enum-string gate values. Spike on current repo (2026-04-21) returned 0 hits,
+  # so Tier A is primary. Tier B fallback (design-review checklist only) reserved if grep
+  # proves brittle — see plugins/ship-flow/INVARIANTS.md §Captain-Gate Checklist.
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  # Pattern: "prompt_captain: ask" / "interrupt_captain: skip" / "captain_gate: auto" etc.
+  local pattern_a='(prompt_captain|interrupt_captain|captain_gate)[[:space:]]*[:=][[:space:]]*"?(ask|skip|auto|yes|no)'
+  local pattern_b='\bgate\b[[:space:]]*:[[:space:]]*"?(ask|skip|continue|block)'
+  local hits_a hits_b
+  hits_a=$(grep -rnE "$pattern_a" "$skills_dir" 2>/dev/null) || hits_a=""
+  hits_b=$(grep -rnE "$pattern_b" "$skills_dir" 2>/dev/null) || hits_b=""
+  if [ -z "$hits_a" ] && [ -z "$hits_b" ]; then
+    echo "boolean-gate: no enum gate found in plugins/ship-flow/skills/" >&2
+    return 0
+  fi
+  echo "ERROR [Principle 4]: enum-string captain-gate values found — boolean gate required:" >&2
+  [ -n "$hits_a" ] && echo "$hits_a" >&2
+  [ -n "$hits_b" ] && echo "$hits_b" >&2
+  echo "See plugins/ship-flow/INVARIANTS.md#principle-4 + §Captain-Gate Checklist for refactor guidance." >&2
+  return 1
 }
 
 check_rid_placeholder() {
