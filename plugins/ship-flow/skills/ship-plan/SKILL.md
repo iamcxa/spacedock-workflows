@@ -192,17 +192,40 @@ Token budget: {updated if changed}
 
 If size changed → update entity frontmatter `size:` field.
 
-### Fold Operation LOC Heuristic (provisional, n=1 from entity 064)
+### Fold/Extraction Operation LOC Heuristic (n=2 calibration, direction-aware)
 
-When the entity's scope is **folding one skill into another with a source-tag** (harness-diet cut principle #2, skill consolidation), the file-count table above does not predict DC-1-style LOC budgets accurately. Use this LOC-based heuristic instead:
+When the entity's scope is **restructuring skills** (harness-diet cut principle #2: fold or extract), the file-count table above does not predict DC-1-style LOC budgets accurately. Two directions with separate formulas:
+
+**Fold direction** (A merged INTO B with source-tag, A retired):
 
 - **Formula**: `fold_net_loc ≈ skill_source_loc × 0.44-0.55`
 - **What to include in `fold_net_loc`**: procedural skeleton + example tables + guidance templates + circuit-breaker/rules sections + cross-reference anchors that satisfy downstream DCs. Do NOT just count the Steps-1-to-N skeleton — the overshoot comes from the tables/templates.
-- **DC-1 budget rule**: when writing DC-1 (target-skill LOC budget after fold), use `target_total_loc ≤ target_initial_loc + (source_loc × 0.55)` as worst-case. Tighter estimates will fail verification honestly.
+- **DC-1 budget rule**: when writing DC-1 (target-skill LOC budget after fold), use `target_total_loc ≤ target_initial_loc + (source_loc × 0.55)` as worst-case.
+- **Empirical anchor**: entity 064 pr-feedback-fold (source 253 LOC → +111 observed fold into ship-execute, plan estimate +70 under-shot by 59%).
 
-**Status**: provisional — derived from n=1 empirical sample (entity 064: source 253 LOC × 0.44 = +111 observed, plan +70 under-shot by 59%; independent verify-stage `wc -l` confirmed). **Re-calibrate after entity 046e** (next fold in the harness-diet series): if observed ratio differs by > ±30% from the 0.44-0.55 range, widen or shift it.
+**Extraction direction** (1 canonical source + N callers with lazy-load refs, callers shrink):
 
-**Source**: `docs/ship-flow/_archive/pr-feedback-fold.md` → `## Execute Output → Knowledge Captures [D2-candidate]` + `## Verify → Knowledge Captures [D1-confirmed]`.
+- **Formula**: `extraction_net_loc ≈ -(source_loc × 0.55-0.70)` where `source_loc` = total preamble LOC summed across all N callers.
+- **What to include**: the deleted content across callers minus (canonical_loc + N × ref_line_loc). Caller refs are typically 3-5 lines each (H2 header + blank + one-line reference + blank).
+- **Pre-shipping size estimate**: plan `token_budget = extraction_net_loc × (US$1 / 100 LOC)` × `mechanical_multiplier` (0.5-0.7 for inline-on-main, 1.5-2.0 for dispatched).
+- **Empirical anchor**: entity 075 preamble-extraction (source 420 LOC across 4 callers → canonical 154 LOC + 4×3 refs = -254 LOC in skills dir, ratio 0.60; +25 test LOC + -14 script LOC = total -243 across ship-flow/). Plan estimate -285 over-shot by 15% (acceptable).
+
+**Picking direction**:
+
+| Signal | Use |
+|---|---|
+| Source ≤ 50 LOC, tightly coupled to one parent | Fold |
+| Source ≥ 100 LOC, genuinely shared by N ≥ 3 callers | Extract |
+| Source ≥ 100 LOC but N = 2 callers | Extract or fold either caller — captain call |
+| Source 50-100 LOC, N = 2-3 callers | Fold into most natural parent; leaves inlined copy in the other |
+
+New skill cost (extraction only): adds 1 to skill count — check against INVARIANT Principle #2 cap (≤ 7) BEFORE proposing extraction in sharp. If at cap, route to fold instead or defer.
+
+**Status**: n=2 (one fold from entity 064, one extraction from entity 075). **Re-calibrate** when next harness-diet restructure ships: if observed ratio differs by > ±30% from the ranges above, widen or shift them.
+
+**Sources**:
+- Fold anchor: `docs/ship-flow/_archive/pr-feedback-fold.md` → `## Execute Output → Knowledge Captures [D2-candidate]` + `## Verify → Knowledge Captures [D1-confirmed]`.
+- Extraction anchor: `docs/ship-flow/_archive/preamble-extraction.md` → `## Execute Output → Knowledge Captures` (post-ship archive).
 
 ## Step 2.7: Scope Anchoring (M/L only)
 
