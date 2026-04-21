@@ -273,9 +273,12 @@ After captain approves both:
 2. Write ROADMAP.md to project root
 3. Commit:
    ```bash
-   git add PRODUCT.md ROADMAP.md
-   git commit -m "docs: bootstrap PRODUCT.md + ROADMAP.md via ship-onboard"
+   git add -- PRODUCT.md ROADMAP.md
+   git commit -m "docs: bootstrap PRODUCT.md + ROADMAP.md via ship-onboard" -- PRODUCT.md ROADMAP.md
    ```
+
+   > **Commit discipline**: every `git add` + `git commit` in this skill uses pathspec-lock (`-- <paths>`) syntax at BOTH stage-time and commit-time. Forbidden staging patterns (`git add -A`, `git add .`, `git commit -am`, `git commit -a -m`) are documented in `plugins/ship-flow/skills/ship-execute/SKILL.md` → "Forbidden staging patterns" section. See also MEMORY #31 (parallel-session git staging contamination) and entity #063.
+
 4. Confirm:
    > **Onboard complete.** PRODUCT.md and ROADMAP.md created.
    > Run `/ship-sharp` to start your first entity.
@@ -552,8 +555,8 @@ Body: write minimal `## Sharp Output` stub with `### Problem` and `### Done Crit
 ### 4.3: Commit all created files
 
 ```bash
-git add docs/{workflow}/
-git commit -m "feat: ship-onboard midway mode — {project} epic + {N} child entities"
+git add -- docs/{workflow}/
+git commit -m "feat: ship-onboard midway mode — {project} epic + {N} child entities" -- docs/{workflow}/
 ```
 
 ## Midway Step 5: Update ROADMAP.md and PRODUCT.md
@@ -593,8 +596,8 @@ If PRODUCT.md doesn't exist → skip (no error).
 ### 5.3: Commit doc updates
 
 ```bash
-git add ROADMAP.md PRODUCT.md
-git commit -m "docs: ship-onboard midway — update ROADMAP + PRODUCT for {project} ({N} done items)"
+git add -- ROADMAP.md PRODUCT.md
+git commit -m "docs: ship-onboard midway — update ROADMAP + PRODUCT for {project} ({N} done items)" -- ROADMAP.md PRODUCT.md
 ```
 
 ### 5.4: Confirm to captain

@@ -329,8 +329,10 @@ Once every task in the wave has reached terminal state, commit DONE tasks serial
 
 ```bash
 # One commit per task, in wave order — never batched
-git add {task.files_modified}
-git commit -m "feat(execute): {slug} task-{N} — {one-line action summary}"
+# Pathspec-lock: `-- <paths>` at BOTH stage and commit time locks the index against
+# parallel-session contamination (see Forbidden staging patterns below + MEMORY #31).
+git add -- {task.files_modified}
+git commit -m "feat(execute): {slug} task-{N} — {one-line action summary}" -- {task.files_modified}
 ```
 
 **One commit per task.** A wave of 3 DONE tasks = 3 commits, not 1. This preserves `git bisect` and PR review decomposition.
@@ -338,6 +340,71 @@ git commit -m "feat(execute): {slug} task-{N} — {one-line action summary}"
 **Pre-commit hook fires per commit.** Do NOT override with `--no-verify`. If the hook fails → revert staged edits, reclassify the task as BLOCKED, follow escalation ladder.
 
 After last commit in wave, capture HEAD as baseline for next wave.
+
+### Forbidden staging patterns
+
+These patterns are **forbidden** in every ship-flow skill commit step — they bypass the pathspec-lock discipline and allow parallel-session / manual-habit contamination of the staged set:
+
+| Forbidden | Reason |
+|---|---|
+| `git add -A` | Stages every modified + new file in the repo; scoops unrelated in-flight drafts |
+| `git add .` | Same as `-A` scoped to cwd — still scoops anything else dirty in cwd subtree |
+| `git commit -am "..."` | `-a` auto-stages every tracked-file modification regardless of pathspec |
+| `git commit -a -m "..."` | Spaced form of the same |
+
+**Correct pattern** — pathspec-lock at both stage-time AND commit-time:
+
+```bash
+git add -- <path1> <path2>
+git commit -m "<message>" -- <path1> <path2>
+```
+
+The `-- <paths>` at commit-time is the load-bearing defense against parallel-session contamination: it locks the commit's index scope to the listed paths even if another session's `git add -A` interleaves between our `git add` and our `git commit`. See MEMORY #31 (parallel-session git staging contamination) and entity #063 (`_archive/explicit-staging-ship-flow.md`).
+
+**Circuit Breaker:** if any ship-flow skill step or mod documents a `git add` / `git commit` example missing `-- <paths>`, treat as a bug and fix inline. A regression test lives at `plugins/ship-flow/lib/__tests__/test-skill-commit-lint.sh` (DC-4 assertion).
+
+---
+
+### Inline-on-main ship pattern (2-commit, no PR)
+
+For entities that are **ship-flow self-reforming** (S/M size, pure ship-flow plugin / docs edit, zero application-code diff, no user-facing UX change), use the inline-on-main pattern instead of opening a feature branch + PR. Precedent: #047 / #049 / #062 / #064 / #067 / #060 / #075 — 7 ships as of 2026-04-21.
+
+**When to use**:
+
+- Change is purely internal tooling (ship-flow skills, docs, mods, lib shell scripts, tests)
+- Zero runtime-application-code diff
+- Captain is the only reviewer signal needed (no multi-agent PR review adds value)
+- Size S or M
+
+**When NOT to use**:
+
+- User-facing UX / API changes
+- Application code changes in `plugins/spacebridge/**` (or wherever the product runtime lives)
+- Entities whose verify stage needs PR-review signal
+
+**2-commit sequence** (pathspec-lock throughout):
+
+```bash
+# Commit 1 — ship: content edits + Ship Section in entity body + ROADMAP / PRODUCT updates
+git add -- <entity-file> ROADMAP.md PRODUCT.md <other-changed-paths>
+git commit -m "ship: <slug> (<NNN>) — <one-line summary>" -- <entity-file> ROADMAP.md PRODUCT.md <other-changed-paths>
+
+# Flip entity to done + archive (status.py bypasses the pr-empty refusal on inline-on-main)
+python3 <spacedock-plugin>/skills/commission/bin/status --workflow-dir docs/ship-flow/ \
+  --set <slug> status=done verdict=PASSED completed="$(date -u +%FT%TZ)" --force
+python3 <spacedock-plugin>/skills/commission/bin/status --workflow-dir docs/ship-flow/ \
+  --archive <slug> --force
+
+# Commit 2 — done + archive: single commit covering the rename from docs/ship-flow/ into _archive/
+git add -- docs/ship-flow/_archive/<slug>.md
+git commit -m "done + archive: #<NNN> <slug> (verdict=PASSED, inline-on-main)" -- docs/ship-flow/_archive/<slug>.md
+```
+
+**Hazards** (observed + mitigated):
+
+- **Parallel-session staging contamination** — even with explicit `git add -- <path>`, another CC session's `git add -A` can interleave between your `git add` and your `git commit`. The pathspec-lock `-- <paths>` at commit-time is the only defense. (MEMORY #31, MEMORY #32, entity #063.)
+- **5069b8ba-class attribution drift** — DO NOT fall back to `git commit -am` or `git add -A` even when "it's just an archive commit". Use the forbidden-pattern rule above.
+- **--force flag usage** — `status --set --force` and `status --archive --force` bypass the `pr: empty` refusal at `status.py:1381/1034`. This is intentional for inline-on-main (no PR exists). Captain may deprecate this once the `if no worktree branch → skip push/PR-create, return non-blocking` code path lands in pr-merge mod (backlog XS entity noted in MEMORY #32).
 
 ---
 
