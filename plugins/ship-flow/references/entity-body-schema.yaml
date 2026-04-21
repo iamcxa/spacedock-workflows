@@ -43,6 +43,7 @@ frontmatter:
     pr_feedback_round: { type: number, default: 0 }
     entity_type: { type: enum, values: [entity, epic], default: entity, description: "entity = normal pipeline entity; epic = decomposed into children, FO skips (status: epic bypasses stage_by_name dispatch)" }
     children: { type: list, items: string, example: '["child-slug-1", "child-slug-2"]', description: "Child entity slugs — set by ship-sharp epic mode when decomposing. Epic entity status is frozen at 'epic'; children flow through the pipeline independently." }
+    plugin: { type: string, pattern: "^[a-z][a-z0-9-]*$", description: "Kebab-case plugin slug — scopes entity to a plugin in a monorepo (e.g., 'ship-flow', 'spacebridge'). When set, resolve_map_path uses plugins/{plugin}/ prefix for canonical doc paths. Optional: omit for repo-root-scoped entities (backward compat)." }
 
 # --- Stage Sections ---
 # Each stage defines: reads (from previous stages), output, report, uat (optional)
