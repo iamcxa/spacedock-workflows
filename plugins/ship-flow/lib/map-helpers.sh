@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # map-helpers.sh — shared functions for extract-map.sh + patch-map.sh
 # Source this file; do not execute directly.
-# Functions: sha256_of, atomic_replace, validate_mermaid, validate_schema_tag, validate_kebab_tag
+# Functions: sha256_of, atomic_replace, validate_mermaid, validate_schema_tag, validate_kebab_tag, resolve_map_path
 #
 # Mermaid directive whitelist derivation (#059 Task 3):
 # - ARCHITECTURE.md actual scan: `graph` (LR/TB variants)
@@ -78,6 +78,19 @@ atomic_replace() {
   mv "$tmp" "$file"
   trap - EXIT INT TERM
   return 0
+}
+
+# resolve_map_path <plugin_slug> <map_name> — returns plugin-scoped or repo-root path
+# Usage: resolve_map_path "ship-flow" "ARCHITECTURE.md" → "plugins/ship-flow/ARCHITECTURE.md"
+#        resolve_map_path "" "ARCHITECTURE.md"          → "ARCHITECTURE.md"
+# Backward-compat: empty plugin_slug → repo-root relative (no plugins/ prefix)
+resolve_map_path() {
+  local plugin_slug="${1:-}" map_name="${2}"
+  if [ -n "$plugin_slug" ]; then
+    echo "plugins/${plugin_slug}/${map_name}"
+  else
+    echo "${map_name}"
+  fi
 }
 
 # validate_mermaid <body-file> <diagram-kind> — exit 0 OK, exit 9 missing/invalid
