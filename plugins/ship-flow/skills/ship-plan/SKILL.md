@@ -40,7 +40,7 @@ Also read `PRODUCT.md` if it exists — check `## Architecture` and `## Constrai
 
 **If entity has `parent:` frontmatter set:**
 
-Read `## Parent Context` from this entity body (written by ship-sharp Step 1.1). Extract:
+Read `## Parent Context` from this entity body (written by ship-shape Step 1.1). Extract:
 - `Contracts to implement:` — these are Cross-Entity Contracts from the parent epic that this entity's plan must implement. Include them in `### Research Summary` and ensure at least one task per contract covers its implementation.
 - `Inherited decisions:` — ADRs from the parent epic that constrain the implementation approach. These override any research findings that conflict (e.g., if ADR says "use JWT tokens", a research finding suggesting session cookies is invalid).
 - `Slice scope:` — the assigned vertical slice. The plan's tasks must stay within this slice — scope creep into other children's vertical slices is a plan failure.

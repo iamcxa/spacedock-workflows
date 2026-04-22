@@ -167,7 +167,7 @@ Based on scan results, generate a draft following this structure:
 
 | Slug | Size | Why now |
 |------|------|---------|
-{Empty — captain fills this during first /ship-sharp}
+{Empty — captain fills this during first /ship-shape}
 
 ## Next
 
@@ -281,7 +281,7 @@ After captain approves both:
 
 4. Confirm:
    > **Onboard complete.** PRODUCT.md and ROADMAP.md created.
-   > Run `/ship-sharp` to start your first entity.
+   > Run `/ship-shape` to start your first entity.
 
 ---
 
@@ -607,7 +607,7 @@ git commit -m "docs: ship-onboard midway — update ROADMAP + PRODUCT for {proje
 > Created:
 > - 1 epic entity: `{epic-entity-id}`
 > - {N} done child entities
-> - {N} draft child entities (ready for `/ship-sharp`)
+> - {N} draft child entities (ready for `/ship-shape`)
 > - ROADMAP.md updated ({N} shipped, {N} added to Now)
 > - PRODUCT.md updated ({N} capability bullets added)
 >

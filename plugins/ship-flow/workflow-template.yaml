@@ -20,13 +20,13 @@ stages:
     initial: true
     worktree: false
     manual: true
-    description: "Captain captures idea. Advance to sharp when ready."
+    description: "Captain captures idea. Advance to shape when ready."
 
-  - name: sharp
+  - name: shape
     worktree: false
     gate: true
     manual: true
-    skill: ship-flow:ship-sharp
+    skill: ship-flow:ship-shape
     model: opus
     description: "Captain-facing. FO invokes skill directly (not via ensign) for interactive Musk audit. Reads PRODUCT.md + ROADMAP.md, size triage (S/M/L), scoring gate. Only human gate in the pipeline."
 
@@ -61,7 +61,7 @@ stages:
     description: "Terminal stage. Merge hook fires here. Entity archived after merge."
 
 gates:
-  - sharp
+  - shape
   - verify
 
 location_default: "docs/ship-flow/"

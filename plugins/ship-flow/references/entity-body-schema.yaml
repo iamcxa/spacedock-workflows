@@ -42,7 +42,7 @@ frontmatter:
     token_actual: { type: number, unit: USD, description: "Accumulated by FO across stages" }
     pr_feedback_round: { type: number, default: 0 }
     entity_type: { type: enum, values: [entity, epic], default: entity, description: "entity = normal pipeline entity; epic = decomposed into children, FO skips (status: epic bypasses stage_by_name dispatch)" }
-    children: { type: list, items: string, example: '["child-slug-1", "child-slug-2"]', description: "Child entity slugs — set by ship-sharp epic mode when decomposing. Epic entity status is frozen at 'epic'; children flow through the pipeline independently." }
+    children: { type: list, items: string, example: '["child-slug-1", "child-slug-2"]', description: "Child entity slugs — set by ship-shape epic mode when decomposing. Epic entity status is frozen at 'epic'; children flow through the pipeline independently." }
     plugin: { type: string, pattern: "^[a-z][a-z0-9-]*$", description: "Kebab-case plugin slug — scopes entity to a plugin in a monorepo (e.g., 'ship-flow', 'spacebridge'). When set, resolve_map_path uses plugins/{plugin}/ prefix for canonical doc paths. Optional: omit for repo-root-scoped entities (backward compat)." }
     # --- Phase 1: Shape Up pattern fields (ship-flow distillation) ---
     pattern: { type: enum, values: [single, pitch, shaped-child, epic], default: single, description: "Entity role: single=standalone /ship, pitch=Shape Up parent (has appetite + rabbit_holes + deleted_from_shape + shaped children), shaped-child=born-sharped under a pitch (skips shape stage), epic=legacy carlove pattern. Default single preserves backward compat." }
@@ -163,7 +163,7 @@ stages:
             - name: before
               required: true
               type: markdown
-              purpose: "Current section content (for freshness check); pre-filled by ship-sharp via extract-map.sh"
+              purpose: "Current section content (for freshness check); pre-filled by ship-shape via extract-map.sh"
             - name: after
               required: true
               type: markdown
@@ -534,15 +534,15 @@ pr_feedback:
       classification_values: [assertion-fail, coverage-gap, architecture, nit]
 
 # --- Epic Sections ---
-# Written by ship-sharp epic mode. Read by child entity sharp and plan stages.
+# Written by ship-shape epic mode. Read by child entity shape and plan stages.
 # Append-only: later stages add to subsections, never overwrite.
 
 epic_context:
   section: "## Epic Context"
   section_tag: epic-context
   layer: decision
-  written_by: "ship-sharp (epic mode) — written once when epic entity is decomposed"
-  read_by: "ship-sharp (child mode Step 1), ship-plan (Step 1 — Cross-Entity Contracts)"
+  written_by: "ship-shape (epic mode) — written once when epic entity is decomposed"
+  read_by: "ship-shape (child mode Step 1), ship-plan (Step 1 — Cross-Entity Contracts)"
   grep_pattern: 'grep -A 200 "^## Epic Context" {entity_file}'
   subsections:
     architecture_decisions:
@@ -583,7 +583,7 @@ parent_context:
   section: "## Parent Context"
   section_tag: parent-context
   layer: decision
-  written_by: "ship-sharp (child mode Step 1) — summary of what the child inherited from parent epic"
+  written_by: "ship-shape (child mode Step 1) — summary of what the child inherited from parent epic"
   read_by: "ship-plan (Step 1) — for Cross-Entity Contracts awareness"
   grep_pattern: 'grep -A 50 "^## Parent Context" {entity_file}'
   fields:

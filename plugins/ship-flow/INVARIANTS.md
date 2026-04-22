@@ -119,7 +119,7 @@ Used for design-review of any skill/plan/entity change that may create a captain
 
 1. **Is the decision expressible as a boolean predicate over entity frontmatter + DC types?** If the answer is "depends on judgment" or requires a runtime enum lookup → reformulate until it is.
 2. **Does this skill/stage add a new point where the captain is prompted/asked?** If yes: is the prompt framed as a boolean (`continue?: y/n`) or an enum (`mode?: ask|skip|auto`)? Reject enums without a boolean-decomposition rationale.
-3. **If this is a gate between stages, who moves the entity forward on PASS?** Automated status flip or captain manual action? Automated gates must be deterministic; captain gates must be at sharp only (or an explicit "captain smoke test" flagged in entity frontmatter).
+3. **If this is a gate between stages, who moves the entity forward on PASS?** Automated status flip or captain manual action? Automated gates must be deterministic; captain gates must be at shape only (or an explicit "captain smoke test" flagged in entity frontmatter).
 4. **If the skill re-implements dispatch or orchestration logic similar to another skill**, can it fold via `source:` tag pattern (Principle #2) instead of living as a separate skill?
 5. **If a new captain-prompt adds an enum with ≥ 3 values**, decompose into N boolean predicates OR provide a deterministic decision tree. No "ask me depending on the vibe" gates.
 6. **If this commit adds or substantially modifies a persistent strategic doc** (adoption audit, design draft, SKILL.md semantic change, canonical `PRODUCT.md` / `ARCHITECTURE.md` / `ROADMAP.md` / `CONTRACT.md` entries, architecture-canon mod output), was a fresh-context verification subagent dispatched to verify low-confidence claims (non-trivial counts, `file:line` citations, consumer-list completeness, enforcement-strength assertions) before commit? Trigger threshold: ≥ 5 claims with less than HIGH confidence, or reorganization of architectural decisions. Verification dispatch is findings-only (no synthesis delegation — the author retains judgment on corrections). **Precedent**: `docs/ship-flow/adoption-readiness-audit.md` (2026-04-21) — sonnet subagent verified 9 claim groups, corrected 14→29 opinion inventory, surfaced 6 unexpected findings. Pattern aligned with dispatch-discipline counter-entry (MEMORY tail 2026-04-21 post-#075).
@@ -156,10 +156,10 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 
 ### Autonomous continuation between stages
 
-**Rule**: Workflow template declares captain gates via `manual: true` on stage states (`docs/ship-flow/README.md` frontmatter). Only `sharp` has `manual: true`. All other stage transitions (plan → execute → verify → ship → done) are autonomous — FO dispatches the next stage ensign directly without captain re-confirmation.
+**Rule**: Workflow template declares captain gates via `manual: true` on stage states (`docs/ship-flow/README.md` frontmatter). Only `shape` has `manual: true`. All other stage transitions (plan → execute → verify → ship → done) are autonomous — FO dispatches the next stage ensign directly without captain re-confirmation.
 
 **Captain is in the loop at**:
-- **Sharp stage** — the ONE captain-interactive gate (defines problem + scope)
+- **Shape stage** — the ONE captain-interactive gate (defines problem + scope)
 - **Verify findings with BLOCKING severity** or feedback-to-execute (NOT for PASSED)
 - **PR merge** — captain's web-side action, post-ship
 - **Explicit captain interrupt** ("stop", "wait", "not yet", etc.)
@@ -173,14 +173,14 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 - Knowledge captures matching inline-to-skill rule (ship-verify Step 4.6)
 
 **Violation patterns** (codify and catch):
-- "Ready to proceed to plan?" — sharp already passed scoring gate, next dispatch is implicit
+- "Ready to proceed to plan?" — shape already passed scoring gate, next dispatch is implicit
 - "Dispatch ship ensign now?" — verify PASSED, ship is the declared next stage
 - "Next is ship, confirm?" — pipeline contract already answered by template
 - "Fix NITs or skip?" — Step 4.6 disposition rule answers this mechanically
 
 **Pre-action narration** (per CLAUDE.md Autonomous Action Boundaries) still applies for commits / pushes / PR creation. **Narration ≠ permission request.** FO states the action in DOING form and proceeds; captain interrupts if needed.
 
-**Precedent**: entity #078 pipeline — FO paused 4+ times asking "proceed to next stage?" despite workflow template declaring all post-sharp stages autonomous. Captain direction 2026-04-22: "這整個流程順序不夠順暢，應該自動做完你能做的". Rule codified this commit.
+**Precedent**: entity #078 pipeline — FO paused 4+ times asking "proceed to next stage?" despite workflow template declaring all post-shape stages autonomous. Captain direction 2026-04-22: "這整個流程順序不夠順暢，應該自動做完你能做的". Rule codified this commit.
 
 ---
 

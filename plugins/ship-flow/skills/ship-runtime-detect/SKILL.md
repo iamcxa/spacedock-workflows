@@ -1,11 +1,11 @@
 ---
 name: ship-runtime-detect
-description: Resolves the runtime tool (13 ecosystems — bun/pnpm/yarn/npm/cargo/go/python/ruby/elixir/jvm/make/shell/dart) from project context via Step R1 config probe, Step R2 README frontmatter override, Step R3 command lookup, and Step R4 LLM fallback. Produces `detected_stacks[]` and `{commands.test/build/typecheck/lint/dev/prettier}` consumed by ship-sharp, ship-plan, ship-execute, and ship-verify. Auto-discovered by directory presence — no manifest edit.
+description: Resolves the runtime tool (13 ecosystems — bun/pnpm/yarn/npm/cargo/go/python/ruby/elixir/jvm/make/shell/dart) from project context via Step R1 config probe, Step R2 README frontmatter override, Step R3 command lookup, and Step R4 LLM fallback. Produces `detected_stacks[]` and `{commands.test/build/typecheck/lint/dev/prettier}` consumed by ship-shape, ship-plan, ship-execute, and ship-verify. Auto-discovered by directory presence — no manifest edit.
 ---
 
 # Ship-Runtime-Detect — Runtime Tool Resolution
 
-Canonical source for stack detection across the ship-flow pipeline. Callers (ship-sharp, ship-plan, ship-execute, ship-verify) reference this skill at their former "Runtime Detection Preamble" location with a call-site-specific purpose line. Consolidated by entity #075 preamble-extraction (slot 046f, harness-diet cut principle #2 — script-mediate / single-source).
+Canonical source for stack detection across the ship-flow pipeline. Callers (ship-shape, ship-plan, ship-execute, ship-verify) reference this skill at their former "Runtime Detection Preamble" location with a call-site-specific purpose line. Consolidated by entity #075 preamble-extraction (slot 046f, harness-diet cut principle #2 — script-mediate / single-source).
 
 ## Contract
 

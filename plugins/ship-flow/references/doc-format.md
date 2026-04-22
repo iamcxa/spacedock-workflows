@@ -1,6 +1,6 @@
 # Doc Format Reference
 
-Shared format for PRODUCT.md and ROADMAP.md updates. Read by ship-sharp (ROADMAP Now) and ship-review (ROADMAP Shipped + PRODUCT.md).
+Shared format for PRODUCT.md and ROADMAP.md updates. Read by ship-shape (ROADMAP Now) and ship-review (ROADMAP Shipped + PRODUCT.md).
 
 ## Tone
 
@@ -57,7 +57,7 @@ Example (S-size, no shape):
 
 ## ROADMAP.md Formats
 
-### Now Row (written by ship-sharp)
+### Now Row (written by ship-shape)
 
 ```
 | {slug} | {S/M/L} | {one sentence from ## Problem — what's broken, not what to build} | {today YYYY-MM-DD} |
