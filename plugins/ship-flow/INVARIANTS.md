@@ -13,7 +13,9 @@
 Three layers, each catching a different failure mode:
 
 1. **CI grep** (`bin/check-invariants.sh`): runs on every PR touching `plugins/ship-flow/**` or `docs/ship-flow/**`. Fails on structural regressions (preamble regrowth, skill count > 7, unwrapped H2/H3, fan-out reviewer bloat, etc.). Green = repo passes its own rules.
-2. **Runtime warn-hook** (`hooks/warn-direct-read.js`): PreToolUse hook on `Read`/`Edit` tool calls. Fires `systemMessage` warning when an agent attempts direct full-file Read on `docs/ship-flow/*.md` entity files (active, non-archived). **Warn-not-block** — operation still proceeds, but the agent sees the nudge to use `lib/extract-section.sh` instead.
+2. **Runtime warn-hooks**:
+   - `hooks/warn-direct-read.js`: PreToolUse hook on `Read`/`Edit` tool calls. Fires `systemMessage` warning when an agent attempts direct full-file Read on `docs/ship-flow/*.md` entity files (active, non-archived). **Warn-not-block** — operation still proceeds, but the agent sees the nudge to use `lib/extract-section.sh` instead.
+   - `hooks/warn-state-drift.sh`: SessionStart hook. Scans active entities for the `status: ship` + `pr: #N MERGED` drift pattern observed 4× the week of 2026-04-20 (catch-up commits `f6029c4c`, `f7a8cacb`, plus #030+#037 hanging at session-start 2026-04-22). Injects `additionalContext` listing drifted entities so FO runs the Step 3c `done + archive` sequence before new execute work. Requires `gh`; graceful no-op otherwise.
 3. **Captain-gate checklist** (§Captain-Gate Checklist below): design-review questions used during PR review for decisions that cannot be grep-enforced reliably (e.g., Principle #4 boolean-vs-enum gate — grep has high false-positive rate on prose skill files).
 
 ---
@@ -185,7 +187,8 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 ## Related Files
 
 - `plugins/ship-flow/bin/check-invariants.sh` — CI grep implementation
-- `plugins/ship-flow/hooks/warn-direct-read.js` — PreToolUse runtime warn hook
+- `plugins/ship-flow/hooks/warn-direct-read.js` — PreToolUse runtime warn hook (direct entity Read/Edit)
+- `plugins/ship-flow/hooks/warn-state-drift.sh` — SessionStart runtime warn hook (FO state drift: merged PR still `status: ship`)
 - `plugins/ship-flow/hooks/hooks.json` — hook wiring
 - `plugins/ship-flow/lib/__tests__/test-check-invariants.sh` — test runner
 - `.github/workflows/ship-flow-invariants.yml` — CI trigger
