@@ -44,6 +44,37 @@ frontmatter:
     entity_type: { type: enum, values: [entity, epic], default: entity, description: "entity = normal pipeline entity; epic = decomposed into children, FO skips (status: epic bypasses stage_by_name dispatch)" }
     children: { type: list, items: string, example: '["child-slug-1", "child-slug-2"]', description: "Child entity slugs — set by ship-sharp epic mode when decomposing. Epic entity status is frozen at 'epic'; children flow through the pipeline independently." }
     plugin: { type: string, pattern: "^[a-z][a-z0-9-]*$", description: "Kebab-case plugin slug — scopes entity to a plugin in a monorepo (e.g., 'ship-flow', 'spacebridge'). When set, resolve_map_path uses plugins/{plugin}/ prefix for canonical doc paths. Optional: omit for repo-root-scoped entities (backward compat)." }
+    # --- Phase 1: Shape Up pattern fields (ship-flow distillation) ---
+    pattern: { type: enum, values: [single, pitch, shaped-child, epic], default: single, description: "Entity role: single=standalone /ship, pitch=Shape Up parent (has appetite + rabbit_holes + deleted_from_shape + shaped children), shaped-child=born-sharped under a pitch (skips shape stage), epic=legacy carlove pattern. Default single preserves backward compat." }
+    appetite: { type: string, description: "Shape Up time budget (e.g., '2 days', '2 weeks'). Not an estimate. Required when pattern=pitch.", required_when: "pattern == pitch" }
+    rabbit_holes: { type: list, items: string, default: [], description: "Todo tids captured from shape as 'not this cycle'. Optional for non-pitch entities.", required_when: "pattern == pitch" }
+    deleted_from_shape:
+      type: list
+      items:
+        type: object
+        schema:
+          claim: { type: string, description: "What was considered" }
+          reason: { type: string, description: "Why it was explicitly rejected (Musk step 2)" }
+      default: []
+      description: "Explicit deletes with reason — Musk step 2 discipline. Required when pattern=pitch."
+      required_when: "pattern == pitch"
+    parent_pitch: { type: string, example: '"081"', description: "Entity ID of the parent pitch. Required when pattern=shaped-child.", required_when: "pattern == shaped-child" }
+    stated_assumptions:
+      type: list
+      items:
+        type: object
+        schema:
+          id: { type: string, example: '"A1"', description: "Per-entity unique (A1, A2, ...)" }
+          claim: { type: string, description: "What is being assumed" }
+          verified_by: { type: enum, values: [codebase-grep, lib-docs, web-search, design-contract, skill-source-read], description: "Verification method" }
+          verification: { type: string, description: "Bash command or describable procedure" }
+          confidence_at_shape: { type: integer, range: "0-100", description: "Subjective confidence at shape time" }
+          criticality: { type: enum, values: [critical, important, nice-to-know], description: "Blast radius if assumption is wrong" }
+          notes: { type: string, description: "Optional elaboration" }
+      default: []
+      description: "Assumptions to verify during shape and re-verify at stage entry (Phase 4)."
+      required_when: "pattern in [pitch, shaped-child]"
+      invariant: "at least 1 assumption with criticality=critical when pattern=pitch"
 
 # --- Stage Sections ---
 # Each stage defines: reads (from previous stages), output, report, uat (optional)
