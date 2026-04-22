@@ -51,8 +51,32 @@ maps:
 
   PRODUCT.md:
     path: "PRODUCT.md"
-    sections: []   # V1.5 — DEFERRED (see #059 Musk Audit bullet 5)
+    sections:
+      - section_tag: capabilities
+        title: "Current Capabilities"
+        purpose: "User-facing capabilities by domain; appended on ship"
+        requires_diagram: false
 
   ROADMAP.md:
     path: "ROADMAP.md"
-    sections: []   # V1.5 — DEFERRED
+    sections:
+      - section_tag: now
+        title: "Now (committed, actively working)"
+        purpose: "Active build cycle — entities currently in execute or later stages"
+        requires_diagram: false
+      - section_tag: next
+        title: "Next (shaped, ready to start when Now clears)"
+        purpose: "Shaped pitches ready to start when Now clears"
+        requires_diagram: false
+      - section_tag: later
+        title: "Later (ideas with potential, not yet shaped)"
+        purpose: "Raw ideas / rabbit holes / todos backlog"
+        requires_diagram: false
+      - section_tag: not-doing
+        title: "Not Doing (explicitly rejected with reason)"
+        purpose: "Explicit deletes with reason (Musk step 2)"
+        requires_diagram: false
+      - section_tag: shipped
+        title: "Shipped"
+        purpose: "History of shipped entities"
+        requires_diagram: false
