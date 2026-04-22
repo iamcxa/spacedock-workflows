@@ -233,51 +233,97 @@ The merge hook reads `## Ship → ### PR Draft` (new layout) or `## Ship Output 
 
 ## Step 3: Update ROADMAP.md
 
-Read `ROADMAP.md` from project root. If it exists:
+Read `ROADMAP.md` from project root. If it does not exist → skip (no error). Otherwise perform two atomic writes (each using hash-checked, pathspec-safe patch-map.sh calls).
 
-1. Find the entity in `## Now` table (match by entity slug or title)
-2. Remove that row from `## Now`
-3. Append a new row to `## Shipped` table. Use the entity's `id` from frontmatter — do NOT invent a new number:
-   ```
-   | {entity.id} | {entity.title} | {one-sentence from ### Problem, present tense per doc-format.md} | {today's date} | ⏳ |
-   ```
-   If `{entity.id}` already exists in the Shipped table (cross-workflow collision), append the workflow dir name as suffix: `{id}-{workflow-dir-name}` (e.g., `005-ship-flow`).
-4. If `## Cost Calibration` table exists and `token_actual` is known:
-   - Increment the size row's Sample count
-   - Recalculate Median actual if sample ≥ 3
+### 3.1 Remove entity from `## Now` section
 
-If ROADMAP.md doesn't exist → skip (no error).
+```bash
+BEFORE_HASH=$(sha256sum ROADMAP.md 2>/dev/null | awk '{print $1}' || shasum -a 256 ROADMAP.md | awk '{print $1}')
+bash plugins/ship-flow/lib/patch-map.sh \
+  --if-hash="$BEFORE_HASH" \
+  --mode=remove-row \
+  --match="{entity.slug}" \
+  --section=now \
+  --commit-as="ship: remove {entity.id} from Now" \
+  ROADMAP.md
+```
+
+If exit 6 (stale hash → another session wrote between extract and patch): re-read, recompute hash, retry. Max 3 retries before reporting BLOCKED.
+
+Idempotency: if the row is already gone (no match), exit 0 and no-op.
+
+### 3.2 Append entity to `## Shipped` section
+
+Rebuild the hash (file changed in 3.1). Then:
+
+```bash
+AFTER_HASH=$(sha256sum ROADMAP.md 2>/dev/null | awk '{print $1}' || shasum -a 256 ROADMAP.md | awk '{print $1}')
+NEW_ROW="| {entity.id} | {entity.title} | {one-sentence from ### Problem, present tense per doc-format.md} | {today's date} | {PR status: ⏳ or link} |"
+bash plugins/ship-flow/lib/patch-map.sh \
+  --if-hash="$AFTER_HASH" \
+  --mode=append \
+  --section=shipped \
+  --commit-as="ship: record {entity.id} in Shipped" \
+  ROADMAP.md <<<"$NEW_ROW"
+```
+
+ID collision policy (cross-workflow): if `{entity.id}` already appears in the current Shipped body, suffix the entity id with the workflow dir name: `{id}-{workflow-dir-name}` (e.g., `005-ship-flow`).
+
+### 3.3 Cost Calibration update (unchanged — no marker)
+
+If `## Cost Calibration` table exists and `token_actual` is known, edit the row manually via the Edit tool:
+- Increment the size row's Sample count
+- Recalculate Median actual if sample ≥ 3
+
+Cost Calibration is captain-managed prose (no section marker) — manual edit is the right tool.
 
 ---
 
 ## Step 4: Update PRODUCT.md
 
-Read `PRODUCT.md` from project root. If it exists:
+Read `PRODUCT.md` from project root. If it does not exist → skip (no error).
 
 **Read `references/doc-format.md` for exact formats.** Follow the derivation rules — do not improvise formats.
 
-1. **Add capability bullet** to `## Current Capabilities`:
-   - Find the matching domain subsection (session management, communication, access, etc.)
-   - Format: `- {What it does} — {why it matters in ≤10 words} (#{entity-id})`
-   - Derivation: if shape ran → from US-1 "I want" clause. If not → from `### Problem` first sentence rewritten as capability.
-   - If no matching subsection exists → create one.
+### 4.1 Append capability bullet to `## Current Capabilities`
 
-2. **Add user story** (JTBD format):
-   - If shape ran → copy accepted stories from `## Sharp Output → ### Shape Output`
-   - If shape didn't run → generate ONE story from `## Sharp Output → ### Problem` + `## Sharp Output → ### Done Criteria`:
-     - Persona: match from PRODUCT.md "Who It Serves" (default: Captain)
-     - Action: from Done Criteria's primary observable change
-     - Outcome: from Problem's "why it matters"
-   - Deduplicate against existing stories.
+Derivation (unchanged from prior phases):
+- Format: `- {What it does} — {why it matters in ≤10 words} (#{entity-id})`
+- If shape ran → derive from US-1 "I want" clause. If not → from `### Problem` first sentence rewritten as capability.
 
-3. **Update constraints** (if the feature changes any constraint):
-   - Rare, but if the feature explicitly relaxes or adds a constraint, update the Constraints table
+Write:
+```bash
+BEFORE_HASH=$(sha256sum PRODUCT.md 2>/dev/null | awk '{print $1}' || shasum -a 256 PRODUCT.md | awk '{print $1}')
+BULLET="- {derived capability line}"
+bash plugins/ship-flow/lib/patch-map.sh \
+  --if-hash="$BEFORE_HASH" \
+  --mode=append \
+  --section=capabilities \
+  --commit-as="ship: add capability for {entity.id}" \
+  PRODUCT.md <<<"$BULLET"
+```
 
-4. **Cross-check consistency** (from doc-format.md):
-   - ROADMAP Shipped "Why it existed" ↔ PRODUCT capability "why it matters" → same idea, different format
-   - North Star in PRODUCT.md Vision ↔ ROADMAP.md North Star → must be identical text
+Domain sub-header grouping (session management / communication / access / etc.) is **deferred** to a future headless-claude reorg entity. For now, append to the end of the capabilities section; captain can re-group periodically.
 
-If PRODUCT.md doesn't exist → skip (no error).
+### 4.2 Add user story (JTBD format)
+
+*(unchanged — prose section; no markers yet)*
+
+- If shape ran → copy accepted stories from `## Sharp Output → ### Shape Output`.
+- If shape didn't run → generate ONE story from `## Sharp Output → ### Problem` + `## Sharp Output → ### Done Criteria`:
+  - Persona: match from PRODUCT.md "Who It Serves" (default: Captain)
+  - Action: from Done Criteria's primary observable change
+  - Outcome: from Problem's "why it matters"
+- Deduplicate against existing stories.
+
+### 4.3 Update constraints
+
+Rare. If the feature explicitly relaxes or adds a constraint, update the Constraints table via the Edit tool (no marker — captain-managed).
+
+### 4.4 Cross-check consistency (from doc-format.md)
+
+- ROADMAP Shipped "Why it existed" ↔ PRODUCT capability "why it matters" → same idea, different format
+- North Star in PRODUCT.md Vision ↔ ROADMAP.md North Star → must be identical text
 
 ---
 
