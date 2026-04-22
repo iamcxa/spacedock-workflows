@@ -152,4 +152,28 @@ else
   echo "SKIP DC-11 shellcheck (not installed)"
 fi
 
+# DC-12 (078): resolve_map_path with plugin slug → plugins/{slug}/{map}
+if type resolve_map_path >/dev/null 2>&1; then
+  result_12="$(resolve_map_path "ship-flow" "ARCHITECTURE.md")"
+  if [ "$result_12" = "plugins/ship-flow/ARCHITECTURE.md" ]; then
+    echo "OK DC-12 resolve_map_path plugin-scoped"
+  else
+    echo "FAIL DC-12 resolve_map_path plugin-scoped (got: $result_12)"; FAIL=1
+  fi
+else
+  echo "FAIL DC-12 resolve_map_path not defined in map-helpers.sh"; FAIL=1
+fi
+
+# DC-13 (078): resolve_map_path with empty slug → repo-root fallback
+if type resolve_map_path >/dev/null 2>&1; then
+  result_13="$(resolve_map_path "" "ARCHITECTURE.md")"
+  if [ "$result_13" = "ARCHITECTURE.md" ]; then
+    echo "OK DC-13 resolve_map_path repo-root fallback"
+  else
+    echo "FAIL DC-13 resolve_map_path repo-root fallback (got: $result_13)"; FAIL=1
+  fi
+else
+  echo "FAIL DC-13 resolve_map_path not defined in map-helpers.sh"; FAIL=1
+fi
+
 exit $FAIL
