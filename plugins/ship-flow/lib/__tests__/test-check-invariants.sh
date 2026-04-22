@@ -177,6 +177,49 @@ EOF
 if dc8_section_tag_coverage 2>/dev/null; then echo "OK DC-8 section-tag coverage fails on unwrapped H2"
 else echo "FAIL DC-8 section-tag coverage fails on unwrapped H2"; FAIL=1; fi
 
+# ========== DC-8b: Stage Report whitelist — spacedock-protocol H2 + nested H3 NOT flagged ==========
+# Post-#078 CI-fail harvest (2026-04-22): spacedock ensign-shared-core:46-51 instructs ensigns to
+# append untagged "## Stage Report: {stage}" + "### Summary" at entity-file end. Ship-flow's
+# check-invariants must whitelist this plugin-agnostic protocol header, not flag it as orphan.
+dc8b_stage_report_whitelist() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  cat > "$d/docs/ship-flow/stage-report-entity.md" <<'EOF'
+---
+id: "998"
+title: stage-report whitelist fixture
+---
+
+<!-- section:sharp-output -->
+## Sharp Output
+Wrapped content.
+<!-- /section:sharp-output -->
+
+## Stage Report: execute
+
+- DONE: task 1
+- DONE: task 2
+
+### Summary
+
+Narrative summary paragraph from spacedock ensign protocol.
+
+## Stage Report: verify
+
+- DONE: quality gate
+
+### Summary
+
+Another narrative summary.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check section-tag-coverage >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  # Exit 0 = pass (no orphan ERRORs). Whitelist working correctly.
+  [ "$rc" = "0" ]
+}
+if dc8b_stage_report_whitelist 2>/dev/null; then echo "OK DC-8b Stage Report whitelist (spacedock protocol)"
+else echo "FAIL DC-8b Stage Report whitelist (spacedock protocol)"; FAIL=1; fi
+
 # ========== DC-10: direct-Read static guard — Read(docs/ship-flow/*.md) unjustified (exit 1) ==========
 dc10_direct_read_guard() {
   local d; d="$(create_mock_plugin_dir)" || return 1

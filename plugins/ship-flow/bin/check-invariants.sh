@@ -131,11 +131,20 @@ check_section_tag_coverage() {
     #   - Headers INSIDE a tag pair are wrapped (allowed, nested)
     #   - Headers AFTER first tag but outside any pair = orphan (flagged)
     #   - Unclosed tags at EOF = structural error (flagged)
+    # Spacedock-protocol whitelist (2026-04-22, post-#078 CI-fail harvest):
+    #   Spacedock ensign-shared-core.md:46-51 instructs ensigns to append untagged
+    #   "## Stage Report: {stage}" at entity-file end (protocol-owned, plugin-agnostic).
+    #   Ship-flow accepts this as a known-ok orphan pattern rather than forcing spacedock
+    #   to adopt ship-flow's section-tag convention (ship-flow portability goal — don't
+    #   impose on engine). Whitelist covers the H2 + any nested H3s under it.
     local errors
     errors=$(awk '
-      /^<!-- section:[a-z]/ { seen_tag = 1; top++; next }
+      /^<!-- section:[a-z]/ { seen_tag = 1; top++; in_stage_report = 0; next }
       /^<!-- \/section:[a-z]/ { if (top > 0) top--; next }
+      /^## Stage Report:/ { in_stage_report = 1; next }
       /^## / || /^### / {
+        if (in_stage_report && /^### /) next
+        if (/^## /) in_stage_report = 0
         if (seen_tag && top == 0) print FILENAME ":" NR ": orphan header: " $0
       }
       END {

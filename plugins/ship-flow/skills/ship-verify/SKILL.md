@@ -91,6 +91,26 @@ done
 
 **Why** (MEMORY.md line 10 precedent, generalized 2026-04-21 post-#060): execute cannot be at fault for failures in a surface where `git log <execute_base>..HEAD -- <surface>` is empty. Originally framed as "pure-rename executes" rule; #060 widened it to any polyglot project where ship-flow plugin work doesn't touch the spacebridge UI runtime surface. Evidence: #060 verify applied this 3× (bun test 7 fails / bun lint 2 errors / tsc 6 errors all in `plugins/spacebridge/ui/` which had 0 commits between `27382256..HEAD`).
 
+### Step 2.0.1: Per-error diff-aware attribution (not just surface-level)
+
+**Trigger**: any check returns ERROR / WARN output containing `file:line` references.
+
+Surface-level scoping (above) says "execute didn't touch surface X → X's failures are pre-existing". That's necessary but not sufficient. A surface CAN have execute-introduced errors AND pre-existing errors mixed together — the specific failing line must be attributed individually.
+
+**Procedure for each error with a file:line reference**:
+
+1. Parse `file:line` from the message (e.g., `ERROR [Principle 5a]: docs/ship-flow/entity.md:397: orphan header: ...`).
+2. Check if the file is in the execute diff: `git diff --name-only {execute_base}..HEAD -- <file>`. Empty → truly pre-existing on THIS file, skip to step 5.
+3. File was touched by execute. Run `git blame -L<line>,<line> --show-name HEAD -- <file>` and extract the commit SHA.
+4. Is that SHA in `{execute_base}..HEAD`? `git rev-list {execute_base}..HEAD | grep -q <sha>`.
+   - **Yes** → **execute-introduced**. CANNOT classify as pre-existing. Treat as a real verify failure: either auto-fix per Step 4.6, feedback-to-execute, or note as BLOCKING.
+   - **No** → pre-existing line in a file that execute happened to modify elsewhere. Acceptable to note but not block.
+5. If step 2 showed empty, the error is pre-existing — note in `### Quality Gate` with `(pre-existing baseline in {file})` suffix.
+
+**Forbidden rationalization**: "pattern existed in OTHER files before" does NOT justify skip. Attribution is per-file, per-line. Each ERROR evaluates on its own.
+
+**Precedent**: entity #078 verify — ensign saw 2 Principle 5a ERRORs at `monorepo-aware-canonical-docs.md:397` and `:595`. The file was added+modified by execute. The blame-SHA of those lines was `0e43d734` (execute's report commit). Execute-introduced. Verify mis-classified as "pre-existing pattern" because similar untagged Stage Report blocks exist in OTHER (pre-049) entities. CI subsequently failed on PR. Step 4.6 auto-fix or feedback-to-execute would have prevented the CI round-trip.
+
 **Record the scoped-gate decision** in `### Quality Gate` so ship-review and captain can see which surfaces were scoped:
 
 ```markdown
