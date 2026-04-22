@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # patch-map.sh <map-file> <section-tag> [--if-hash=<sha>] [--commit-as=<msg>] [--no-commit]
-# Replaces content between <!-- section:TAG --> markers. Content from stdin.
+#              [--mode=<replace|append|remove-row>] [--match=<substring>] [--section=<tag>]
+# Replaces/appends/removes content between <!-- section:TAG --> markers. Content from stdin.
 #
 # Exit codes:
 #   0 success
@@ -14,6 +15,8 @@
 #   8 git commit failed (hook blocked, not a repo, etc.)
 #   9 mermaid diagram missing for requires_diagram: true section
 #  10 markers missing or unbalanced
+#  11 --mode=remove-row requires --match
+#  12 invalid --mode value
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,23 +27,46 @@ source "${SCRIPT_DIR}/map-helpers.sh"
 IF_HASH=""
 COMMIT_MSG=""
 NO_COMMIT=0
+MODE="replace"
+MATCH=""
+SECTION_FLAG=""
 POS=()
 for arg in "$@"; do
   case "$arg" in
     --if-hash=*) IF_HASH="${arg#--if-hash=}" ;;
     --commit-as=*) COMMIT_MSG="${arg#--commit-as=}" ;;
     --no-commit) NO_COMMIT=1 ;;
+    --mode=*) MODE="${arg#--mode=}" ;;
+    --match=*) MATCH="${arg#--match=}" ;;
+    --section=*) SECTION_FLAG="${arg#--section=}" ;;
     --*) echo "Unknown option: $arg" >&2; exit 1 ;;
     *) POS+=("$arg") ;;
   esac
 done
 
-MAP_FILE="${POS[0]:-}"
-TAG="${POS[1]:-}"
+if [ -n "$SECTION_FLAG" ]; then
+  TAG="$SECTION_FLAG"
+  MAP_FILE="${POS[0]:-}"
+else
+  MAP_FILE="${POS[0]:-}"
+  TAG="${POS[1]:-}"
+fi
 { [ -n "$MAP_FILE" ] && [ -n "$TAG" ]; } || {
-  echo "Usage: patch-map.sh <map-file> <section-tag> [--if-hash=<sha>] [--commit-as=<msg>] [--no-commit]" >&2
+  echo "Usage: patch-map.sh <map-file> <section-tag> [--if-hash=<sha>] [--commit-as=<msg>] [--no-commit] [--mode=<replace|append|remove-row>] [--match=<substring>] [--section=<tag>]" >&2
   exit 1
 }
+
+# Validate mode
+case "$MODE" in
+  replace|append|remove-row) ;;
+  *) echo "Error: invalid --mode value: $MODE (must be replace, append, or remove-row)" >&2; exit 12 ;;
+esac
+
+# remove-row requires --match
+if [ "$MODE" = "remove-row" ] && [ -z "$MATCH" ]; then
+  echo "Error: --mode=remove-row requires --match=<substring>" >&2
+  exit 11
+fi
 [ -f "$MAP_FILE" ] || { echo "Error: file not found: $MAP_FILE" >&2; exit 3; }
 
 validate_kebab_tag "$TAG" || exit 5
@@ -63,10 +89,23 @@ if ! grep -q "<!-- section:${TAG} -->" "$MAP_FILE"; then
   exit 4
 fi
 
-# Read new content from stdin → temp file
+# Build new section body → temp file (mode-dispatch)
 BODY_FILE="$(mktemp)"
 trap 'rm -f "$BODY_FILE"' EXIT INT TERM
-cat > "$BODY_FILE"
+
+case "$MODE" in
+  replace)
+    cat > "$BODY_FILE"
+    ;;
+  append)
+    CURRENT_BODY="$(sed -n "/<!-- section:${TAG} -->/,/<!-- \\/section:${TAG} -->/p" "$MAP_FILE" | sed '1d;$d')"
+    { printf '%s\n' "$CURRENT_BODY"; cat; } > "$BODY_FILE"
+    ;;
+  remove-row)
+    CURRENT_BODY="$(sed -n "/<!-- section:${TAG} -->/,/<!-- \\/section:${TAG} -->/p" "$MAP_FILE" | sed '1d;$d')"
+    printf '%s\n' "$CURRENT_BODY" | grep -vF -- "$MATCH" > "$BODY_FILE" || true
+    ;;
+esac
 
 # Diagram validation — only if schema declares requires_diagram: true for this section
 REQ="$(awk -v tag="$TAG" '

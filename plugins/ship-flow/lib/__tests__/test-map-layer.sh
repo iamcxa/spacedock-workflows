@@ -176,4 +176,65 @@ else
   echo "FAIL DC-13 resolve_map_path not defined in map-helpers.sh"; FAIL=1
 fi
 
+# DC-14: --mode=append adds row to ROADMAP shipped section
+echo
+echo "--- DC-14: --mode=append ROADMAP.shipped ---"
+TMPDIR_DC14="$(mktemp -d)"
+cp ROADMAP.md "$TMPDIR_DC14/ROADMAP.md"
+pushd "$TMPDIR_DC14" >/dev/null || exit
+ORIG_HASH_14="$(sha256sum ROADMAP.md 2>/dev/null | awk '{print $1}' || shasum -a 256 ROADMAP.md | awk '{print $1}')"
+assert_exit 0 \
+  "echo '| 999 | test-dc14 | Why shipped | 2026-04-22 | PR |' | bash '${LIB_DIR}/patch-map.sh' --if-hash='$ORIG_HASH_14' --mode=append --section=shipped --no-commit ROADMAP.md" \
+  "DC-14a --mode=append with valid hash"
+assert_stdout_matches "test-dc14" \
+  "bash '${LIB_DIR}/extract-map.sh' ROADMAP.md shipped" \
+  "DC-14b appended row visible in shipped section"
+# Stale hash should fail
+assert_exit 6 \
+  "echo '| 998 | stale-test | x | 2026-04-22 | PR |' | bash '${LIB_DIR}/patch-map.sh' --if-hash='$ORIG_HASH_14' --mode=append --section=shipped --no-commit ROADMAP.md" \
+  "DC-14c stale hash rejected"
+popd >/dev/null || exit
+rm -rf "$TMPDIR_DC14"
+
+# DC-15: --mode=remove-row filters rows matching --match substring
+echo
+echo "--- DC-15: --mode=remove-row ROADMAP.now ---"
+TMPDIR_DC15="$(mktemp -d)"
+cp ROADMAP.md "$TMPDIR_DC15/ROADMAP.md"
+pushd "$TMPDIR_DC15" >/dev/null || exit
+# Inject a known row into now section via a raw write (bypass patch-map for fixture setup)
+awk '/<!-- section:now -->/{print; print ""; print "| 888 | dc15-removable | test | 2026-04-22 |"; next}1' ROADMAP.md > ROADMAP.md.tmp && mv ROADMAP.md.tmp ROADMAP.md
+HASH_15="$(sha256sum ROADMAP.md 2>/dev/null | awk '{print $1}' || shasum -a 256 ROADMAP.md | awk '{print $1}')"
+assert_exit 0 \
+  "bash '${LIB_DIR}/patch-map.sh' --if-hash='$HASH_15' --mode=remove-row --match=dc15-removable --section=now --no-commit ROADMAP.md </dev/null" \
+  "DC-15a remove-row by substring match"
+# Row gone from section
+if bash "${LIB_DIR}/extract-map.sh" ROADMAP.md now | grep -q 'dc15-removable'; then
+  echo "FAIL DC-15b row still present after remove-row"; FAIL=1
+else
+  echo "OK DC-15b row removed"
+fi
+# remove-row without --match → exit 11
+assert_exit 11 \
+  "bash '${LIB_DIR}/patch-map.sh' --if-hash='$HASH_15' --mode=remove-row --section=now --no-commit ROADMAP.md </dev/null" \
+  "DC-15c --mode=remove-row without --match fails"
+popd >/dev/null || exit
+rm -rf "$TMPDIR_DC15"
+
+# DC-16: --mode=append works on PRODUCT.capabilities (different file, same primitive)
+echo
+echo "--- DC-16: --mode=append PRODUCT.capabilities ---"
+TMPDIR_DC16="$(mktemp -d)"
+cp PRODUCT.md "$TMPDIR_DC16/PRODUCT.md"
+pushd "$TMPDIR_DC16" >/dev/null || exit
+HASH_16="$(sha256sum PRODUCT.md 2>/dev/null | awk '{print $1}' || shasum -a 256 PRODUCT.md | awk '{print $1}')"
+assert_exit 0 \
+  "echo '- DC-16 capability — proves append works (#999)' | bash '${LIB_DIR}/patch-map.sh' --if-hash='$HASH_16' --mode=append --section=capabilities --no-commit PRODUCT.md" \
+  "DC-16a --mode=append PRODUCT.capabilities"
+assert_stdout_matches "DC-16 capability" \
+  "bash '${LIB_DIR}/extract-map.sh' PRODUCT.md capabilities" \
+  "DC-16b appended bullet visible"
+popd >/dev/null || exit
+rm -rf "$TMPDIR_DC16"
+
 exit $FAIL
