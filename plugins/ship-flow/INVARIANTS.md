@@ -148,6 +148,40 @@ Used for design-review of any skill/plan/entity change that may create a captain
 
 ---
 
+## FO Discipline
+
+Rules for the orchestrator (first-officer role) during pipeline execution. These are behavioral, not structural — they govern **when FO pauses for captain** vs **dispatches autonomously**.
+
+### Autonomous continuation between stages
+
+**Rule**: Workflow template declares captain gates via `manual: true` on stage states (`docs/ship-flow/README.md` frontmatter). Only `sharp` has `manual: true`. All other stage transitions (plan → execute → verify → ship → done) are autonomous — FO dispatches the next stage ensign directly without captain re-confirmation.
+
+**Captain is in the loop at**:
+- **Sharp stage** — the ONE captain-interactive gate (defines problem + scope)
+- **Verify findings with BLOCKING severity** or feedback-to-execute (NOT for PASSED)
+- **PR merge** — captain's web-side action, post-ship
+- **Explicit captain interrupt** ("stop", "wait", "not yet", etc.)
+
+**NOT captain gates** (FO continues autonomously):
+- Between plan → execute
+- Between execute → verify
+- Between verify PASSED → ship
+- Post-ship status transitions (ship → done on merge)
+- Auto-fix eligible NIT findings (ship-verify Step 4.6)
+- Knowledge captures matching inline-to-skill rule (ship-verify Step 4.6)
+
+**Violation patterns** (codify and catch):
+- "Ready to proceed to plan?" — sharp already passed scoring gate, next dispatch is implicit
+- "Dispatch ship ensign now?" — verify PASSED, ship is the declared next stage
+- "Next is ship, confirm?" — pipeline contract already answered by template
+- "Fix NITs or skip?" — Step 4.6 disposition rule answers this mechanically
+
+**Pre-action narration** (per CLAUDE.md Autonomous Action Boundaries) still applies for commits / pushes / PR creation. **Narration ≠ permission request.** FO states the action in DOING form and proceeds; captain interrupts if needed.
+
+**Precedent**: entity #078 pipeline — FO paused 4+ times asking "proceed to next stage?" despite workflow template declaring all post-sharp stages autonomous. Captain direction 2026-04-22: "這整個流程順序不夠順暢，應該自動做完你能做的". Rule codified this commit.
+
+---
+
 ## Related Files
 
 - `plugins/ship-flow/bin/check-invariants.sh` — CI grep implementation
