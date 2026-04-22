@@ -282,6 +282,54 @@ check_rid_placeholder() {
   return 0
 }
 
+check_pitch_assumptions() {
+  # DC-10 — Phase 1 (ship-flow distillation): entities with pattern=pitch
+  # must have >=1 assumption with criticality=critical. Warning-only in
+  # Phase 1; promoted to blocking in Phase 2 when shape skill requires.
+  local warn_count=0
+  if ! command -v yq >/dev/null 2>&1; then
+    echo "WARN [Principle 5c]: yq not installed — skipping pitch-assumption check" >&2
+    return 0
+  fi
+  local entity
+  # Iterate all workflow-entity .md files under $ROOT/docs/*/*.md, skipping known non-entities
+  for entity in "$ROOT"/docs/*/*.md; do
+    [ -f "$entity" ] || continue
+    local bn
+    bn="$(basename "$entity")"
+    case "$bn" in
+      README.md|ROADMAP.md|PRODUCT.md|ARCHITECTURE.md|INVARIANTS.md) continue ;;
+    esac
+    case "$entity" in
+      */_archive/*|*/_debriefs/*|*/_mods/*) continue ;;
+    esac
+    # Extract frontmatter (first --- block)
+    local fm
+    fm="$(mktemp)"
+    awk '/^---$/{c++; if(c==2){exit}; next} c==1{print}' "$entity" > "$fm"
+    local pattern
+    pattern="$({ yq '.pattern // "single"' "$fm" 2>/dev/null || echo single; } | tr -d '"' | head -1)"
+    if [ "$pattern" = "pitch" ]; then
+      local critical_count
+      critical_count="$({ yq '[.stated_assumptions[]? | select(.criticality == "critical")] | length' "$fm" 2>/dev/null || echo 0; } | head -1)"
+      if [ -z "$critical_count" ] || [ "$critical_count" = "null" ]; then
+        critical_count=0
+      fi
+      if [ "$critical_count" = "0" ]; then
+        echo "WARN [Principle 5c]: $entity pattern=pitch but has 0 critical assumptions. See plugins/ship-flow/INVARIANTS.md#principle-5" >&2
+        warn_count=$((warn_count + 1))
+      fi
+    fi
+    rm -f "$fm"
+  done
+  if [ "$warn_count" = "0" ]; then
+    echo "OK DC-10 pitch-assumption invariant (0 warnings)"
+  else
+    echo "OK DC-10 pitch-assumption invariant ($warn_count warnings — non-blocking in Phase 1)"
+  fi
+  return 0
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -295,6 +343,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     fan-out-reviewer) check_fan_out_reviewer; exit $? ;;
     boolean-gate) check_boolean_gate; exit $? ;;
     rid-placeholder) check_rid_placeholder; exit $? ;;
+    pitch-assumptions) check_pitch_assumptions; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -324,5 +373,6 @@ check_direct_read_static || FAIL=1
 check_fan_out_reviewer || FAIL=1
 check_boolean_gate || FAIL=1
 check_rid_placeholder || FAIL=1
+check_pitch_assumptions || FAIL=1
 
 exit $FAIL

@@ -304,4 +304,71 @@ dc14_runtime_preamble_hard_enforcement() {
 if dc14_runtime_preamble_hard_enforcement 2>/dev/null; then echo "OK DC-14 runtime-preamble hard-enforcement (inject=fail, revert=pass)"
 else echo "FAIL DC-14 runtime-preamble hard-enforcement (inject=fail, revert=pass)"; FAIL=1; fi
 
+# ========== DC-10: check_pitch_assumptions — warns on pitch with zero critical assumptions ==========
+dc10_pitch_assumptions() {
+  local fixdir
+  fixdir="$(mktemp -d)"
+  mkdir -p "$fixdir/docs/fake-workflow"
+  # Good pitch — has critical assumption
+  cat > "$fixdir/docs/fake-workflow/pitch-good.md" <<'EOF'
+---
+id: "pitch-good"
+title: "Pitch with critical assumption"
+status: sharp
+pattern: pitch
+stated_assumptions:
+  - id: "A1"
+    claim: "Good claim"
+    verified_by: codebase-grep
+    verification: "true"
+    confidence_at_shape: 90
+    criticality: critical
+---
+body
+EOF
+  # Bad pitch — no critical assumption
+  cat > "$fixdir/docs/fake-workflow/pitch-bad.md" <<'EOF'
+---
+id: "pitch-bad"
+title: "Pitch with no critical assumption"
+status: sharp
+pattern: pitch
+stated_assumptions: []
+---
+body
+EOF
+  # Non-pitch entity — should be ignored
+  cat > "$fixdir/docs/fake-workflow/single-entity.md" <<'EOF'
+---
+id: "single"
+title: "Regular single entity"
+status: draft
+---
+body
+EOF
+
+  # Run check against fixture
+  local warn_out
+  warn_out="$(bash "$CHECK_SCRIPT" --test-fixture "$fixdir" --check pitch-assumptions 2>&1 1>/dev/null)"
+  rm -rf "$fixdir"
+  # Assertions
+  if echo "$warn_out" | grep -q 'pitch-bad.md'; then
+    echo "OK DC-10a warning fired on pitch-bad"
+  else
+    echo "FAIL DC-10a warning not fired on pitch-bad"; FAIL=1
+  fi
+  if echo "$warn_out" | grep -q 'pitch-good.md'; then
+    echo "FAIL DC-10b false warning on pitch-good"; FAIL=1
+  else
+    echo "OK DC-10b no false warning on pitch-good"
+  fi
+  if echo "$warn_out" | grep -q 'single-entity.md'; then
+    echo "FAIL DC-10c false warning on non-pitch entity"; FAIL=1
+  else
+    echo "OK DC-10c non-pitch entity ignored"
+  fi
+  return 0
+}
+dc10_pitch_assumptions
+
 exit $FAIL
