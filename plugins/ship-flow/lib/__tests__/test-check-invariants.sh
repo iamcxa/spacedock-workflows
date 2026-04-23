@@ -424,4 +424,147 @@ EOF
 }
 dc10_pitch_assumptions
 
+# ========== stage-artifact-path: SKILL references its artifact filename ==========
+
+# Pass: SKILL mentions its artifact
+stage_artifact_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nWrites plan.md to entity folder.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check stage-artifact-path >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if stage_artifact_pass 2>/dev/null; then echo "OK stage-artifact-path: plan.md present → pass"
+else echo "FAIL stage-artifact-path: plan.md present → pass"; FAIL=1; fi
+
+# Fail: SKILL missing artifact reference
+stage_artifact_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nNo mention of the artifact here.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check stage-artifact-path >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if stage_artifact_fail 2>/dev/null; then echo "OK stage-artifact-path: missing plan.md → fail"
+else echo "FAIL stage-artifact-path: missing plan.md → fail"; FAIL=1; fi
+
+# ========== layer-a-delegation: SKILL documents Layer A ==========
+
+# Pass: SKILL has "Layer A" reference
+layer_a_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nLayer A: dispatches planner subagent.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if layer_a_pass 2>/dev/null; then echo "OK layer-a-delegation: Layer A present → pass"
+else echo "FAIL layer-a-delegation: Layer A present → pass"; FAIL=1; fi
+
+# Fail: SKILL silent on Layer A
+layer_a_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nNo delegation info here.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if layer_a_fail 2>/dev/null; then echo "OK layer-a-delegation: no Layer A → fail"
+else echo "FAIL layer-a-delegation: no Layer A → fail"; FAIL=1; fi
+
+# ========== cross-review-gate: SKILL has 5-factor rubric ==========
+
+# Pass: SKILL has cross-review gate + 5-factor rubric + Feasibility
+cross_review_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  cat > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md" <<'EOF'
+# ship-plan
+
+### Cross-review gate (Principle 6 Rule C)
+
+5-factor rubric adapted for plan stage:
+1. Feasibility — tasks achievable?
+2. Executable scope — atomic commits?
+3. Quality — DCs runnable?
+4. DC adequacy — observable checks?
+5. Canonical sync — ARCHITECTURE.md touched?
+
+Verdict: PROCEED / VETO / PROMPT_CAPTAIN.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check cross-review-gate >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if cross_review_pass 2>/dev/null; then echo "OK cross-review-gate: full rubric present → pass"
+else echo "FAIL cross-review-gate: full rubric present → pass"; FAIL=1; fi
+
+# Fail: SKILL missing 5-factor rubric
+cross_review_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nNo gate here.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check cross-review-gate >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if cross_review_fail 2>/dev/null; then echo "OK cross-review-gate: no rubric → fail"
+else echo "FAIL cross-review-gate: no rubric → fail"; FAIL=1; fi
+
+# ========== structural-parity-dc: UI entity must have parity signal ==========
+
+# Pass: UI entity with parity signal
+structural_parity_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  cat > "$d/docs/ship-flow/ui-entity.md" <<'EOF'
+---
+id: "999"
+type: ui
+title: "UI entity with parity"
+---
+
+## Design Reference
+
+DC-1: column count matches design (3 columns in grid).
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check structural-parity-dc >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if structural_parity_pass 2>/dev/null; then echo "OK structural-parity-dc: parity signal present → pass"
+else echo "FAIL structural-parity-dc: parity signal present → pass"; FAIL=1; fi
+
+# Fail: UI entity without parity signal
+structural_parity_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  cat > "$d/docs/ship-flow/ui-no-checks.md" <<'EOF'
+---
+id: "998"
+type: ui
+title: "UI entity without coverage"
+---
+
+## Design Reference
+
+DC-1: renders correctly.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check structural-parity-dc >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if structural_parity_fail 2>/dev/null; then echo "OK structural-parity-dc: no parity signal → fail"
+else echo "FAIL structural-parity-dc: no parity signal → fail"; FAIL=1; fi
+
 exit $FAIL
