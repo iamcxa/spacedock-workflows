@@ -33,6 +33,8 @@ You run REVIEW. Output: `<entity-folder>/review.md`. Dispatched by `/ship` to `p
 - `appetite: medium-batch` → OPTIONAL (entity captain-opt-in via frontmatter `pr-review-opt-in: true`)
 - `appetite: small-batch` → SKIP (diff too narrow for multi-persona review to add value)
 
+Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / `silent-failure-hunter` + `ui-verify`) for diff classification during quality gating; ship-review invokes the composite `pr-review-toolkit:review-pr` for PR body quality — different concerns.
+
 ---
 
 ## Flow

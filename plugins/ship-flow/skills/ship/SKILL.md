@@ -9,6 +9,8 @@ argument-hint: "<entity-id | slug | concrete-requirement>"
 
 You run the SHIP pipeline entry. Produce 5 per-stage .md artifacts + final PR per Principle 6 3-layer architecture, dispatching to named teammates via SendMessage where the team was spawned at `/shape`.
 
+**Layer A delegation**: none — `/ship` is pure orchestration. Stage skills (ship-plan / ship-execute / ship-verify / ship-review) own their Layer A delegations.
+
 **Pipeline artifacts** (`<entity-folder>` = `docs/<wf>/<id>-<slug>/`):
 - `plan.md` — ship-plan output (task breakdown, verification spec, DCs).
 - `execute.md` — ship-execute output (commits, files modified, UAT evidence).
@@ -107,7 +109,7 @@ After each stage's .md lands, dispatch cross-review to the counterpart teammate.
 
 After `review.md` cross-review PROCEED:
 
-1. **Compose `ship.md`** inside entity folder. Content: PR URL, deploy reference (if deployed), merge status, customer-visible summary (1-2 sentences drawn from spec.md + execute.md). Single atomic commit via Layer C writer (**Wave 5 dependency** — `lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`; until Wave 5 lands, inline `git add <entity-folder>/ship.md && git commit ... -- <entity-folder>/ship.md`).
+1. **Compose `ship.md`** inside entity folder. Content: PR URL, deploy reference (if deployed), merge status, customer-visible summary (1-2 sentences drawn from spec.md + execute.md). Single atomic commit via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
 2. **Create PR** via `gh pr create` with title from entity + body referencing all stage artifacts (plan/execute/verify/review links).
 3. **Announce** to captain: entity shipped + PR URL + stage artifact paths.
 4. TaskUpdate ship-final=completed.
@@ -116,9 +118,9 @@ After `review.md` cross-review PROCEED:
 
 ---
 
-## Per-stage .md writers (Wave 5 dependency)
+## Per-stage .md writers
 
-Each stage skill SHOULD use Layer C writer `lib/write-stage-artifact.sh --stage=<stage> --entity=<id>-<slug> --content=<path-to-draft>` (lands in Wave 5 of #085). Until Wave 5, inline atomic write + explicit-pathspec commit:
+Each stage skill uses Layer C writer `lib/write-stage-artifact.sh --stage=<stage> --entity=<id>-<slug> --content=<path-to-draft>` (Wave 5 primitive landed at commit `acd73545`). The writer handles atomic commit with explicit pathspec; stages MUST NOT inline their own `git add`/`git commit`. Fallback pattern (inline atomic write) is retained for documentation-only reference:
 
 ```bash
 git add "<entity-folder>/<stage>.md" && \
@@ -148,7 +150,7 @@ No `-a`/`-A` staging (MEMORY #14/#25/#37). Sharp-claim → pipeline-start commit
 ## References
 
 - Entity folder schema: `plugins/ship-flow/references/entity-body-schema.yaml`.
-- Per-stage writer (Wave 5): `plugins/ship-flow/lib/write-stage-artifact.sh`.
+- Per-stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh` (landed commit `acd73545`).
 - Atomic writer (shape): `plugins/ship-flow/lib/shape-confirm.sh`.
 - Stage skills: `ship-flow:ship-plan`, `ship-flow:ship-execute`, `ship-flow:ship-verify`, `ship-flow:ship-review`.
 - Upstream shape skill: `ship-flow:ship-shape` (team spawn happens here).

@@ -187,7 +187,7 @@ Record fixes in `### Verdict → auto_fixes:` with `{finding-id, commit-sha, bef
 
 ## Step 6 — Write `verify.md` + cross-review gate
 
-**Atomic write** via Layer C writer (**Wave 5 dependency** — `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify --entity=<id>-<slug>`). Until Wave 5, inline: `git add <entity-folder>/verify.md && git commit -m "verify(<id>): ..." -- <entity-folder>/verify.md`. No `-a`/`-A` (MEMORY #14/#25/#37).
+**Atomic write** via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify --entity=<id>-<slug>`. Writer handles atomic commit with explicit pathspec. No `-a`/`-A` (MEMORY #14/#25/#37).
 
 **Section tagging (mandatory)** — every H2/H3 wrapped in paired `<!-- section:tag -->` ... `<!-- /section:tag -->`. Tag list + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.verify`. Required subsections:
 - `### Quality Gate` — per-surface scoping decisions + check results + pre-existing attributions
@@ -238,7 +238,7 @@ Verdict: **PROCEED** → TaskUpdate verify=completed, FO advances. **VETO** → 
 ## References
 
 - Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.verify`.
-- Per-stage writer (Wave 5): `plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify`.
+- Per-stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify` (landed commit `acd73545`).
 - Section/map helpers: `plugins/ship-flow/lib/extract-section.sh`, `extract-map.sh`, `patch-map.sh`.
 - Runtime detect: `ship-flow:ship-runtime-detect`.
 - Layer A — haiku reviewers: `pr-review-toolkit:code-reviewer`, `pr-review-toolkit:silent-failure-hunter`, `trailofbits:*`, `pr-review-toolkit:{pr-test-analyzer,type-design-analyzer,comment-analyzer,code-simplifier}`.

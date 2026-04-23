@@ -102,7 +102,7 @@ Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 
 ### Cross-review gate (before captain gate) — Principle 6 Rule C
 
-Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Rate PASS/WARN/FAIL on 5 factors (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected) then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
+Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 5-factor rubric (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
 
 ---
 
