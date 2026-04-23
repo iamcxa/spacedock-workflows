@@ -102,7 +102,7 @@ Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 
 ### Cross-review gate (before captain gate) — Principle 6 Rule C
 
-Dispatch cross-review to `executer` teammate (or fresh sonnet if no team). Rate PASS/WARN/FAIL on 5 factors (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected) then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
+Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Rate PASS/WARN/FAIL on 5 factors (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected) then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
 
 ---
 
@@ -122,7 +122,7 @@ Exception rationale: brainstorming's Q-loop handles discovery; Shape Up framing 
 
 **Delegation**: `superpowers:writing-skills` owns skill design + claude 4.7 knowledge + RED/GREEN/REFACTOR + frontmatter discipline. Do NOT re-teach.
 
-**Flow**: announce mode → `Skill: superpowers:writing-skills` → on completion apply Layer B wrap: appetite (`small-batch` single SKILL.md / `medium-batch` multi-file); children usually 1 (decompose only if design spans multi SKILL.md / lib scripts); assumptions extracted from writing-skills invariants (frontmatter valid, description matches trigger, etc.), ≥1 critical; architecture-impact only if new skill reshapes plugin structure. Cross-review gate → present proposal → captain gate.
+**Flow**: announce mode → `Skill: superpowers:writing-skills` → on completion apply Layer B wrap: appetite (`small-batch` single SKILL.md / `medium-batch` multi-file); **children = 1 per SKILL.md (default)**; decompose into ≥2 children ONLY when (a) design spans **different SKILL.md files** OR (b) supporting **scripts/tests need separate landing** than the skill (e.g., lib script lands before skill references it). Assumptions extracted from writing-skills invariants (frontmatter valid, description matches trigger, etc.), ≥1 critical. Architecture-impact only if new skill reshapes plugin structure. Cross-review gate → present proposal → captain gate.
 
 Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Shape Up framing is Layer B.
 
