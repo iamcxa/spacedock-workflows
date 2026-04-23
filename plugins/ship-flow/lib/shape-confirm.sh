@@ -6,7 +6,9 @@
 #
 # Usage: bash shape-confirm.sh --proposal=<json-file> [--dry-run] [--layout=folder|flat]
 #
-# --layout=folder  writes docs/<wf>/<id>-<slug>/README.md + spec.md (folder layout)
+# --layout=folder  writes docs/<wf>/<id>-<slug>/index.md + spec.md (folder layout)
+#                  Note: index.md (not README.md) per spacedock status --next-id
+#                  discovery convention; see pitch 089.
 # --layout=flat    writes docs/<wf>/<id>-<slug>.md (default, backward compat)
 #
 # Exit codes: 0 success, 1 usage/malformed JSON, 3 missing file,
@@ -67,9 +69,10 @@ TODO_DIR="${ENTITY_DIR}/todos"
 # Layout-aware path computation
 if [ "$LAYOUT" = "folder" ]; then
   PITCH_FOLDER="${ENTITY_DIR}/${PITCH_ID}-${PITCH_SLUG}"
-  PITCH_README="${PITCH_FOLDER}/README.md"
+  # index.md (not README.md) — spacedock status --next-id discovery convention
+  PITCH_INDEX="${PITCH_FOLDER}/index.md"
   PITCH_SPEC="${PITCH_FOLDER}/spec.md"
-  PITCH_PATH="$PITCH_README"
+  PITCH_PATH="$PITCH_INDEX"
 else
   PITCH_PATH="${ENTITY_DIR}/${PITCH_ID}-${PITCH_SLUG}.md"
 fi
@@ -95,7 +98,7 @@ if [ "$DRY_RUN" = "1" ]; then
   echo "# shape-confirm --dry-run (layout=$LAYOUT)"
   echo "Would write:"
   if [ "$LAYOUT" = "folder" ]; then
-    echo "  pitch README: ${PITCH_README}"
+    echo "  pitch index:  ${PITCH_INDEX}"
     echo "  pitch spec:   ${PITCH_SPEC}"
   else
     echo "  pitch: $PITCH_PATH"
@@ -112,8 +115,8 @@ mkdir -p "$ENTITY_DIR" "$TODO_DIR"
 # 1. Write pitch entity (layout-aware)
 if [ "$LAYOUT" = "folder" ]; then
   mkdir -p "$PITCH_FOLDER"
-  # README.md — frontmatter + stage-artifact-links section
-  cat > "$PITCH_README" <<EOF
+  # index.md — frontmatter + stage-artifact-links section
+  cat > "$PITCH_INDEX" <<EOF
 ---
 id: "${PITCH_ID}"
 title: "${PITCH_TITLE}"
@@ -164,7 +167,7 @@ done)
 
 (fill in from deleted_from_shape)
 EOF
-  WRITTEN_FILES=("$PITCH_README" "$PITCH_SPEC")
+  WRITTEN_FILES=("$PITCH_INDEX" "$PITCH_SPEC")
 else
   cat > "$PITCH_PATH" <<EOF
 ---
