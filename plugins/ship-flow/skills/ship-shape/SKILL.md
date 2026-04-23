@@ -167,6 +167,16 @@ Per-assumption fields (schema at `plugins/ship-flow/references/entity-body-schem
 
 For each `criticality: critical` assumption, run its `verification` command NOW (soft cap 30s each) and record resolved confidence in the proposal; note any that slow-failed.
 
+### Step 7.5 — Architecture impact drafting (only if pitch touches ARCHITECTURE.md)
+
+**Skip when:** the pitch is a pure bug fix, UI polish, or docs change — none of the ARCHITECTURE.md sections (context / containers / components / constraints / dependencies / decisions) move.
+
+**Run when:** L0 research in Step 2 surfaced constraint / container / component drift OR a new decision record belongs in ARCHITECTURE.md. The `architecture-canon` mod (`docs/ship-flow/_mods/architecture-canon.md`) fires at ship-review time and expects an `architecture-impact` block in the entity body to patch ARCHITECTURE.md atomically (read-first CAS via `patch-map.sh --if-hash`).
+
+Draft an `<!-- section:architecture-impact -->` block for each child that will move ARCHITECTURE.md. Pre-fill `before:` now via `bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <target_section>` so the freshness check at ship-review passes. Required fields (full list in `plugins/ship-flow/references/entity-body-schema.yaml` under `section_tag: architecture-impact`): `target_section`, `summary`, `before`, `after`, `rationale`.
+
+If uncertain which section moves, emit a `stated_assumption` (`verified_by: design-contract`) instead of guessing — ship-plan will verify and may defer the `architecture-impact` block to ship-execute.
+
 ### Step 8 — Proposal synthesis + present (captain gate)
 
 Compose and present ONE block in the chat. This is the only moment the captain sees your work until they decide.
@@ -399,6 +409,7 @@ shape-confirm.sh writes the Shape Report to the pitch body. You supply the stage
 - `appetite` chosen to fit estimated work (rather than scope trimmed to fit appetite) → Shape Up violation.
 - Proposal presented before research subagent returned → you're synthesizing from your own context, not fresh L0 evidence.
 - Captain asked a question during Steps 1-7 and you answered → autonomous-proposer contract violated. Finish the research, present the proposal, then answer.
+- Pitch touches an ARCHITECTURE.md section (context / containers / components / constraints / dependencies / decisions) but you drafted **no** `architecture-impact` block → Step 7.5 skipped. The `architecture-canon` mod will noop at ship-review, and ARCHITECTURE.md silently drifts from the shipped change.
 
 ---
 
@@ -411,4 +422,5 @@ shape-confirm.sh writes the Shape Report to the pitch body. You supply the stage
 - Rabbit-hole capture sibling skill: `plugins/ship-flow/skills/add-todos/SKILL.md` (Task 2.4).
 - Pipeline entry sibling: `plugins/ship-flow/skills/ship/SKILL.md` (Task 2.5).
 - Back-compat alias: `plugins/ship-flow/skills/ship-sharp/SKILL.md` (Task 2.6 — DEPRECATED, forwards here).
+- Architecture-impact consumer: `docs/ship-flow/_mods/architecture-canon.md` (#060) — commit-back hook that patches ARCHITECTURE.md at ship-review when an entity declares an `architecture-impact` block (Step 7.5 above). Schema: `plugins/ship-flow/references/entity-body-schema.yaml` → `section_tag: architecture-impact`.
 - MEMORY references: #5 (next-id atomicity), #14 (commit attribution), #25 (staging contamination), #30 (verification-dispatch), #35 (dispatch discipline).
