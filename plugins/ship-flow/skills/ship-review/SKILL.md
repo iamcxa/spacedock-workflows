@@ -28,6 +28,11 @@ You run REVIEW. Output: `<entity-folder>/review.md`. Dispatched by `/ship` to `p
 - Canonical doc sync (ROADMAP.md + PRODUCT.md via patch-map.sh, pathspec-safe).
 - Token cost summary + D2 knowledge candidate surfacing.
 
+**pr-review-toolkit invocation sizing** (captain Q3 answer, Wave 6):
+- `appetite: big-batch` → ALWAYS invoke `pr-review-toolkit:review-pr`
+- `appetite: medium-batch` → OPTIONAL (entity captain-opt-in via frontmatter `pr-review-opt-in: true`)
+- `appetite: small-batch` → SKIP (diff too narrow for multi-persona review to add value)
+
 ---
 
 ## Flow
@@ -208,7 +213,7 @@ No candidates → skip silently.
 
 Dispatch cross-review to `executer` teammate (reviews PR body + doc-sync accuracy) or fresh sonnet (no team). Upgrade fresh **opus** when `appetite: big-batch`.
 
-**Optional Layer A expansion for big-batch entities**: invoke `Skill: pr-review-toolkit:review-pr` for multi-persona PR body review (code-reviewer / silent-failure-hunter / security-reviewer). Review agent philosophy is Layer A — do NOT re-teach personas.
+**Layer A expansion per sizing rule** (see Layer A delegation section above): `appetite: big-batch` → ALWAYS invoke `Skill: pr-review-toolkit:review-pr` for multi-persona PR body review. `appetite: medium-batch` → invoke only if entity frontmatter `pr-review-opt-in: true`. `appetite: small-batch` → skip (diff too narrow for multi-persona value).
 
 5-factor rubric adapted for review stage:
 
@@ -263,6 +268,6 @@ Return to /ship; advance to ship-final stage (PR creation + captain merge gate).
 - Atomic doc patches: `plugins/ship-flow/lib/patch-map.sh` (read-first CAS via `--if-hash`).
 - Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
 - Doc format rules: `plugins/ship-flow/references/doc-format.md`.
-- Layer A: `pr-review-toolkit:review-pr` (PR review agent personas — optional for big-batch).
+- Layer A: `pr-review-toolkit:review-pr` (PR review agent personas — ALWAYS big-batch; OPTIONAL medium-batch via `pr-review-opt-in: true`; SKIP small-batch).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md`.
 - MEMORY: #14/#25/#37 (pathspec / staging), #30 (verification-dispatch — applies to substantial ROADMAP/PRODUCT entries), #35 (dispatch discipline amended by Principle 6), opus-4.7-naturally-does (2026-04-23 harness diet).
