@@ -99,7 +99,46 @@ Three layers, each catching a different failure mode:
 
 ---
 
-### Principle 6: Metadata-driven portability
+### Principle 6: Context Continuity + Layered Skill Architecture
+
+**Rule A (Context Continuity)**:
+Stage transitions within a pitch should prefer SendMessage to a named teammate over dispatching fresh-context subagent. Default team = planner (opus) + executer (sonnet) per pitch.
+
+Fresh-subagent reserved for: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages (structured review prompt, ~5min).
+
+**Rule B (3-Layer Skill Architecture)**:
+Stage skills SHOULD delegate to Layer A superpowers atomic skill for core logic.
+
+EXCEPTION: When Layer A's design philosophy fundamentally conflicts with stage requirement (e.g., ship-shape Mode A autonomous proposer vs superpowers:brainstorming Q-loop), stage skill may own the orchestration flow. Each such exception MUST be documented with rationale in the stage skill's SKILL.md.
+
+Stage skills composed via 3 layers:
+- Layer A: superpowers atomic skill (core brainstorm/plan/execute logic)
+- Layer B: ship-flow research + peer review + discipline (Musk/Shape Up, Context7/firecrawl/exa, cross-agent review, goal-backward DC)
+- Layer C: ship-flow canonical primitives (patch-map / extract-section / check-invariants / entity body schema)
+
+Stage skills SHOULD augment with Layer B when superpowers atomic skill has scope gap (research depth, self-review). Stage skills MUST integrate via Layer C for canonical state.
+
+**Rule C (Cross-Review Gate)**:
+Each stage transition has a cross-review gate. Primary author's teammate counterpart reviews output with structured prompt (feasibility / executable / quality / DC adequacy / canonical sync). FO decides final gate: veto / proceed / prompt captain.
+
+**Failure modes**:
+1. Agent dispatches fresh-context subagent for within-pitch stage transition without justifying one of the exceptions in Rule A.
+2. Stage skill reinvents Layer A logic (e.g., rewrites brainstorming procedure) instead of invoking the superpowers atomic skill — OR creates an undocumented Layer A exception.
+3. Stage transition lacks cross-review gate.
+
+**Enforcement**: Tier B (design-review / Captain-Gate Checklist). No grep enforcement — dispatch choice depends on context that grep cannot see.
+
+**Rationale**:
+- Opus 4.7 + 1M context + prompt cache make "fresh subagent per stage" (4.6-era defence) obsolete.
+- Superpowers skills are atomic, not workflow — ship-flow's value is the Layer B/C augmentation.
+- Cross-review catches author bias; superpowers doesn't self-review.
+- Documented Layer A exceptions (like ship-shape Mode A) preserve stage design autonomy when atomic skill philosophy conflicts with stage contract.
+
+**Source**: Session 2026-04-23 opus 4.7 self-reflection + captain direction. Supersedes implicit "always dispatch fresh" pattern from 4.6-era design. Preserves Principle 2 (skill count ≤ 7).
+
+---
+
+### Principle 7: Metadata-driven portability
 
 **Rule**: Runtime/VCS/test-framework detection should happen in ONE helper, referenced by skills on demand. Not copied eagerly into each skill's preamble.
 
@@ -122,7 +161,8 @@ Used for design-review of any skill/plan/entity change that may create a captain
 3. **If this is a gate between stages, who moves the entity forward on PASS?** Automated status flip or captain manual action? Automated gates must be deterministic; captain gates must be at shape only (or an explicit "captain smoke test" flagged in entity frontmatter).
 4. **If the skill re-implements dispatch or orchestration logic similar to another skill**, can it fold via `source:` tag pattern (Principle #2) instead of living as a separate skill?
 5. **If a new captain-prompt adds an enum with ≥ 3 values**, decompose into N boolean predicates OR provide a deterministic decision tree. No "ask me depending on the vibe" gates.
-6. **If this commit adds or substantially modifies a persistent strategic doc** (adoption audit, design draft, SKILL.md semantic change, canonical `PRODUCT.md` / `ARCHITECTURE.md` / `ROADMAP.md` / `CONTRACT.md` entries, architecture-canon mod output), was a fresh-context verification subagent dispatched to verify low-confidence claims (non-trivial counts, `file:line` citations, consumer-list completeness, enforcement-strength assertions) before commit? Trigger threshold: ≥ 5 claims with less than HIGH confidence, or reorganization of architectural decisions. Verification dispatch is findings-only (no synthesis delegation — the author retains judgment on corrections). **Precedent**: `docs/ship-flow/adoption-readiness-audit.md` (2026-04-21) — sonnet subagent verified 9 claim groups, corrected 14→29 opinion inventory, surfaced 6 unexpected findings. Pattern aligned with dispatch-discipline counter-entry (MEMORY tail 2026-04-21 post-#075).
+6. **Principle 6 (Context Continuity + Layered Skill Architecture)**: design-review each stage transition for named-teammate-default (Rule A), Layer A delegation compliance or documented exception (Rule B), and cross-review gate presence (Rule C). Tier B.
+7. **If this commit adds or substantially modifies a persistent strategic doc** (adoption audit, design draft, SKILL.md semantic change, canonical `PRODUCT.md` / `ARCHITECTURE.md` / `ROADMAP.md` / `CONTRACT.md` entries, architecture-canon mod output), was a fresh-context verification subagent dispatched to verify low-confidence claims (non-trivial counts, `file:line` citations, consumer-list completeness, enforcement-strength assertions) before commit? Trigger threshold: ≥ 5 claims with less than HIGH confidence, or reorganization of architectural decisions. Verification dispatch is findings-only (no synthesis delegation — the author retains judgment on corrections). **Precedent**: `docs/ship-flow/adoption-readiness-audit.md` (2026-04-21) — sonnet subagent verified 9 claim groups, corrected 14→29 opinion inventory, surfaced 6 unexpected findings. Pattern aligned with dispatch-discipline counter-entry (MEMORY tail 2026-04-21 post-#075).
 
 ---
 
