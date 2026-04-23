@@ -452,23 +452,62 @@ stage_artifact_fail() {
 if stage_artifact_fail 2>/dev/null; then echo "OK stage-artifact-path: missing plan.md → fail"
 else echo "FAIL stage-artifact-path: missing plan.md → fail"; FAIL=1; fi
 
-# ========== layer-a-delegation: SKILL documents Layer A ==========
+# ========== layer-a-delegation: SKILL has invocation OR explicit escape ==========
 
-# Pass: SKILL has "Layer A" reference
-layer_a_pass() {
+# Pass: SKILL has a plugin-qualified Skill invocation (markdown backtick form)
+layer_a_pass_invocation_backtick() {
   local d; d="$(create_mock_plugin_dir)" || return 1
   mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
-  printf '# ship-plan\n\nLayer A: dispatches planner subagent.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  printf '# ship-plan\n\nInvoke `Skill: superpowers:writing-plans` for plan authoring.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
   local rc
   bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
   rm -rf "$d"
   [ "$rc" = "0" ]
 }
-if layer_a_pass 2>/dev/null; then echo "OK layer-a-delegation: Layer A present → pass"
-else echo "FAIL layer-a-delegation: Layer A present → pass"; FAIL=1; fi
+if layer_a_pass_invocation_backtick 2>/dev/null; then echo "OK layer-a-delegation: backtick Skill invocation → pass"
+else echo "FAIL layer-a-delegation: backtick Skill invocation → pass"; FAIL=1; fi
 
-# Fail: SKILL silent on Layer A
-layer_a_fail() {
+# Pass: SKILL has a function-style invocation `Skill(plugin:name)`
+layer_a_pass_invocation_funccall() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nThe flow dispatches Skill(superpowers:writing-plans) inline.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if layer_a_pass_invocation_funccall 2>/dev/null; then echo "OK layer-a-delegation: Skill() call → pass"
+else echo "FAIL layer-a-delegation: Skill() call → pass"; FAIL=1; fi
+
+# Pass: SKILL has explicit "pure orchestration" escape annotation
+layer_a_pass_escape() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nno Layer A — pure orchestration (autonomous proposer owns flow).\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if layer_a_pass_escape 2>/dev/null; then echo "OK layer-a-delegation: escape annotation → pass"
+else echo "FAIL layer-a-delegation: escape annotation → pass"; FAIL=1; fi
+
+# Fail: SKILL mentions "Layer A" in prose but has NO invocation and NO escape — the cargo-cult case
+layer_a_fail_cargo_cult() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nLayer A is important. We should dispatch the planner subagent sometimes.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if layer_a_fail_cargo_cult 2>/dev/null; then echo "OK layer-a-delegation: cargo-cult prose (no invocation, no escape) → fail"
+else echo "FAIL layer-a-delegation: cargo-cult prose (no invocation, no escape) → fail"; FAIL=1; fi
+
+# Fail: SKILL completely silent
+layer_a_fail_silent() {
   local d; d="$(create_mock_plugin_dir)" || return 1
   mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
   printf '# ship-plan\n\nNo delegation info here.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
@@ -477,8 +516,8 @@ layer_a_fail() {
   rm -rf "$d"
   [ "$rc" = "1" ]
 }
-if layer_a_fail 2>/dev/null; then echo "OK layer-a-delegation: no Layer A → fail"
-else echo "FAIL layer-a-delegation: no Layer A → fail"; FAIL=1; fi
+if layer_a_fail_silent 2>/dev/null; then echo "OK layer-a-delegation: silent SKILL → fail"
+else echo "FAIL layer-a-delegation: silent SKILL → fail"; FAIL=1; fi
 
 # ========== team-fallback-documented: SKILL references TeamCreate/SendMessage fallback ==========
 

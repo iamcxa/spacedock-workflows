@@ -334,19 +334,32 @@ check_stage_artifact_path() {
 }
 
 check_layer_a_delegation() {
-  # Verify every stage SKILL.md documents Layer A delegation (or explicit absence).
-  # Accepts: "Layer A" OR "Layer A:" OR "no Layer A" OR "pure orchestration"
+  # Verify every stage SKILL.md either:
+  #  (a) contains an explicit plugin-qualified skill invocation pattern
+  #      (`Skill: plugin:skill-name` OR `Skill(plugin:skill-name)`), backticks optional
+  #  OR
+  #  (b) contains an explicit escape annotation:
+  #      'no Layer A' / 'pure orchestrat' (matches 'pure orchestration')
+  #
+  # Rationale: pitch 088 strengthens the prose-only check that passed on bare
+  # mentions of "Layer A" without ever naming or invoking an atomic skill.
+  # Prose presence with no invocation = cargo-cult compliance; opus 4.7 will
+  # skip the delegate when the prompt doesn't feel like it needs a sub-skill.
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
   local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
   local fail=0
-  local sk n
+  local sk
   for sk in "${STAGE_SKILLS[@]}"; do
     local skill_file="${skills_dir}/${sk}/SKILL.md"
     [ -f "$skill_file" ] || continue
-    n=$({ grep -cE "Layer A|no Layer A|pure orchestrat" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
-    if [ "${n:-0}" = "0" ]; then
-      echo "ERROR [layer-a-delegation]: ${sk}/SKILL.md has no Layer A delegation documentation (add '## Layer A delegation', 'Layer A:' marker, or 'no Layer A — pure orchestration' note)" >&2
+    local has_invocation has_escape
+    # Invocation pattern: optional backtick, "Skill", colon-or-paren, optional space,
+    # plugin-name (lowercase kebab), colon, then something (skill-name).
+    has_invocation=$({ grep -cE '`?Skill[:(] ?[a-z][a-z0-9-]+:' "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    has_escape=$({ grep -cEi 'no Layer A|pure orchestrat' "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${has_invocation:-0}" = "0" ] && [ "${has_escape:-0}" = "0" ]; then
+      echo "ERROR [layer-a-delegation]: ${sk}/SKILL.md has no Layer A delegation — neither a plugin-qualified Skill invocation (e.g., 'Skill: superpowers:writing-plans') nor an explicit 'no Layer A — pure orchestration' escape annotation" >&2
       fail=1
     fi
   done
