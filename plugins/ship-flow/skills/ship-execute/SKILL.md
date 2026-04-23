@@ -21,6 +21,9 @@ You run EXECUTE. Output: `<entity-folder>/execute.md`. Dispatched by `/ship` to 
 
 `superpowers:subagent-driven-development` owns dispatch philosophy (one task = one subagent, status protocol DONE/NEEDS_CONTEXT/BLOCKED, review loop). **Do NOT re-teach.** Ship-execute wraps with Layer B augmentation:
 
+**Rule A Fallback reminder**: when `SendMessage(executer)` is unavailable (phantom team / no response) or a dispatched fresh Agent stalls on stream watchdog, fall back per INVARIANTS Principle 6 Rule A Fallback — fresh `Agent(subagent_type: general-purpose)` with captured task + architecture context in the prompt. Stall-recovery: check `git log -- <task-files>` before redoing (subagent may have committed before stalling). Inline execution is the last resort for small-batch scope.
+
+
 - Wave graph traversal (strict wave-sequential; parallelism within wave when no `files_modified` overlap).
 - Tiered quality check (T1 build/typecheck/test; T2 frontend smoke via curl).
 - BLOCKED escalation ladder (haiku → sonnet → opus; never same-tier retry).

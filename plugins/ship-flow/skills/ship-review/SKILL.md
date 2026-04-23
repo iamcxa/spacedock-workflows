@@ -34,6 +34,8 @@ You run REVIEW. Output: `<entity-folder>/review.md`. Dispatched by `/ship` to `p
 
 Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / `silent-failure-hunter` + `ui-verify`) for diff classification during quality gating; ship-review invokes the composite `pr-review-toolkit:review-pr` for PR body quality — different concerns.
 
+**Rule A Fallback reminder**: when `SendMessage(planner)` for the canonical doc dispatch is unavailable (phantom team / no response) or the dispatched fresh Agent stalls, fall back per INVARIANTS Principle 6 Rule A Fallback — fresh `Agent(subagent_type: general-purpose)` with captured entity sections + doc pathspecs in the prompt. If canonical doc patches are already partially committed when a subagent stalls, check `git log` before redoing (may have landed pre-stall). Inline patching via `patch-map.sh --if-hash` is the last resort.
+
 ---
 
 ## Flow

@@ -114,6 +114,29 @@ Stage transitions within a pitch should prefer SendMessage to a named teammate o
 
 Fresh-subagent reserved for: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages (structured review prompt, ~5min).
 
+**Rule A Fallback (when TeamCreate / SendMessage fails)**:
+
+TeamCreate and SendMessage are experimental primitives — Kent's MEMORY `agent-teams-experimental-gotchas.md` documents three known failure modes (tmux silent fail, phantom teams, dead SendMessage). Fresh-Agent dispatches can also stall on the 600s stream watchdog (pitch 086 live evidence: 2 of 3 subagents stalled).
+
+Stage skills MUST codify a fallback path for teammate-unavailable OR subagent-stall conditions:
+
+**When to fall back** (any of):
+- `TeamCreate` returns error OR team-listing shows phantom (empty / stale).
+- `SendMessage` times out or returns no teammate response within the stage's expected window (~10× dispatch; see per-stage SKILL.md for specific timeouts).
+- Fresh-Agent subagent stalls on stream watchdog (no progress for 600s).
+
+**How to fall back** (preserve context continuity as much as possible):
+- **Teammate-unavailable** → dispatch fresh-`Agent(subagent_type: ...)` with captured stage context packed into the prompt (entity files to read, stage intent, critical assumptions). This is the "fresh subagent + briefing" path.
+- **Single-stage inline** → when fallback also fails or the stage work is bounded (≤ small-batch), main agent executes the stage inline with explicit pathspec commits. Not preferred but valid when circumstances warrant; annotate commit message with "inline after teammate/subagent failure".
+
+**Stall-recovery sub-pattern** (subagent stalled post-edit, pre/post-commit):
+1. Check `git log --oneline -3 -- <target-file>` — did the subagent land a commit before stalling?
+2. If yes → inspect the commit content, verify it matches intent; no redo needed. Stall is not failure — it's dispatch infrastructure noise.
+3. If no → redo the stage work (inline or via new fresh-Agent with same prompt). The `git stash` state may hold uncommitted subagent edits; inspect and salvage via `git stash show` + explicit pathspec commit if the edits are correct.
+4. Capture recurrence: 3+ stall events in successive sessions → escalate to rabbit-hole `auto-recover-stalled-subagent-commits` (automated git introspection pattern).
+
+**Failure to codify fallback** → Tier B (design-review gate) violation. Stage SKILLs MUST contain at least one of the tokens `fresh subagent`, `fresh Agent`, `team unavailable`, `phantom`, `fallback`, OR an explicit comment `<!-- no TeamCreate — pure inline orchestration -->` annotation.
+
 **Rule B (3-Layer Skill Architecture)**:
 Stage skills SHOULD delegate to Layer A superpowers atomic skill for core logic.
 
