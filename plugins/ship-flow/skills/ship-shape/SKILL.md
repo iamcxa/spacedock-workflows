@@ -62,7 +62,43 @@ Emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/refe
 
 ### Architecture-impact (only when ARCHITECTURE.md moves)
 
-Skip for pure bug / UI polish / docs. Run when L0 surfaces drift OR new decision belongs in ARCHITECTURE.md. Draft `<!-- section:architecture-impact -->` per child; pre-fill `before:` via `bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <section>`. Uncertain → emit assumption `verified_by: design-contract`. Consumer mod: `docs/ship-flow/_mods/architecture-canon.md`.
+Skip for pure bug / UI polish / docs. Run when L0 surfaces drift OR new decision belongs in ARCHITECTURE.md. Draft `<!-- section:architecture-impact -->` per child; pre-fill `before:` via `bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <section>`. Uncertain → emit assumption `verified_by: design-contract`. Consumer: ship-review planner dispatch patches ARCHITECTURE.md via `patch-map.sh --if-hash`.
+
+### Product-impact (only when PRODUCT.md moves)
+
+Trigger conditions (any):
+- New user-facing capability (adds row to `## Current Capabilities`).
+- New user story accepted (JTBD Persona / Action / Outcome).
+- Constraint added / relaxed (hard limits section).
+- "Who It Serves" / "Why It Exists" shifts.
+
+Skip when: pitch is pure internal refactor / infra / bug fix with no user-facing surface.
+
+Draft `<!-- section:product-impact -->` per affected child:
+- `target_section`: e.g. `capabilities`, `user-stories`, `constraints`.
+- `before` / `after`: current vs new section content.
+- `rationale`: why this product-level change.
+
+Schema: `entity-body-schema.yaml` → `product-impact` block. Consumer: ship-review planner dispatch patches PRODUCT.md via `patch-map.sh --if-hash`.
+
+### Readme-impact (only when README.md user-facing prose moves)
+
+Trigger conditions (any):
+- New user-facing command / flag / env var added.
+- Install procedure changes.
+- Breaking change to existing command (renamed / removed flag).
+- Version bump affecting adopter upgrade path.
+- Any change to README's Installation / Usage / Commands / Quick Start sections.
+
+Draft one `<!-- section:readme-impact -->` block per affected README section:
+- `target_section`: prose heading ("Installation", "Commands", etc.).
+- `before` / `after`: current vs new prose.
+- `rationale`: why.
+- `entry_critical: true` if the change affects first-time adopter success (triggers cross-review enhanced audit at ship-review).
+
+Schema: `entity-body-schema.yaml` → `readme-impact` block. Consumer: ship-review planner dispatch applies via Edit tool + explicit pathspec commit (README is prose-heavy, typically no section tags — DO NOT use patch-map.sh).
+
+Skip when: pitch is pure internal refactor, bug fix, or infrastructure (no user-facing surface change).
 
 ### Compose + present proposal
 
@@ -180,7 +216,7 @@ Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `app
 - Mode A: no multi-turn captain Qs before proposal. One intake clarification max → else route to Mode B.
 - Atomic writes via `shape-confirm.sh` only; no direct entity/ROADMAP edits; no `-a`/`-A` staging.
 - Proposal before L0 subagent returned → stale synthesis.
-- Pitch moves ARCHITECTURE.md without `architecture-impact` block → silent drift at ship-review.
+- Pitch moves ARCHITECTURE.md / PRODUCT.md / README.md without matching impact block (`architecture-impact` / `product-impact` / `readme-impact`) → silent drift at ship-review (planner dispatch has nothing to patch).
 - Within-pitch stage transition via fresh-subagent without (a/b/c/d) exception → Rule A violation.
 - Mode B/C re-teaches Layer A procedure → Rule B violation.
 - `--next-id` → `shape-confirm.sh` commit = ONE uninterrupted pair (MEMORY #5).
