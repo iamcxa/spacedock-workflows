@@ -58,7 +58,7 @@ Musk 5 steps (requirements → **delete** → simplify → speed up → automate
 
 Pick `small-batch` / `medium-batch` / `big-batch`. Exceeds big-batch → flag `[EPIC?]`, recommend sub-pitch.
 
-Emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/references/entity-body-schema.yaml`). **Mandatory**: ≥1 `criticality: critical`. Run each critical's verification now (30s soft cap); record resolved confidence.
+Emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/references/entity-body-schema.yaml`). **Mandatory**: ≥1 `criticality: critical`. Run each critical's verification now (30s soft cap); record resolved confidence in `confidence_at_shape`. **Do NOT reproduce verification output in the proposal** — `verified_by` + bumped `confidence_at_shape` is the full trace. Raw grep/read results belong to plan-stage research, not shape-stage proposal.
 
 ### Architecture-impact (only when ARCHITECTURE.md moves)
 
@@ -102,6 +102,8 @@ Skip when: pitch is pure internal refactor, bug fix, or infrastructure (no user-
 
 ### Compose + present proposal
 
+**Fat-marker-sketch rule**: Children are titles, not specs. Stated assumptions are claims + confidence + criticality + `verified_by`, not verification RESULTS. DCs, tool choices, file paths, greppable queries, npm-dep choices, LOC estimates all belong to PLAN. If a child description exceeds one line of vertical-slice intent, or if an assumption reproduces verification output, delete detail and keep the claim.
+
 ONE block — captain's only view until gate:
 
 ```
@@ -139,6 +141,8 @@ Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 ### Cross-review gate (before captain gate) — Principle 6 Rule C
 
 Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 5-factor rubric (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
+
+**Proposal budget**: the proposal text passed to the cross-reviewer MUST be ≤400 words. Longer = detail creep; trim BEFORE dispatching cross-review, not after.
 
 ---
 
@@ -222,6 +226,9 @@ Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `app
 - `--next-id` → `shape-confirm.sh` commit = ONE uninterrupted pair (MEMORY #5).
 - Reject → zero files (verify `git status` clean).
 - Explicit pathspec on manual commit (MEMORY #14/#25/#37): `git add <path> && git commit ... -- <path>`.
+- Child description >20 words → PLAN creep, trim to title + 1-line vertical-slice note.
+- Compose proposal >500 words → detail creep, re-read fat-marker-sketch rule and delete detail, not scope.
+- Assumption block reproduces raw grep/read output → Gap C violation, move to plan-stage research.
 
 ---
 
