@@ -66,8 +66,12 @@ check_skill_count() {
     # shellcheck disable=SC2012  # ls is fine here; no weird filenames expected in skills/
     n=$(ls -1 "$skills_dir"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
   fi
-  if [ "$n" -gt 7 ]; then
-    echo "ERROR [Principle 2]: skill count > 7 (got $n). See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
+  # TEMP Phase 2 cap raised to 10 for (6 stage + 4 utility) split.
+  # Phase 3 replaces this with proper stage/utility separation logic per
+  # refined Principle 2 in INVARIANTS.md (see Principle 6 Rule B + utility
+  # category bullets). Bug tracked: improve-skill-count-split-check.
+  if [ "$n" -gt 10 ]; then
+    echo "ERROR [Principle 2]: skill count > 10 (got $n; hard cap pending Phase 3 split). See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
     return 1
   fi
   return 0

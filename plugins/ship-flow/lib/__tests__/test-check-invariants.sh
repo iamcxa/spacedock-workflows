@@ -112,11 +112,11 @@ else echo "SKIP DC-5 shellcheck (not installed)"; fi
 # Note: tests below use `[ "$rc" = "1" ]` (exact exit 1) not `!= 0` to avoid
 # false-pass when script is missing (exit 127 "command not found" would pass `!= 0`).
 
-# ========== DC-6: skill count > 7 triggers fail (exit 1) ==========
+# ========== DC-6: skill count > 10 triggers fail (exit 1) ==========
 dc6_skill_count() {
   local d; d="$(create_mock_plugin_dir)" || return 1
-  # Create 8 stub SKILL.md files → should trigger fail
-  for i in 1 2 3 4 5 6 7 8; do
+  # Create 11 stub SKILL.md files → should trigger fail (Phase 2 cap = 10)
+  for i in 1 2 3 4 5 6 7 8 9 10 11; do
     mkdir -p "$d/plugins/ship-flow/skills/stub-$i"
     echo "# stub $i" > "$d/plugins/ship-flow/skills/stub-$i/SKILL.md"
   done
@@ -125,8 +125,8 @@ dc6_skill_count() {
   rm -rf "$d"
   [ "$rc" = "1" ]
 }
-if dc6_skill_count 2>/dev/null; then echo "OK DC-6 skill count guard fails at 8 skills"
-else echo "FAIL DC-6 skill count guard fails at 8 skills"; FAIL=1; fi
+if dc6_skill_count 2>/dev/null; then echo "OK DC-6 skill count guard fails at 11 skills"
+else echo "FAIL DC-6 skill count guard fails at 11 skills"; FAIL=1; fi
 
 # ========== DC-7: preamble regrowth (≥ 2 copies, not allowlisted) triggers fail ==========
 # Uses `## Verify Stage Preamble` — in check's signatures list but NOT in 046f-deferred
