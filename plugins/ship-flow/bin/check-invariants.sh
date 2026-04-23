@@ -59,22 +59,39 @@ FAIL=0
 # ---- Check functions (stubs in T3; bodies filled in T6/T7/T8) ----
 
 check_skill_count() {
-  # DC-6 — Principle 2: skill count ≤ 7
+  # DC-6 — Principle 2: stage skill count ≤ 7; utility skills uncapped.
+  # Explicit allowlists — catches unclassified additions immediately.
+  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect)
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
-  local n=0
-  if [ -d "$skills_dir" ]; then
-    # shellcheck disable=SC2012  # ls is fine here; no weird filenames expected in skills/
-    n=$(ls -1 "$skills_dir"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+  [ -d "$skills_dir" ] || return 0
+
+  local fail=0
+  local stage_count=0
+  local sk
+
+  # Walk every skill directory and classify
+  for sk_dir in "$skills_dir"/*/; do
+    sk="$(basename "$sk_dir")"
+    [ -f "${sk_dir}SKILL.md" ] || continue
+
+    local in_stage=0 in_utility=0
+    for s in "${STAGE_SKILLS[@]}";   do [ "$sk" = "$s" ] && in_stage=1   && break; done
+    for u in "${UTILITY_SKILLS[@]}"; do [ "$sk" = "$u" ] && in_utility=1 && break; done
+
+    if [ "$in_stage" = "1" ]; then
+      stage_count=$((stage_count + 1))
+    elif [ "$in_utility" = "0" ]; then
+      echo "ERROR [Principle 2]: unclassified skill '$sk' — add to STAGE_SKILLS or UTILITY_SKILLS in check-invariants.sh. See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
+      fail=1
+    fi
+  done
+
+  if [ "$stage_count" -gt 7 ]; then
+    echo "ERROR [Principle 2]: stage skill count > 7 (got $stage_count; cap is 7). See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
+    fail=1
   fi
-  # TEMP Phase 2 cap raised to 10 for (6 stage + 4 utility) split.
-  # Phase 3 replaces this with proper stage/utility separation logic per
-  # refined Principle 2 in INVARIANTS.md (see Principle 6 Rule B + utility
-  # category bullets). Bug tracked: improve-skill-count-split-check.
-  if [ "$n" -gt 10 ]; then
-    echo "ERROR [Principle 2]: skill count > 10 (got $n; hard cap pending Phase 3 split). See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
-    return 1
-  fi
-  return 0
+  return "$fail"
 }
 
 check_preamble_regrowth() {
@@ -286,6 +303,129 @@ check_rid_placeholder() {
   return 0
 }
 
+check_stage_artifact_path() {
+  # Verify every stage SKILL.md references its declared artifact filename.
+  # Mapping: ship-shape→spec.md, ship-plan→plan.md, ship-execute→execute.md,
+  #          ship-verify→verify.md, ship-review→review.md, ship→ship.md
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  local fail=0
+  declare -A ARTIFACT_MAP
+  ARTIFACT_MAP=(
+    [ship-shape]=spec.md
+    [ship-plan]=plan.md
+    [ship-execute]=execute.md
+    [ship-verify]=verify.md
+    [ship-review]=review.md
+    [ship]=ship.md
+  )
+  local sk artifact n
+  for sk in "${!ARTIFACT_MAP[@]}"; do
+    local skill_file="${skills_dir}/${sk}/SKILL.md"
+    [ -f "$skill_file" ] || continue
+    artifact="${ARTIFACT_MAP[$sk]}"
+    n=$({ grep -cF "$artifact" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${n:-0}" = "0" ]; then
+      echo "ERROR [stage-artifact-path]: ${sk}/SKILL.md does not mention its artifact '${artifact}'" >&2
+      fail=1
+    fi
+  done
+  return "$fail"
+}
+
+check_layer_a_delegation() {
+  # Verify every stage SKILL.md documents Layer A delegation (or explicit absence).
+  # Accepts: "Layer A" OR "Layer A:" OR "no Layer A" OR "pure orchestration"
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local fail=0
+  local sk n
+  for sk in "${STAGE_SKILLS[@]}"; do
+    local skill_file="${skills_dir}/${sk}/SKILL.md"
+    [ -f "$skill_file" ] || continue
+    n=$({ grep -cE "Layer A|no Layer A|pure orchestrat" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${n:-0}" = "0" ]; then
+      echo "ERROR [layer-a-delegation]: ${sk}/SKILL.md has no Layer A delegation documentation (add '## Layer A delegation', 'Layer A:' marker, or 'no Layer A — pure orchestration' note)" >&2
+      fail=1
+    fi
+  done
+  return "$fail"
+}
+
+check_cross_review_gate() {
+  # Verify every stage SKILL.md has a cross-review gate with 5-factor rubric.
+  # Requires: cross-review mention + "5-factor rubric" + "Feasibility" (case-insensitive).
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local fail=0
+  local sk
+  for sk in "${STAGE_SKILLS[@]}"; do
+    local skill_file="${skills_dir}/${sk}/SKILL.md"
+    [ -f "$skill_file" ] || continue
+    local has_gate has_rubric has_feasibility
+    has_gate=$({ grep -ciE "cross-review gate|cross.review" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    has_rubric=$({ grep -cF "5-factor rubric" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    has_feasibility=$({ grep -ciF "feasibility" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${has_gate:-0}" = "0" ] || [ "${has_rubric:-0}" = "0" ] || [ "${has_feasibility:-0}" = "0" ]; then
+      echo "ERROR [cross-review-gate]: ${sk}/SKILL.md missing cross-review gate section or 5-factor rubric (needs cross-review + '5-factor rubric' + 'Feasibility')" >&2
+      fail=1
+    fi
+  done
+  return "$fail"
+}
+
+check_structural_parity_dc() {
+  # Scan active entity .md files. For entities declaring type=ui or containing
+  # ## Design Reference, verify at least one DC mentions structural parity.
+  # Parity signals: structural|parity|column count|pill-stage--|prop-type|DOM structure
+  #
+  # Grandfather allowlist: pre-#048 entities that have ## Design Reference but predate
+  # the structural-parity-dc invariant. These are skipped with SKIP log, not ERROR.
+  local GRANDFATHER_STRUCTURAL_PARITY=(
+    design-stage-integration
+    pipeline-graph-visual-fix
+    war-room-command-palette
+  )
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0
+  local f bn slug
+  for f in "$docs_dir"/*.md; do
+    [ -f "$f" ] || continue
+    bn="$(basename "$f")"
+    [ "$bn" = "README.md" ] && continue
+    case "$f" in *_archive*|*_debriefs*|*_mods*) continue ;; esac
+    # Check grandfather allowlist by basename without .md
+    slug="${bn%.md}"
+    local grandfathered=0
+    for gf in "${GRANDFATHER_STRUCTURAL_PARITY[@]}"; do
+      [ "$slug" = "$gf" ] && grandfathered=1 && break
+    done
+    if [ "$grandfathered" = "1" ]; then
+      echo "SKIP [structural-parity-dc]: $bn — grandfathered pre-#048 (no structural-parity DC required)" >&2
+      continue
+    fi
+    # Trigger condition: type: ui in frontmatter OR ## Design Reference in body
+    local is_ui=0
+    if grep -qE "^type:[[:space:]]*ui" "$f" 2>/dev/null; then
+      is_ui=1
+    elif grep -qF "## Design Reference" "$f" 2>/dev/null; then
+      is_ui=1
+    fi
+    [ "$is_ui" = "0" ] && continue
+    # Check for structural parity DC signal
+    local has_parity
+    has_parity=$({ grep -ciE "structural|parity|column count|pill-stage--|prop-type|DOM structure" "$f" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${has_parity:-0}" = "0" ]; then
+      echo "ERROR [structural-parity-dc]: $bn is ui-type/has Design Reference but no structural-parity DC signal (add column-count/class-presence/prop-type check). See INVARIANTS.md §UI-entity grep-DCs" >&2
+      fail=1
+    fi
+  done
+  return "$fail"
+}
+
 check_pitch_assumptions() {
   # DC-10 — Phase 1 (ship-flow distillation): entities with pattern=pitch
   # must have >=1 assumption with criticality=critical. Warning-only in
@@ -348,6 +488,10 @@ if [ -n "$SINGLE_CHECK" ]; then
     boolean-gate) check_boolean_gate; exit $? ;;
     rid-placeholder) check_rid_placeholder; exit $? ;;
     pitch-assumptions) check_pitch_assumptions; exit $? ;;
+    stage-artifact-path) check_stage_artifact_path; exit $? ;;
+    layer-a-delegation) check_layer_a_delegation; exit $? ;;
+    cross-review-gate) check_cross_review_gate; exit $? ;;
+    structural-parity-dc) check_structural_parity_dc; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -368,7 +512,7 @@ if [ "$SPIKE_BOOLEAN_GATE" = "1" ]; then
   exit $?
 fi
 
-# Full run — all 8 checks
+# Full run — all checks
 check_skill_count || FAIL=1
 check_preamble_regrowth || FAIL=1
 check_section_tag_coverage || FAIL=1
@@ -378,5 +522,9 @@ check_fan_out_reviewer || FAIL=1
 check_boolean_gate || FAIL=1
 check_rid_placeholder || FAIL=1
 check_pitch_assumptions || FAIL=1
+check_stage_artifact_path || FAIL=1
+check_layer_a_delegation || FAIL=1
+check_cross_review_gate || FAIL=1
+check_structural_parity_dc || FAIL=1
 
 exit $FAIL

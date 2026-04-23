@@ -1,546 +1,179 @@
 ---
 name: ship-plan
-description: "Use when writing an implementation plan for a sharpened entity. Agent-autonomous: size-adaptive research with produce+review team, TDD task structure, plan reviewed by separate agent. No captain gate."
+description: "Use when writing an implementation plan for a shaped entity. Agent-autonomous: size-adaptive research + TDD task plan, dispatched by /ship to `planner` teammate (SendMessage). Output: `<entity-folder>/plan.md` via lib/write-stage-artifact.sh. Layer A delegation: superpowers:writing-plans for plan authoring philosophy; ship-plan wraps with Shape Up scope anchoring + runtime detection + cross-review gate."
 user-invocable: false
-argument-hint: "[entity-slug]"
+argument-hint: "[entity-id | slug]"
 ---
 
-# Ship-Plan — Research and Plan
+# Ship-Plan — PLAN Stage (2.0)
 
-You are running the PLAN stage of ship-flow. No captain interaction — you research, write, review, and iterate until the plan is solid enough for agents to execute autonomously.
+You run PLAN. Output: `<entity-folder>/plan.md`. Dispatched by `/ship` to `planner` teammate via SendMessage (team spawned at `/shape`). No captain gate.
 
-## Entity Body Contract
+**Pipeline position**: reads `spec.md` + parent cross-entity contracts → produces `plan.md` → cross-review gate → advance to execute.
 
-**Schema:** `references/entity-body-schema.yaml` → `stages.plan`
+## Entity body contract (schema-as-prose)
 
-**Reads:** `## Sharp Output` (all subsections), `## Parent Context` (if parent entity exists — `### Cross-Entity Contracts`), `PRODUCT.md` (architecture + constraints)
-**Writes:**
-- `## Plan Output` — subsections: Research Summary, Size Re-evaluation, Verification Spec, Plan (TDD tasks with waves)
-- `## Plan Report` — status, stage_cost, iterations, dimensions, reviewer verdict, scope anchoring, task count, model split
+- Reads: `spec.md` (`## Sharp Output` / `## Shape Output` — problem, done criteria, size, scope, assumptions, children DAG), parent entity `## Cross-Entity Contracts` if `parent:` set, `PRODUCT.md` constraints.
+- Writes: `<entity-folder>/plan.md` sections — `## Research Summary`, `## Size Re-evaluation`, `## Verification Spec`, `## Plan` (TDD tasks with waves), `## Plan Report` (status/cost/iterations/verdict).
+- Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.plan`.
 
-## Step 1: Read Sharp Output
+## Layer A delegation (Principle 6 Rule B)
 
-**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
-```bash
-bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
-```
-Falls back to H2 boundary regex automatically for legacy (untagged) entities.
+`superpowers:writing-plans` owns plan authoring discipline (TDD order, wave safety, placeholder-free prose, task atomicity). **Do NOT re-teach.** Ship-plan wraps with Layer B augmentation:
 
-Record the current time as the stage start timestamp (ISO 8601 format).
+- Shape Up scope anchoring (every task maps to a Done Criterion / Scope In bullet).
+- Size-adaptive research team (produce + review subagents, sized S/M/L).
+- Runtime detection via `ship-flow:ship-runtime-detect` for `{commands.test/build/typecheck/lint/dev}`.
+- Assumption re-validation (Step 1.5) against current codebase state before planning.
+- Plan-checker multi-dimensional review + cross-review gate.
 
-Read the entity file. Extract from `## Sharp Output`:
-- `### Problem` — what to solve
-- `### Done Criteria` — what "shipped" looks like
-- `### Size Assessment` — S/M/L determines your INITIAL approach (may change after research)
-- `### Project Skills` — domain skills available
-- `### Shape Output` — scope in/out (if shape phase ran) — these are your scope anchors
-- `### Musk Audit` — gap-to-goal analysis, KEEP/DEFER/DELETE verdicts
+---
 
-Also read `PRODUCT.md` if it exists — check `## Architecture` and `## Constraints` for solution constraints.
+## Flow
 
-**If entity has `parent:` frontmatter set:**
+**Phases (TaskCreate sub-tasks — inherit from /ship umbrella when pipeline-dispatched; create own when standalone):**
+`read-spec` → `assumption-revalidate` → `research` → `size-reevaluate` → `scope-anchor` → `write-plan` → `verification-spec` → `self-review` → `cross-review` → `emit-plan.md`
 
-Read `## Parent Context` from this entity body (written by ship-shape Step 1.1). Extract:
-- `Contracts to implement:` — these are Cross-Entity Contracts from the parent epic that this entity's plan must implement. Include them in `### Research Summary` and ensure at least one task per contract covers its implementation.
-- `Inherited decisions:` — ADRs from the parent epic that constrain the implementation approach. These override any research findings that conflict (e.g., if ADR says "use JWT tokens", a research finding suggesting session cookies is invalid).
-- `Slice scope:` — the assigned vertical slice. The plan's tasks must stay within this slice — scope creep into other children's vertical slices is a plan failure.
+### Step 1 — Read spec + cross-entity contracts
 
-Write a `### Cross-Entity Contracts` subsection in `## Plan Output → ### Research Summary`:
-```markdown
-### Cross-Entity Contracts (from parent epic)
-- **{contract name}**: {definition} — Task {N} implements this
-```
+Record stage-start ISO timestamp. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <section-tag>` (handles folder + flat layouts). From spec.md: problem, done criteria, size (S/M/L), scope-in bullets, musk-audit verdicts, stated assumptions.
 
-**Input validation**: If `## Sharp Output → ### Problem` or `## Sharp Output → ### Done Criteria` is missing, write `## Plan Report` with `status: blocked, reason: missing sharp output` and return. Do NOT plan on partial input.
+If `parent:` frontmatter set: read parent `## Cross-Entity Contracts`. Extract `Contracts to implement`, `Inherited decisions` (ADR overrides), `Slice scope`. These override any conflicting research finding.
 
-## Runtime Detection
+**Blocker**: spec missing problem or done criteria → write `## Plan Report status: blocked, reason: missing spec` and return.
 
-Before writing task verification commands, invoke `ship-flow:ship-runtime-detect` skill to populate `{commands.test/build/typecheck/lint/dev}` used in task Done fields.
+### Step 1.5 — Assumption re-validation
 
-## Step 1.5: Assumption Re-Validation
+Scan spec for `file:line` citations. Read each; compare current content vs spec's assumption. Stale line (shifted but claim plausible) → note `(⚠ stale-evidence)` inline. Contradicted (content shows opposite) → **BLOCKER** (status: blocked, reason: sharp assumption contradicted). Rationale: stale-premise plans = most expensive failure mode (executor BLOCKs on non-matching codebase).
 
-Sharp-stage assumptions may reference codebase state that changed between sharp and plan (other merges, concurrent work, manual edits). Before planning, verify that sharp's evidence still holds.
+Skip if no file:line citations (common for S-size).
 
-**Procedure:**
+### Step 2 — Research (size-adaptive, produce+review)
 
-1. Scan `## Sharp Output → ### Musk Audit` and `### Shape Output` (if exists) for file:line citations — any reference of the form `path/to/file.ts:NN` or `path/to/file.ts lines NN-MM`.
-2. For each citation, Read the file at the cited line range.
-3. Compare current content against what sharp assumed:
+- **S** — skip research. Proceed to Step 3.
+- **M** — dispatch Agent A (sonnet producer: codebase impact + lib constraints, <400 words, file:line citations) → Agent B (sonnet reviewer: APPROVED / GAPS / CONTRADICTION, <300 words). Max 1 gap-fill round.
+- **L** — dispatch 3-5 parallel producers (upstream constraints / existing patterns / lib surface / gotchas / reference examples), each <200 words, file:line citations. Reviewer runs cross-domain + coverage check. Max 1 gap-fill round.
 
-| Result | Action |
-|--------|--------|
-| Evidence holds — content supports the assumption | Proceed silently |
-| Evidence stale — line shifted but claim still plausible | Note `(⚠ stale-evidence: {file}:{line})` inline, proceed with caution |
-| Evidence contradicted — content shows the opposite | **BLOCKER** — write `## Plan Report` with `status: blocked, reason: sharp assumption contradicted` and return. Do NOT plan on stale premises. |
+**Contradiction**: write both verbatim as Open Question in `## Research Summary`. Never silently resolve.
 
-**Skip when:** No file:line citations found in sharp output (common for S-size entities with simple directives). Log "Step 1.5: skipped — no file:line citations in sharp output" and proceed.
+### Step 2.5 — Size re-evaluation
 
-**Why this matters:** Planning on stale assumptions is the most expensive failure mode — the plan looks correct, execute dispatches agents, and tasks BLOCK because the codebase doesn't match what the plan expected. One Read per citation at plan start costs seconds; a stale-assumption BLOCKED task costs minutes + escalation ladder.
+Count actual affected files from research vs spec's size estimate.
 
-## Step 2: Research (size-adaptive, produce+review team)
-
-### Size S — Skip Research
-The problem is clear and small. Go directly to Step 2.7.
-
-### Size M — Targeted Research (2 agents: produce + review)
-
-**Agent A (Producer)** — dispatch as subagent:
-
-```
-Agent(
-  description: "Research: {problem summary}",
-  model: sonnet,
-  prompt: |
-    Research two topics for planning. Report findings with file:line citations.
-
-    ## Topic 1: Codebase Impact
-    Explore the codebase for files affected by: {problem}.
-    Read existing patterns. Report: affected files with paths, current approach,
-    dependencies, suggested approach.
-
-    ## Topic 2: Library/API Constraints
-    Check library/API constraints for: {relevant tech}.
-    Report: version requirements, breaking changes, gotchas.
-
-    {If project skills: "This project has {skill} — load it and check for existing patterns."}
-
-    ## Output Format
-    For each topic: 3-5 bullet findings, each with file:line citation.
-    Flag any contradictions between topics.
-    Under 400 words total.
-)
-```
-
-**Agent B (Reviewer)** — dispatch AFTER Agent A returns:
-
-```
-Agent(
-  description: "Review research: {problem summary}",
-  model: sonnet,
-  prompt: |
-    Review these research findings for a plan about: {problem}
-
-    ## Research Findings
-    {Agent A's full output}
-
-    ## Review Checklist
-    1. Are file:line citations real? (spot-check 2-3 by reading the actual files)
-    2. Are there codebase areas the research MISSED? (check imports, callers, tests)
-    3. Do the findings contradict each other? (flag explicitly)
-    4. Is the "suggested approach" feasible given the constraints?
-    5. What's the actual file count that would change? (for size re-evaluation)
-
-    Report:
-    - APPROVED: findings are solid
-    - GAPS: {list specific gaps to investigate}
-    - CONTRADICTION: {list conflicting findings}
-
-    Under 300 words.
-)
-```
-
-If GAPS → dispatch Agent A again with specific gap questions. Max 1 round.
-
-### Size L — Full Research (3+ producers + 1 reviewer)
-
-Dispatch 3-5 producer subagents in parallel (capped at 5), each covering one domain:
-
-1. **Upstream Constraints** — project rules (CLAUDE.md, existing decisions, PRODUCT.md constraints)
-2. **Existing Patterns** — how similar problems are already solved (2+ consistent usages)
-3. **Library/API Surface** — third-party behavior, version pinning, public API contracts
-4. **Known Gotchas** — landmines, race conditions, non-obvious interactions
-5. **Reference Examples** — one-shot examples the plan will copy from
-
-Each producer: sonnet, under 200 words, file:line citations mandatory.
-
-**Reviewer** — dispatch AFTER all producers return:
-
-Same review checklist as M-size, plus:
-- Cross-domain consistency check (does the constraint researcher's finding conflict with the pattern researcher's approach?)
-- Coverage check (does every Done Criterion have at least one research finding supporting it?)
-
-If GAPS → dispatch specific producers again. Max 1 round.
-
-**Contradiction handling**: When findings conflict, write BOTH verbatim in `### Research Summary` (under `## Plan Output`) as an Open Question. Do NOT silently pick one. The plan must address contradictions explicitly.
-
-Collect all research + review outputs.
-
-## Step 2.5: Size Re-evaluation
-
-After research completes (skip for Size S with no research):
-
-Count the actual affected files from research findings. Compare to sharp's size estimate:
-
-| Sharp estimate | Actual files | Action |
+| Sharp | Actual | Action |
 |---|---|---|
-| S | ≤ 3 files | Confirmed S |
-| S | 4-10 files | **Upgrade to M** — update ## Size Re-evaluation, adjust approach |
-| S | > 10 files | **Upgrade to L** — update ## Size Re-evaluation, run full research if not already done |
-| M | ≤ 3 files | **Downgrade to S** — simplify plan accordingly |
-| M | 4-15 files | Confirmed M |
-| M | > 15 files | **Upgrade to L** — run remaining research domains if not covered |
-| L | any | Confirmed L (already ran full research) |
-
-Write `### Size Re-evaluation` (under `## Plan Output`):
-```markdown
-### Size Re-evaluation
-Sharp estimate: {original}
-Research evidence: {N} files affected, {reasoning}
-Adjusted size: {confirmed | upgraded to M | downgraded to S}
-Token budget: {updated if changed}
-```
-
-If size changed → update entity frontmatter `size:` field.
-
-### Fold/Extraction Operation LOC Heuristic (n=2 calibration, direction-aware)
-
-When the entity's scope is **restructuring skills** (harness-diet cut principle #2: fold or extract), the file-count table above does not predict DC-1-style LOC budgets accurately. Two directions with separate formulas:
-
-**Fold direction** (A merged INTO B with source-tag, A retired):
-
-- **Formula**: `fold_net_loc ≈ skill_source_loc × 0.44-0.55`
-- **What to include in `fold_net_loc`**: procedural skeleton + example tables + guidance templates + circuit-breaker/rules sections + cross-reference anchors that satisfy downstream DCs. Do NOT just count the Steps-1-to-N skeleton — the overshoot comes from the tables/templates.
-- **DC-1 budget rule**: when writing DC-1 (target-skill LOC budget after fold), use `target_total_loc ≤ target_initial_loc + (source_loc × 0.55)` as worst-case.
-- **Empirical anchor**: entity 064 pr-feedback-fold (source 253 LOC → +111 observed fold into ship-execute, plan estimate +70 under-shot by 59%).
-
-**Extraction direction** (1 canonical source + N callers with lazy-load refs, callers shrink):
-
-- **Formula**: `extraction_net_loc ≈ -(source_loc × 0.55-0.70)` where `source_loc` = total preamble LOC summed across all N callers.
-- **What to include**: the deleted content across callers minus (canonical_loc + N × ref_line_loc). Caller refs are typically 3-5 lines each (H2 header + blank + one-line reference + blank).
-- **Pre-shipping size estimate**: plan `token_budget = extraction_net_loc × (US$1 / 100 LOC)` × `mechanical_multiplier` (0.5-0.7 for inline-on-main, 1.5-2.0 for dispatched).
-- **Empirical anchor**: entity 075 preamble-extraction (source 420 LOC across 4 callers → canonical 154 LOC + 4×3 refs = -254 LOC in skills dir, ratio 0.60; +25 test LOC + -14 script LOC = total -243 across ship-flow/). Plan estimate -285 over-shot by 15% (acceptable).
-
-**Picking direction**:
-
-| Signal | Use |
-|---|---|
-| Source ≤ 50 LOC, tightly coupled to one parent | Fold |
-| Source ≥ 100 LOC, genuinely shared by N ≥ 3 callers | Extract |
-| Source ≥ 100 LOC but N = 2 callers | Extract or fold either caller — captain call |
-| Source 50-100 LOC, N = 2-3 callers | Fold into most natural parent; leaves inlined copy in the other |
-
-New skill cost (extraction only): adds 1 to skill count — check against INVARIANT Principle #2 cap (≤ 7) BEFORE proposing extraction in sharp. If at cap, route to fold instead or defer.
-
-**Status**: n=2 (one fold from entity 064, one extraction from entity 075). **Re-calibrate** when next harness-diet restructure ships: if observed ratio differs by > ±30% from the ranges above, widen or shift them.
-
-**Sources**:
-- Fold anchor: `docs/ship-flow/_archive/pr-feedback-fold.md` → `## Execute Output → Knowledge Captures [D2-candidate]` + `## Verify → Knowledge Captures [D1-confirmed]`.
-- Extraction anchor: `docs/ship-flow/_archive/preamble-extraction.md` → `## Execute Output → Knowledge Captures` (post-ship archive).
-
-## Step 2.7: Scope Anchoring (M/L only)
-
-**Skip for Size S.**
-
-Before writing tasks, cross-reference against scope:
-- If `## Sharp Output → ### Shape Output` has Scope In → every task must map to a Scope In bullet
-- If no Shape Output → every task must map to a `## Sharp Output → ### Done Criteria` item
-
-Produce a mapping table:
-
-```markdown
-| Task | Maps to |
-|------|---------|
-| Task 1 | Done Criteria #1 / Scope In #2 |
-| Task 2 | Done Criteria #3 |
-```
-
-**Halt condition**: any task with no mapping → drop the task (out of scope) or note a scope gap in `## Plan Report`. Do NOT silently expand scope beyond what sharp defined.
-
-## Step 3: Write Plan (TDD Task Structure)
-
-Write a plan with concrete tasks. Each task must be completable by a single agent in one dispatch.
-
-**TDD enforcement:** every task that produces application code must follow test-first order.
-
-Format:
-
-```markdown
-### Plan
-
-#### Task 1: {name}
-**Wave:** {0|1|2|...} — wave 0 for test infrastructure, same-wave tasks can run in parallel
-**Files:** {create/modify with exact paths}
-**Read first:** {files the agent must read before starting}
-**Steps:**
-1. Write the failing test:
-   ```typescript
-   // test code
-   ```
-2. Run test to verify it fails:
-   `{commands.test} {test-file} -- --grep "{test-name}"`
-   (Resolve {commands.test} from Runtime Detection Preamble above)
-   Expected: FAIL with "{expected error}"
-3. Write minimal implementation:
-   ```typescript
-   // implementation code
-   ```
-4. Run test to verify it passes:
-   `{commands.test} {test-file}`
-   Expected: PASS
-5. Run quality check: `{commands.build} && {commands.typecheck}`
-**Done:** {runnable verification command}
-**Model:** haiku | sonnet
-```
+| S | ≤3 | Confirmed S |
+| S | 4-10 | Upgrade to M |
+| S | >10 | Upgrade to L (run full research) |
+| M | ≤3 | Downgrade to S |
+| M | 4-15 | Confirmed M |
+| M | >15 | Upgrade to L |
+| L | any | Confirmed L |
 
-### TDD Exceptions (non-code tasks)
-
-Tasks that don't produce application code skip TDD:
-- Config file changes (tsconfig, package.json)
-- Pure refactor with existing test coverage
-- Documentation-only tasks
-- Migration/seed scripts (test via execution, not unit test)
-
-Mark these as `**TDD:** skip — {reason}` in the task.
-
-### Plan Writing Rules (No Placeholders)
+Update entity frontmatter `size:` if changed.
 
-Every task must contain the actual content an agent needs. These are **plan failures** — never write them:
-- "TBD", "TODO", "implement later", "fill in details"
-- "Add appropriate error handling" / "add validation" / "handle edge cases"
-- "Write tests for the above" (without specifying what to test)
-- "Similar to Task N" (repeat the specifics — the agent reads tasks independently)
-- Steps that describe what to do without showing how
-- References to types, functions, or methods not defined anywhere in the plan
+**Fold/extract LOC heuristic** (harness-diet restructures; n=2 calibration):
+- Fold (A → B, A retired): `fold_net_loc ≈ source_loc × 0.44-0.55`. DC-1 budget worst-case = `target_initial + source × 0.55`. Include procedural skeleton + example tables + guidance templates (not just the Steps-1-to-N).
+- Extract (1 source → N callers with refs): `extraction_net_loc ≈ -(source_loc × 0.55-0.70)` where source = summed preamble LOC across callers.
+- Picking: ≤50 LOC + one parent → fold. ≥100 LOC + N≥3 callers → extract. 50-100 LOC + N=2-3 → fold into most natural parent. Extraction adds 1 skill (Principle 2 cap check first).
 
-### Wave Assignment Rules
-
-- **Wave 0**: test infrastructure creation (setup files, fixtures)
-- **Wave N+1** tasks can only depend on outputs from wave ≤ N
-- Tasks in the same wave must NOT have `files_modified` overlap (parallel safety)
-- A wave N task's `read_first` cannot include a file first written by another wave N task
+### Step 2.7 — Scope anchoring (M/L only)
 
-### Task Verification Rules
+Every task maps to a spec `Scope In` bullet (if shape ran) OR a `Done Criteria` item. Produce task×mapping table. Unmapped task → drop or flag in `## Plan Report`. Do NOT silently expand scope.
 
-Every task's **Done** field must contain a runnable command:
-```
-Done: `{commands.test} tests/x.test.ts` passes
-Done: `grep "validateEmail" src/models/User.ts` finds the new function
-```
-Not: "works correctly" / "is properly implemented" / "handles all cases"
+### Step 3 — Write plan (delegate to superpowers:writing-plans)
 
-## Step 3.5: Verification Spec
+Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD task order, wave safety, placeholder scan, task atomicity, verification commands per task Done. **Do NOT re-teach.**
 
-Read `## Sharp Output → ### Done Criteria` and `## Sharp Output → ### Journey → DC Mapping` from sharp output. For each typed Done Criterion, fill in the exact verification procedure:
+**Layer B wrap** (ship-plan owns these on top of Layer A output):
+- Runtime detection — invoke `ship-flow:ship-runtime-detect` before tasks get written; propagate `{commands.test/build/typecheck/lint/dev}` into every task's Done field.
+- TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `**TDD:** skip — <reason>`.
+- Wave rules: wave 0 = test infra; wave N+1 depends only on ≤N outputs; no `files_modified` overlap within a wave; no cycle.
 
-```markdown
-### Verification Spec
+### Step 3.5 — Verification spec (structural parity enforcement)
 
-| DC | Type | Assertion | Verify Procedure | Expected |
-|----|------|-----------|-----------------|----------|
-| DC-1 | ui | Detail page loads with comment panel | `curl -sf localhost:3000/entity/test \| grep 'comment-panel'` | matches |
-| DC-2 | ui | Panel has input + submit | `curl -sf localhost:3000/entity/test \| grep 'comment-input'` | matches |
-| DC-3 | api | POST returns 201 | `curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/api/comments -d '{"text":"test"}'` | 201 |
-| DC-4 | ui | Comment appears without refresh | `e2e-test flows/comment-sse.yaml` (if e2e available) or manual | steps pass |
-| DC-5 | cli | Notification test passes | `{commands.test} tests/notification.test.ts` | exit 0 |
-```
+Per typed Done Criterion, fill exact verification procedure:
 
-**Verify Procedure rules by type:**
+| Type | Procedure | Fallback |
+|---|---|---|
+| `cli` | bash command + expected exit/output | always available |
+| `api` | `curl` with method/URL/body + status + response pattern | always available |
+| `ui` | `curl -sfN <route>` + `grep` content; complex interaction → `e2e-test <flow.yaml>` | curl+grep skip interaction |
+| `skill` | `Skill("<name>")` invoke + expected output shape | session-only verification |
+| `e2e` | `e2e-test <flow.yaml>` with step assertions | degrade to `ui` type |
 
-| Type | Procedure format | Fallback if infra unavailable |
-|------|-----------------|------------------------------|
-| `cli` | Exact bash command + expected exit code/output | — (always available) |
-| `api` | `curl` command with method, URL, body, expected status + response pattern | — (always available) |
-| `ui` | `curl` route + `grep` content (T2 level). If complex interaction → `e2e-test {flow.yaml}` | curl + grep (skip interaction check) |
-| `skill` | `Skill("{skill-name}")` invoke + expected output shape | Note: can only verify in Claude Code session |
-| `e2e` | `e2e-test {flow.yaml}` with step-by-step assertions | Degrade to `ui` type (curl + grep) |
+Every DC MUST have a runnable verify procedure. "Manual check" = plan failure.
 
-**Every DC MUST have a Verify Procedure.** "Manual check" or "visually inspect" is a plan failure — find a programmatic way or degrade the type (e.g., `e2e` → `ui` with curl).
+**UI entities MUST have ≥1 structural-parity DC** — grep DCs prove wiring, not rendering. Column/cell count parity / grid-template vs header count / prop-type assertion / class-name presence. MEMORY #048: all grep DCs passed while 3 CSS-grid / prop-mis-wire bugs shipped; captain cycle wasted. Budget one structural DC per UI entity.
 
-**For UI entities: include at least one structural-parity DC.** Grep-based DCs ("component X is imported and used") prove component *wiring*, not rendered *alignment*. During #048 war-room-ui-components ship, grep DC-1..6 all PASSED while captain smoke test found 3 BLOCKING bugs (CSS grid column mismatch, wrong prop passed to component, column semantics drift) — every visual-structural bug was invisible to text-based assertions. Mitigate by adding programmatic structural checks before the captain smoke-test gate:
+Note: `ui` type uses `-sfN` (Next.js 16 Turbopack SSR chunks — MEMORY #073). Backward-compatible.
 
-| Structural check type | Example Verify Procedure |
-|---|---|
-| Column / cell count parity | `curl -sf localhost:3637/ \| grep -c 'wr-th'` matches `curl -sf localhost:3637/ \| grep -c 'wr-tr > :first-child > *'` |
-| Grid template vs header count | `grep grid-template-columns globals.css \| awk '{print NF-1}'` equals header-span count in consumer TSX |
-| Prop-type assertion | Vitest/bun-test that imports the component and asserts prop shape matches expected variant enum (catches `intent={entity.status}` style mis-wires) |
-| Class name presence | `curl -sf localhost:3637/ \| grep -c 'pill-stage--'` > 0 (proves StagePill actually rendered, not plain text fallback) |
+### Step 4 — Self-review (plan-checker-lite)
 
-Add at least ONE such structural DC per UI entity. Captain smoke test remains the final V3-delta judgment gate (typography weight, color shade, padding 1-2px drift), but structural bugs that break the grid or mis-wire props MUST be caught programmatically — they waste a captain cycle otherwise.
+Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 
-The Verification Spec table is consumed by:
-- **Execute Step 5.1** — runs each procedure as first-pass
-- **Verify Step 4** — runs each procedure independently as second-pass
-- **Ship PR body** — includes procedure + results for reviewer reproduction
+1. **Requirement coverage** — every DC maps to ≥1 task.
+2. **Task completeness** — every task has paths / verify command / model hint / wave.
+3. **Dependency correctness** — wave graph safe (no cycles / no same-wave `files_modified` overlap / no read_first pulling same-wave outputs).
+4. **Zero-placeholder scan** — grep `TBD | add appropriate | similar to Task N | as needed | fill in | \.\.\.` → fix inline.
+5. **Type/signature consistency** — cross-task function/type signatures match.
+6. **Task minimality (M/L)** — merge adjacent non-load-bearing tasks; drop nice-to-haves not in DCs.
+7. **TDD compliance** — test-first order on code tasks; `TDD: skip` tasks have valid reason.
+8. **Stale-line-anchor** — every `file:line` citation re-read; content-matches / line-shifted / contradicted (BLOCKER) / phantom path (BLOCKER). Catches #1 cause of execute BLOCKED returns.
+9. **Design reference compliance** — skip if no `## Design Reference` section; else cross-check visual attrs (fill/stroke/colors/dimensions) against cited spec files. Flag deviations.
 
-## Step 4: Self-Review (Plan-Checker Lite)
+### Step 5 — Cross-review gate (Principle 6 Rule C)
 
-After writing the plan, run this multi-dimensional review. Steps 4 + 4.5 instantiate INVARIANTS §Captain-Gate Checklist #6 for plan documents. For supplementary strategic outputs produced during planning (e.g., research synthesis, architecture impact drafts) that contain ≥ 5 lower-confidence claims, consider an additional fresh-context verification dispatch before commit.
+Dispatch cross-review to `executer` teammate (pipeline path) or fresh sonnet (no team). Upgrade to fresh **opus** when `appetite: big-batch`.
 
-### Dimension 1 — Requirement Coverage
-Does every Done Criterion from `## Sharp Output → ### Done Criteria` map to at least one task? Missing coverage = blocker.
+5-factor rubric adapted for plan stage:
 
-### Dimension 2 — Task Completeness
-Does every task have: exact file paths, verification command, model hint, wave assignment? Missing fields = blocker.
+1. **Feasibility** — tasks achievable by single agent in one dispatch each?
+2. **Executable scope** — tasks are atomic commits aligned 1:1 with waves?
+3. **Quality** — Verification Spec covers every DC with runnable procedure (≥1 structural-parity DC for UI)?
+4. **DC adequacy** — observable DCs per task; no "works correctly" / "handles all cases"?
+5. **Canonical sync** — ARCHITECTURE.md touches planned? architecture-impact draft per affected child?
 
-### Dimension 3 — Dependency Correctness
-Build the wave graph. Check:
-- Wave N `read_first` only references wave < N outputs or pre-existing files
-- No `files_modified` overlap within the same wave
-- No cycles
+Verdict: **PROCEED** / **VETO** (max 2 loops back to Step 3 with reviewer feedback; round 3 → PROMPT_CAPTAIN) / **PROMPT_CAPTAIN**.
 
-### Dimension 4 — Zero-Placeholder Scan
-Grep the plan for: `TBD`, `add appropriate`, `similar to Task N`, `as needed`, `fill in`, `...`. Any hit = fix it inline.
+### Step 6 — Emit plan.md
 
-### Dimension 5 — Type/Signature Consistency
-If task-3 introduces a function signature and task-5 calls it, the signatures must match. Cross-task inconsistency = blocker.
+Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=plan --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive landed at commit `acd73545`). Primitive handles atomic commit with explicit pathspec (MEMORY #14/#25/#37).
 
-### Dimension 6 — Task Minimality (M/L only)
-For each task, ask:
-1. Could this merge with an adjacent task without losing ship-worthiness?
-2. Is this scaffolding (setup, imports, empty files) that should collapse into the task that uses it?
-3. Are there nice-to-haves not in Done Criteria? Drop them.
+Plan.md sections: `## Research Summary` (findings + open questions if contradictions + reviewer verdict), `## Size Re-evaluation`, `## Verification Spec` (table from Step 3.5), `## Plan` (TDD tasks from Step 3), `## Plan Report` (status, stage_cost: dispatches×model, iterations, dimensions pass/fail, reviewer verdict, scope anchoring, task count, model split, started/completed/duration).
 
-### Dimension 7 — TDD Compliance
-Does every code-producing task follow test-first order (write test → verify fail → implement → verify pass)? Tasks with `TDD: skip` must have a valid reason.
+Mark TaskCreate sub-task `emit-plan.md` completed; return to /ship for advance to execute.
 
-### Dimension 8 — Stale-Line-Anchor Check
-For every `file:line` citation in the plan (`read_first` entries, code snippets referencing specific lines, step instructions citing line numbers):
+---
 
-1. Read the cited file and line range
-2. Does the content at that line match what the plan assumes?
+## Invariants + red flags (STOP if violated)
 
-| Result | Action |
-|--------|--------|
-| Content matches assumption | PASS — proceed silently |
-| Line shifted but content exists nearby | WARNING — update the line number in the plan |
-| Content contradicts assumption | BLOCKER — the plan is building on stale evidence. Fix the task or flag in Plan Review |
-| File doesn't exist | BLOCKER — plan references a phantom path |
+- Every DC has a runnable verify procedure. "Manual check" = plan failure.
+- UI entity without ≥1 structural-parity DC = silent visual-bug risk.
+- Contradicted sharp assumption (Step 1.5) → BLOCKER, do not plan on stale premises.
+- Wave graph violates safety (cycle / overlap / cross-read) → BLOCKER.
+- Placeholder prose (`TBD` / "similar to Task N" / `...`) = plan failure; fix inline.
+- Cross-review VETO loop capped at 2 rounds; round 3 → PROMPT_CAPTAIN.
+- Layer A delegation (`superpowers:writing-plans`) owns plan authoring — re-teaching = Principle 6 Rule B violation.
+- Scope expansion beyond spec Scope In / DCs = Shape Up violation; drop or flag.
 
-**This check is cheap (just Read calls) and catches the #1 cause of execute-stage BLOCKED returns** — plans written against a codebase state that changed between plan and execute.
+## Circuit breakers
 
-**Fix issues inline.** Then re-review. Max 3 iterations.
-
-### Dimension 9 — Design Reference Compliance
-
-**Skip when:** Entity has no `## Design Reference` section.
-
-When entity has a `## Design Reference` section:
-- For each task in the plan that implements a visual element (any task whose steps describe colors, layout, SVG attributes, CSS properties, or UI structure), Read the design reference file(s) cited in `## Design Reference`
-- Cross-check key visual attributes (fill, stroke, colors, dimensions, rx, filter, font-size, font-weight) against reference values
-- Flag any deviation: "Plan says {X}, reference says {Y} — intentional? If yes, add rationale inline in the plan."
-- This catches errors where plan text or code snippets diverge from the design spec (e.g., entity 020's `fill="none"` when the reference showed `fill="bg-surface"`)
-
-## Step 4.5: Plan Review by Separate Agent
-
-After self-review passes, dispatch a **review agent** to challenge the plan:
-
-```
-Agent(
-  description: "Review plan: {entity-slug}",
-  model: sonnet,
-  prompt: |
-    Review this implementation plan. You did NOT write it — challenge it.
-
-    ## Problem
-    {from entity}
-
-    ## Done Criteria
-    {from entity}
-
-    ## Plan
-    {full plan text}
-
-    ## Challenge Checklist
-    1. Can each task be completed by a SINGLE agent in ONE dispatch?
-       (If a task requires reading the output of its own earlier steps → split it)
-    2. Are the TDD test cases testing BEHAVIOR, not implementation?
-       (Testing "function exists" is useless. Testing "input X → output Y" is useful.)
-    3. Will a haiku-tier agent succeed at haiku-marked tasks?
-       (If the task requires reading 3+ files to understand context → upgrade to sonnet)
-    4. Are there missing tasks? (Read Done Criteria — is every criterion verifiable from the plan?)
-    5. Is scope creep present? (Tasks that don't map to Done Criteria or Scope In → flag)
-
-    Report:
-    - APPROVED: plan is solid
-    - REVISE: {list specific issues with fix suggestions}
-
-    Be specific. "Task 3 could be better" is not actionable.
-    "Task 3 should split — step 2 depends on step 1's output file" is actionable.
-)
-```
-
-If REVISE → fix issues inline, re-run self-review (Step 4) once. Do NOT dispatch reviewer again — max 1 reviewer round.
-
-If APPROVED → proceed to Step 5.
-
-## Step 5: Write Entity Sections
-
-**Section tagging (mandatory):** Wrap each section you write with its HTML comment tag pair. Tag names from `references/entity-body-schema.yaml` → `section_tag`. Example structure:
-
-```markdown
-<!-- section:plan-output -->
-## Plan Output
-
-<!-- section:research-summary -->
-### Research Summary
-{content}
-<!-- /section:research-summary -->
-
-<!-- section:size-reevaluation -->
-### Size Re-evaluation
-{content}
-<!-- /section:size-reevaluation -->
-
-<!-- section:verification-spec -->
-### Verification Spec
-{table}
-<!-- /section:verification-spec -->
-
-<!-- section:plan -->
-### Plan
-{tasks}
-<!-- /section:plan -->
-
-<!-- /section:plan-output -->
-<!-- section:plan-report -->
-## Plan Report
-{fields}
-<!-- /section:plan-report -->
-```
-
-Tag list: `plan-output` (impl), `research-summary` (impl), `size-reevaluation` (impl), `verification-spec` (impl), `plan` (impl), `plan-report` (impl)
-
-```markdown
-## Plan Output
-
-### Research Summary
-{findings, or "Size S — no research needed"}
-{Open Questions from contradictory research, if any}
-{Reviewer assessment: APPROVED | GAPS addressed}
-
-### Size Re-evaluation
-Sharp estimate: {original}
-Research evidence: {N files, reasoning}
-Adjusted size: {confirmed | changed}
-
-### Verification Spec
-{table — written in Step 3.5}
-
-### Plan
-{tasks with TDD structure and wave assignments}
-
-## Plan Report
-status: {clean | gaps-noted}
-stage_cost: ${plan_cost} ({N} dispatches: {breakdown by model})
-Iterations: {N} (self-review) + {1} (reviewer)
-Dimensions: {8 dimensions, which passed/failed}
-Reviewer verdict: {APPROVED | REVISE → fixed}
-Scope anchoring: {all tasks mapped | gaps noted}
-Task count: {count}
-Model split: {N haiku, M sonnet}
-started_at: "{ISO 8601 timestamp}"
-completed_at: "{ISO 8601 timestamp}"
-duration_minutes: {number}
-```
-
-FO reads `stage_cost:` line and adds to entity frontmatter `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
-
-## Circuit Breakers
-
-- Research producer timeout: 2 minutes per agent
-- Research reviewer: max 1 gap-fill round
-- Self-review loop: max 3 iterations → proceed with gaps noted
-- Plan reviewer: max 1 round (no re-dispatch)
-- Total plan stage: if > 20 minutes elapsed → **write `## Plan Output` and `## Plan Report` to the entity file with whatever you have** (partial research, incomplete tasks are OK — mark gaps with `⚠️ INCOMPLETE: {reason}`), then return. The FO output-validation gate requires these sections to exist. Never exit without writing them.
-- Research contradictions: write both, never silently resolve
-- Size re-evaluation: if upgraded, re-run missing research domains before planning
+- Research producer timeout: 2 min/agent.
+- Research reviewer: max 1 gap-fill round.
+- Self-review loop: max 3 iterations → proceed with gaps noted in Plan Report.
+- Cross-review reviewer: max 1 round per VETO; 2 VETOs total before PROMPT_CAPTAIN.
+- Total stage >20 min elapsed → write `plan.md` with partial content + `⚠️ INCOMPLETE` markers + Plan Report status=partial, then return. Never exit without emitting plan.md.
+
+---
+
+## References
+
+- Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.plan`.
+- Stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh`.
+- Section extraction: `plugins/ship-flow/lib/extract-section.sh`.
+- Layer A: `superpowers:writing-plans` (plan authoring discipline).
+- Utility: `ship-flow:ship-runtime-detect` (13-ecosystem runtime detection).
+- Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
+- Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
+- MEMORY: #5 (--next-id atomicity), #14/#25/#37 (explicit pathspec / staging), #35 (dispatch discipline amended by Principle 6), #048 (UI structural-parity), #073 (Next.js 16 `-sfN`), opus-4.7-naturally-does (2026-04-23 harness diet).

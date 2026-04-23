@@ -112,21 +112,74 @@ else echo "SKIP DC-5 shellcheck (not installed)"; fi
 # Note: tests below use `[ "$rc" = "1" ]` (exact exit 1) not `!= 0` to avoid
 # false-pass when script is missing (exit 127 "command not found" would pass `!= 0`).
 
-# ========== DC-6: skill count > 10 triggers fail (exit 1) ==========
-dc6_skill_count() {
+# ========== DC-6: split counting — stage ≤ 7, utility uncapped, orphan fails ==========
+
+# DC-6a: 6 stage skills (current post-wave5b count) → pass
+dc6a_stage_count_6_pass() {
   local d; d="$(create_mock_plugin_dir)" || return 1
-  # Create 11 stub SKILL.md files → should trigger fail (Phase 2 cap = 10)
-  for i in 1 2 3 4 5 6 7 8 9 10 11; do
-    mkdir -p "$d/plugins/ship-flow/skills/stub-$i"
-    echo "# stub $i" > "$d/plugins/ship-flow/skills/stub-$i/SKILL.md"
+  for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
+  done
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check skill-count >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if dc6a_stage_count_6_pass 2>/dev/null; then echo "OK DC-6a stage=6 passes"
+else echo "FAIL DC-6a stage=6 passes"; FAIL=1; fi
+
+# DC-6b: 8 stage skills → fail (exceeds cap of 7)
+dc6b_stage_count_8_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review ship-alpha ship-beta; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
   done
   local rc
   bash "$CHECK_SCRIPT" --test-fixture "$d" --check skill-count >/dev/null 2>&1; rc=$?
   rm -rf "$d"
   [ "$rc" = "1" ]
 }
-if dc6_skill_count 2>/dev/null; then echo "OK DC-6 skill count guard fails at 11 skills"
-else echo "FAIL DC-6 skill count guard fails at 11 skills"; FAIL=1; fi
+if dc6b_stage_count_8_fail 2>/dev/null; then echo "OK DC-6b stage=8 fails (cap 7)"
+else echo "FAIL DC-6b stage=8 fails (cap 7)"; FAIL=1; fi
+
+# DC-6c: 3 utility skills (all known) alongside 6 stage → pass (utility uncapped)
+dc6c_utility_uncapped_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
+  done
+  for sk in add-todos ship-onboard ship-runtime-detect; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
+  done
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check skill-count >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if dc6c_utility_uncapped_pass 2>/dev/null; then echo "OK DC-6c utility skills uncapped (6 stage + 3 utility = pass)"
+else echo "FAIL DC-6c utility skills uncapped"; FAIL=1; fi
+
+# DC-6d: orphan skill (not in either allowlist) → fail
+dc6d_orphan_skill_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
+  done
+  # Add an unclassified skill
+  mkdir -p "$d/plugins/ship-flow/skills/ship-mystery"
+  echo "# mystery" > "$d/plugins/ship-flow/skills/ship-mystery/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check skill-count >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if dc6d_orphan_skill_fail 2>/dev/null; then echo "OK DC-6d orphan skill fails"
+else echo "FAIL DC-6d orphan skill fails"; FAIL=1; fi
 
 # ========== DC-7: preamble regrowth (≥ 2 copies, not allowlisted) triggers fail ==========
 # Uses `## Verify Stage Preamble` — in check's signatures list but NOT in 046f-deferred
@@ -370,5 +423,172 @@ EOF
   return 0
 }
 dc10_pitch_assumptions
+
+# ========== stage-artifact-path: SKILL references its artifact filename ==========
+
+# Pass: SKILL mentions its artifact
+stage_artifact_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nWrites plan.md to entity folder.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check stage-artifact-path >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if stage_artifact_pass 2>/dev/null; then echo "OK stage-artifact-path: plan.md present → pass"
+else echo "FAIL stage-artifact-path: plan.md present → pass"; FAIL=1; fi
+
+# Fail: SKILL missing artifact reference
+stage_artifact_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nNo mention of the artifact here.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check stage-artifact-path >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if stage_artifact_fail 2>/dev/null; then echo "OK stage-artifact-path: missing plan.md → fail"
+else echo "FAIL stage-artifact-path: missing plan.md → fail"; FAIL=1; fi
+
+# ========== layer-a-delegation: SKILL documents Layer A ==========
+
+# Pass: SKILL has "Layer A" reference
+layer_a_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nLayer A: dispatches planner subagent.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if layer_a_pass 2>/dev/null; then echo "OK layer-a-delegation: Layer A present → pass"
+else echo "FAIL layer-a-delegation: Layer A present → pass"; FAIL=1; fi
+
+# Fail: SKILL silent on Layer A
+layer_a_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nNo delegation info here.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if layer_a_fail 2>/dev/null; then echo "OK layer-a-delegation: no Layer A → fail"
+else echo "FAIL layer-a-delegation: no Layer A → fail"; FAIL=1; fi
+
+# ========== cross-review-gate: SKILL has 5-factor rubric ==========
+
+# Pass: SKILL has cross-review gate + 5-factor rubric + Feasibility
+cross_review_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  cat > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md" <<'EOF'
+# ship-plan
+
+### Cross-review gate (Principle 6 Rule C)
+
+5-factor rubric adapted for plan stage:
+1. Feasibility — tasks achievable?
+2. Executable scope — atomic commits?
+3. Quality — DCs runnable?
+4. DC adequacy — observable checks?
+5. Canonical sync — ARCHITECTURE.md touched?
+
+Verdict: PROCEED / VETO / PROMPT_CAPTAIN.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check cross-review-gate >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if cross_review_pass 2>/dev/null; then echo "OK cross-review-gate: full rubric present → pass"
+else echo "FAIL cross-review-gate: full rubric present → pass"; FAIL=1; fi
+
+# Fail: SKILL missing 5-factor rubric
+cross_review_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nNo gate here.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check cross-review-gate >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if cross_review_fail 2>/dev/null; then echo "OK cross-review-gate: no rubric → fail"
+else echo "FAIL cross-review-gate: no rubric → fail"; FAIL=1; fi
+
+# ========== structural-parity-dc: UI entity must have parity signal ==========
+
+# Pass: UI entity with parity signal
+structural_parity_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  cat > "$d/docs/ship-flow/ui-entity.md" <<'EOF'
+---
+id: "999"
+type: ui
+title: "UI entity with parity"
+---
+
+## Design Reference
+
+DC-1: column count matches design (3 columns in grid).
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check structural-parity-dc >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if structural_parity_pass 2>/dev/null; then echo "OK structural-parity-dc: parity signal present → pass"
+else echo "FAIL structural-parity-dc: parity signal present → pass"; FAIL=1; fi
+
+# Fail: UI entity without parity signal
+structural_parity_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  cat > "$d/docs/ship-flow/ui-no-checks.md" <<'EOF'
+---
+id: "998"
+type: ui
+title: "UI entity without coverage"
+---
+
+## Design Reference
+
+DC-1: renders correctly.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check structural-parity-dc >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if structural_parity_fail 2>/dev/null; then echo "OK structural-parity-dc: no parity signal → fail"
+else echo "FAIL structural-parity-dc: no parity signal → fail"; FAIL=1; fi
+
+# Grandfather: pre-#048 allowlisted entities skip even without parity signal
+structural_parity_grandfather() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  # Use one of the 3 grandfathered slugs — no parity signal, should SKIP not ERROR
+  cat > "$d/docs/ship-flow/design-stage-integration.md" <<'EOF'
+---
+id: "042"
+title: "Design stage integration"
+---
+
+## Design Reference
+
+DC-1: renders correctly.
+EOF
+  local rc stderr_out
+  stderr_out="$(bash "$CHECK_SCRIPT" --test-fixture "$d" --check structural-parity-dc 2>&1 >/dev/null)"
+  rc=$?
+  rm -rf "$d"
+  # Must pass (rc=0) AND emit SKIP line
+  [ "$rc" = "0" ] && echo "$stderr_out" | grep -q "grandfathered"
+}
+if structural_parity_grandfather 2>/dev/null; then echo "OK structural-parity-dc: grandfather allowlist skips pre-#048 entity"
+else echo "FAIL structural-parity-dc: grandfather allowlist skips pre-#048 entity"; FAIL=1; fi
 
 exit $FAIL

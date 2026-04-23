@@ -1,581 +1,250 @@
 ---
 name: ship-verify
-description: "Use when execute tasks are complete and the entity needs verification before shipping. Agent-autonomous gate: 5-check quality, themed review classification, done criteria UAT. Feedback-to execute on failure."
-user-invocable: false
-argument-hint: "[entity-slug]"
+description: "Use when verifying execute output before ship — standalone via `/verify <entity-id>` or pipeline-dispatched by `/ship`. Agent-autonomous ROI gate: scoped quality checks on touched surfaces, spot-check critical DCs, auto-fix NITs inline, escalate to agent-browser e2e for UI DCs. Output: `docs/<wf>/<id>-<slug>/verify.md`."
+user-invocable: true
+argument-hint: "<entity-id> [--fast | --full]"
 ---
 
-# Ship-Verify — Quality Gate, Review, and UAT
+# Ship-Verify — VERIFY Stage (2.0)
 
-You are running the VERIFY stage of ship-flow. No captain interaction — run full-project quality checks, review the diff, verify done criteria. This stage is a gate: PASS advances to ship, FAIL feeds back to execute.
+You run VERIFY. Output: `docs/<wf>/<id>-<slug>/verify.md`. **You are NOT the author of the code** — review as an independent agent. PASS advances to review; FAIL feeds back to execute (max 2 rounds).
 
-**You are NOT the author of this code.** You are a fresh agent reviewing work done by a different execute-stage ensign. Review the diff as an independent reviewer — do not assume correctness.
+**Three concerns, one stage**: Quality (mechanical gate on touched surfaces) + Review (classified findings from dispatched haiku reviewers) + UAT (done-criteria evidence review + spot-check).
 
-This stage combines three verification concerns:
-- **Quality** — mechanical full-project verification (5 checks)
-- **Review** — judgment-bearing code review classification (debate-driven)
-- **UAT** — done criteria verification against captain's acceptance
+## When to use
 
-## Entity Body Contract
+- **Pipeline** (invoked by `/ship`) — dispatched via SendMessage to `verifier` teammate; cross-review gate mandatory; produces `verify.md`.
+- **Standalone** `/verify <entity-id>` — user-invocable. Reuses `pitch-<id>` team if it exists; else creates fresh `verify-<pitch-id>` team with opus verifier.
+- **Standalone** `/verify "<requirement>"` — treat as concrete-requirement entry; inverse-escape if vague (see `/ship` pattern).
+- `--fast` — skip cross-review gate (captain manual fast-feedback). `--full` — force full re-run of every DC (skip spot-check heuristic).
 
-**Schema:** `references/entity-body-schema.yaml` → `stages.verify`
-
-**Reads:** `## Execute Output` (all subsections), `## Plan Output` → Verification Spec, `## Sharp Output` → Done Criteria, `PRODUCT.md` → Constraints
-**Writes:** single `## Verify` section with 5 subsections (post-2026-04-19 D1 consolidation):
-- `### Quality Gate` — 5-check full-project verification
-- `### Review Findings` — classified haiku + pre-scan output
-- `### Knowledge Captures` — D1/D2 tags
-- `### UAT` — evidence review + spot-check (mode line + results table)
-- `### Verdict` — authoritative status / cost / blocking issues / timestamps (FO grep-reads `status:` line)
-
-> Pre-2026-04-19 layout used 3 H2 sections (`## Verify Output`, `## Verify Report`, `## Verify UAT`). Ship-review and ship-execute (pr-feedback mode) accept both layouts; no migration of archived entities needed.
+**Inverse escape:** entity-id with no matching `docs/<wf>/<id>-*/` or `docs/<wf>/<id>-*.md` → announce `entity not found — run /shape <directive>` and EXIT.
 
 ---
 
-## Step 1: Read Execution Results
+## Step 1 — Resolve entity + team + TaskCreate
 
-**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
-```bash
-bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
-```
-Falls back to H2 boundary regex automatically for legacy (untagged) entities.
+Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Read entity file (flat `.md` or folder `README.md` + prior `.md` stages). Record stage-start ISO timestamp.
 
-Record the current time as the stage start timestamp (ISO 8601 format).
+**Read** (tag-based via `bash plugins/ship-flow/lib/extract-section.sh <entity> <tag>`):
+- `spec.md` (or entity `## Sharp Output`) → `### Done Criteria`, `### Size Assessment`
+- `plan.md` → `### Plan` (`files_modified`), `### Verification Spec` (DC procedures)
+- `execute.md` → `### Execution Log` (commit SHAs, base SHA), `### Issues Found`, `## Execute UAT`
+- `PRODUCT.md` → `## Constraints` (if exists)
 
-Read the entity file. Extract:
-- `## Sharp Output → ### Done Criteria` — what must be true
-- `## Execute Output → ### Execution Log` — what was done, commit SHAs
-- `## Execute Output → ### Issues Found` — any auto-created entities
-- `## Sharp Output → ### Size Assessment` — determines review depth
-- `## Plan Output → ### Plan` — for `files_modified` cross-check
-- `PRODUCT.md` — constraints to verify against (if exists)
+Capture **execute base SHA** from first task's parent commit in `execute.md`. Do NOT recompute from `main..HEAD` (MEMORY #25 — parallel-session churn produces reverse-subtraction artifacts).
 
-**Pre-check**: if > 50% of tasks failed in execute → do NOT proceed. **Write `## Verify` with `### Quality Gate` showing the pre-check failure, and `### Verdict` with `status: blocked`, `verdict: BLOCKED`** to the entity file, then notify captain. The FO output-validation gate requires the `## Verify` section with `### Verdict` subsection to exist (or legacy `## Verify Report` for older entities). Never exit without writing them.
+**Pre-check**: if > 50% of execute tasks failed → write `verify.md` with `status: blocked`, notify captain, EXIT. Never exit without the artifact.
 
-Capture execute base SHA from `## Execute Output → ### Execution Log` (first task's parent commit). This is the merge-base for "changes introduced by THIS entity" even when `main` advanced due to parallel-session commits during execute — do NOT recompute from `main..HEAD` (MEMORY.md line 25: parallel-session churn produces reverse-subtraction artifacts).
-
-**Parallel-session filter** (when `{execute_base}..HEAD` contains interleaved commits from other entities — detectable via `git log {execute_base}..HEAD --oneline | grep -v '<this-entity-slug>'` returning non-empty): scope review-stage diff commands (Step 3.1+) to the plan's `files_modified` list rather than the full range:
-
-```bash
-# Entity-scoped diff for review (instead of full range which commingles parallel work):
-git diff {execute_base}..HEAD -- $(grep -E "^\*\*Files:" <plan-section> | sed 's/.*Files: *//' | tr -d '`')
-```
-
-Quality gate (Step 2) is NOT affected — it runs full-project per surface regardless of interleaving.
+**Team** (Principle 6 Rule A):
+- Pipeline invocation → already inside `verifier` teammate context. Inherit parent `/ship` umbrella tasks (no new TaskCreate).
+- Standalone — team `pitch-<id>` exists → SendMessage to `verifier`. No team exists → `TeamCreate(team_name: "verify-<pitch-id>", members: ["verifier"])` + spawn opus verifier.
+- Standalone — TaskCreate 3 sub-tasks: `scoped-gate` → `spot-check-uat` → `escalation-or-nits`.
 
 ---
 
-## Runtime Detection
+## Step 2 — Quality gate (scoped, ROI-default)
 
-Before running any quality check, invoke `ship-flow:ship-runtime-detect` skill to populate `{commands.test/build/typecheck/lint}` used in quality-gate commands.
+**Rule**: run quality checks ONLY on runtime surfaces execute wrote commits to. Full-project checks on untouched surfaces are baseline noise (MEMORY #10 generalized). Invoke `ship-flow:ship-runtime-detect` to populate `{commands.test/build/typecheck/lint}`.
 
-## Step 2: Quality Gate — 5-Check Full-Project Verification
-
-Run ALL 5 checks against the full project. Binary pass/fail per check, no judgment.
-
-### Step 2.0: Scoped-gate preamble (runtime-surface change detection)
-
-Before running checks 1-4, compute whether execute actually wrote code to each detected runtime surface. For each stack in `detected_stacks` (from the runtime-detect skill), map it to a surface directory (e.g., `bun`/`npm` at root → `./`; `bun` in `plugins/spacebridge/ui/` → that dir; `cargo` → `src/`). Then:
-
+**Per-surface commit count**:
 ```bash
 for SURFACE in $SURFACES; do
-  SURFACE_COMMITS=$(git log {execute_base}..HEAD --oneline -- "$SURFACE" 2>/dev/null | wc -l)
-  echo "$SURFACE: $SURFACE_COMMITS execute-introduced commits"
+  N=$(git log {execute_base}..HEAD --oneline -- "$SURFACE" 2>/dev/null | wc -l)
+  # N == 0 → scoped PASS (documented baseline), skip
+  # N > 0  → run full checks on that surface
 done
 ```
 
-**Decision**:
-- `SURFACE_COMMITS > 0` → run full quality gate for that surface (checks 1-4 normally).
-- `SURFACE_COMMITS == 0` AND any check fails on that surface → **baseline noise** (execute cannot have caused failures in a surface it didn't write). Mark check as `PASS (scoped — 0 execute commits touched $SURFACE)` and document the pre-existing failures in `### Quality Gate` for captain awareness, but do NOT block on them.
-- Both scoped gates AND any failing check in a surface WITH `SURFACE_COMMITS > 0` → FAIL normally per the "Any of checks 1-4 FAIL" rule below.
+Run checks 1-4 (tests / lint / typecheck / build) on surfaces with `N > 0`. Check 5 (format) advisory only. Capture last 40 lines per check as evidence.
 
-**Why** (MEMORY.md line 10 precedent, generalized 2026-04-21 post-#060): execute cannot be at fault for failures in a surface where `git log <execute_base>..HEAD -- <surface>` is empty. Originally framed as "pure-rename executes" rule; #060 widened it to any polyglot project where ship-flow plugin work doesn't touch the spacebridge UI runtime surface. Evidence: #060 verify applied this 3× (bun test 7 fails / bun lint 2 errors / tsc 6 errors all in `plugins/spacebridge/ui/` which had 0 commits between `27382256..HEAD`).
+**Any check FAIL → feedback to execute.** Do NOT proceed to review. Max 2 feedback rounds, then PROMPT_CAPTAIN.
 
-### Step 2.0.1: Per-error diff-aware attribution (not just surface-level)
+### Step 2.1 — Per-error diff-aware attribution (ROI critical)
 
-**Trigger**: any check returns ERROR / WARN output containing `file:line` references.
+**Trigger**: any check output contains `file:line` references.
 
-Surface-level scoping (above) says "execute didn't touch surface X → X's failures are pre-existing". That's necessary but not sufficient. A surface CAN have execute-introduced errors AND pre-existing errors mixed together — the specific failing line must be attributed individually.
+Surface-level scoping says "execute didn't touch surface X → failures are pre-existing". Necessary but not sufficient — a touched surface can mix execute-introduced + pre-existing errors. Attribute **per error**:
 
-**Procedure for each error with a file:line reference**:
+1. Parse `file:line`. Run `git diff --name-only {execute_base}..HEAD -- <file>`; empty → pre-existing on this file.
+2. File touched → `git blame -L<line>,<line> --show-name HEAD -- <file>`; extract SHA.
+3. SHA ∈ `{execute_base}..HEAD`? **Yes** → execute-introduced (real failure: auto-fix per Step 5 or feedback-to-execute). **No** → pre-existing line; note but don't block.
 
-1. Parse `file:line` from the message (e.g., `ERROR [Principle 5a]: docs/ship-flow/entity.md:397: orphan header: ...`).
-2. Check if the file is in the execute diff: `git diff --name-only {execute_base}..HEAD -- <file>`. Empty → truly pre-existing on THIS file, skip to step 5.
-3. File was touched by execute. Run `git blame -L<line>,<line> --show-name HEAD -- <file>` and extract the commit SHA.
-4. Is that SHA in `{execute_base}..HEAD`? `git rev-list {execute_base}..HEAD | grep -q <sha>`.
-   - **Yes** → **execute-introduced**. CANNOT classify as pre-existing. Treat as a real verify failure: either auto-fix per Step 4.6, feedback-to-execute, or note as BLOCKING.
-   - **No** → pre-existing line in a file that execute happened to modify elsewhere. Acceptable to note but not block.
-5. If step 2 showed empty, the error is pre-existing — note in `### Quality Gate` with `(pre-existing baseline in {file})` suffix.
+**Forbidden rationalization**: "pattern existed elsewhere before" does NOT justify skip. Attribution is per-file, per-line. Precedent: entity #078 — 2 Principle 5a ERRORs blame-attributed to execute's report commit, mis-classified as "pre-existing pattern", CI failed on PR.
 
-**Forbidden rationalization**: "pattern existed in OTHER files before" does NOT justify skip. Attribution is per-file, per-line. Each ERROR evaluates on its own.
-
-**Precedent**: entity #078 verify — ensign saw 2 Principle 5a ERRORs at `monorepo-aware-canonical-docs.md:397` and `:595`. The file was added+modified by execute. The blame-SHA of those lines was `0e43d734` (execute's report commit). Execute-introduced. Verify mis-classified as "pre-existing pattern" because similar untagged Stage Report blocks exist in OTHER (pre-049) entities. CI subsequently failed on PR. Step 4.6 auto-fix or feedback-to-execute would have prevented the CI round-trip.
-
-**Record the scoped-gate decision** in `### Quality Gate` so ship-review and captain can see which surfaces were scoped:
-
-```markdown
-### Quality Gate
-- tests (ship-flow surface): PASS
-- tests (spacebridge-ui surface): PASS (scoped — 0 execute commits touched plugins/spacebridge/ui; 7 pre-existing failures in pipeline-parse.test.ts documented)
-- lint ... etc.
-```
-
-### Check 1: Tests
-```bash
-{commands.test} 2>&1
-```
-Verdict: exit code 0 and no failing tests → PASS. Otherwise → FAIL.
-
-### Check 2: Lint
-```bash
-{commands.lint} 2>&1
-```
-Verdict: exit code 0 → PASS. Warnings-only → PASS. Errors → FAIL.
-
-### Check 3: Type Check
-```bash
-{commands.typecheck} 2>&1
-```
-Verdict: exit code 0 and no `error TS` lines → PASS. Otherwise → FAIL.
-
-### Check 4: Build
-```bash
-{commands.build} 2>&1
-```
-Verdict: exit code 0 → PASS. Otherwise → FAIL.
-
-### Check 5: Format (if formatter configured)
-```bash
-{commands.prettier} --check "src/**/*.{ts,tsx}" 2>&1 || echo "no formatter configured"
-```
-(Note: For cargo/go projects where {commands.prettier} is N/A, skip Check 5 entirely — it is advisory only.)
-Verdict: exit code 0 or no formatter → PASS. Otherwise → FAIL (advisory, not blocking).
-
-**Capture last 40 lines of each check's output as evidence.**
-
-**Any of checks 1-4 FAIL → feedback to execute.** Do NOT proceed to review. Max 2 feedback rounds, then escalate to captain.
-
-```markdown
-### Quality Gate
-- tests: PASS (142 pass, 0 fail)
-- lint: PASS
-- typecheck: PASS
-- build: PASS
-- format: PASS (advisory)
-```
+**Record in `### Quality Gate`**: which surfaces were scoped + each pre-existing error suffixed `(pre-existing baseline)`.
 
 ---
 
-## Step 3: Code Review — Haiku Agents + Sonnet Integration
+## Step 3 — Review (haiku reviewer matrix + spot-check)
 
-The verify stage uses `dispatch: debate-driven`. FO dispatches haiku review agents (cheap, specialized) BEFORE dispatching you (sonnet, integration). You read their raw findings and classify.
-
-**Architecture:**
-```
-FO dispatches (selected by pre-scan):
-  ├── haiku agents: pr-review-toolkit + trailofbits skills
-  │   ↓ all write raw findings to entity ## Haiku Review
-  └── YOU (sonnet): pre-scan → read findings → spot-check → classify → verdict
-```
-
-### Step 3.1: Pre-Scan + Reviewer Selection (Inline — You Do This Yourself)
-
-Before reading haiku findings, run these mechanical checks AND determine which reviewers FO should have dispatched:
-
-**Mechanical pre-scan:**
-
-1. **Stale references**: For every symbol removed by the diff, grep for remaining references. Hit outside the diff = stale reference finding.
-2. **Plan consistency**: Cross-check `git diff --stat` file list against `## Plan Output → ### Plan` `files_modified`. Files changed but not in plan = unplanned change finding. Files in plan but unchanged = missed task finding.
-3. **Constraint check**: If `PRODUCT.md` has `## Constraints`, verify changes don't violate any.
-4. **CLAUDE.md rule walk**: For each changed file in the diff, walk dirname upward from the file to the repo root, collecting every `CLAUDE.md` encountered. Read each collected CLAUDE.md. For every rule it defines, check whether the diff violates it.
-
-   ```
-   Example: changed file is src/domain/session/watcher.ts
-   Walk: src/domain/session/CLAUDE.md → src/domain/CLAUDE.md → src/CLAUDE.md → CLAUDE.md
-   Each CLAUDE.md may define rules like "no direct DB access from domain layer",
-   "always use Zod for external input validation", etc.
-   ```
-
-   Any violation = pre-scan finding with: the CLAUDE.md path, the rule text, the violating file:line from the diff. Severity: BLOCKING (rule uses "must"/"never"/"always") or WARNING (rule uses "prefer"/"should"/"consider").
-
-   **Dedup**: if multiple changed files share the same parent CLAUDE.md, read it once. Cache CLAUDE.md contents during the walk.
-
-**Reviewer selection matrix (FO uses this to decide which haiku agents to dispatch):**
-
-Read `## Sharp Output → ### Size Assessment` from entity and diff content:
+**Reviewer matrix (Principle 3)**: default 2 haiku for source-file diffs; skip entirely for non-source-only diffs.
 
 ```bash
 DIFF_FILES=$(git diff {execute_base}..HEAD --name-only)
-DIFF_CONTENT=$(git diff {execute_base}..HEAD)
-```
-
-#### Hard skip — non-source-only diffs (no haiku at all):
-
-If the diff contains **only** non-source-code files, skip the entire haiku dispatch and run inline review (Step 3.2 fallback path):
-
-```bash
 SOURCE_FILES=$(echo "$DIFF_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|sh)$')
-if [ -z "$SOURCE_FILES" ]; then
-  echo "Diff is non-source-only (docs/config/SKILL.md/etc.) — skip haiku dispatch, sonnet inline review only"
-fi
 ```
 
-> **Why** (2026-04 D1 measurement, n=2 SKILL.md entities): haiku reviewers hallucinated 50-100% of citations on prompt-text diffs because they anchor findings to pre-execute line numbers that no longer exist after restructure. Net surviving findings: 0. Inline sonnet review on the diff is strictly better here. Captain has already implicitly skipped haiku for `vercel-ci-auto-deploy` and `workflow-skill-routing` without ill effect — formalizing.
+| Diff content | Haiku dispatches | Notes |
+|---|---|---|
+| Non-source only (docs / SKILL.md / config) | **0** — sonnet inline review on diff | 2026-04 D1: haiku hallucinate 50-100% on prompt-text diffs |
+| S/M/L with source | `pr-review-toolkit:code-reviewer` + `pr-review-toolkit:silent-failure-hunter` | Default pair |
+| Opt-in via `haiku-opt-in: <name>` | `trailofbits:{insecure-defaults \| sharp-edges \| variant-analysis}`, `pr-review-toolkit:{pr-test-analyzer \| type-design-analyzer \| comment-analyzer \| code-simplifier}` | Explicit tag only |
 
-#### Always dispatch (when source files present):
+Cost: ~$0.05/haiku. Default M/L = $0.10.
 
-| Agent | Skill | What it checks |
-|-------|-------|---------------|
-| `code-reviewer` | `pr-review-toolkit:code-reviewer` | Diff correctness, match to plan, regressions |
+**Inline pre-scan (always, before haiku findings arrive)**:
+1. **Stale references** — for every symbol removed, grep remaining refs outside the diff.
+2. **Plan consistency** — cross-check `git diff --stat` vs `plan.md → files_modified`. Unplanned change OR missed task = finding.
+3. **Constraint check** — `PRODUCT.md → ## Constraints` respected?
+4. **CLAUDE.md walk** — for each changed file, walk dirname to repo root collecting `CLAUDE.md`; check each rule against the diff. Severity: "must/never/always" → BLOCKING; "prefer/should/consider" → WARNING. Dedup + cache during walk.
 
-#### Dispatch for M/L (when source files present):
+**Spot-check haiku citations — 100%, not a sample** (MEMORY #078 precedent):
+- Read exact file at cited line ±2 lines.
+- Content matches → keep. Line shifted but content within ±5 → keep with updated line. Content absent → DROP + log `[D2-candidate] {agent} hallucinated at {file}:{line}` in `### Knowledge Captures`.
+- Single agent > 30% hallucination → discard ALL findings from that agent for this review; log as untrusted for this diff class.
 
-| Agent | Skill | What it checks |
-|-------|-------|---------------|
-| `silent-failure-hunter` | `pr-review-toolkit:silent-failure-hunter` | Empty catch blocks, swallowed errors, fallbacks that hide failures |
-
-> **Removed from M/L mandatory** (2026-04 D1 measurement): `pr-test-analyzer` contributed 6 raw findings → 1 NIT in entity-detail-redesign (collapsed by sonnet into a single coverage-gap line). Net actionable surviving findings across n=4 sample: 0. Demoted to opt-in trigger (see Content-triggered below). `comment-analyzer` and `code-simplifier` never appeared in measured sample — also demoted to explicit opt-in pending evidence.
-
-#### Opt-in only (add `haiku-opt-in: <name>` to entity body):
-
-| Agent | Skill | Trigger |
-|-------|-------|---------|
-| `insecure-defaults` | `trailofbits:insecure-defaults` | `haiku-opt-in: insecure-defaults` |
-| `sharp-edges` | `trailofbits:sharp-edges` | `haiku-opt-in: sharp-edges` |
-| `variant-analysis` | `trailofbits:variant-analysis` | `haiku-opt-in: variant-analysis` |
-| `pr-test-analyzer` | `pr-review-toolkit:pr-test-analyzer` | `haiku-opt-in: pr-test-analyzer` |
-| `type-design-analyzer` | `pr-review-toolkit:type-design-analyzer` | `haiku-opt-in: type-design-analyzer` |
-| `comment-analyzer` | `pr-review-toolkit:comment-analyzer` | `haiku-opt-in: comment-analyzer` |
-| `code-simplifier` | `pr-review-toolkit:code-simplifier` | `haiku-opt-in: code-simplifier` |
-
-> **Demoted from content-triggered to opt-in** (2026-04 D1 measurement, n=5 ship-flow entities): `insecure-defaults`, `sharp-edges`, `variant-analysis`, `pr-test-analyzer`, `type-design-analyzer` — 0 dispatches across all 5 entities. Plugin/bash/markdown diffs do not match auth/route/bug/test/type triggers. `comment-analyzer` and `code-simplifier` were already opt-in. Net active agents: 2 defaults vs prior false complexity of 7 content-triggered rows.
-
-#### Summary by diff content (post-D1 measurement):
-
-| Diff content | Default | Opt-in | Total range |
-|---|---|---|---|
-| Non-source only (docs/SKILL.md/config) | (none — sonnet inline review) | (none) | **0 agents** |
-| S source (≤3 files) | code-reviewer (1) | 0-7 on request | 1 agent + opt-ins |
-| M source (4-15 files) | code-reviewer + silent-failure-hunter (2) | 0-7 on request | 2 agents + opt-ins |
-| L source (>15 files) | code-reviewer + silent-failure-hunter (2) | 0-7 on request | 2 agents + opt-ins |
-
-**Cost estimate:** haiku ~$0.05/agent → 0: $0, S: $0.05, M/L: $0.10 (down from $0.05-0.25 pre-056).
-
-**Re-evaluate at next D1 sample (current + 5 entities):** if any cut/demoted agent would have caught a missed bug found in PR review or production, calibrate back. Default stance: keep cuts, append evidence to MEMORY.md.
-
-**Haiku agent prompt template (FO uses this for each dispatched reviewer):**
-
-Each haiku agent receives:
-```
-You are a specialized code reviewer. Load Skill("{skill-name}") and apply it to this diff.
-
-## Diff
-git diff {execute_base}..HEAD
-
-## Rules
-- Report raw findings only — no severity, no fix recommendations
-- Each finding must include: file:line, exact code snippet (copy-paste, not paraphrased), check name
-- Do NOT assign severity — the sonnet verify ensign classifies
-- Return empty array [] if no checks trigger
-- A false finding is worse than no finding — you will be spot-checked
-```
-
-### Step 3.2: Read Haiku Review Findings
-
-Read `## Haiku Review` from the entity file (written by FO-dispatched haiku agents).
-
-Expected finding format from each haiku agent:
-```
-### {agent-name} ({skill-name})
-- file:line — `{exact code snippet}` — {check that triggered}
-- file:line — `{exact code snippet}` — {check that triggered}
-```
-
-If `## Haiku Review` is missing (FO skipped dispatch, or bare mode):
-- Run a single inline review yourself using the diff:
-  ```bash
-  git diff {execute_base}..HEAD
-  ```
-  Check: (1) changes match plan, (2) security, (3) dead code, (4) error handling, (5) stale refs.
-
-### Step 3.3: Spot-Check Haiku Citations (Hallucination Guard)
-
-**Spot-check every finding that carries a file:line citation — 100%, not a sample.**
-
-Haiku reviewers hallucinate prose content at plausible line numbers on prose-heavy diffs (comments, docstrings, SKILL.md text). Sampling 2-3 findings misses fabricated ones with probability ~40-60% when 1-of-5 is bogus. Precedent: entity #078 NIT-2 — haiku code-reviewer cited `map-helpers.sh:86` as containing `resolve_map_path "omitted" ...`; the string "omitted" did not exist anywhere in the file. Original 2-3 random sample missed it because the 2 sampled findings happened to be the real ones.
-
-**Procedure for each finding that cites a file:line**:
-
-1. Read the exact cited file at the cited line range (±2 lines for context).
-2. Does the quoted / described content actually exist there?
-
-| Result | Action |
-|--------|--------|
-| Content matches | Keep finding, proceed to classify |
-| Line shifted but content exists within ±5 lines | Keep finding, update line number |
-| Content does NOT exist at cited location OR anywhere nearby | DROP finding, record in `### Knowledge Captures` as `[D2-candidate] haiku {agent-name} hallucinated at {file}:{line} — claimed "{quoted text}", actually "{what's there}"` |
-| > 30% of an agent's findings are hallucinated | **Discard ALL findings from that agent** for this review, mark reviewer untrusted for this diff class in Knowledge Captures |
-
-**Findings WITHOUT file:line citations** (e.g., "approach is unsafe"): qualitative spot-check — read the diff and judge. These don't need per-line verification but still face the same drop-rate threshold.
-
-**Cost**: ~30s per finding. For typical 2-5 findings per review, total spot-check cost < 3 minutes — cheap relative to a false concern landing in the permanent entity body.
-
-### Step 3.4: Classify Findings
-
-For each surviving finding (from haiku agents, pre-scan, or inline review), YOU assign severity:
-
-| Severity | Routing |
-|----------|---------|
-| **BLOCKING** — security hole, broken functionality, data loss risk | NEEDS_FIX → report to FO |
-| **WARNING** — potential bug, missing edge case, weak error handling | Log, proceed if no BLOCKING |
-| **NIT** — style, naming, minor improvement | Log as non-blocking, auto-create draft entity if warranted |
-
-**If BLOCKING findings exist:**
-- Write classification to `### Review Findings`
-- Report NEEDS_FIX to FO with specific blocking issues
-- FO dispatches fix agent → re-dispatches haiku reviewers → you re-classify
-- Max 2 rounds, then escalate to captain
-
-```markdown
-### Review Findings
-Scope: {N} files, {M} haiku reviewers dispatched (or "inline review — bare mode")
-
-### Pre-scan
-- Stale references: {none | list}
-- Plan consistency: {all files match | discrepancies}
-- Constraint check: {all constraints respected | violations}
-
-### Haiku review (spot-checked)
-Spot-check: {N}/{M} citations verified — {all match | N hallucinations dropped}
-
-| Severity | File:Line | Description | Source |
-|----------|-----------|-------------|--------|
-| BLOCKING | src/api.ts:42 | Silent swallow of 4xx | silent-failure-hunter |
-| WARNING | src/types.ts:10 | Loose union type | type-design-analyzer |
-
-Verdict: {SHIP IT | NEEDS_FIX round N | escalated}
-```
+**Classify surviving findings**:
+- **BLOCKING** (security / broken / data-loss) → feedback to execute (max 2 rounds).
+- **WARNING** (potential bug / weak edge case) → log; proceed if no BLOCKING.
+- **NIT** (style / minor) → consider auto-fix per Step 5.
 
 ---
 
-## Step 4: Done Criteria UAT (Evidence Review + Spot-Check)
+## Step 4 — UAT (spot-check default, full re-run fallback)
 
-**Default: read execute's evidence and spot-check ≤2 critical DCs.** Full re-run is the fallback when evidence is unreliable, not the default.
+**Default: spot-check ≤2 critical DCs + evidence review.** Full re-run is fallback, not default. Evidence: 2026-04 D1 n=31 DCs changed 0 verdicts on full re-run.
 
-> **Why changed (2026-04 D1 measurement, n=31 DCs across 4 entities):** independent second-pass changed 0/31 verdicts. Re-running every DC procedure burned ~30% of verify wallclock without ever flipping a verdict. Spot-check + evidence review preserves the Bayesian update (catches execute self-deception or stale evidence) at a fraction of the cost. Full re-run remains available as fallback.
+### 4.1 — Evidence review
 
-### Step 4.1: Read Execute Evidence
+Read `execute.md → ## Execute UAT` (or `## Execute Output → ### Done Criteria Verification` for legacy). Each row must have:
+- Procedure from `plan.md → ### Verification Spec`
+- Concrete evidence (command output excerpt / file:line citation / screenshot path) — not just "✅"
 
-Read `## Execute UAT` (or `## Execute Output → ### Done Criteria Verification` for older entities). Verify each row has:
-- The procedure from `## Plan Output → ### Verification Spec`
-- Concrete evidence (command output excerpt, file:line citation, screenshot path) — not just "✅"
+**Degrade to 4.3 full re-run if**: evidence missing, only "ok"/"pass"/"✅", procedure differs from Verification Spec, OR ≥1 DC marked FAIL/degraded without explanation.
 
-**Degrade to full re-run (Step 4.3) if any of:**
-- Evidence column missing or contains only "ok" / "pass" / "✅" with no substance
-- Procedure differs from Verification Spec
-- ≥1 DC has `FAIL` or `degraded` status without explanation
+### 4.2 — Spot-check
 
-### Step 4.2: Spot-Check Critical DCs
+Pick 2 DCs: (1) **highest-risk** (priority `e2e > api > ui > cli > skill`; break ties by assertion complexity), (2) **random** from remaining. Re-run per type:
 
-Pick up to 2 DCs to re-run yourself:
-1. **Highest-risk DC** — typically `e2e` > `api` > `ui` > `cli` > `skill`. If multiple at the top tier, pick the one with the most complex assertion (e.g., expects multiple grep matches, or asserts on response body shape).
-2. **One sampled at random** from the remaining DCs.
-
-Re-run their procedures via Bash/curl/Skill per type:
-
-| Type | How to run |
-|------|-----------|
-| `cli` | Bash: run command, check exit code + output |
-| `api` | Bash: run curl command, check status + response |
-| `ui` | Bash: curl route + grep content. If e2e flow exists → `Skill("e2e-pipeline:e2e-test")` |
-| `skill` | `Skill("{skill-name}")` with probe prompt, check output shape |
-| `e2e` | `Skill("e2e-pipeline:e2e-test")` if available, otherwise degrade to `ui` + warn |
-
-Compare your spot-check result against execute's claim for those DCs:
+| Type | Primitive |
+|---|---|
+| `cli` | Bash: command + exit code + output grep |
+| `api` | Bash: curl + status + response shape |
+| `ui` | Bash: `curl -sfN <route> \| grep <assertion>` (MEMORY turbopack-streaming — `-N` mandatory for Next.js 16). Flow exists → `Skill: e2e-pipeline:e2e-test` |
+| `skill` | `Skill("<skill-name>")` with probe prompt, check output shape |
+| `e2e` | `Skill: e2e-pipeline:e2e-test` if flow present; else degrade to `ui` + warn |
 
 | Spot-check outcome | Action |
 |---|---|
-| Both DCs match execute | Trust the remaining DCs based on evidence review; proceed to output |
-| 1 mismatch | Re-run the mismatched DC's neighbors (same type or same code area). If neighbor also mismatches → Step 4.3 |
-| Both mismatch | Degrade to Step 4.3 — execute's evidence is unreliable across the board |
+| Both DCs match execute | Trust remaining DCs based on evidence; advance |
+| 1 mismatch | Re-run the mismatched DC's neighbors (same type or code area); neighbor mismatch → 4.3 |
+| Both mismatch | 4.3 — evidence unreliable |
 
-### Step 4.3: Fallback — Full Re-Run
+### 4.3 — Fallback: full re-run
 
-Triggered only by Step 4.1 evidence gap or Step 4.2 spot-check mismatch.
+Re-run every DC procedure via 4.2 type-dispatch table. Each result: infra-fail (feedback automated) or assertion-fail (specific evidence logged).
 
-Re-run every DC procedure as the previous "Independent Second-Pass" mandated. Use the same type dispatch table as 4.2.
+### 4.4 — Agent-browser escalation (UI-type DCs)
 
-### Failure classification (applies to spot-check or full re-run)
+After code-level DC verification, if any DC has type `ui` AND `e2e-pipeline` is installed (`claude plugins list | grep e2e-pipeline`), dispatch per DC to the narrowest primitive:
 
-- **Infra-fail** — command not found, server not running, binary missing, e2e infra unavailable → feedback to execute (automated, no captain)
-- **Assertion-fail** — command ran but output doesn't match expected → specific failure logged with evidence
-
-### Output
-
-Append `### UAT` subsection to the entity's `## Verify` section:
-
-```markdown
-### UAT
-
-Mode: {spot-check | full-rerun (fallback: <reason>)}
-
-| DC | Type | Assertion | Verify Procedure | Execute 1st | Verify | Evidence |
-|----|------|-----------|-----------------|-------------|--------|----------|
-| DC-1 | ui | Detail page with panel | `curl ... \| grep` | ✅ | ✅ spot-checked | "comment-panel" found |
-| DC-2 | ui | Input + submit button | `curl ... \| grep` | ✅ | ✅ trust (evidence: log line 47) | execute log line 47 |
-| DC-3 | api | POST returns 201 | `curl -s -w "%{http_code}" ...` | ✅ | ✅ spot-checked | 201, {"id":"abc"} |
-| DC-4 | e2e | Comment appears (SSE) | `e2e-test flows/comment-sse.yaml` | ⚠️ degraded to ui | ⚠️ degraded to ui | curl check only |
-| DC-5 | cli | Notification test | `bun test tests/notification.test.ts` | ✅ | ✅ trust | exit 0 in execute log |
-```
-
-The `Verify` column states the verification mode for each DC: `spot-checked`, `trust (evidence: <ref>)`, or `re-run (fallback)`.
-
-If any Done Criterion fails → feedback to execute with: DC number, type, procedure, expected vs actual. Max 2 rounds.
-
----
-
-## Step 4.1: Visual Verification (UI-type DCs)
-
-After all DC verification procedures pass, check if any DC has type `ui`:
-
-If yes AND `e2e-pipeline` is available (check: `claude plugins list 2>/dev/null | grep e2e-pipeline`):
-1. Dispatch `e2e-pipeline:e2e-walkthrough` in background (non-blocking) to screenshot the affected pages
-2. If entity has `## Design Reference` with screenshot paths → compare rendered screenshot against the design reference image
-3. If no `## Design Reference` → compare screenshot against DC assertions (does the rendered UI show what the DCs describe?)
-4. Report under `## Verify → ### Verdict` (or legacy `## Verify Report`): visual verification PASS/FAIL with screenshot evidence
-
-If `e2e-pipeline` is not available:
-- Flag in report: "⚠ Visual verification skipped — e2e-pipeline not installed. Install via marketplace for UI verification."
-- Do NOT block the pipeline — proceed with code-level verification result
-
----
-
-## Step 4.5: Knowledge Capture (Conditional)
-
-Scan all findings from quality gate, review, and UAT. Classify findings that **generalize beyond this entity**:
-
-**D1 — Skill-Level Pattern** (auto-write):
-Tag `[D1]` in `### Knowledge Captures`. Examples:
-- "Haiku agent `type-design-analyzer` hallucinated 60% — prefer `code-reviewer` for type checks"
-- "Quality gate: `bun lint` requires `--fix` run before commit in this project"
-
-**D2 — Project-Level Candidate** (staged for captain):
-Tag `[D2-candidate]` in `### Knowledge Captures`. Examples:
-- "All new API routes need rate limiting middleware — entity X shipped without it"
-- "Frontend routes must handle SSR — `window` access broke quality gate"
-
-Ship-review stage surfaces `[D2-candidate]` items to captain.
-
-**Skip when**: All findings are entity-specific. Log: `Knowledge capture: skipped — no findings met D1/D2 threshold`
-
----
-
-## Step 4.6: Auto-Fix Disposition (Before Writing Verdict)
-
-Before writing the Verdict section, **auto-fix any findings that meet ALL these criteria** — do NOT defer mechanical cosmetic fixes to captain:
-
-| Criterion | Description |
+| Primitive | When |
 |---|---|
-| Severity is NIT / non-blocking | BLOCKING and WARNING are NEVER auto-fixed (they need captain visibility or feedback-to-execute loop) |
-| Scope: comment / docstring / header inventory only | No logic, type, or behavior change |
-| Single file, ≤ 5 LOC net change | Larger scope = follow-up entity, not inline fix |
-| Fix is mechanical (no judgment required) | If the fix requires deciding between alternatives → captain call |
+| `e2e-pipeline:e2e-test` | Flow YAML exists at `.claude/e2e/flows/<feature>.yaml` — full flow execution with asserts |
+| `e2e-pipeline:e2e-walkthrough` | No flow; visual screenshot + optional video of affected pages |
+| `e2e-pipeline:ui-verify` | Declarative computed-style regression — fixed selectors × expected CSS values (design tokens / layout dimensions / theme changes) |
 
-**Also auto-codify knowledge captures that fit the inline-to-skill rule** (captain's principle: MEMORY is last resort, check if the lesson can be inlined into workflow/skills first):
+If `## Design Reference` present → compare screenshots against reference images. No reference → verify DC assertions against rendered UI. e2e-pipeline absent → log `visual verification skipped` but do NOT block.
 
-| If knowledge capture pattern | Action |
-|---|---|
-| Lesson applies to a specific skill stage at a specific step | Inline-edit the skill file (e.g., add a gate, strengthen a check). Record the skill edit commit SHA in the knowledge capture. Downgrade from [D2-candidate] to [inlined] |
-| Lesson is cross-skill / cross-project / behavioral (FO discipline) | Leave as [D2-candidate] for ship-review → CLAUDE.md candidacy |
-| Lesson is entity-specific one-off | Leave as [D1] — no upgrade |
-
-**Procedure**:
-
-1. For each eligible finding / capture, apply the fix via Edit tool.
-2. Re-run the affected quality-gate check (shellcheck / typecheck / relevant test) to confirm no regression.
-3. Commit with explicit path + pathspec lock. Message: `fix({component}): {summary} (verify NIT-{N})` for cosmetic fixes, or `harden({plugin}): codify {pattern} at {skill}:{step} (from verify capture)` for skill inlines.
-4. Record in `### Verdict` → `auto_fixes:` sub-field the list of `{finding-id | capture-id, commit-sha, before/after summary}`.
-
-**Rationale**: Captain doesn't need to review cosmetic fixes or obvious skill hardenings — they waste a round-trip cycle. Findings that CAN'T be auto-fixed (BLOCKING/WARNING, or needing judgment) remain in `### Review Findings` for captain awareness and potential feedback-to-execute.
-
-**Anti-pattern**: Do NOT auto-fix BLOCKING or WARNING severity. Do NOT auto-fix findings that touch logic. Do NOT rewrite core skill procedures (only add gates / checks / strengthen existing rules). If in doubt, don't auto-fix and leave for captain / feedback-to-execute.
-
-**Precedent**: entity #078 verify captured 2 NITs + 1 D2 dispatch-discipline observation. Post-verify captain had to manually direct "修該修的" + 3-observation MEMORY discussion before skill hardening happened. Auto-fix disposition would have:
-- Fixed NIT-1 (header inventory) inline before verdict
-- Inlined dispatch-discipline observation into ship-execute/SKILL.md before verdict
-- Left NIT-2 hallucination as [D2-candidate] (it's a reviewer-calibration note, not an entity fix)
-→ captain only sees non-auto-fixable items, shorter verify → ship path.
+Record verdicts under `### UAT → visual:` subsection.
 
 ---
 
-## Step 5: Write Verdict
+## Step 5 — Auto-fix NITs inline (before verdict)
 
-**Section tagging (mandatory):** The entire ## Verify section and each subsection must be wrapped. Example:
+**Apply only when ALL criteria met** (never BLOCKING / WARNING):
+- Severity ≤ NIT AND
+- Scope ∈ {comment, docstring, header inventory} — no logic, type, behavior change AND
+- Single file, ≤ 5 LOC net AND
+- Mechanical (no judgment between alternatives)
 
-```markdown
-<!-- section:verify -->
-## Verify
+For each eligible finding: Edit fix → re-run affected quality check → commit with explicit path (`git add <path> && git commit -m "fix(<component>): <summary> (verify NIT-<N>)" -- <path>`).
 
-<!-- section:quality-gate -->
-### Quality Gate
-{content}
-<!-- /section:quality-gate -->
+**Also auto-codify** knowledge captures that match inline-to-skill (captain principle: MEMORY last resort — check if lesson can be inlined into workflow first):
 
-<!-- section:review-findings -->
-### Review Findings
-{content}
-<!-- /section:review-findings -->
+| Capture pattern | Action |
+|---|---|
+| Lesson applies to specific skill stage at specific step | Inline-edit the skill file (add gate / check). Record commit SHA in capture; downgrade `[D2-candidate]` → `[inlined]`. |
+| Lesson is cross-skill / cross-project / behavioral | Leave as `[D2-candidate]` for ship-review → CLAUDE.md candidacy. |
+| Entity-specific one-off | Leave as `[D1]`. |
 
-<!-- section:verify-knowledge-captures -->
-### Knowledge Captures
-{content}
-<!-- /section:verify-knowledge-captures -->
+**Anti-pattern**: do NOT auto-fix findings that touch logic, do NOT rewrite core skill procedures (only add gates / strengthen existing rules).
 
-<!-- section:uat -->
-### UAT
-{table}
-<!-- /section:uat -->
+Record fixes in `### Verdict → auto_fixes:` with `{finding-id, commit-sha, before/after summary}`.
 
-<!-- section:verify-verdict -->
-### Verdict
-{fields}
-<!-- /section:verify-verdict -->
+---
 
-<!-- /section:verify -->
-```
+## Step 6 — Write `verify.md` + cross-review gate
 
-Tag list: `verify` (impl), `quality-gate` (impl), `review-findings` (impl), `verify-knowledge-captures` (impl), `uat` (impl), `verify-verdict` (impl)
+**Atomic write** via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify --entity=<id>-<slug>`. Writer handles atomic commit with explicit pathspec. No `-a`/`-A` (MEMORY #14/#25/#37).
 
-Append `### Verdict` subsection to the entity's `## Verify` section. This replaces legacy top-level `## Verify Report`.
+**Section tagging (mandatory)** — every H2/H3 wrapped in paired `<!-- section:tag -->` ... `<!-- /section:tag -->`. Tag list + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.verify`. Required subsections:
+- `### Quality Gate` — per-surface scoping decisions + check results + pre-existing attributions
+- `### Review Findings` — pre-scan + classified haiku table (file:line, severity, source, description)
+- `### Knowledge Captures` — `[D1]` / `[D2-candidate]` / `[inlined]` tags
+- `### UAT` — mode line + results table with `Verify` column (`spot-checked` / `trust (evidence: <ref>)` / `re-run (fallback)`)
+- `### Verdict` — `status:` (grep gate — `passed` | `failed` | `blocked`), `stage_cost:`, `auto_fixes:`, `started_at:` / `completed_at:` / `duration_minutes:`
 
-```markdown
-### Verdict
-status: {passed | failed}
-Verdict: {PASS | FAIL}
-Quality: {5/5 pass}
-Review: {verdict from Step 3}
-UAT: {all done criteria pass | N failed} (mode: {spot-check | full-rerun})
-Blocking issues: {none | list}
-Knowledge capture: {D1: N written, D2: M candidates | skipped}
-stage_cost: ${verify_cost} ({N} dispatches: {breakdown by model})
-started_at: "{ISO 8601 timestamp}"
-completed_at: "{ISO 8601 timestamp}"
-duration_minutes: {number}
-```
+FO greps `^status:` for the machine-readable gate. `Verdict:` line is human-facing summary.
 
-FO reads `status:` line (grep pattern `^status:`) for the authoritative gate and `stage_cost:` line for `token_actual` accumulation. The `Verdict:` line is a human-facing summary; `status:` is the machine-readable gate.
+### Cross-review gate (Principle 6 Rule C) — skipped on `--fast`
 
-Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes.
+Dispatch cross-review to counterpart teammate (`planner` if `verifier` just wrote) after `verify.md` lands. Reviewer model fallback when no team: fresh **sonnet** default; upgrade to fresh **opus** when entity's `appetite: big-batch`.
 
-If status `passed` → FO advances to ship.
-If status `failed` → FO routes feedback-to execute with the entire `## Verify` section as context.
+5-factor rubric adapted for verify:
 
-> Backward compat: pre-2026-04-19 entities used `## Verify Report` as a top-level H2. Both layouts are accepted by ship-review and ship-execute (pr-feedback mode). New entities should use `## Verify → ### Verdict`.
+| Factor | Verify interpretation |
+|---|---|
+| **Feasibility** | gate scope correct for diff domain (source vs non-source, scoped vs full)? |
+| **Executable scope** | verdict supported by evidence, not claim? |
+| **Quality** | ≥1 critical assumption verified? pre-scan ran? |
+| **DC adequacy** | scoped-gate spot-checks critical DCs? |
+| **Canonical sync** | canonical docs consistent post-execute (architecture-impact blocks applied)? |
 
-## Circuit Breakers
+Verdict: **PROCEED** → TaskUpdate verify=completed, FO advances. **VETO** → feedback-to-execute (max 2 rounds per stage; round 3 → PROMPT_CAPTAIN). **PROMPT_CAPTAIN** → halt, present `verify.md` + reviewer concern.
 
-- Quality gate fail → execute feedback: max 2 rounds
-- Review NEEDS_FIX → fix + re-review: max 2 rounds
-- Done criteria fail → execute feedback: max 2 rounds
-- After all max retries exhausted → escalate to captain
-- Infra-fail vs assertion-fail: infra routes to execute automatically, assertion requires specific evidence
+`--fast` captain mode skips this gate; captain takes responsibility for the bypass.
+
+---
+
+## Invariants + red flags (STOP or escalate if violated)
+
+- Quality gate is scoped to touched surfaces (MEMORY #10); full-project noise ≠ failure.
+- Per-error attribution: pattern-in-other-files does NOT excuse execute-introduced line (MEMORY #078).
+- Haiku spot-check = 100% of citations, not sample (MEMORY #078 precedent).
+- Default haiku pair for source-files; ZERO haiku for non-source-only diffs (Principle 3).
+- UAT spot-check default; full re-run is fallback, not default.
+- Auto-fix NEVER on BLOCKING/WARNING; never on logic; ≤5 LOC mechanical only.
+- `verify.md` must exist with `### Verdict → status:` before exit — even on blocked pre-check.
+- Pipeline invocation inherits `/ship` team; standalone may CreateTeam. Fresh-subagent only for Rule A exceptions.
+- Cross-review mandatory except `--fast`; VETO feedback capped at 2 rounds per stage.
+- Explicit pathspec on every commit (MEMORY #14/#25/#37). No `-a`/`-A`.
+- Parallel-session diff: scope review to `files_modified` when `git log <execute_base>..HEAD --oneline | grep -v <this-slug>` non-empty.
+- Feedback-to-execute capped at 2 rounds per gate (quality / review-BLOCKING / UAT); round 3 → PROMPT_CAPTAIN. Infra-fail (missing binary / server down) auto-routes; assertion-fail requires specific evidence.
+
+---
+
+## References
+
+- Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.verify`.
+- Per-stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify` (landed commit `acd73545`).
+- Section/map helpers: `plugins/ship-flow/lib/extract-section.sh`, `extract-map.sh`, `patch-map.sh`.
+- Runtime detect: `ship-flow:ship-runtime-detect`.
+- Layer A — haiku reviewers: `pr-review-toolkit:code-reviewer`, `pr-review-toolkit:silent-failure-hunter`, `trailofbits:*`, `pr-review-toolkit:{pr-test-analyzer,type-design-analyzer,comment-analyzer,code-simplifier}`.
+- Layer A — agent-browser: `e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, `e2e-pipeline:ui-verify`.
+- Layer A — inline review: `superpowers:verification-before-completion` (compatible mental model).
+- Upstream: `ship-flow:ship-shape` (team spawn), `ship-flow:ship` (pipeline entry).
+- Downstream: `ship-flow:ship-review` (reads `verify.md → status:`).
+- Principle 6: `plugins/ship-flow/INVARIANTS.md` (Rule A continuity + Rule B 3-layer + Rule C cross-review).
+- MEMORY: #5 (--next-id), #10 (scoped-gate), #14/#25/#37 (pathspec / staging), #30 (verification-dispatch), #35 (dispatch discipline, amended by Principle 6 Rule A), #078 (per-error attribution + 100% spot-check), opus-4.7-naturally-does (2026-04-23 harness diet), nextjs-16-streaming-curl-flag (turbopack `-N` requirement).

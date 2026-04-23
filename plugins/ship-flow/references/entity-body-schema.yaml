@@ -149,7 +149,7 @@ stages:
           section_tag: architecture-impact
           layer: decision
           optional: true
-          purpose: "Entity-declared architectural change. Consumed by ship-review `architecture-canon` mod to patch ARCHITECTURE.md atomically with read-first CAS (#060)."
+          purpose: "Entity-declared architectural change. Consumed by ship-review to patch ARCHITECTURE.md atomically with read-first CAS."
           fields:
             - name: target_section
               required: true
@@ -172,6 +172,60 @@ stages:
               required: false
               type: prose
               purpose: "Why this decision (optional; entity body provides fuller context)"
+        product_impact:
+          section: "### Product Impact"
+          section_tag: product-impact
+          layer: decision
+          optional: true
+          purpose: "Entity-declared product documentation change. Consumed by ship-review to patch PRODUCT.md atomically."
+          fields:
+            - name: target_section
+              required: true
+              type: string
+              purpose: "Which PRODUCT.md section this entity patches"
+            - name: summary
+              required: true
+              type: string
+              purpose: "1-3 sentence prose summary of the product change (feeds commit message)"
+            - name: before
+              required: true
+              type: markdown
+              purpose: "Current section content (for freshness check)"
+            - name: after
+              required: true
+              type: markdown
+              purpose: "New section content to commit"
+            - name: rationale
+              required: false
+              type: prose
+              purpose: "Why this product change (optional; entity body provides fuller context)"
+        readme_impact:
+          section: "### README Impact"
+          section_tag: readme-impact
+          layer: decision
+          optional: true
+          purpose: "Entity-declared README.md change. Consumed by ship-review to patch README.md atomically."
+          fields:
+            - name: target_section
+              required: true
+              type: string
+              purpose: "Which README.md section this entity patches"
+            - name: before
+              required: true
+              type: markdown
+              purpose: "Current section content (for freshness check)"
+            - name: after
+              required: true
+              type: markdown
+              purpose: "New section content to commit"
+            - name: rationale
+              required: false
+              type: prose
+              purpose: "Why this README change (optional)"
+            - name: entry_critical
+              required: false
+              type: boolean
+              purpose: "True if this README entry is user-facing critical (e.g. install instructions, breaking change notice)"
         size_assessment:
           section: "### Size Assessment"
           section_tag: size-assessment
@@ -517,6 +571,88 @@ stages:
         - "## Ship Output (legacy → ## Ship with same subsections)"
         - "## Ship Report (legacy → ## Ship → ### Verdict)"
     uat: null  # ship doesn't verify — verify already passed
+
+  # ===== REVIEW =====
+  review:
+    reads:
+      - "## Verify → ### Verdict (status: must be passed)"
+      - "## Execute Output → Execution Log"
+      - "## Sharp Output → Architecture Impact"
+      - "PRODUCT.md, ROADMAP.md"
+    output:
+      section: "## Review"
+      section_tag: review
+      layer: implementation
+      subsections:
+        pr_draft:
+          section: "### PR Draft"
+          section_tag: review-pr-draft
+          layer: implementation
+          fields:
+            - { name: title, type: string }
+            - name: body
+              type: prose
+              includes:
+                - "## Problem (from Sharp Output)"
+                - "## Done Criteria + Verification (from Verify UAT)"
+                - "## Changes (from Execute Output → Execution Log)"
+                - "## Quality Gate (from Verify → ### Quality Gate)"
+                - "Entity ID, tracker, cost footer"
+        roadmap_md_update:
+          section: "### ROADMAP.md Update"
+          section_tag: review-roadmap-update
+          layer: implementation
+          condition: "Only when ROADMAP.md exists and entity moved stage"
+          fields:
+            - { name: action, type: string, description: "Section moved (Now → Shipped, or similar)" }
+            - { name: patch_via, type: string, default: "patch-map.sh --mode=remove-row + append shipped" }
+        product_md_update:
+          section: "### PRODUCT.md Update"
+          section_tag: review-product-update
+          layer: implementation
+          condition: "Only when PRODUCT.md exists and capabilities changed"
+          fields:
+            - { name: capabilities_added, type: number }
+            - { name: stories_added, type: number }
+        architecture_changes:
+          section: "### Architecture Changes"
+          section_tag: review-architecture-changes
+          layer: implementation
+          condition: "Only when ## Sharp Output → ### Architecture Impact is present"
+          fields:
+            - { name: patch_citations, type: list, format: "- {section} patched via ship-review (commit: {sha})" }
+            - { name: patch_committed, type: boolean }
+        d2_knowledge_candidates:
+          section: "### D2 Knowledge Candidates"
+          section_tag: review-d2-knowledge-candidates
+          layer: implementation
+          condition: "Only if [D2-candidate] items exist from execute/verify"
+          fields:
+            - { name: candidates, type: list, description: "Presented to captain for CLAUDE.md approval" }
+        token_summary:
+          section: "### Token Summary"
+          section_tag: review-token-summary
+          layer: implementation
+          fields:
+            - { name: budget, type: string }
+            - { name: actual, type: string }
+            - { name: ratio, type: string }
+        review_report:
+          section: "### Review Report"
+          section_tag: review-report
+          layer: implementation
+          description: "Authoritative review outcome. FO grep-reads `status:` line."
+          fields:
+            - { name: status, type: enum, values: [passed, blocked], grepable: true }
+            - { name: stage_cost, type: string, format: "$X.XX (description)", grepable: true }
+            - { name: pr, type: string }
+            - { name: roadmap, type: string, description: "omit if no ROADMAP update" }
+            - { name: product, type: string, description: "omit if no PRODUCT update" }
+            - { name: architecture, type: string, description: "omit if no architecture change" }
+            - { name: started_at, type: string, format: "ISO 8601" }
+            - { name: completed_at, type: string, format: "ISO 8601" }
+            - { name: duration_minutes, type: number }
+    uat: null  # review does not re-run UAT; verify already passed
 
 # --- PR Feedback (re-entry) ---
 pr_feedback:

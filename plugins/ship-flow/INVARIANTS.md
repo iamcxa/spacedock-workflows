@@ -38,15 +38,23 @@ Three layers, each catching a different failure mode:
 
 **Rule**: Small single-purpose skills that re-implement dispatch/orchestration logic of a parent skill should fold into the parent with a `source:` tag on their content.
 
+**Split counting** (updated 2026-04-23 via entity #085 Wave 5b, commit `d51620e4`): stage-skills and utility-skills are counted SEPARATELY. Stage-skills have a hard cap ≤ 7; utility-skills are uncapped. Current inventory under the split rule:
+
+- **Stage-skills (≤7 cap)**: `ship-shape`, `ship`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review` — 6 total (under cap).
+- **Utility-skills (uncapped)**: `add-todos`, `ship-onboard`, `ship-runtime-detect` — 3 total.
+
+The pre-2026-04-23 "temp cap = 10" rule is superseded: `check-invariants.sh --check skill-count` now runs split-counted assertions. Rationale: stage-skills define the workflow's shape and must stay cognitively manageable; utility-skills are on-demand helpers that don't add pipeline surface area.
+
 **Failure modes**:
-1. Total skill count in `plugins/ship-flow/skills/*/SKILL.md` exceeds **7** (empirical soft cap from 2026-04-20 diagnosis and 047/049/064 harness-diet cuts)
-2. A SKILL.md wraps ≤ 20 LOC of actual logic (cargo-cult container)
+1. Stage-skill count exceeds **7** (workflow's shape no longer cognitively graspable)
+2. A stage SKILL.md wraps ≤ 20 LOC of actual logic (cargo-cult container)
+3. A utility-skill attempting to re-implement a stage-orchestration path (classification error — folds into the parent stage skill instead)
 
-**Grep check** (DC-6 skill-count): `check-invariants.sh --check skill-count` runs `ls plugins/ship-flow/skills/*/SKILL.md | wc -l` and fails if > 7.
+**Grep check** (DC-6 skill-count): `check-invariants.sh --check skill-count` uses the split taxonomy from `check-invariants.sh` (introduced in commit `d51620e4`): fails if stage-skills > 7.
 
-**Precedent**: 047 ship-capture removal (244 → 60 LOC bash), 064 pr-feedback-fold (253 → folded into ship-execute Mode B with `<!-- section:pr-feedback-mode -->` tag). See entity archives for fold pattern.
+**Precedent**: 047 ship-capture removal (244 → 60 LOC bash), 064 pr-feedback-fold (253 → folded into ship-execute Mode B with `<!-- section:pr-feedback-mode -->` tag), #085 Wave 5b T4 ship-sharp removal (commit `0b3fcc1a`, deprecated alias). See entity archives for fold pattern.
 
-**Source**: `memory/ship-flow-harness-diagnosis.md:46` (Feynman perspective — naming-only skill detection).
+**Source**: `memory/ship-flow-harness-diagnosis.md:46` (Feynman perspective — naming-only skill detection). Split counting rule sourced from entity #085 design decision 4.
 
 ---
 
@@ -121,10 +129,36 @@ Stage skills SHOULD augment with Layer B when superpowers atomic skill has scope
 **Rule C (Cross-Review Gate)**:
 Each stage transition has a cross-review gate. Primary author's teammate counterpart reviews output with structured prompt (feasibility / executable / quality / DC adequacy / canonical sync). FO decides final gate: veto / proceed / prompt captain.
 
+**Layer A delegation table** (examples from ship-flow 2.0, #085):
+
+| Stage skill | Layer A delegate | Scope | Exception? |
+|---|---|---|---|
+| ship-shape (Mode A) | — | autonomous proposer owns flow | Yes — documented in SKILL.md (brainstorming's HARD-GATE Q-loop conflicts with autonomous contract) |
+| ship-shape (Mode B) | `superpowers:brainstorming` | HARD-GATE Q-loop for ambiguous intake | No — clean delegation, Shape Up framing wraps brainstorm output |
+| ship-shape (Mode C) | `superpowers:writing-skills` | skill design + claude 4.7 knowledge + RED/GREEN/REFACTOR | No — Shape Up framing wraps skill design |
+| ship | — | pure orchestration (5-stage dispatch) | N/A — no logic to delegate |
+| ship-plan | `superpowers:writing-plans` | TDD order, wave safety, placeholder-free prose, task atomicity | No — Layer B wraps with scope anchoring + runtime detection + plan-checker |
+| ship-execute | `superpowers:subagent-driven-development` | task = subagent, status protocol, review loop | No — Layer B wraps with wave graph + escalation ladder + pathspec-lock + Mode B re-entry |
+| ship-verify | `e2e-pipeline:e2e-test` / `e2e-pipeline:e2e-walkthrough` / `ui-verify` | agent-browser E2E verification for UI-typed DCs | No — Layer B wraps with ROI-aware scoped gate + spot-check UAT |
+| ship-review | `pr-review-toolkit:review-pr` (optional for big-batch) | multi-persona PR review (code-reviewer / silent-failure-hunter / security-reviewer) | No — Layer B wraps with ARCHITECTURE.md / ROADMAP / PRODUCT canonical doc sync |
+
+**Cross-review gate 5-factor rubric examples** (adapted per stage — see each stage SKILL.md for full text):
+
+| Factor | ship-plan | ship-execute | ship-verify | ship-review |
+|---|---|---|---|---|
+| **Feasibility** | tasks achievable single-dispatch? | wave plan executed cleanly (no terminal BLOCKs)? | gate scope correct (scoped vs full)? | PR size reasonable? |
+| **Executable scope** | tasks atomic 1:1 with waves? | commits 1:1 with tasks (preserves bisect)? | verdict supported by evidence? | review scope matches actual diff? |
+| **Quality** | Verification Spec covers every DC (≥1 structural-parity for UI)? | atomic pathspec, T1+T2 passed per task? | ≥1 critical assumption verified? | no silent failures; arch commits BEFORE PR body cites? |
+| **DC adequacy** | observable (no "works correctly")? | AC procedures ran; output captured? | spot-checks critical DCs? | PR body DC+Verification table reproducible copy-paste? |
+| **Canonical sync** | ARCHITECTURE.md touches planned? | architecture-impact blocks updated post-execute? | canonical docs consistent post-execute? | ROADMAP + PRODUCT updated; Architecture Changes cited? |
+
+All stages use the same reviewer fallback pattern (Q1 from Wave 2 captain answers): cross-teammate counterpart → fresh sonnet default → fresh opus when `appetite: big-batch`. Verdict set: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**.
+
 **Failure modes**:
 1. Agent dispatches fresh-context subagent for within-pitch stage transition without justifying one of the exceptions in Rule A.
 2. Stage skill reinvents Layer A logic (e.g., rewrites brainstorming procedure) instead of invoking the superpowers atomic skill — OR creates an undocumented Layer A exception.
 3. Stage transition lacks cross-review gate.
+4. Cross-review 5-factor rubric adapted per stage MUST keep the same factor names (feasibility / executable scope / quality / DC adequacy / canonical sync) — rubric drift breaks cross-stage review-pattern recognition.
 
 **Enforcement**: Tier B (design-review / Captain-Gate Checklist). No grep enforcement — dispatch choice depends on context that grep cannot see.
 
@@ -162,7 +196,7 @@ Used for design-review of any skill/plan/entity change that may create a captain
 4. **If the skill re-implements dispatch or orchestration logic similar to another skill**, can it fold via `source:` tag pattern (Principle #2) instead of living as a separate skill?
 5. **If a new captain-prompt adds an enum with ≥ 3 values**, decompose into N boolean predicates OR provide a deterministic decision tree. No "ask me depending on the vibe" gates.
 6. **Principle 6 (Context Continuity + Layered Skill Architecture)**: design-review each stage transition for named-teammate-default (Rule A), Layer A delegation compliance or documented exception (Rule B), and cross-review gate presence (Rule C). Tier B.
-7. **If this commit adds or substantially modifies a persistent strategic doc** (adoption audit, design draft, SKILL.md semantic change, canonical `PRODUCT.md` / `ARCHITECTURE.md` / `ROADMAP.md` / `CONTRACT.md` entries, architecture-canon mod output), was a fresh-context verification subagent dispatched to verify low-confidence claims (non-trivial counts, `file:line` citations, consumer-list completeness, enforcement-strength assertions) before commit? Trigger threshold: ≥ 5 claims with less than HIGH confidence, or reorganization of architectural decisions. Verification dispatch is findings-only (no synthesis delegation — the author retains judgment on corrections). **Precedent**: `docs/ship-flow/adoption-readiness-audit.md` (2026-04-21) — sonnet subagent verified 9 claim groups, corrected 14→29 opinion inventory, surfaced 6 unexpected findings. Pattern aligned with dispatch-discipline counter-entry (MEMORY tail 2026-04-21 post-#075).
+7. **If this commit adds or substantially modifies a persistent strategic doc** (adoption audit, design draft, SKILL.md semantic change, canonical `PRODUCT.md` / `ARCHITECTURE.md` / `ROADMAP.md` / `CONTRACT.md` entries), was a fresh-context verification subagent dispatched to verify low-confidence claims (non-trivial counts, `file:line` citations, consumer-list completeness, enforcement-strength assertions) before commit? Trigger threshold: ≥ 5 claims with less than HIGH confidence, or reorganization of architectural decisions. Verification dispatch is findings-only (no synthesis delegation — the author retains judgment on corrections). **Precedent**: `docs/ship-flow/adoption-readiness-audit.md` (2026-04-21) — sonnet subagent verified 9 claim groups, corrected 14→29 opinion inventory, surfaced 6 unexpected findings. Pattern aligned with dispatch-discipline counter-entry (MEMORY tail 2026-04-21 post-#075).
 
 ---
 

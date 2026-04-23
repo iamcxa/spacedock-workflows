@@ -62,7 +62,43 @@ Emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/refe
 
 ### Architecture-impact (only when ARCHITECTURE.md moves)
 
-Skip for pure bug / UI polish / docs. Run when L0 surfaces drift OR new decision belongs in ARCHITECTURE.md. Draft `<!-- section:architecture-impact -->` per child; pre-fill `before:` via `bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <section>`. Uncertain → emit assumption `verified_by: design-contract`. Consumer mod: `docs/ship-flow/_mods/architecture-canon.md`.
+Skip for pure bug / UI polish / docs. Run when L0 surfaces drift OR new decision belongs in ARCHITECTURE.md. Draft `<!-- section:architecture-impact -->` per child; pre-fill `before:` via `bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <section>`. Uncertain → emit assumption `verified_by: design-contract`. Consumer: ship-review planner dispatch patches ARCHITECTURE.md via `patch-map.sh --if-hash`.
+
+### Product-impact (only when PRODUCT.md moves)
+
+Trigger conditions (any):
+- New user-facing capability (adds row to `## Current Capabilities`).
+- New user story accepted (JTBD Persona / Action / Outcome).
+- Constraint added / relaxed (hard limits section).
+- "Who It Serves" / "Why It Exists" shifts.
+
+Skip when: pitch is pure internal refactor / infra / bug fix with no user-facing surface.
+
+Draft `<!-- section:product-impact -->` per affected child:
+- `target_section`: e.g. `capabilities`, `user-stories`, `constraints`.
+- `before` / `after`: current vs new section content.
+- `rationale`: why this product-level change.
+
+Schema: `entity-body-schema.yaml` → `product-impact` block. Consumer: ship-review planner dispatch patches PRODUCT.md via `patch-map.sh --if-hash`.
+
+### Readme-impact (only when README.md user-facing prose moves)
+
+Trigger conditions (any):
+- New user-facing command / flag / env var added.
+- Install procedure changes.
+- Breaking change to existing command (renamed / removed flag).
+- Version bump affecting adopter upgrade path.
+- Any change to README's Installation / Usage / Commands / Quick Start sections.
+
+Draft one `<!-- section:readme-impact -->` block per affected README section:
+- `target_section`: prose heading ("Installation", "Commands", etc.).
+- `before` / `after`: current vs new prose.
+- `rationale`: why.
+- `entry_critical: true` if the change affects first-time adopter success (triggers cross-review enhanced audit at ship-review).
+
+Schema: `entity-body-schema.yaml` → `readme-impact` block. Consumer: ship-review planner dispatch applies via Edit tool + explicit pathspec commit (README is prose-heavy, typically no section tags — DO NOT use patch-map.sh).
+
+Skip when: pitch is pure internal refactor, bug fix, or infrastructure (no user-facing surface change).
 
 ### Compose + present proposal
 
@@ -102,7 +138,7 @@ Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 
 ### Cross-review gate (before captain gate) — Principle 6 Rule C
 
-Dispatch cross-review to `executer` teammate (or fresh sonnet if no team). Rate PASS/WARN/FAIL on 5 factors (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected) then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
+Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 5-factor rubric (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
 
 ---
 
@@ -122,7 +158,7 @@ Exception rationale: brainstorming's Q-loop handles discovery; Shape Up framing 
 
 **Delegation**: `superpowers:writing-skills` owns skill design + claude 4.7 knowledge + RED/GREEN/REFACTOR + frontmatter discipline. Do NOT re-teach.
 
-**Flow**: announce mode → `Skill: superpowers:writing-skills` → on completion apply Layer B wrap: appetite (`small-batch` single SKILL.md / `medium-batch` multi-file); children usually 1 (decompose only if design spans multi SKILL.md / lib scripts); assumptions extracted from writing-skills invariants (frontmatter valid, description matches trigger, etc.), ≥1 critical; architecture-impact only if new skill reshapes plugin structure. Cross-review gate → present proposal → captain gate.
+**Flow**: announce mode → `Skill: superpowers:writing-skills` → on completion apply Layer B wrap: appetite (`small-batch` single SKILL.md / `medium-batch` multi-file); **children = 1 per SKILL.md (default)**; decompose into ≥2 children ONLY when (a) design spans **different SKILL.md files** OR (b) supporting **scripts/tests need separate landing** than the skill (e.g., lib script lands before skill references it). Assumptions extracted from writing-skills invariants (frontmatter valid, description matches trigger, etc.), ≥1 critical. Architecture-impact only if new skill reshapes plugin structure. Cross-review gate → present proposal → captain gate.
 
 Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Shape Up framing is Layer B.
 
@@ -180,7 +216,7 @@ Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `app
 - Mode A: no multi-turn captain Qs before proposal. One intake clarification max → else route to Mode B.
 - Atomic writes via `shape-confirm.sh` only; no direct entity/ROADMAP edits; no `-a`/`-A` staging.
 - Proposal before L0 subagent returned → stale synthesis.
-- Pitch moves ARCHITECTURE.md without `architecture-impact` block → silent drift at ship-review.
+- Pitch moves ARCHITECTURE.md / PRODUCT.md / README.md without matching impact block (`architecture-impact` / `product-impact` / `readme-impact`) → silent drift at ship-review (planner dispatch has nothing to patch).
 - Within-pitch stage transition via fresh-subagent without (a/b/c/d) exception → Rule A violation.
 - Mode B/C re-teaches Layer A procedure → Rule B violation.
 - `--next-id` → `shape-confirm.sh` commit = ONE uninterrupted pair (MEMORY #5).
