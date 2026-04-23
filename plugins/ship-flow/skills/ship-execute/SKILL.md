@@ -1,676 +1,265 @@
 ---
 name: ship-execute
-description: "Use when executing a plan's tasks via ensign dispatch. Agent-autonomous: wave-parallel dispatch with per-task model hints, implementer→reviewer two-stage loop, BLOCKED escalation ladder. No captain gate."
+description: "Use when executing a plan's tasks via wave-parallel dispatch. Agent-autonomous: wave graph traversal with per-task model hints, implementer→reviewer two-stage loop, BLOCKED escalation ladder (haiku→sonnet→opus), PR-feedback re-entry mode. Dispatched by /ship to `executer` teammate (SendMessage). Output: `<entity-folder>/execute.md`. Layer A delegation: superpowers:subagent-driven-development for dispatch philosophy."
 user-invocable: false
-argument-hint: "[entity-slug]"
+argument-hint: "[entity-id | slug]"
 ---
 
-# Ship-Execute — Wave-Parallel Dispatch and Build
+# Ship-Execute — EXECUTE Stage (2.0)
 
-You are running the EXECUTE stage of ship-flow. No captain interaction — dispatch agents wave-by-wave, verify each task, handle failures via escalation ladder.
+You run EXECUTE. Output: `<entity-folder>/execute.md`. Dispatched by `/ship` to `executer` teammate via SendMessage. No captain gate.
 
-## Entity Body Contract
+**Pipeline position**: reads `plan.md` → wave-by-wave dispatch + review → commits → produces `execute.md` → cross-review gate → advance to verify.
 
-**Schema:** `references/entity-body-schema.yaml` → `stages.execute`
+## Entity body contract (schema-as-prose)
 
-**Reads:** `## Plan Output` (all subsections), `## Sharp Output` → Done Criteria
-**Writes:**
-- `## Execute Output` — subsections: Execution Log (per-task table), Issues Found, Knowledge Captures (D1/D2)
-- `## Execute Report` — status, stage_cost, tasks summary, knowledge capture
-- `## Execute UAT` — first-pass AC verification (not authoritative — verify re-runs independently)
+- Reads: `plan.md` (`## Plan`, `## Verification Spec`), sharp `## Done Criteria`, `## PR Review Feedback` (if Mode B).
+- Writes: `<entity-folder>/execute.md` sections — `## Execution Log` (per-task table: status / wave / model / files / verification), `## Issues Found`, `## Knowledge Captures` (D1/D2), `## Execute UAT` (first-pass AC verification, not authoritative), `## Execute Report` (status / stage_cost / tasks summary).
+- Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.execute`.
 
----
+## Layer A delegation (Principle 6 Rule B)
 
-<!-- section:pr-feedback-mode -->
-## Step 0: PR-Feedback Mode Detection
+`superpowers:subagent-driven-development` owns dispatch philosophy (one task = one subagent, status protocol DONE/NEEDS_CONTEXT/BLOCKED, review loop). **Do NOT re-teach.** Ship-execute wraps with Layer B augmentation:
 
-Before entering the normal dispatch loop, check if this invocation is a PR-feedback re-entry.
-
-**Trigger condition** — enter Mode B (PR-feedback) when BOTH are true:
-1. Entity frontmatter `pr_feedback_round` field exists AND > 0 (set by prior rollback or by captain)
-2. Entity has `pr:` frontmatter field AND no current `## PR Review Feedback` section (OR the section is stale vs current PR review state)
-
-Otherwise → Mode A (normal execute). Skip to Step 1.
-
-### Mode B: PR-Feedback Ingestion (folded 2026-04-21 — `source: pr-feedback`)
-
-> **Source tag**: this block is tagged `source: pr-feedback` (mirrors the provenance field used on dispatched task metadata). The tag identifies content folded from the retired PR-feedback re-entry skill per cut principle #2 (separate-skill-for-small-function → inline-in-parent with tag). 046e invariants CI and any future harvesting/audit tooling should grep on `source: pr-feedback` OR `<!-- section:pr-feedback-mode -->` to locate this block.
-
-#### B.1: Fetch and classify PR comments
-
-Read entity `pr:` field. Fetch reviews via VCS CLI:
-
-```bash
-# Inline VCS detection (3-line; full detection + close logic in bin/pr-feedback-rollback.sh)
-if git remote -v | grep -q github; then PR_VIEW="gh pr view"; else PR_VIEW="glab mr view"; fi
-$PR_VIEW <pr-number> --json reviews,comments
-# Also inline review comments (file:line — GitHub):
-# gh api repos/{owner}/{repo}/pulls/{pr-number}/comments --jq '.[] | "\(.path):\(.line) — \(.body)"'
-# GitLab equivalent:
-# glab api projects/{project}/merge_requests/{mr-iid}/notes --jq '.[] | "\(.position.new_path):\(.position.new_line) — \(.body)"'
-```
-
-For each CHANGES_REQUESTED review or inline comment, classify against `## Sharp Output → ### Done Criteria`:
-- Matches a DC by assertion text (or references a file:line inside a DC-bearing task's `files_modified`) → classification=`assertion-fail`, route=`execute`
-- Describes a NEW requirement not in DCs → classification=`coverage-gap`, route=`execute`
-- Raises architectural concern → classification=`architecture`, route=`plan`
-- Style/naming nit → classification=`nit`, route=no-rollback (log only)
-
-#### B.2: Write `## PR Review Feedback` classification table
-
-Tagged section `<!-- section:pr-review-feedback -->`. Columns: # / Comment / DC / Classification / Route to.
-
-```markdown
-<!-- section:pr-review-feedback -->
-## PR Review Feedback
-
-PR: #{pr-number}
-Reviewer: {author}
-Date: {ISO 8601}
-
-| # | Comment | DC | Classification | Route to |
-|---|---------|----|----|---|
-| 1 | "POST /api/comments returns 500 when body is empty" | DC-3 | assertion-fail | execute |
-| 2 | "Missing auth middleware on new route" | — | coverage-gap | execute |
-| 3 | "Should use event-driven not polling" | — | architecture | plan |
-| 4 | "Rename `handleStuff` to `handleComment`" | — | nit | — (log only) |
-<!-- /section:pr-review-feedback -->
-```
-
-#### B.3: Determine rollback target
-
-Deepest wins: `architecture` > `assertion-fail|coverage-gap` > `nit`. If ONLY nits → no rollback, close with comment explaining follow-up will be a separate entity.
-
-#### B.4: Write guidance section for next dispatch
-
-If target=execute → write `## Execute Guidance` (tagged `<!-- section:execute-guidance -->`) with flagged-item list + passing-task exclusion list:
-
-```markdown
-<!-- section:execute-guidance -->
-## Execute Guidance (from PR review)
-
-Focus on these items — PR reviewer flagged them:
-{list of assertion-fail and coverage-gap items with DC references}
-
-Do NOT re-implement tasks that passed. Only fix the flagged items.
-Previous passing tasks: {list from ## Execute Output → ### Execution Log where status=done and not flagged}
-<!-- /section:execute-guidance -->
-```
-
-If target=plan → write `## Plan Guidance` (tagged `<!-- section:plan-guidance -->`):
-
-```markdown
-<!-- section:plan-guidance -->
-## Plan Guidance (from PR review)
-
-Architecture concern raised by reviewer:
-{architecture comment text verbatim}
-
-Re-plan with this constraint. Previous plan is in ## Plan Output → ### Plan (may need partial rewrite).
-<!-- /section:plan-guidance -->
-```
-
-#### B.5: Invoke rollback helper + exit
-
-```bash
-bash plugins/ship-flow/bin/pr-feedback-rollback.sh <entity-file> <target-status> <pr-number> <round>
-```
-
-Helper flips frontmatter `status:` to target, bumps `pr_feedback_round`, closes PR via detected VCS (github/gitlab). Do NOT delete branch — next execute pass adds commits to the same branch, ship opens new PR.
-
-**Exit ship-execute after B.5.** FO sees `status: execute|plan` flip → re-dispatches ship-execute (or ship-plan if target=plan). On re-entry with `## Execute Guidance` now present, Mode A filters tasks using guidance's flagged-item list.
-
-### Circuit breaker (Mode B)
-- `pr_feedback_round` > 3 → refuse and escalate to captain ("3 PR review rounds without approval, manual intervention needed")
-- PR already merged → refuse rollback, suggest new entity for follow-up fixes
-- Only nits → log + close with comment, no rollback (nits addressed in separate entity)
-- Do NOT force-push or rebase — add fixup commits so reviewer can see what changed
-- Do NOT dismiss PR reviews — reviewer feedback is sovereign; classify and route, don't argue
-<!-- /section:pr-feedback-mode -->
+- Wave graph traversal (strict wave-sequential; parallelism within wave when no `files_modified` overlap).
+- Tiered quality check (T1 build/typecheck/test; T2 frontend smoke via curl).
+- BLOCKED escalation ladder (haiku → sonnet → opus; never same-tier retry).
+- Benign-drift pre-check (anchor-drift / file-renamed / semantic-grep-mismatch auto-resolve before escalation).
+- Serial commits per wave with pathspec-lock (parallel-session contamination defense).
+- PR-feedback re-entry mode (Mode B).
+- Architecture snippet injection into troop prompts.
 
 ---
 
-## Step 1: Read Plan and Build Wave Graph
+## Flow
 
-**(Mode A — normal execute. If Mode B triggered in Step 0, skill exits before reaching Step 1.)**
+**Phases (TaskCreate sub-tasks — inherit from /ship umbrella when pipeline-dispatched):**
+`mode-detect` → `read-plan` → `wave-graph` → `arch-snippet` → `wave-execute` (per wave: `dispatch → review → commit`) → `ac-verify` → `cross-review` → `emit-execute.md`
 
-**Section extraction:** When reading a specific section from an entity file, prefer tag-based extraction over H2 boundary grep:
+### Step 0 — Mode detection
+
+Check entity frontmatter `pr_feedback_round`:
+
+- `> 0` AND `pr:` set AND no current `## PR Review Feedback` section → **Mode B** (PR-feedback re-entry). See Step 0B.
+- Otherwise → **Mode A** (normal execute). Proceed to Step 1.
+
+### Step 0B — Mode B flow (PR-feedback re-entry)
+
+Fetch PR reviews via VCS CLI (`gh pr view --json reviews,comments` for GitHub; `glab mr view` for GitLab). Classify each comment as BLOCKING (architecture / correctness) / NITS (style / naming) / OBSERVATIONS.
+
+- All NITS → log + close PR comment, no rollback (nits go in separate entity).
+- BLOCKING target = execute → write `## Execute Guidance` section (tagged `<!-- section:execute-guidance -->`) with flagged-items list; run `bash plugins/ship-flow/bin/pr-feedback-rollback.sh <entity-file> execute <pr#> <round>`.
+- BLOCKING target = plan (architecture concern) → write `## Plan Guidance` section; rollback target=plan.
+
+Exit after rollback. FO re-dispatches ship-execute (or ship-plan) on next status cycle.
+
+**Circuit breakers**: `pr_feedback_round > 3` → escalate captain. PR already merged → refuse rollback. Do NOT force-push / rebase (add fixup commits).
+
+### Step 1 — Read plan + build wave graph
+
+Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> plan`. Parse tasks: files, steps, verify commands, model hints, wave assignments.
+
+Group by wave (0, 1, 2, ...). Wave dependency sanity: for each task in wave N, every `read_first` path either exists in worktree OR is in `files_modified` of a task in wave <N. Violation → `## Execution Log status: blocked, reason: wave dependency violation` and return. **Never silently reorder waves** — plan stage owns topology.
+
+**Blocker**: plan missing or malformed → `status: blocked` and return.
+
+### Step 1.5 — Architecture snippet (ARCH_SNIPPET for troop context)
+
 ```bash
-bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
-```
-Falls back to H2 boundary regex automatically for legacy (untagged) entities.
-
-Record the current time as the stage start timestamp (ISO 8601 format).
-
-Read the entity file. Extract `## Plan Output → ### Plan` section — parse all tasks with their files, steps, verification commands, model hints, and **wave assignments**.
-
-Build the wave graph:
-- Group tasks by wave number (0, 1, 2, ...)
-- Wave 0: test infrastructure (if declared)
-- Same-wave tasks: can run in parallel (if no file overlap)
-- Cross-wave: strictly sequential — wave N+1 starts only after wave N is fully committed
-
-**Wave dependency sanity check**: For each task in wave N, verify that every path in its `read_first` list either (a) already exists in the worktree, or (b) is listed in `files_modified` of a task in wave < N.
-
-If any violation found → write `### Execution Log` (under `## Execute Output`) with `status: blocked, reason: wave dependency violation — {details}` and return. **Do NOT silently reorder waves.** The plan stage owns wave topology.
-
-**Input validation**: If `## Plan Output → ### Plan` is missing or malformed → write `### Execution Log` (under `## Execute Output`) with `status: blocked` and return. Do NOT execute on partial input.
-
-### Step 1.5: Architecture snippet for troop context (#060)
-
-Before dispatching troops, build an `ARCH_SNIPPET` variable holding the
-`ARCHITECTURE.md` sections the troop needs to stay consistent with canonical
-technical context:
-
-```bash
-# Always include constraints (hard limits every task must honor)
 ARCH_SNIPPET="$(bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md constraints 2>/dev/null || true)"
-
-# If entity declares architecture-impact, also include the target section
 TARGET=$(bash plugins/ship-flow/lib/extract-section.sh "$ENTITY_FILE" architecture-impact 2>/dev/null | awk '/^target_section:/ {print $2; exit}')
 if [ -n "$TARGET" ] && [ "$TARGET" != "constraints" ]; then
   ARCH_SNIPPET="${ARCH_SNIPPET}"$'\n\n'"$(bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md \"$TARGET\" 2>/dev/null || true)"
 fi
 ```
 
-Include `$ARCH_SNIPPET` in every troop's dispatch prompt under a `### Architecture context` block (see Dispatch Pattern below). This grounds task implementation in the canonical architecture — troops can reason about "what pattern does this component already follow" instead of guessing.
+Inject `$ARCH_SNIPPET` into every troop prompt under `### Architecture context` block. Skip block if ARCHITECTURE.md absent (`ARCH_SNIPPET=""`). FO uses it for its own context in inline mode too.
 
-**Skip when `ARCHITECTURE.md` absent** — some projects have not bootstrapped an ARCHITECTURE.md yet. If the file is missing, set `ARCH_SNIPPET=""` and omit the `### Architecture context` block from the prompt; tasks still run, just without architectural grounding.
+### Step 2 — Execute wave-by-wave (delegate dispatch to Layer A)
 
-**Inline-mode note** — when FO is implementing tasks inline (no Agent dispatch, per the #057/058/059 precedent), FO still reads `ARCH_SNIPPET` at this step for its own contextual awareness; there is no separate "dispatch prompt" to inject into.
+Invoke `Skill: superpowers:subagent-driven-development` for dispatch philosophy. It owns: task = subagent, status protocol, review loop structure. **Do NOT re-teach.**
 
----
+**Layer B wrap** (ship-execute owns):
 
-## Runtime Detection
+- **Runtime detection** — invoke `ship-flow:ship-runtime-detect` before any quality check to populate `{commands.test/build/typecheck/lint/dev}`.
+- **Dispatch discipline** — default path: every task gets dispatched via Agent tool per plan's `model:`. "Agent tool not available" is a false claim in ensign context unless probe (`Agent(subagent_type: general-purpose, model: haiku, prompt: "return OK")`) returns runtime error. Inline exception requires ALL THREE: pure file-string replace + verbatim spec + single file <20 LOC; plus recorded verbatim probe error.
+- **Parallelism within wave** — tasks with no `files_modified` overlap → dispatch in parallel (multiple Agent calls in one tool-call block). Overlap or `serial: true` → sequential within wave. Never start wave N+1 until wave N fully committed.
+- **Self-drive (anti-idle)** — no idle between tasks. After DONE + commit + review, immediately proceed. Entire execute stage = single continuous run.
 
-Before running any quality check or dev server command, invoke `ship-flow:ship-runtime-detect` skill to populate `{commands.test/lint/dev}` used in subsequent steps.
+**Dispatch prompt anatomy** (ship-execute fills in, Layer A teaches why):
+- Task text from plan (verbatim).
+- Project / entity context.
+- `### Architecture context` block with `$ARCH_SNIPPET` when non-empty.
+- Status protocol reminder (DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED).
+- Tiered quality check spec (T1 always, T2 if frontend touched).
+- `Do NOT commit — return changed_files and status.` (orchestrator owns commits).
 
-## Self-Drive Rule (Anti-Idle)
+### Step 2.5 — Tiered quality check (mandatory per task before DONE)
 
-**Do not idle between tasks.** After completing one task (DONE, commit, review), immediately proceed to the next task in the current wave or advance to the next wave. Do not wait for external input between tasks. The entire execute stage is a single continuous run — you have all the context you need from the Plan section.
-
-If you find yourself at a turn boundary with remaining tasks, your next action must be dispatching or implementing the next task. Pausing between tasks wastes time and risks session-level idle timeout.
-
----
-
-## Step 2: Execute Tasks (Wave-by-Wave)
-
-Iterate waves sequentially. Inside each wave, dispatch implementation subagents:
-
-### Dispatch Discipline — No Inline Rationalization
-
-**Default path**: every task gets dispatched via the Agent tool per Dispatch Pattern below. The plan's `model:` field (haiku/sonnet) is the authoritative dispatch target.
-
-**"Agent tool not available" is a false claim in `spacedock:ensign` context.** The ensign agent definition grants `Tools: All tools` including Agent. If you are about to inline a task citing tool unavailability, you are rationalizing. Evidence required before any inline:
-
-1. Probe Agent tool with a trivial call:
-   ```
-   Agent({subagent_type: "general-purpose", model: "haiku", description: "probe", prompt: "return OK"})
-   ```
-2. If probe returns OK → Agent IS available. Proceed with dispatch per Pattern below. No inline.
-3. If probe returns an actual runtime error → record the verbatim error in `## Execute Report`, then inline only if ALL narrow-exception criteria below also hold.
-
-**Narrow inline exception** (probe must have actually failed AND all 3 must hold):
-- Task is pure file-string replacement via Edit tool
-- Spec is verbatim copy with no interpretation / judgment required
-- Single file, < 20 LOC net change
-
-**Recording rule**: any inline execution MUST log in `### Execution Log` the real error that blocked dispatch (verbatim quote, not paraphrase). Verify stage treats "Agent tool not available" without a quoted error as a dispatch-discipline violation and records it as [D2-candidate] in Knowledge Captures. Precedent: entity #078 execute ensign — inlined 3 haiku tasks with false unavailability claim; outcome was green but the rationale was fabricated.
-
----
-
-### Dispatch Pattern
-
-For each task in the current wave:
-
-```
-Agent(
-  description: "Task {N}: {name}",
-  model: {task.model},  // haiku or sonnet from plan
-  prompt: |
-    You are implementing one task from a ship-flow plan.
-
-    ## Task
-    {full task text from plan}
-
-    ## Context
-    Project: {project description}
-    Entity: {entity title} — {problem summary}
-    {If project skills relevant: "Available skill: {skill} — use it for {purpose}"}
-
-    ### Architecture context          ← include only when $ARCH_SNIPPET non-empty (Step 1.5)
-    {$ARCH_SNIPPET — constraints + optional target_section from ARCHITECTURE.md}
-
-    ## Your Job
-    1. Read the files listed in "Read first" before starting
-    2. Implement exactly what the task specifies
-    3. Write tests if the task says to
-    4. Run the verification command from "Done"
-    5. Report status with changed files list
-
-    ## Status Protocol (mandatory — report exactly one)
-
-    **DONE**: Task completed, verification passed. Return:
-    - changed_files: [list of files modified]
-    - verification_output: {command output}
-
-    **DONE_WITH_CONCERNS**: Task completed and verification passed, but you have doubts. Return:
-    - changed_files: [list of files modified]
-    - verification_output: {command output}
-    - concerns: {what worries you — correctness doubt, edge case, scope question}
-
-    **NEEDS_CONTEXT**: Cannot proceed — need specific information. Return:
-    - missing: {what you need — be specific}
-    - attempted: {what you tried}
-
-    **BLOCKED**: Cannot complete — plan issue or external dependency. Return:
-    - blocked_reason: {why — be specific}
-    - attempted: {what you tried}
-
-    ## Quality Check — Tiered (mandatory before reporting DONE)
-
-    ### Tier 1 (always, ~30s):
-    Run ALL of these. ALL must pass (using runtime-detected commands from Runtime Detection Preamble):
-    ```bash
-    {commands.build} 2>&1
-    {commands.typecheck} 2>&1
-    {commands.test} 2>&1
-    ```
-    If any fail → fix and retry (max 3 attempts).
-
-    ### Tier 2 (only if your task touched frontend files — ui/, app/, components/, pages/, *.tsx):
-    ```bash
-    timeout 30 {commands.dev} &
-    sleep 5
-    curl -sf http://localhost:3000 > /dev/null && echo "T2: root OK" || echo "T2: root FAIL"
-    curl -sf http://localhost:3000/{affected-route} > /dev/null && echo "T2: route OK" || echo "T2: route FAIL"
-    kill %1 2>/dev/null
-    ```
-    If T2 fails → fix before reporting DONE. T2 failures count toward retries.
-
-    Do NOT commit — return changed_files and status. Orchestrator handles commits.
-
-    Work from: {project_root}
-)
-```
-
-### Parallelism Within Waves
-
-- Tasks in the same wave with **no `files_modified` overlap** → dispatch in parallel (multiple Agent calls in one tool-call block)
-- Tasks with file overlap or `serial: true` → dispatch sequentially within the wave
-- Never start wave N+1 while any task in wave N is still in flight
-
----
-
-## Step 3: Handle Task Returns
-
-For each task return, process by status:
-
-### DONE
-1. Schedule for commit in Step 3.5
-2. Dispatch immediate review (see Step 4)
-
-### DONE_WITH_CONCERNS
-1. Read the concerns before proceeding
-2. If concerns are about **correctness or scope** (e.g., "not sure this handles the edge case", "might conflict with X") → address the concern before review. Options: re-dispatch with clarification, or note the concern for reviewer to check specifically.
-3. If concerns are **observations** (e.g., "this file is getting large", "naming could be better") → note in `### Issues Found` and proceed to commit + review as normal DONE.
-4. Log concerns in `### Execution Log` under the task's row as `concerns: {text}`.
-
-### NEEDS_CONTEXT
-1. Gather the missing information from the entity body, plan, or worktree
-2. Re-dispatch the same task (same model) with extra context prepended
-3. **Cap: 2 NEEDS_CONTEXT rounds per task.** Third round → reclassify as BLOCKED
-
-### BLOCKED — Escalation Ladder
-
-BLOCKED means "cannot complete as judged by this model tier." Escalate model tiers before declaring terminal failure:
-
-1. **First BLOCKED (on haiku)** → re-dispatch as **sonnet** with the `blocked_reason` in prompt
-2. **Second BLOCKED (on sonnet)** → re-dispatch as **opus** with accumulated blocked_reasons
-3. **Third BLOCKED (on opus)** → **terminal failure**. Log to `### Execution Log`, create auto-issue entity
-
-**This is NOT a retry loop** — each tier is a fundamentally different reasoning budget. haiku→sonnet→opus is three different strategies, not three retries of one.
-
-**Never skip a tier.** Never retry the same tier twice. Never jump straight to "replan" on first BLOCKED.
-
-### Benign-Drift Pre-Check
-
-Before the escalation ladder fires on a BLOCKED return, check for benign drift using substring matching:
-
-1. **anchor-drift** — `blocked_reason` contains `line` AND one of: `mismatch`, `shifted`, `not found at line`, `content moved` → auto-proceed as DONE + log `scope_observation`
-2. **file-renamed** — `blocked_reason` contains `read_first` AND one of: `not found`, `ENOENT`, `does not exist`. Verify via `git log --diff-filter=R --follow -- <path>`. Rename confirmed → auto-proceed. No rename → fall through to ladder.
-3. **semantic-grep-mismatch** — `blocked_reason` contains `grep` AND `count`, and the searched string appears in the plan text itself (circular reference) → auto-proceed + log `scope_observation`
-
-Match → classify as DONE + inject `scope_observation` finding. No match → proceed to escalation ladder.
-
----
-
-## Step 3.5: Serial Commits After Each Wave
-
-Once every task in the wave has reached terminal state, commit DONE tasks serially:
+**T1 (always, ~30s)** — troop runs all three; all must pass (max 3 retry attempts):
 
 ```bash
-# One commit per task, in wave order — never batched
-# Pathspec-lock: `-- <paths>` at BOTH stage and commit time locks the index against
-# parallel-session contamination (see Forbidden staging patterns below + MEMORY #31).
-git add -- {task.files_modified}
-git commit -m "feat(execute): {slug} task-{N} — {one-line action summary}" -- {task.files_modified}
+{commands.build} 2>&1
+{commands.typecheck} 2>&1
+{commands.test} 2>&1
 ```
 
-**One commit per task.** A wave of 3 DONE tasks = 3 commits, not 1. This preserves `git bisect` and PR review decomposition.
+**T2 (only if task touched frontend files — `ui/`, `app/`, `components/`, `pages/`, `*.tsx`)**:
 
-**Pre-commit hook fires per commit.** Do NOT override with `--no-verify`. If the hook fails → revert staged edits, reclassify the task as BLOCKED, follow escalation ladder.
+```bash
+timeout 30 {commands.dev} &
+sleep 5
+curl -sfN http://localhost:3000 > /dev/null && echo "T2: root OK" || echo "T2: root FAIL"
+curl -sfN http://localhost:3000/{affected-route} > /dev/null && echo "T2: route OK" || echo "T2: route FAIL"
+kill %1 2>/dev/null
+```
 
-After last commit in wave, capture HEAD as baseline for next wave.
+T2 failures count toward retries. Note `-sfN` for Next.js 16 Turbopack SSR (MEMORY #073).
 
-### Forbidden staging patterns
+### Step 3 — Handle task returns
 
-These patterns are **forbidden** in every ship-flow skill commit step — they bypass the pathspec-lock discipline and allow parallel-session / manual-habit contamination of the staged set:
+- **DONE** → schedule commit (Step 3.5) + dispatch review (Step 4).
+- **DONE_WITH_CONCERNS** → correctness/scope concerns → re-dispatch with clarification; observation concerns → log in `## Issues Found`, proceed as DONE.
+- **NEEDS_CONTEXT** → gather missing info + re-dispatch (same model) with extra context. Cap 2 rounds; round 3 → reclassify as BLOCKED.
+- **BLOCKED** → benign-drift pre-check first; else escalation ladder.
+
+### Step 3.1 — Benign-drift pre-check (before escalation)
+
+Substring match on `blocked_reason`:
+
+- **anchor-drift** — contains `line` AND one of: `mismatch | shifted | not found at line | content moved` → auto-DONE + log `scope_observation`.
+- **file-renamed** — contains `read_first` AND one of: `not found | ENOENT | does not exist`. Verify `git log --diff-filter=R --follow -- <path>`. Rename confirmed → auto-DONE; else fall through.
+- **semantic-grep-mismatch** — contains `grep` AND `count`, searched string appears in plan text itself (circular reference) → auto-DONE + log.
+
+No match → escalation ladder.
+
+### Step 3.2 — BLOCKED escalation ladder
+
+1. First BLOCKED (haiku) → re-dispatch as **sonnet** with `blocked_reason` in prompt.
+2. Second BLOCKED (sonnet) → re-dispatch as **opus** with accumulated reasons.
+3. Third BLOCKED (opus) → **terminal failure**. Log + create auto-issue entity.
+
+**NOT a retry loop** — each tier is a different reasoning budget. Never skip a tier. Never same-tier retry. Never jump to "replan" on first BLOCKED.
+
+### Step 3.5 — Serial commits after each wave (pathspec-lock)
+
+After all tasks in wave reach terminal state, commit DONE tasks serially — one commit per task (preserves `git bisect` + PR decomposition):
+
+```bash
+git add -- {task.files_modified}
+git commit -m "feat(execute): {slug} task-{N} — {one-line action}" -- {task.files_modified}
+```
+
+**Forbidden staging patterns** (parallel-session contamination defense — MEMORY #14/#25/#37):
 
 | Forbidden | Reason |
 |---|---|
-| `git add -A` | Stages every modified + new file in the repo; scoops unrelated in-flight drafts |
-| `git add .` | Same as `-A` scoped to cwd — still scoops anything else dirty in cwd subtree |
-| `git commit -am "..."` | `-a` auto-stages every tracked-file modification regardless of pathspec |
-| `git commit -a -m "..."` | Spaced form of the same |
+| `git add -A` / `git add .` | Scoops unrelated dirty files |
+| `git commit -am` / `git commit -a -m` | `-a` auto-stages every tracked modification |
 
-**Correct pattern** — pathspec-lock at both stage-time AND commit-time:
+**Correct pattern**: `git add -- <paths> && git commit ... -- <paths>`. The `-- <paths>` at commit-time locks the index scope even if another session interleaves a `git add -A`. Regression test: `plugins/ship-flow/lib/__tests__/test-skill-commit-lint.sh`.
 
-```bash
-git add -- <path1> <path2>
-git commit -m "<message>" -- <path1> <path2>
-```
+Pre-commit hook fires per commit. Do NOT override with `--no-verify`. Hook fail → revert + reclassify as BLOCKED.
 
-The `-- <paths>` at commit-time is the load-bearing defense against parallel-session contamination: it locks the commit's index scope to the listed paths even if another session's `git add -A` interleaves between our `git add` and our `git commit`. See MEMORY #31 (parallel-session git staging contamination) and entity #063 (`_archive/explicit-staging-ship-flow.md`).
+### Step 4 — Review each task (immediate, haiku)
 
-**Circuit Breaker:** if any ship-flow skill step or mod documents a `git add` / `git commit` example missing `-- <paths>`, treat as a bug and fix inline. A regression test lives at `plugins/ship-flow/lib/__tests__/test-skill-commit-lint.sh` (DC-4 assertion).
+Dispatch review subagent right after each DONE report (loop = implement → review → fix → re-review → next task). Model = haiku (reviews are mechanical). Prompt reviews: diff matches task? obvious bugs / missing handling / broken imports? tests exist? T1/T2 passed?
+
+Verdict: APPROVED | NEEDS_FIX (BLOCKING only) + Non-Blocking notes.
+
+**Review loop** — NEEDS_FIX → dispatch fix agent (same model as original) with specific issues → fix commits → re-review. Max 3 rounds; round 3 still NEEDS_FIX → log failed + create auto-issue entity.
+
+**Non-blocking findings → auto entity**: `{slug}-improve-task-{N}` with `source: "auto:ship-flow review"`, status: draft.
+
+### Step 5 — Wave completion + AC verification (first-pass)
+
+After all waves complete, run `## Verification Spec` procedures per type (cli / api / ui / skill / e2e). Write to `## Execute UAT` section — **first-pass, not authoritative**; verify stage re-runs independently.
+
+### Step 5.3 — Knowledge capture (conditional)
+
+Log to `## Knowledge Captures`:
+- **D1-confirmed** — codebase-grounded insight confirmed by ≥2 tasks (e.g., "extraction ratio 0.60 observed here; widens MEMORY bound").
+- **D2-candidate** — one-off insight worth re-validating in next harness-diet (e.g., "dispatch-discipline rationalization precedent").
+
+### Step 6 — Cross-review gate (Principle 6 Rule C)
+
+Dispatch cross-review to `verifier` teammate (pipeline path) or fresh sonnet (no team). Upgrade to fresh **opus** when `appetite: big-batch`.
+
+5-factor rubric adapted for execute stage:
+
+1. **Feasibility** — wave plan executed cleanly (no terminal BLOCKs / no forced `--no-verify`)?
+2. **Executable scope** — commits match tasks 1:1? one-commit-per-task preserved?
+3. **Quality** — atomic commits used explicit pathspec (no `-A` / `-am`)? T1+T2 passed per task?
+4. **DC adequacy** — AC verification ran all procedures; failures noted honestly?
+5. **Canonical sync** — architecture-impact blocks updated post-execute if ARCHITECTURE.md moved?
+
+Verdict: **PROCEED** / **VETO** (loop to fix) / **PROMPT_CAPTAIN**.
+
+### Step 7 — Emit execute.md
+
+Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=execute --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; handles atomic commit + pathspec-lock).
+
+Execute.md sections: `## Execution Log` (per-task table), `## Issues Found`, `## Knowledge Captures` (D1/D2), `## Execute UAT` (first-pass AC), `## Execute Report` (status / stage_cost: Σ dispatches×model / tasks summary / knowledge capture counts / started/completed/duration).
+
+Return to /ship; advance to verify.
 
 ---
 
-### Inline-on-main ship pattern (2-commit, no PR)
+## Inline-on-main ship pattern (2-commit, no PR)
 
-For entities that are **ship-flow self-reforming** (S/M size, pure ship-flow plugin / docs edit, zero application-code diff, no user-facing UX change), use the inline-on-main pattern instead of opening a feature branch + PR. Precedent: #047 / #049 / #062 / #064 / #067 / #060 / #075 — 7 ships as of 2026-04-21.
+For **ship-flow self-reforming** entities (S/M, pure ship-flow plugin / docs / lib shell edit, zero application-code diff, no user-facing UX). Precedent: #047 / #049 / #062 / #064 / #067 / #060 / #075.
 
-**When to use**:
+**When NOT**: user-facing UX / API, application code in `plugins/spacebridge/**`, entities whose verify needs PR-review signal.
 
-- Change is purely internal tooling (ship-flow skills, docs, mods, lib shell scripts, tests)
-- Zero runtime-application-code diff
-- Captain is the only reviewer signal needed (no multi-agent PR review adds value)
-- Size S or M
-
-**When NOT to use**:
-
-- User-facing UX / API changes
-- Application code changes in `plugins/spacebridge/**` (or wherever the product runtime lives)
-- Entities whose verify stage needs PR-review signal
-
-**2-commit sequence** (pathspec-lock throughout):
+2-commit sequence (pathspec-lock throughout):
 
 ```bash
-# Commit 1 — ship: content edits + Ship Section in entity body + ROADMAP / PRODUCT updates
-git add -- <entity-file> ROADMAP.md PRODUCT.md <other-changed-paths>
-git commit -m "ship: <slug> (<NNN>) — <one-line summary>" -- <entity-file> ROADMAP.md PRODUCT.md <other-changed-paths>
+git add -- <entity-file> ROADMAP.md PRODUCT.md <other-paths>
+git commit -m "ship: <slug> (<NNN>) — <summary>" -- <entity-file> ROADMAP.md PRODUCT.md <other-paths>
 
-# Flip entity to done + archive (status.py bypasses the pr-empty refusal on inline-on-main)
 python3 <spacedock-plugin>/skills/commission/bin/status --workflow-dir docs/ship-flow/ \
   --set <slug> status=done verdict=PASSED completed="$(date -u +%FT%TZ)" --force
 python3 <spacedock-plugin>/skills/commission/bin/status --workflow-dir docs/ship-flow/ \
   --archive <slug> --force
 
-# Commit 2 — done + archive: single commit covering the rename from docs/ship-flow/ into _archive/
 git add -- docs/ship-flow/_archive/<slug>.md
 git commit -m "done + archive: #<NNN> <slug> (verdict=PASSED, inline-on-main)" -- docs/ship-flow/_archive/<slug>.md
 ```
 
-**Hazards** (observed + mitigated):
-
-- **Parallel-session staging contamination** — even with explicit `git add -- <path>`, another CC session's `git add -A` can interleave between your `git add` and your `git commit`. The pathspec-lock `-- <paths>` at commit-time is the only defense. (MEMORY #31, MEMORY #32, entity #063.)
-- **5069b8ba-class attribution drift** — DO NOT fall back to `git commit -am` or `git add -A` even when "it's just an archive commit". Use the forbidden-pattern rule above.
-- **--force flag usage** — `status --set --force` and `status --archive --force` bypass the `pr: empty` refusal at `status.py:1381/1034`. This is intentional for inline-on-main (no PR exists). Captain may deprecate this once the `if no worktree branch → skip push/PR-create, return non-blocking` code path lands in pr-merge mod (backlog XS entity noted in MEMORY #32).
+`--force` bypasses `pr: empty` refusal (intentional for no-PR inline). Hazards: parallel-session staging contamination (pathspec-lock is sole defense); MEMORY #14 5069b8ba-class attribution drift (do NOT fall back to `-am`).
 
 ---
 
-## Step 4: Review Each Task (Immediate — Do NOT Batch)
+## Invariants + red flags (STOP if violated)
 
-**Every task gets reviewed immediately after DONE.** The loop is: implement → review → fix → re-review → next task.
+- Wave graph honored: never start wave N+1 while wave N in flight; never silently reorder waves.
+- Dispatch default: Agent tool unless probe returns verbatim runtime error AND narrow-exception criteria all hold.
+- `--no-verify` is forbidden. Pre-commit hook fail → revert + reclassify BLOCKED.
+- Forbidden staging: `-A` / `-am` / `.` anywhere in this skill's commit path.
+- BLOCKED escalation never same-tier retries; each tier = different reasoning budget.
+- T1 mandatory per task; T2 mandatory when frontend touched.
+- Review loop max 3 rounds per task; round 3 failed → auto-issue entity.
+- One-commit-per-task. Batching = violation of PR-decomposition + bisect discipline.
+- Cross-review VETO capped at 2 rounds; round 3 → PROMPT_CAPTAIN.
+- Layer A delegation (`superpowers:subagent-driven-development`) owns dispatch philosophy — re-teaching = Principle 6 Rule B violation.
 
-Dispatch a review subagent right after each implementation agent reports DONE:
+## Circuit breakers
 
-```
-Agent(
-  description: "Review Task {N}: {name}",
-  model: haiku,  // Reviews are mechanical — haiku is sufficient
-  prompt: |
-    Review the changes from Task {N}: {name}.
-
-    ## What was requested
-    {task text from plan}
-
-    ## What changed
-    Run: git diff HEAD~1 --stat && git diff HEAD~1
-    
-    ## Check (all 5 mandatory)
-    1. Does the diff match what the task requested? (no more, no less)
-    2. Are there obvious bugs, missing error handling, or broken imports?
-    3. Do tests exist for new functionality?
-    4. Did the implementation agent report T1 quality check PASS?
-    5. If frontend change: did T2 smoke check PASS?
-    
-    ## Non-blocking findings
-    Issues that don't affect this task's correctness
-    (tech debt, style improvements, refactor opportunities):
-    - List under "## Non-Blocking" — do NOT mark as NEEDS_FIX
-    
-    Report: APPROVED | NEEDS_FIX (list specific BLOCKING issues only)
-)
-```
-
-**Review loop:**
-- NEEDS_FIX → dispatch fix agent (same model as original task) with specific issues
-- Fix agent commits → re-dispatch review agent
-- Max 3 rounds per task
-- Round 3 still NEEDS_FIX → log as failed, create auto-issue entity
-
-**Non-blocking findings → auto entity:**
-If review reports non-blocking findings, create a new draft entity:
-```
-Entity: {slug}-improve-{task-N}
-Status: draft
-Source: "auto:ship-flow review"
-```
+- Review loop: max 3 rounds → auto-issue entity.
+- BLOCKED ladder: 3 tiers → terminal failure + auto-issue entity.
+- PR-feedback: `pr_feedback_round > 3` → escalate captain.
+- Total stage >30 min elapsed → write `execute.md` with partial content + `⚠️ INCOMPLETE` markers + Execute Report status=partial. Never exit without emitting execute.md.
 
 ---
 
-## Step 5: Wave Completion, AC Verification, and Frontend Smoke
+## References
 
-After all waves complete:
-
-### 5.1: AC Verification (First-Pass)
-
-Read `## Plan Output → ### Verification Spec`. For each row, run the Verify Procedure by type:
-
-| Type | How to run |
-|------|-----------|
-| `cli` | Bash: run command, check exit code + output |
-| `api` | Bash: run curl command, check status + response |
-| `ui` | Bash: curl route + grep content. If e2e flow exists → `Skill("e2e-pipeline:e2e-test")` |
-| `skill` | `Skill("{skill-name}")` with probe prompt, check output shape |
-| `e2e` | `Skill("e2e-pipeline:e2e-test")` if available, otherwise degrade to `ui` type + warn |
-
-Record each result in the AC Verification table (see Step 6 output). This is the execute-stage first-pass — verify stage re-runs independently as a second opinion.
-
-If any criterion fails → log the failure but do NOT block. Verify stage is the authoritative gate.
-
-### 5.2: Frontend Smoke
-
-Check if frontend files were touched:
-
-```bash
-git diff {execute_start_sha}..HEAD --name-only | grep -E '^(ui/|app/|components/|pages/|src/.*\.tsx)'
-```
-
-If yes → run Tier 2 smoke check:
-```bash
-timeout 30 {commands.dev} &
-sleep 5
-curl -sf http://localhost:3000 > /dev/null && echo "T2: root OK" || echo "T2: root FAIL"
-kill %1 2>/dev/null
-```
-
-Log result to `### Execution Log`.
-
----
-
-## Step 6: Write Entity Sections
-
-**Section tagging (mandatory):** Wrap each section you write with its HTML comment tag pair. Example structure:
-
-```markdown
-<!-- section:execute-output -->
-## Execute Output
-
-<!-- section:execution-log -->
-### Execution Log
-{table}
-<!-- /section:execution-log -->
-
-<!-- section:issues-found -->
-### Issues Found
-{list}
-<!-- /section:issues-found -->
-
-<!-- section:knowledge-captures -->
-### Knowledge Captures
-{content}
-<!-- /section:knowledge-captures -->
-
-<!-- /section:execute-output -->
-<!-- section:execute-uat -->
-## Execute UAT
-{table}
-<!-- /section:execute-uat -->
-<!-- section:execute-report -->
-## Execute Report
-{fields}
-<!-- /section:execute-report -->
-```
-
-Tag list: `execute-output` (impl), `execution-log` (impl), `issues-found` (impl), `knowledge-captures` (impl), `execute-report` (impl), `execute-uat` (impl)
-
-```markdown
-## Execute Output
-
-### Execution Log
-
-| Task | Wave | Model | Status | Files Changed | Retries | Review | Commit | Est. Cost |
-|------|------|-------|--------|---------------|---------|--------|--------|-----------|
-| 1: {name} | 1 | haiku | done | file1.ts, file2.ts | 0 | approved | abc1234 | ~$0.10 |
-| 2: {name} | 1 | sonnet | done | file3.ts | 1 | approved (round 2) | def5678 | ~$1.50 |
-| 3: {name} | 2 | haiku | blocked→sonnet done | file4.ts | 0+1 | approved | ghi9012 | ~$0.55 |
-
-Escalations:
-- Task 3: haiku BLOCKED ("type error in dependency") → sonnet DONE
-
-Frontend smoke: {PASS/FAIL/N/A}
-
-Scope observations: {benign-drift auto-proceeds, if any}
-
-### Issues Found
-- {non-blocking findings} → auto-created entity #{slug}-improve-N
-
-### Knowledge Captures
-{see Step 5.3}
-
-## Execute UAT
-
-| Done Criterion | Verify Command | Result |
-|----------------|---------------|--------|
-| POST /api/comments returns 201 | `curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/api/comments` | 201 PASS |
-| {commands.test} passes with new test | `{commands.test}` | 143 pass, 0 fail PASS |
-
-## Execute Report
-status: {passed | failed | blocked}
-stage_cost: ${execute_cost} ({N} dispatches: {breakdown by model})
-Tasks: {N done, M blocked, K needs-context-rounds}
-Knowledge capture: {D1: N, D2: M | skipped}
-started_at: "{ISO 8601 timestamp}"
-completed_at: "{ISO 8601 timestamp}"
-duration_minutes: {number}
-```
-
----
-
-## Step 5.3: Knowledge Capture (Conditional)
-
-After AC verification, scan all findings surfaced during execution (scope_observations, review non-blocking findings, DONE_WITH_CONCERNS concerns, escalation patterns). Classify each finding that **generalizes beyond this entity**:
-
-**D1 — Skill-Level Pattern** (auto-write, no captain gate):
-Patterns that future agents should know. Tag `[D1]` in `### Knowledge Captures`. Examples:
-- "This codebase uses `createSnapshot()` synchronously — async wrappers must preserve sync return"
-- "`bun test` needs `--preload ./setup.ts` for integration tests"
-
-**D2 — Project-Level Candidate** (staged for captain):
-Architectural decisions or constraints worth adding to CLAUDE.md. Tag `[D2-candidate]` in `### Knowledge Captures`. Examples:
-- "Dashboard must remain SSR-compatible — no `window` access in shared modules"
-- "All API routes require auth middleware — no public endpoints"
-
-Ship-review stage surfaces `[D2-candidate]` items to captain during finalization.
-
-**Skip when**: All findings are entity-specific. Log: `Knowledge capture: skipped — no findings met D1/D2 threshold`
-
----
-
-## Token Tracking
-
-### Per-Stage Cost Estimation
-
-Agent dispatch cost is estimated (not metered — Claude Code Agent tool does not return usage metadata). Use dispatch-count heuristics per model tier:
-
-| Model | Estimated cost per dispatch |
-|-------|---------------------------|
-| opus | ~$2.00 (heavy reasoning, large context) |
-| sonnet | ~$0.50 (standard tasks) |
-| haiku | ~$0.05 (mechanical review, classification) |
-
-These are order-of-magnitude estimates based on typical agent context sizes (~50K input + ~5K output tokens). Actual costs vary by task complexity.
-
-### Accumulation
-
-After each Agent dispatch (implementation, review, or escalation), add the model's estimated cost to a running total:
-
-```
-execute_cost = sum of all dispatches in this stage
-```
-
-Write in `## Execute Report`:
-
-```
-status: {passed | failed | blocked}
-stage_cost: ${execute_cost} ({N} dispatches: {breakdown by model})
-```
-
-FO reads `status:` and `stage_cost:` lines for dispatch decisions and `token_actual` accumulation. Calculate duration from the recorded start timestamp to now. Write started_at, completed_at, and duration_minutes to the report.
-
-### Budget Check
-
-After each dispatch, compute running total. If `execute_cost + prior_stages_cost > token_budget × 2` → **write `## Execute Output` (with `### Execution Log` of tasks completed so far) and `## Execute Report` with `status: paused` to the entity file**, then notify captain. The FO output-validation gate requires these sections to exist. Never exit without writing them. Do NOT silently continue.
-
-### Cost Column in Execution Log
-
-```
-| Task | Model | Status | Files | Retries | Review | Est. Cost |
-|------|-------|--------|-------|---------|--------|-----------|
-| 1    | haiku | done   | ...   | 0       | approved | ~$0.10 |
-| 2    | sonnet | done  | ...   | 1       | approved | ~$1.50 |
-```
-
-## Circuit Breakers
-
-- Per-task implementation retry: max 3 attempts
-- Per-task review loop: max 3 rounds
-- BLOCKED escalation: haiku → sonnet → opus (once each, never same tier twice)
-- NEEDS_CONTEXT rounds: max 2, then reclassify as BLOCKED
-- Total blocked tasks: > 50% of tasks blocked → escalate to captain
-- Wave integrity: dependency violation → return to plan, never silent reorder
-- Token overrun: token_actual > token_budget × 2 → pause, ask captain
-- Token tracking: log each agent dispatch cost to entity frontmatter `token_actual`
+- Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.execute`.
+- Stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh`.
+- Section extraction: `plugins/ship-flow/lib/extract-section.sh`, `extract-map.sh`.
+- Layer A: `superpowers:subagent-driven-development` (dispatch philosophy).
+- Utility: `ship-flow:ship-runtime-detect` (13-ecosystem).
+- PR-feedback rollback: `plugins/ship-flow/bin/pr-feedback-rollback.sh`.
+- Commit-lint test: `plugins/ship-flow/lib/__tests__/test-skill-commit-lint.sh`.
+- Principle 6: `plugins/ship-flow/INVARIANTS.md`.
+- MEMORY: #5 (--next-id atomicity), #14/#25/#37 (pathspec / staging contamination), #30 (verification-dispatch), #35 (dispatch discipline amended by Principle 6), #073 (Next.js 16 `-sfN`), opus-4.7-naturally-does (2026-04-23 harness diet).
