@@ -213,7 +213,7 @@ dc5_decisions_append() {
 if dc5_decisions_append 2>/dev/null; then echo "OK DC-5 decisions table append via extract-then-patch"
 else echo "FAIL DC-5 decisions table append via extract-then-patch"; FAIL=1; fi
 
-# ========== DC-6: ship-sharp SKILL has ≥3 architecture-impact refs ==========
+# ========== DC-6: ship-shape SKILL has ≥3 architecture-impact refs ==========
 dc6_sharp_skill_refs() {
   [ -f "$SHARP_SKILL" ] || return 1
   local n; n="$(grep -c 'architecture-impact' "$SHARP_SKILL" 2>/dev/null || echo 0)"
