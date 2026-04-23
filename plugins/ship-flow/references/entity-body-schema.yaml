@@ -172,6 +172,60 @@ stages:
               required: false
               type: prose
               purpose: "Why this decision (optional; entity body provides fuller context)"
+        product_impact:
+          section: "### Product Impact"
+          section_tag: product-impact
+          layer: decision
+          optional: true
+          purpose: "Entity-declared product documentation change. Consumed by ship-review to patch PRODUCT.md atomically."
+          fields:
+            - name: target_section
+              required: true
+              type: string
+              purpose: "Which PRODUCT.md section this entity patches"
+            - name: summary
+              required: true
+              type: string
+              purpose: "1-3 sentence prose summary of the product change (feeds commit message)"
+            - name: before
+              required: true
+              type: markdown
+              purpose: "Current section content (for freshness check)"
+            - name: after
+              required: true
+              type: markdown
+              purpose: "New section content to commit"
+            - name: rationale
+              required: false
+              type: prose
+              purpose: "Why this product change (optional; entity body provides fuller context)"
+        readme_impact:
+          section: "### README Impact"
+          section_tag: readme-impact
+          layer: decision
+          optional: true
+          purpose: "Entity-declared README.md change. Consumed by ship-review to patch README.md atomically."
+          fields:
+            - name: target_section
+              required: true
+              type: string
+              purpose: "Which README.md section this entity patches"
+            - name: before
+              required: true
+              type: markdown
+              purpose: "Current section content (for freshness check)"
+            - name: after
+              required: true
+              type: markdown
+              purpose: "New section content to commit"
+            - name: rationale
+              required: false
+              type: prose
+              purpose: "Why this README change (optional)"
+            - name: entry_critical
+              required: false
+              type: boolean
+              purpose: "True if this README entry is user-facing critical (e.g. install instructions, breaking change notice)"
         size_assessment:
           section: "### Size Assessment"
           section_tag: size-assessment
