@@ -380,15 +380,33 @@ check_structural_parity_dc() {
   # Scan active entity .md files. For entities declaring type=ui or containing
   # ## Design Reference, verify at least one DC mentions structural parity.
   # Parity signals: structural|parity|column count|pill-stage--|prop-type|DOM structure
+  #
+  # Grandfather allowlist: pre-#048 entities that have ## Design Reference but predate
+  # the structural-parity-dc invariant. These are skipped with SKIP log, not ERROR.
+  local GRANDFATHER_STRUCTURAL_PARITY=(
+    design-stage-integration
+    pipeline-graph-visual-fix
+    war-room-command-palette
+  )
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0
-  local f bn
+  local f bn slug
   for f in "$docs_dir"/*.md; do
     [ -f "$f" ] || continue
     bn="$(basename "$f")"
     [ "$bn" = "README.md" ] && continue
     case "$f" in *_archive*|*_debriefs*|*_mods*) continue ;; esac
+    # Check grandfather allowlist by basename without .md
+    slug="${bn%.md}"
+    local grandfathered=0
+    for gf in "${GRANDFATHER_STRUCTURAL_PARITY[@]}"; do
+      [ "$slug" = "$gf" ] && grandfathered=1 && break
+    done
+    if [ "$grandfathered" = "1" ]; then
+      echo "SKIP [structural-parity-dc]: $bn — grandfathered pre-#048 (no structural-parity DC required)" >&2
+      continue
+    fi
     # Trigger condition: type: ui in frontmatter OR ## Design Reference in body
     local is_ui=0
     if grep -qE "^type:[[:space:]]*ui" "$f" 2>/dev/null; then

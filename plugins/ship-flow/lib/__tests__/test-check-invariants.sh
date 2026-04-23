@@ -567,4 +567,28 @@ EOF
 if structural_parity_fail 2>/dev/null; then echo "OK structural-parity-dc: no parity signal → fail"
 else echo "FAIL structural-parity-dc: no parity signal → fail"; FAIL=1; fi
 
+# Grandfather: pre-#048 allowlisted entities skip even without parity signal
+structural_parity_grandfather() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  # Use one of the 3 grandfathered slugs — no parity signal, should SKIP not ERROR
+  cat > "$d/docs/ship-flow/design-stage-integration.md" <<'EOF'
+---
+id: "042"
+title: "Design stage integration"
+---
+
+## Design Reference
+
+DC-1: renders correctly.
+EOF
+  local rc stderr_out
+  stderr_out="$(bash "$CHECK_SCRIPT" --test-fixture "$d" --check structural-parity-dc 2>&1 >/dev/null)"
+  rc=$?
+  rm -rf "$d"
+  # Must pass (rc=0) AND emit SKIP line
+  [ "$rc" = "0" ] && echo "$stderr_out" | grep -q "grandfathered"
+}
+if structural_parity_grandfather 2>/dev/null; then echo "OK structural-parity-dc: grandfather allowlist skips pre-#048 entity"
+else echo "FAIL structural-parity-dc: grandfather allowlist skips pre-#048 entity"; FAIL=1; fi
+
 exit $FAIL
