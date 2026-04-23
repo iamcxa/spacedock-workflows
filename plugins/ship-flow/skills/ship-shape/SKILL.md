@@ -1,89 +1,72 @@
 ---
 name: ship-shape
-description: "Use when shaping a vague or complex directive into a Shape Up pitch before autonomous pipeline execution. Agent-autonomous: reads workspace context, applies Musk decomposition with explicit deletes, extracts stated assumptions, emits ONE structured pitch proposal; captain has a single confirm / refine / reject gate."
+description: "Use when shaping a vague / complex / ambiguous directive into a Shape Up pitch before autonomous pipeline execution. Default Mode A: agent-autonomous proposer (one proposal, captain gates confirm / refine / reject). Mode B: `--discuss` or auto-routed Q-loop via superpowers:brainstorming. Mode C: skill-authoring via superpowers:writing-skills. Output: `docs/<wf>/<id>-<slug>/spec.md` (folder layout default)."
 user-invocable: true
-argument-hint: "[directive-text | todo-tid | entity-id]"
+argument-hint: "[--discuss] [directive-text | todo-tid | entity-id]"
 ---
 
-# Ship-Shape — Autonomous Pitch Proposer
+# Ship-Shape — SHAPE Stage (2.0)
 
-You run the SHAPE stage of ship-flow. Captain gets ONE proposal and decides confirm / refine / reject. No Q-by-Q interrogation, no multi-round interactive shaping.
+You run SHAPE. Output: `docs/<wf>/<id>-<slug>/spec.md`. Captain has ONE gate per run: confirm / refine / reject.
 
-**Shape Up vocabulary** (load-bearing — entity body schema depends on these names):
-- **Pitch** — parent entity this run produces. Fields: `problem`, `appetite`, `children[]`, `rabbit_holes[]`, `deleted_from_shape[]`, `stated_assumptions[]`, `dag_mermaid`.
-- **Appetite** — time budget (2-3d / 1-2w / 6w), NOT an estimate. Scope fits budget; budget does not expand.
-- **Rabbit holes** — follow-ups captured as todos (`docs/<wf>/todos/`). Worth doing eventually; out of cycle.
-- **Deletes (Musk step 2)** — claims actively rejected with a reason. Evidence the pitch was sharpened.
-- **Shaped child** — vertical E2E slice entity (`pattern: shaped-child`) born already sharpened under the pitch.
-- **DAG** — mermaid child-dependency diagram; feeds FO Pitch Orchestration.
+**Shape Up vocabulary** (load-bearing — entity-body schema depends on these names):
+- **Pitch** — parent entity. Fields: `problem`, `appetite`, `children[]`, `rabbit_holes[]`, `deleted_from_shape[]`, `stated_assumptions[]`, `dag_mermaid`.
+- **Appetite** — time budget (`small-batch` 2-3d / `medium-batch` 1-2w / `big-batch` 6w). Scope fits budget; budget does not flex.
+- **Rabbit hole** — follow-up captured to `docs/<wf>/todos/`. **Delete (Musk step 2)** — claim rejected with reason. **Shaped child** — vertical E2E slice (`pattern: shaped-child`). **DAG** — mermaid child-dependency diagram; feeds FO Pitch Orchestration.
 
 ## When to use
 
-- `/shape "<free text>"` — most common.
-- `/shape <todo-tid>` — promote a captured todo into a pitch.
-- `/shape <entity-id>` — shape an existing draft entity.
+`/shape "<free text>"` — Mode A (default). `/shape --discuss "<text>"` — Mode B Q-loop. `/shape <todo-tid>` — promote captured todo. `/shape <entity-id>` — shape existing draft.
 
-**DO NOT USE when:** directive is already concrete (specific files, reproducible bug, typed acceptance) — route to `/ship`.
+**Escape hatch (skip shape):** directive <80 chars AND contains `fix | typo | rename | bump | patch | bugfix | hotfix` as whole word → `shape unnecessary — run /ship directly` and EXIT. Concrete directive (files / reproducible bug / typed acceptance) → suggest `/ship <requirement>` and EXIT.
 
-**Escape hatch:** directive <80 chars AND contains `fix | typo | rename | bump | patch | bugfix | hotfix` as a whole word → announce `shape unnecessary — run ship-plan directly` and EXIT.
+**Mode auto-routing** (on `/shape "<text>"` without `--discuss`):
+
+1. **Mode C (skill-authoring)** — FIRST. Triggers: keywords `create/build/write/improve/modify a skill`, `SKILL.md`, `add a skill`; target paths `*/skills/*`, `*/SKILL.md`, `.claude/agents/*`; entity frontmatter `type: skill` or `domain: skill-authoring`.
+2. **Mode B (ambiguity)** — SECOND. After L0 subagent returns, `open_questions[]` length ≥ 3 → announce switch and run Mode B.
+3. **Default** — Mode A.
 
 ---
 
-## Flow
+## Mode A — Autonomous Proposer (default)
 
-```
-captain: /shape <arg>
-  ↓  agent: intake → research → Musk decompose → compose proposal (~60-120s, silent)
-  ↓  agent: ONE proposal block (captain's only gate)
-  ↓  captain: confirm | refine: "<text>" | reject
-  ↓  confirm → shape-confirm.sh writes all artifacts in 1 atomic commit
-```
+Main agent runs inline. Use TaskCreate to mark phases on main-agent path (skip if a named teammate owns the pitch end-to-end).
 
-### Intake (3 forms)
+**Phases**: `intake` → `L0-research` → `L1-research` → `L2-research` → `musk-decompose` → `assumption-extract` → `compose-proposal` → `cross-review` → `captain-gate`
+
+### Intake
 
 | Form | Detection | Action |
 |---|---|---|
-| Free text | no tid or entity match | use as directive |
-| Todo tid | matches `docs/<wf>/todos/<tid>.md` | read todo body as directive; note tid |
-| Entity id | matches `docs/<wf>/<id>-<slug>.md` | read entity; use title + body as directive |
+| Free text | no tid/entity match | use as directive |
+| Todo tid | matches `docs/<wf>/todos/<tid>.md` | read todo body; note tid |
+| Entity id | matches `docs/<wf>/<id>-<slug>.md` OR `docs/<wf>/<id>-<slug>/README.md` | read entity; use title + body |
 
-Record stage-start ISO timestamp. Resolve workflow dir from `docs/*/README.md` frontmatter `entry-point:`. Run escape-hatch check now.
+Record stage-start ISO timestamp. Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Run escape-hatch check now.
 
 ### Research (L0 → L1 → L2; skip layers that don't apply)
 
-- **L0 codebase** — dispatch a **fresh-context subagent** (don't grep from orchestrating context). Subagent maps directive → file:line clusters, existing patterns, ARCHITECTURE/PRODUCT/ROADMAP constraints, up to 5 prior related entities. Return structured: `affected_files`, `existing_patterns`, `constraints`, `prior_entities`, `open_questions`.
-- **L1 library** — inline via Context7 / trained knowledge when a library is central. Subagent only for wide API surface.
+- **L0 codebase** — dispatch **fresh-context subagent** (do NOT grep from orchestrating context). Return: `affected_files`, `existing_patterns`, `constraints`, `prior_entities[≤5]`, `open_questions[]`.
+- **L1 library** — inline via trained knowledge / Context7. Subagent only for wide API surface.
 - **L2 web** — 1-2 `WebSearch` queries only when L0+L1 leave a load-bearing claim unresolved. Usually skip.
 
-### Musk decomposition (5 steps)
+RULE: L0 via fresh subagent is non-negotiable. Opus 4.7 handles the rest naturally — don't over-teach.
 
-Apply rigorously, especially step 2: requirements check → **delete** → simplify → speed up → automate.
+### Musk decompose, appetite, assumptions
 
-**Step 2 is non-negotiable.** Every considered-then-rejected claim lands in `deleted_from_shape[]` with an explicit `reason`. Empty array on a non-trivial pitch = you skipped Musk — loop back.
+Musk 5 steps (requirements → **delete** → simplify → speed up → automate). Rejected claim → `deleted_from_shape[]` with `reason`. Empty array on non-trivial = Musk skipped → loop back. "Worth doing eventually" → `rabbit_holes[]`; "wrong / redundant / ceremonial" → `deleted_from_shape[]`.
 
-**Rabbit hole vs delete:** "worth doing eventually" → `rabbit_holes[]`. "wrong / redundant / ceremonial" → `deleted_from_shape[]`.
+Pick `small-batch` / `medium-batch` / `big-batch`. Exceeds big-batch → flag `[EPIC?]`, recommend sub-pitch.
 
-### Appetite sizing (Shape Up budget, NOT estimate)
-
-Pick one: `small-batch` (2-3d, 1-3 children) | `medium-batch` (1-2w, 3-6 children) | `big-batch` (6w classic, 5-10 children). Children are sized to fit; the budget does not flex. If natural decomposition exceeds big-batch → flag `[EPIC?]` in Step 8 title and recommend a first sub-pitch.
-
-### Assumption extraction
-
-Emit a `stated_assumption` for every load-bearing claim. Schema at `plugins/ship-flow/references/entity-body-schema.yaml`.
-
-**Mandatory:** ≥1 `criticality: critical` assumption per pitch. If none surface → research was shallow; loop back. For each critical assumption, run its `verification` command now (30s soft cap) and record resolved confidence.
+Emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/references/entity-body-schema.yaml`). **Mandatory**: ≥1 `criticality: critical`. Run each critical's verification now (30s soft cap); record resolved confidence.
 
 ### Architecture-impact (only when ARCHITECTURE.md moves)
 
-**Skip when:** pure bug fix / UI polish / docs change — no constraint/container/component/decision drift.
-
-**Run when:** L0 surfaced drift OR a new decision record belongs in ARCHITECTURE.md. Draft an `<!-- section:architecture-impact -->` block per child; pre-fill `before:` via `bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <section>` so the ship-review freshness check passes. Uncertain → emit a `stated_assumption (verified_by: design-contract)` and let ship-plan verify.
-
-Schema: `entity-body-schema.yaml` → `section_tag: architecture-impact`. Consumer: `docs/ship-flow/_mods/architecture-canon.md`.
+Skip for pure bug / UI polish / docs. Run when L0 surfaces drift OR new decision belongs in ARCHITECTURE.md. Draft `<!-- section:architecture-impact -->` per child; pre-fill `before:` via `bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <section>`. Uncertain → emit assumption `verified_by: design-contract`. Consumer mod: `docs/ship-flow/_mods/architecture-canon.md`.
 
 ### Compose + present proposal
 
-ONE block — captain's first and only view of your work:
+ONE block — captain's only view until gate:
 
 ```
 Pitch proposal: <title>
@@ -93,140 +76,125 @@ Problem:
 
 Appetite: <small-batch | medium-batch | big-batch> (<concrete time budget>)
 
-Children (N, each a vertical E2E slice that ships standalone):
+Children (N, each vertical E2E that ships standalone):
   <id>.1 — <title> (deps: none)
-  <id>.2 — <title> (deps: <parent-slug-or-id>)
-  ...
+  <id>.2 — <title> (deps: <parent-slug>)
 
 Rabbit holes (auto-captured to docs/<wf>/todos/ on confirm):
-  - <one-line claim>
+  - <one-line>
 
 Musk deletes (NOT captured — rationale for the record):
   - <claim> — <reason>
 
-Stated assumptions (verified per stage in Phase 4):
+Stated assumptions:
   A1 (critical, <conf>%): <claim>
-  A2 (important, <conf>%): <claim>
 
 DAG:
 ```mermaid
 graph LR
   A[<child-1>] --> B[<child-2>]
-  A --> C[<child-3>]
 ```
 
 Confirm / refine: "<text>" / reject ?
 ```
 
-Render mermaid fence literally — shape-confirm.sh requires the `graph` prefix.
+Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
+
+### Cross-review gate (before captain gate) — Principle 6 Rule C
+
+Dispatch cross-review to `executer` teammate (or fresh sonnet if no team). Rate PASS/WARN/FAIL on 5 factors (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected) then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
 
 ---
 
-## Captain response
+## Mode B — Interactive Q-loop (Layer A exception)
+
+**Trigger**: `/shape --discuss "<text>"` OR auto-routed when L0 returns ≥3 `open_questions`.
+
+**Delegation**: `superpowers:brainstorming` owns the HARD-GATE Q-loop. Do NOT re-teach.
+
+**Flow**: announce mode → `Skill: superpowers:brainstorming` → on completion apply Mode A Layer B wrap on the brainstorm report (appetite, Musk decompose to vertical children, ≥1 critical assumption, DAG, architecture-impact if needed) → cross-review gate → present proposal → captain gate.
+
+Exception rationale: brainstorming's Q-loop handles discovery; Shape Up framing (appetite/DAG/deletes/assumptions) is Layer B, not in superpowers.
+
+## Mode C — Skill-authoring (Layer A exception)
+
+**Trigger**: keywords / path patterns / frontmatter (see Mode auto-routing §1).
+
+**Delegation**: `superpowers:writing-skills` owns skill design + claude 4.7 knowledge + RED/GREEN/REFACTOR + frontmatter discipline. Do NOT re-teach.
+
+**Flow**: announce mode → `Skill: superpowers:writing-skills` → on completion apply Layer B wrap: appetite (`small-batch` single SKILL.md / `medium-batch` multi-file); children usually 1 (decompose only if design spans multi SKILL.md / lib scripts); assumptions extracted from writing-skills invariants (frontmatter valid, description matches trigger, etc.), ≥1 critical; architecture-impact only if new skill reshapes plugin structure. Cross-review gate → present proposal → captain gate.
+
+Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Shape Up framing is Layer B.
+
+---
+
+## Captain response (all modes)
 
 ### Confirm
 
-1. Allocate IDs:
+1. **Allocate IDs** (MEMORY #5 — `--next-id` non-atomic; this → commit = ONE uninterrupted pair):
    ```bash
-   python3 "$SPACEDOCK_PLUGIN_DIR/skills/commission/bin/status" \
-     --workflow-dir "$WORKFLOW_DIR" --next-id
+   python3 "$SPACEDOCK_PLUGIN_DIR/skills/commission/bin/status" --workflow-dir "$WORKFLOW_DIR" --next-id
    ```
-   First ID is the pitch's; child IDs are `<pitch-id>.N` (dense, no gaps). MEMORY #5: `--next-id` is non-atomic; claim + shape-confirm.sh commit must be a single uninterrupted pair.
+   First ID = pitch. Child IDs = `<pitch-id>.N` (dense, no gaps).
 
-2. Serialize proposal → temp JSON → invoke atomic writer:
+2. **Serialize → temp JSON → invoke atomic writer:**
    ```bash
-   bash plugins/ship-flow/lib/shape-confirm.sh \
-     --proposal="$PROPOSAL_JSON" --workflow-dir="$WORKFLOW_DIR"
+   bash plugins/ship-flow/lib/shape-confirm.sh --proposal="$PROPOSAL_JSON" --layout=folder --workflow-dir="$WORKFLOW_DIR"
    ```
+   `--layout=folder` (default for new pitches) writes `docs/<wf>/<id>-<slug>/README.md` + `spec.md`. **Wave 5 dependency of entity #085**: the `--layout=folder` flag lands in Wave 5; until then flat layout is operational fallback.
 
-3. Report: 1 pitch entity + N shaped-children + M rabbit-hole todos + ROADMAP.md rows (next/later/not-doing), all in one commit SHA. Children ready for FO Pitch Orchestration.
+3. **Report**: 1 pitch (folder) + N shaped-children + M rabbit-hole todos + ROADMAP.md rows, ONE commit SHA.
 
-### Refine
+### Refine / Reject
 
-Re-run research + decompose with refinement appended to directive (lean re-run; don't diff-patch). Max 2 rounds; after round 2, ask captain: refine again / save draft / reject.
-
-### Reject
-
-Do NOT invoke shape-confirm.sh. Verify `git status --short` clean (reset any accidental changes). Emit `Pitch rejected. No files written.` and EXIT.
+**Refine** — re-run research + decompose with refinement appended (lean re-run; don't diff-patch). Max 2 rounds; then ask: refine / save draft / reject. **Reject** — do NOT invoke shape-confirm.sh; verify `git status --short` clean; emit `Pitch rejected. No files written.` and EXIT.
 
 ---
 
-## Proposal JSON schema (for shape-confirm.sh — machine contract)
+## Named-teammate spawn (Principle 6 Rule A)
 
-```json
-{
-  "pitch": {
-    "id": "090",
-    "slug": "<kebab-case, ≤40 chars>",
-    "title": "<pitch title>",
-    "problem": "<1-3 sentences>",
-    "appetite": "<small|medium|big>-batch (<time budget>)",
-    "stated_assumptions": [
-      {
-        "id": "A1",
-        "claim": "<one sentence>",
-        "verified_by": "codebase-grep | lib-docs | web-search | design-contract | skill-source-read",
-        "verification": "<bash command or describable procedure>",
-        "confidence_at_shape": 75,
-        "criticality": "critical | important | nice-to-know",
-        "notes": ""
-      }
-    ],
-    "dag_mermaid": "graph LR\n  A[<child-1>] --> B[<child-2>]"
-  },
-  "children": [
-    {
-      "id": "090.1",
-      "slug": "<child-slug>",
-      "title": "<child title>",
-      "vertical_slice": "<entry → layers → observable outcome>",
-      "depends_on": []
-    }
-  ],
-  "rabbit_holes": [
-    { "slug": "<kebab>", "claim": "<one-line>", "domain": "<dashboard-ui | cli | docs>", "guess_files": [] }
-  ],
-  "deleted_from_shape": [
-    { "claim": "<what was considered>", "reason": "<why rejected>" }
-  ]
-}
+On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size).
+
+```
+TeamCreate(team_name: "pitch-<id>", members: ["planner", "executer", "verifier"])
+Agent(team_name: "pitch-<id>", name: "planner", model: "opus", task: "Planner for pitch-<id>. Read docs/<wf>/<id>-<slug>/spec.md.")
+Agent(team_name: "pitch-<id>", name: "executer", model: "sonnet", task: "Executer for pitch-<id>. Atomic commits, DC-first.")
+SendMessage(to: "planner", body: "Proceed to /plan for pitch-<id>. Read spec.md; output plan.md.")
 ```
 
-**Field rules:** `children[].id` is `<pitch.id>.<N>` (dense 1,2,3 — no gaps). `depends_on` uses child **slugs** (not IDs). `dag_mermaid` first line must start with `graph`. `stated_assumptions[]` MUST contain ≥1 `criticality: critical`. `deleted_from_shape[]` SHOULD have ≥1 (empty = Musk smell).
+Stage continuation — SendMessage to named teammate (~10× faster than fresh dispatch). **Fresh-subagent reserved for Rule A exceptions**: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages.
 
 ---
 
-## Layer B invariants (keep these at hand)
+## Proposal JSON schema (machine contract for shape-confirm.sh)
 
-- **Musk Step 2 delete ≥1** — non-negotiable on non-trivial pitches.
-- **Critical assumption ≥1** — Phase 1 schema enforces.
-- **Appetite is a budget, not an estimate** — scope fits; budget does not stretch.
-- **Autonomous contract** — no multi-turn captain Qs before the proposal. One ambiguous-intake clarification max.
-- **Atomic writes only** via `shape-confirm.sh`. Never write entity/ROADMAP directly. No `-a`/`-A` staging.
-- **Rabbit hole ≠ delete** — misclassification breaks Shape Up accounting.
-- **Fresh-context subagent for L0** — don't pollute orchestrating context with grep output.
-- **Vertical slice, not horizontal split** — each child ships E2E standalone; reject all-API or all-UI children.
-- **--next-id atomicity (MEMORY #5)** — `--next-id` → shape-confirm.sh commit is one uninterrupted pair.
-- **Reject → zero files** — verify `git status` clean.
+Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — SHOULD have ≥1; empty = Musk smell). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`.
 
-## Red flags (STOP and rerun)
+---
 
-- Zero `deleted_from_shape` on a non-trivial pitch → Musk skipped.
-- Zero critical assumptions → research shallow; schema will fail.
-- Children split by layer (all-API, all-UI) → fake decomposition.
-- Every child depends on every other → not a DAG; rescope.
-- Appetite picked to fit estimated work → Shape Up violated.
-- Proposal presented before L0 subagent returned → stale-context synthesis.
-- Captain Q answered during Steps 1-7 → autonomous-proposer contract violated.
-- Pitch touches ARCHITECTURE.md section but no `architecture-impact` block → mod will noop at ship-review; silent drift.
+## Invariants + red flags (STOP and rerun if violated)
+
+- Musk step 2 delete ≥1 on non-trivial; ≥1 critical assumption; appetite is budget not estimate.
+- Children = vertical E2E; all-API / all-UI / every-depends-on-every = fake decomposition.
+- Mode A: no multi-turn captain Qs before proposal. One intake clarification max → else route to Mode B.
+- Atomic writes via `shape-confirm.sh` only; no direct entity/ROADMAP edits; no `-a`/`-A` staging.
+- Proposal before L0 subagent returned → stale synthesis.
+- Pitch moves ARCHITECTURE.md without `architecture-impact` block → silent drift at ship-review.
+- Within-pitch stage transition via fresh-subagent without (a/b/c/d) exception → Rule A violation.
+- Mode B/C re-teaches Layer A procedure → Rule B violation.
+- `--next-id` → `shape-confirm.sh` commit = ONE uninterrupted pair (MEMORY #5).
+- Reject → zero files (verify `git status` clean).
+- Explicit pathspec on manual commit (MEMORY #14/#25/#37): `git add <path> && git commit ... -- <path>`.
 
 ---
 
 ## References
 
-- Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml` (pitch + shaped-child body contracts).
-- Atomic writer: `plugins/ship-flow/lib/shape-confirm.sh`.
+- Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml`.
+- Atomic writer: `plugins/ship-flow/lib/shape-confirm.sh` (`--layout=folder` lands Wave 5 of #085).
 - Rabbit-hole capture: `plugins/ship-flow/skills/add-todos/SKILL.md`.
 - Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
-- Ship-flow README + INVARIANTS: `plugins/ship-flow/README.md`, `plugins/ship-flow/INVARIANTS.md` (Principle 6 — layered skill architecture).
-- MEMORY: #5 (--next-id atomicity), #14 (commit attribution), #25 (staging contamination), #30 (verification-dispatch), #35 (dispatch discipline, amended by Principle 6 Rule A).
+- Layer A: `superpowers:brainstorming` (Mode B), `superpowers:writing-skills` (Mode C).
+- Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
+- MEMORY: #5, #14, #25, #30, #35 (amended by Principle 6 Rule A), #37, opus-4.7-naturally-does (2026-04-23 harness diet).
