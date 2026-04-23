@@ -52,7 +52,7 @@ token_actual:
 
 ${TITLE_CASED}
 
-> Next: when ready to define problem framing + done criteria, run \`/ship-flow:ship-sharp ${slug}\`. Captain gates the sharp stage; agents handle plan/execute/verify/ship autonomously after.
+> Next: when ready to define problem framing + done criteria, run \`/ship-flow:ship-shape ${slug}\`. Captain gates the sharp stage; agents handle plan/execute/verify/ship autonomously after.
 EOF
 
 echo "Captured: ${slug}"

@@ -4,7 +4,7 @@
 #
 # Pre-impl expectation (T1 ships before T2-T6): all 10 DCs FAIL because
 #   - docs/ship-flow/_mods/architecture-canon.md doesn't exist     (DC-1..5, 9, 10 part b)
-#   - plugins/ship-flow/skills/ship-sharp/SKILL.md has no arch refs (DC-6)
+#   - plugins/ship-flow/skills/ship-shape/SKILL.md has no arch refs (DC-6)
 #   - plugins/ship-flow/skills/ship-execute/SKILL.md has no extract-map on ARCHITECTURE.md (DC-7)
 #   - plugins/ship-flow/references/entity-body-schema.yaml has no section_tag: architecture-impact (DC-8)
 # Post-impl (after T2-T6): all 10 DCs PASS.
@@ -21,7 +21,7 @@ PLUGIN_DIR="${LIB_DIR}/.."
 REPO_ROOT="$(cd "${PLUGIN_DIR}/../.." && pwd)"
 
 MOD_FILE="${REPO_ROOT}/docs/ship-flow/_mods/architecture-canon.md"
-SHARP_SKILL="${PLUGIN_DIR}/skills/ship-sharp/SKILL.md"
+SHARP_SKILL="${PLUGIN_DIR}/skills/ship-shape/SKILL.md"
 EXECUTE_SKILL="${PLUGIN_DIR}/skills/ship-execute/SKILL.md"
 SCHEMA="${PLUGIN_DIR}/references/entity-body-schema.yaml"
 ARCH_SRC="${REPO_ROOT}/ARCHITECTURE.md"
@@ -219,8 +219,8 @@ dc6_sharp_skill_refs() {
   local n; n="$(grep -c 'architecture-impact' "$SHARP_SKILL" 2>/dev/null || echo 0)"
   [ "$n" -ge 3 ]
 }
-if dc6_sharp_skill_refs 2>/dev/null; then echo "OK DC-6 ship-sharp SKILL architecture-impact ≥3"
-else echo "FAIL DC-6 ship-sharp SKILL architecture-impact ≥3"; FAIL=1; fi
+if dc6_sharp_skill_refs 2>/dev/null; then echo "OK DC-6 ship-shape SKILL architecture-impact ≥3"
+else echo "FAIL DC-6 ship-shape SKILL architecture-impact ≥3"; FAIL=1; fi
 
 # ========== DC-7: ship-execute SKILL has extract-map on ARCHITECTURE.md ≥1 ==========
 dc7_execute_skill_refs() {

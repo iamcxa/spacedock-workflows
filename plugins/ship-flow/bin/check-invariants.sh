@@ -110,7 +110,7 @@ check_section_tag_coverage() {
   # Grandfather rule: pre-049 entities were never tagged — flagging all 42 of them would be
   # massive scope creep for 046e. Rule: entity is ENFORCED only if it already contains ≥ 1
   # section tag (demonstrating adoption intent). Entities with zero tags are skipped with WARN
-  # (pre-049 baseline). New sharp-created entities always have tags (per ship-sharp/ship-plan skills).
+  # (pre-049 baseline). New sharp-created entities always have tags (per ship-shape/ship-plan skills).
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0
