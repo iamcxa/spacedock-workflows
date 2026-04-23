@@ -198,6 +198,8 @@ Dispatch cross-review to `verifier` teammate (pipeline path) or fresh sonnet (no
 
 Verdict: **PROCEED** / **VETO** (loop to fix) / **PROMPT_CAPTAIN**.
 
+**Circuit breaker**: if `SendMessage(verifier)` is unresponsive (phantom team / timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus on `big-batch`. Do not block on an unresponsive reviewer.
+
 ### Step 7 — Emit execute.md
 
 Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=execute --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; handles atomic commit + pathspec-lock).

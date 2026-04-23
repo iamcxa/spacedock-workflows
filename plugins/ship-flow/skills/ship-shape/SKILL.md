@@ -159,6 +159,8 @@ Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no 
 
 **Proposal budget**: the proposal text passed to the cross-reviewer MUST be ≤400 words. Longer = detail creep; trim BEFORE dispatching cross-review, not after.
 
+**Circuit breaker**: if the cross-review teammate is unresponsive (phantom team / SendMessage timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus when `appetite: big-batch`. Do not block on an unresponsive reviewer.
+
 ---
 
 ## Mode B — Interactive Q-loop (Layer A exception)

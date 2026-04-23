@@ -183,6 +183,8 @@ Dispatch cross-review to `executer` teammate (reviews PR body + canonical-docs d
 
 Verdict: **PROCEED** / **VETO** (loop to fix sections) / **PROMPT_CAPTAIN**.
 
+**Circuit breaker**: if `SendMessage(executer)` is unresponsive (phantom team / timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus on `big-batch`. Do not block on an unresponsive reviewer.
+
 ### Step 8 — Emit review.md
 
 Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=review --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; atomic + pathspec-lock).

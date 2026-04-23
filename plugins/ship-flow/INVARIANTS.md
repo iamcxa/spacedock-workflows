@@ -152,6 +152,8 @@ Stage skills SHOULD augment with Layer B when superpowers atomic skill has scope
 **Rule C (Cross-Review Gate)**:
 Each stage transition has a cross-review gate. Primary author's teammate counterpart reviews output with structured prompt (feasibility / executable / quality / DC adequacy / canonical sync). FO decides final gate: veto / proceed / prompt captain.
 
+**Reviewer-unresponsive circuit breaker**: if the cross-review teammate is unresponsive (phantom team / SendMessage timeout / fresh-Agent stall), fall back per Rule A Fallback above — fresh sonnet by default, fresh opus when `appetite: big-batch`. Do not block stage advancement on an unresponsive reviewer. Each stage SKILL cross-review subsection MUST reference this fallback (pitch 091 grep-enforces this cross-reference; see `check_cross_review_gate` / `check_team_fallback_documented`).
+
 **Layer A delegation table** (examples from ship-flow 2.0, #085):
 
 | Stage skill | Layer A delegate | Scope | Exception? |

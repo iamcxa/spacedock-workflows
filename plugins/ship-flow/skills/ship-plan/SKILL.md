@@ -136,6 +136,8 @@ Dispatch cross-review to `executer` teammate (pipeline path) or fresh sonnet (no
 
 Verdict: **PROCEED** / **VETO** (max 2 loops back to Step 3 with reviewer feedback; round 3 → PROMPT_CAPTAIN) / **PROMPT_CAPTAIN**.
 
+**Circuit breaker**: if `SendMessage(executer)` is unresponsive (phantom team / timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus on `big-batch`. Do not block on an unresponsive reviewer.
+
 ### Step 6 — Emit plan.md
 
 Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=plan --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive landed at commit `acd73545`). Primitive handles atomic commit with explicit pathspec (MEMORY #14/#25/#37).

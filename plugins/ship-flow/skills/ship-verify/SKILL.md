@@ -214,6 +214,8 @@ Dispatch cross-review to counterpart teammate (`planner` if `verifier` just wrot
 
 Verdict: **PROCEED** → TaskUpdate verify=completed, FO advances. **VETO** → feedback-to-execute (max 2 rounds per stage; round 3 → PROMPT_CAPTAIN). **PROMPT_CAPTAIN** → halt, present `verify.md` + reviewer concern.
 
+**Circuit breaker**: if `SendMessage(planner)` is unresponsive (phantom team / timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus on `big-batch`. Do not block on an unresponsive reviewer.
+
 `--fast` captain mode skips this gate; captain takes responsibility for the bypass.
 
 ---
