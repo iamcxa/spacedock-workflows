@@ -1,6 +1,6 @@
 ---
 name: ship-review
-description: "Use when verify stage passed and entity is ready for PR creation + canonical documentation sync. Agent-autonomous: architecture-canon mod + PR-body drafting + ROADMAP.md/PRODUCT.md updates + token cost summary. Dispatched by /ship to `planner` teammate (SendMessage). Output: `<entity-folder>/review.md`. Layer A delegation: pr-review-toolkit:review-pr for review agent philosophy."
+description: "Use when verify stage passed and entity is ready for PR creation + canonical documentation sync. Agent-autonomous: 4-doc canonical dispatch (ARCHITECTURE.md / PRODUCT.md / README.md / ROADMAP.md) via `planner` teammate + PR-body drafting + token cost summary. Dispatched by /ship to `planner` teammate (SendMessage). Output: `<entity-folder>/review.md`. Layer A delegation: pr-review-toolkit:review-pr for review agent philosophy."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---
@@ -9,13 +9,13 @@ argument-hint: "[entity-id | slug]"
 
 You run REVIEW. Output: `<entity-folder>/review.md`. Dispatched by `/ship` to `planner` teammate via SendMessage (hot context from spec + plan authorship). No captain gate at this stage; captain decides merge after PR lands in `/ship` final stage.
 
-**Pipeline position**: reads `verify.md` (must have PASS verdict) → invokes architecture-canon mod → drafts PR body → updates canonical docs → produces `review.md` → cross-review gate → advance to ship-final.
+**Pipeline position**: reads `verify.md` (must have PASS verdict) → dispatches 4-doc canonical patches to `planner` → drafts PR body → produces `review.md` → cross-review gate → advance to ship-final.
 
 ## Entity body contract (schema-as-prose)
 
-- Reads: `verify.md` verdict (PASS required), `execute.md` execution log, `spec.md` problem / DC / user journey / architecture-impact, `plan.md` verification spec table, `PRODUCT.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `references/doc-format.md`.
-- Writes: `<entity-folder>/review.md` sections — `## PR Draft` (title + body), `## ROADMAP.md Update` (conditional), `## PRODUCT.md Update` (conditional), `## Architecture Changes` (conditional, from canon mod), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (verdict / stage_cost / timestamps).
-- Side effects: ROADMAP.md Now → Shipped; PRODUCT.md capability + user story append.
+- Reads: `verify.md` verdict (PASS required), `execute.md` execution log, `spec.md` problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`.
+- Writes: `<entity-folder>/review.md` sections — `## PR Draft` (title + body), `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (verdict / stage_cost / timestamps).
+- Side effects: ARCHITECTURE.md / PRODUCT.md / README.md / ROADMAP.md patched (by `planner` dispatch — NOT by this skill directly).
 - Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.review`.
 
 ## Layer A delegation (Principle 6 Rule B)
@@ -23,9 +23,8 @@ You run REVIEW. Output: `<entity-folder>/review.md`. Dispatched by `/ship` to `p
 `pr-review-toolkit:review-pr` (and specialized reviewer agents) owns PR review agent philosophy (code-reviewer / silent-failure-hunter / security-reviewer persona prompts, diff interpretation, finding severity classification). **Do NOT re-teach.** Ship-review wraps with Layer B augmentation:
 
 - Verify verdict pre-check (PASS required; block-on-fail).
-- Architecture-canon mod invocation (atomic ARCHITECTURE.md patch with read-first CAS, before PR body is drafted).
+- **Canonical docs update**: dispatched to `planner` (named teammate via SendMessage) — leverages Principle 6 Rule A continuity (shape → plan → execute → verify context). Planner holds hot context across the pitch; mechanical patching of 4 docs benefits from that context (cross-section aggregation, prose-varying README judgment).
 - PR body drafting from canonical entity sections (Problem / User Journey / DC+Verification / Changes / Architecture Changes / Quality Gate).
-- Canonical doc sync (ROADMAP.md + PRODUCT.md via patch-map.sh, pathspec-safe).
 - Token cost summary + D2 knowledge candidate surfacing.
 
 **pr-review-toolkit invocation sizing** (captain Q3 answer, Wave 6):
@@ -40,44 +39,49 @@ Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / 
 ## Flow
 
 **Phases (TaskCreate sub-tasks — inherit from /ship umbrella when pipeline-dispatched):**
-`read-verify` → `arch-canon-mod` → `vcs-detect` → `pr-body-draft` → `roadmap-update` → `product-update` → `token-summary` → `d2-surface` → `cross-review` → `emit-review.md`
+`read-verify` → `dispatch-canonical-patches` → `vcs-detect` → `pr-body-draft` → `token-summary` → `d2-surface` → `cross-review` → `emit-review.md`
 
 ### Step 1 — Read verify verdict + entity sections
 
-Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS` (legacy fallback `## Verify Report` → `Verdict: PASS`). From execute.md: execution log (for PR body Changes section). From spec.md: Problem, User Journey, Done Criteria, Shape Output (if present), Size Assessment, Architecture Impact (if present).
+Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS`. From execute.md: execution log (for PR body Changes section). From spec.md (aggregated across children): Problem, User Journey, Done Criteria, Shape Output, Size Assessment, `architecture-impact`, `product-impact`, `readme-impact`. From parent entity (if `parent:` set): `roadmap-phase`.
 
 **Pre-check**: verdict != PASS → write `## Review Report status: blocked, reason: verify verdict <actual>, expected passed` and return. Never proceed without PASS.
 
-### Step 1.5 — Invoke architecture-canon mod (before PR body)
+### Step 2 — Dispatch canonical doc patches to `planner`
 
-Runs before Step 2 so arch commits land on branch and PR body can cite their SHAs.
+SendMessage to `planner` teammate with a structured prompt. Planner already has hot context from shape + plan stages; this dispatch is the canonical-sync work, not re-discovery.
 
-**Trigger check**:
-```bash
-bash plugins/ship-flow/lib/extract-section.sh "$ENTITY_FILE" architecture-impact 2>/dev/null | grep -qE "^after:[[:space:]]*\|"
+**Dispatch prompt template**:
+
+> Draft canonical doc patches for pitch `<id>-<slug>`. Read entity children's `architecture-impact`, `product-impact`, `readme-impact` blocks + parent `roadmap-phase` + verify verdict. Aggregate per target_section. Apply patches atomically:
+>
+> - **ARCHITECTURE.md** — per aggregated `architecture-impact` section: `bash plugins/ship-flow/lib/patch-map.sh --if-hash=<sha> --section=<target_section> --commit-as="docs(architecture): #<id> — <summary>" ARCHITECTURE.md`. Then append Decisions index row for #<id> via same primitive.
+> - **PRODUCT.md** — per aggregated `product-impact` section: `bash plugins/ship-flow/lib/patch-map.sh --if-hash=<sha> --section=<target_section> --commit-as="docs(product): #<id> — <summary>" PRODUCT.md`. Covers user stories, constraints, capabilities.
+> - **README.md** — per `readme-impact` block: Edit tool with before/after matching (README is prose-heavy, typically NO section tags → DO NOT use patch-map.sh). Commit via explicit pathspec: `git add -- README.md && git commit -m "docs(readme): #<id> — <summary>" -- README.md`. If block has `entry_critical: true`, note it in commit body.
+> - **ROADMAP.md** — status flip: `patch-map.sh --if-hash=<sha> --mode=remove-row --match=<slug> --section=now --commit-as="ship: remove #<id> from Now" ROADMAP.md` then `--mode=append --section=shipped --commit-as="ship: record #<id> in Shipped"` with new row.
+>
+> Discipline: read-first CAS via `--if-hash` on patch-map.sh invocations. Exit 6 (stale hash) → re-read + retry, max 3 rounds per doc. Explicit pathspec at commit-time (MEMORY #14/#25/#37). No `-a`/`-A`. Commit each doc separately.
+>
+> Report back with: 4 commit SHAs (or skip-rationale per doc if no matching impact block) + per-doc diff summary.
+
+**Verification reminder** (INVARIANTS Captain-Gate #6): if any impact block's `after:` substantially replaces an existing section OR contains ≥5 lower-confidence claims, planner dispatches fresh-context verification subagent BEFORE patching. Same principle applies to prose-heavy README edits.
+
+**Blocker conditions**:
+- Planner reports `patch-map.sh --if-hash` exit 6 after 3 retries on any doc → write `## Review Report status: blocked, reason: canonical doc <name> stale hash; parallel session contaminated` and return.
+- Planner reports a per-child impact block fails schema validation (missing `target_section` / malformed `before:` / `after:` empty) → HALT ship-review; write `## Review Report status: blocked, reason: impact block schema violation on <child-id>`. Fix is in shape stage.
+
+**On dispatch success**: capture planner's reported SHAs. Draft `## Canonical Docs Update` section in review.md:
+
+```markdown
+## Canonical Docs Update
+
+- ARCHITECTURE.md: {ARCH_COMMIT short-SHA} — {summary} (or "skipped — no architecture-impact block")
+- PRODUCT.md: {PRODUCT_COMMIT short-SHA} — {summary} (or "skipped — no product-impact block")
+- README.md: {README_COMMIT short-SHA} — {summary} (or "skipped — no readme-impact block")
+- ROADMAP.md: {ROADMAP_COMMIT short-SHA} — status flipped (or "skipped — no parent roadmap-phase")
 ```
 
-No `architecture-impact` section OR empty `after:` block → skip silently (mod also noops internally; double-check saves a subshell).
-
-**Verification reminder** (INVARIANTS Captain-Gate #6): if `architecture-impact.after` substantially replaces an existing section OR contains ≥5 lower-confidence claims (novel pattern / consumer-list / file:line citations), dispatch fresh-context verification subagent BEFORE running the mod. Same principle applies at Steps 3 / 4 for substantial ROADMAP / PRODUCT entries.
-
-**When triggered**:
-```bash
-ENTITY_FILE="$ENTITY_FILE" bash docs/ship-flow/_mods/architecture-canon.md
-```
-
-Mod sequence: (1) freshness-check captured `before:` against current ARCHITECTURE.md (exit 1 = stale); (2) atomic patch of `target_section` via patch-map.sh with read-first CAS (commit: `docs(architecture): #{id} — {summary}`); (3) append Decisions table row (commit: `docs(architecture-index): #{id}`).
-
-**On mod success**: capture two commit SHAs for PR body:
-```bash
-ARCH_COMMIT=$(git log -2 --format=%H --grep='^docs(architecture): #' | head -1)
-ADR_COMMIT=$(git log -2 --format=%H --grep='^docs(architecture-index): #' | head -1)
-```
-PR body includes `## Architecture Changes` section.
-
-**On mod failure** (exit non-zero): HALT ship-review; write `## Review Report status: blocked, reason: architecture-canon mod failed: exit {rc}`. Captain reconciles (most common: re-extract `before:` because parallel session patched ARCHITECTURE.md post-sharp). Exit codes: 1 = freshness / missing fields, 6 = CAS mismatch, 9 = mermaid validation.
-
-### Step 1.7 — VCS detection
+### Step 3 — VCS detection
 
 ```bash
 git remote -v 2>/dev/null | grep -q "github\.com" && echo "vcs=github" || \
@@ -95,7 +99,7 @@ Override from `docs/<wf>/README.md` frontmatter `commands:` block if present (pr
 
 Unknown VCS → stop; ask captain to add `commands:` block to workflow README frontmatter.
 
-### Step 2 — Draft PR body (write to review.md)
+### Step 4 — Draft PR body (write to review.md)
 
 **Do NOT push or `gh pr create` here.** Ship-final stage (in `/ship` skill) creates the PR from this drafted body. Ship-review only writes `## PR Draft` to `review.md`.
 
@@ -117,9 +121,11 @@ Body:
 ## Changes
 {from execute.md → Execution Log — task summary with commit SHAs}
 
-## Architecture Changes          ← include ONLY if architecture-canon mod ran
-- Patched ARCHITECTURE.md → {target_section}: {summary} ({ARCH_COMMIT short-SHA})
-- Appended Decisions index row for #{entity-id} ({ADR_COMMIT short-SHA})
+## Canonical Docs Update
+- ARCHITECTURE.md → {target_section}: {summary} ({ARCH_COMMIT short-SHA})  ← omit line if skipped
+- PRODUCT.md → {target_section}: {summary} ({PRODUCT_COMMIT short-SHA})    ← omit line if skipped
+- README.md → {section}: {summary} ({README_COMMIT short-SHA})             ← omit line if skipped; flag ⚠ entry_critical if applicable
+- ROADMAP.md: status flipped Now → Shipped ({ROADMAP_COMMIT short-SHA})    ← omit line if skipped
 
 ## Quality Gate
 {from verify.md → Quality Gate 5-check results}
@@ -129,62 +135,6 @@ Ship-flow: shape → plan → execute → verify → review → ship-final (auto
 Tracker: {tracker + issue, if set}
 Cost: ${token_actual} (budget: ${token_budget})
 ```
-
-The ship-final stage (in `/ship` skill) reads this drafted body to assemble the `gh pr create` / `glab mr create` invocation.
-
-### Step 3 — Update ROADMAP.md (two atomic patches)
-
-Skip if `ROADMAP.md` absent (no error).
-
-**3.1 Remove from Now section**:
-```bash
-BEFORE_HASH=$(sha256sum ROADMAP.md 2>/dev/null | awk '{print $1}' || shasum -a 256 ROADMAP.md | awk '{print $1}')
-bash plugins/ship-flow/lib/patch-map.sh \
-  --if-hash="$BEFORE_HASH" --mode=remove-row --match="{entity.slug}" --section=now \
-  --commit-as="ship: remove {entity.id} from Now" ROADMAP.md
-```
-Exit 6 (stale hash — parallel session wrote between extract and patch): re-read + recompute + retry. Max 3 retries before BLOCKED. Idempotent: row already gone → no-op exit 0.
-
-**3.2 Append to Shipped section** (recompute hash first; file changed in 3.1):
-```bash
-AFTER_HASH=$(sha256sum ROADMAP.md 2>/dev/null | awk '{print $1}' || shasum -a 256 ROADMAP.md | awk '{print $1}')
-NEW_ROW="| {entity.id} | {title} | {one-sentence from Problem, present tense per doc-format.md} | {today} | {PR ⏳ or link} |"
-bash plugins/ship-flow/lib/patch-map.sh \
-  --if-hash="$AFTER_HASH" --mode=append --section=shipped \
-  --commit-as="ship: record {entity.id} in Shipped" ROADMAP.md <<<"$NEW_ROW"
-```
-
-**ID collision** (cross-workflow): if `{entity.id}` already in current Shipped body → suffix with workflow dir: `{id}-{workflow-dir-name}` (e.g., `005-ship-flow`).
-
-**3.3 Cost Calibration** (unchanged; captain-managed prose, no marker): if `## Cost Calibration` table exists and `token_actual` known, increment size row's Sample count and recalc Median if sample ≥3. Manual Edit tool is the right tool here.
-
-### Step 4 — Update PRODUCT.md
-
-Skip if absent. Read `references/doc-format.md` for exact formats; follow derivation rules, do not improvise.
-
-**4.1 Append capability bullet** to `## Current Capabilities`:
-- Format: `- {What it does} — {why it matters in ≤10 words} (#{entity-id})`
-- If shape ran → derive from US-1 "I want" clause. Else → from Problem first sentence rewritten as capability.
-
-```bash
-BEFORE_HASH=$(sha256sum PRODUCT.md 2>/dev/null | awk '{print $1}' || shasum -a 256 PRODUCT.md | awk '{print $1}')
-BULLET="- {derived line}"
-bash plugins/ship-flow/lib/patch-map.sh \
-  --if-hash="$BEFORE_HASH" --mode=append --section=capabilities \
-  --commit-as="ship: add capability for {entity.id}" PRODUCT.md <<<"$BULLET"
-```
-
-Domain sub-header grouping deferred to a future reorg entity; append to end for now.
-
-**4.2 Add user story (JTBD format)** (unchanged — prose; no marker):
-- Shape ran → copy accepted stories from spec.md Shape Output.
-- No shape → generate ONE story: Persona (match PRODUCT.md "Who It Serves", default Captain); Action (from DC's primary observable change); Outcome (from Problem's "why it matters"). Deduplicate.
-
-**4.3 Update constraints** (rare; Edit tool, no marker) only if feature explicitly relaxes or adds a constraint.
-
-**4.4 Cross-check consistency** (from doc-format.md):
-- ROADMAP Shipped "Why it existed" ↔ PRODUCT capability "why it matters" (same idea, different format).
-- North Star in PRODUCT.md Vision ↔ ROADMAP.md North Star (identical text).
 
 ### Step 5 — Token summary
 
@@ -213,17 +163,21 @@ No candidates → skip silently.
 
 ### Step 7 — Cross-review gate (Principle 6 Rule C)
 
-Dispatch cross-review to `executer` teammate (reviews PR body + doc-sync accuracy) or fresh sonnet (no team). Upgrade fresh **opus** when `appetite: big-batch`.
+Dispatch cross-review to `executer` teammate (reviews PR body + canonical-docs dispatch accuracy) or fresh sonnet (no team). Upgrade fresh **opus** when `appetite: big-batch`.
 
-**Layer A expansion per sizing rule** (see Layer A delegation section above): `appetite: big-batch` → ALWAYS invoke `Skill: pr-review-toolkit:review-pr` for multi-persona PR body review. `appetite: medium-batch` → invoke only if entity frontmatter `pr-review-opt-in: true`. `appetite: small-batch` → skip (diff too narrow for multi-persona value).
+**Layer A expansion per sizing rule** (see Layer A delegation section above): `appetite: big-batch` → ALWAYS invoke `Skill: pr-review-toolkit:review-pr` for multi-persona PR body review. `appetite: medium-batch` → invoke only if entity frontmatter `pr-review-opt-in: true`. `appetite: small-batch` → skip.
 
 5-factor rubric adapted for review stage:
 
 1. **Feasibility** — PR size reasonable; branch ready for captain smoke?
 2. **Executable scope** — review scope matches actual diff (no omitted file / no scope creep)?
-3. **Quality** — no silent failures; every DC verified in UAT table; architecture commits land BEFORE PR body cites them?
+3. **Quality** — no silent failures; every DC verified in UAT table; canonical commits land BEFORE PR body cites them?
 4. **DC adequacy** — PR body's DC+Verification table is reproducible (copy-paste the procedure)?
-5. **Canonical sync** — ROADMAP + PRODUCT updated; PR body reflects canonical deltas (Architecture Changes / Cost Calibration if applicable)?
+5. **Canonical sync** — 4-doc audit:
+   - **ARCHITECTURE.md**: architecture-impact blocks aggregated cleanly per target_section? No section-tag corruption (patch-map.sh CAS held)?
+   - **PRODUCT.md**: constraints / user stories align with spec.md intent?
+   - **README.md**: `entry_critical` readme-impact blocks carefully applied (prose-varying needs closer audit)? Install / usage prose reads naturally?
+   - **ROADMAP.md**: status flip matches pitch actual verdict? Shipped row carries correct date + PR placeholder?
 
 Verdict: **PROCEED** / **VETO** (loop to fix sections) / **PROMPT_CAPTAIN**.
 
@@ -231,7 +185,7 @@ Verdict: **PROCEED** / **VETO** (loop to fix sections) / **PROMPT_CAPTAIN**.
 
 Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=review --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; atomic + pathspec-lock).
 
-Review.md sections: `## PR Draft`, `## ROADMAP.md Update` (conditional), `## PRODUCT.md Update` (conditional), `## Architecture Changes` (conditional), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (status: shipped-ready / stage_cost / tasks / Verify results / ROADMAP+PRODUCT update status / timestamps / duration).
+Review.md sections: `## PR Draft`, `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (status / stage_cost / planner dispatch cost / Verify results / canonical sync status / timestamps / duration).
 
 Return to /ship; advance to ship-final stage (PR creation + captain merge gate).
 
@@ -242,21 +196,21 @@ Return to /ship; advance to ship-final stage (PR creation + captain merge gate).
 ## Invariants + red flags (STOP if violated)
 
 - Verify verdict must be PASS. Anything else → BLOCKED, return to FO.
-- Architecture-canon mod is load-bearing: any `architecture-impact` section → mod MUST run before PR body drafted (so SHAs can be cited). Mod failure → HALT.
+- Canonical docs update is dispatched to `planner` teammate — ship-review does NOT patch docs directly. Planner holds hot context; patches are mechanical + prose-sensitive for README.
+- patch-map.sh `--if-hash` read-first CAS is the only safe concurrent-write pattern for ARCHITECTURE / PRODUCT / ROADMAP. Exit 6 (stale) → re-read + retry, max 3.
+- README.md uses Edit tool (prose-heavy, no section tags typically); DO NOT patch-map.sh on README.
+- Explicit pathspec at commit-time on every doc commit (MEMORY #14/#25/#37). No `-a`/`-A`.
 - Do NOT push or `gh pr create` here — ship-final owns PR creation. Only draft PR body to review.md.
-- ROADMAP / PRODUCT patches use `patch-map.sh` with `--if-hash` read-first CAS. Exit 6 (stale) → re-read + retry, max 3.
-- `--if-hash` retry cap: 3. Beyond → BLOCKED.
-- Cost Calibration + user story + constraint updates are prose-manual (Edit tool); the three don't use patch-map.sh.
 - Frontmatter write scope strict: only `token_actual`.
 - Layer A delegation (`pr-review-toolkit:*`) owns PR review agent personas — re-teaching = Principle 6 Rule B violation.
 - Cross-review VETO cap 2 rounds; round 3 → PROMPT_CAPTAIN.
+- 4-doc canonical-sync audit in cross-review must cover all 4 docs (or explicit skip-rationale per doc).
 
 ## Circuit breakers
 
 - Verify verdict != PASS → do not proceed; report back to FO.
-- Architecture-canon mod failure → HALT, write blocked Review Report.
-- Patch-map `--if-hash` exit 6: max 3 retries.
-- ROADMAP / PRODUCT update failure: log as Learning, proceed non-blocking.
+- Planner reports patch-map `--if-hash` exit 6 after 3 retries on any doc → HALT, write blocked Review Report.
+- Impact block schema violation (missing target_section / malformed before-after) → HALT; fix in shape stage.
 - Token overrun (actual > budget × 2): note in Review Report, do not block.
 - Total stage >15 min elapsed → write `review.md` partial + `⚠️ INCOMPLETE` markers + Review Report status=partial. Never exit without emitting review.md.
 
@@ -264,12 +218,11 @@ Return to /ship; advance to ship-final stage (PR creation + captain merge gate).
 
 ## References
 
-- Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.review`.
-- Stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh`.
+- Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.review` (plus `architecture-impact`, `product-impact`, `readme-impact`, `roadmap-phase` block schemas).
+- Stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh` (landed commit `acd73545`).
 - Section extraction: `plugins/ship-flow/lib/extract-section.sh`.
-- Atomic doc patches: `plugins/ship-flow/lib/patch-map.sh` (read-first CAS via `--if-hash`).
-- Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
+- Atomic doc patches: `plugins/ship-flow/lib/patch-map.sh` (read-first CAS via `--if-hash`) — ARCHITECTURE / PRODUCT / ROADMAP only.
 - Doc format rules: `plugins/ship-flow/references/doc-format.md`.
 - Layer A: `pr-review-toolkit:review-pr` (PR review agent personas — ALWAYS big-batch; OPTIONAL medium-batch via `pr-review-opt-in: true`; SKIP small-batch).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md`.
-- MEMORY: #14/#25/#37 (pathspec / staging), #30 (verification-dispatch — applies to substantial ROADMAP/PRODUCT entries), #35 (dispatch discipline amended by Principle 6), opus-4.7-naturally-does (2026-04-23 harness diet).
+- MEMORY: #14/#25/#37 (pathspec / staging), #30 (verification-dispatch — applies to substantial canonical-doc entries), #35 (dispatch discipline amended by Principle 6), opus-4.7-naturally-does (2026-04-23 harness diet).
