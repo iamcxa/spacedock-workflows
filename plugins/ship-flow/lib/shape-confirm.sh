@@ -4,7 +4,10 @@
 # Reads a JSON proposal, writes: pitch entity + children + rabbit-hole todos
 # + ROADMAP updates (next/later/not-doing sections) in ONE atomic commit.
 #
-# Usage: bash shape-confirm.sh --proposal=<json-file> [--dry-run]
+# Usage: bash shape-confirm.sh --proposal=<json-file> [--dry-run] [--layout=folder|flat]
+#
+# --layout=folder  writes docs/<wf>/<id>-<slug>/README.md + spec.md (folder layout)
+# --layout=flat    writes docs/<wf>/<id>-<slug>.md (default, backward compat)
 #
 # Exit codes: 0 success, 1 usage/malformed JSON, 3 missing file,
 #             6 hash mismatch during patch, 7 required helpers missing,
@@ -13,15 +16,19 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./map-helpers.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/map-helpers.sh"
 
 PROPOSAL=""
 DRY_RUN=0
+LAYOUT="flat"
 
 for arg in "$@"; do
   case "$arg" in
-    --proposal=*) PROPOSAL="${arg#--proposal=}" ;;
-    --dry-run)    DRY_RUN=1 ;;
+    --proposal=*)    PROPOSAL="${arg#--proposal=}" ;;
+    --dry-run)       DRY_RUN=1 ;;
+    --layout=folder) LAYOUT="folder" ;;
+    --layout=flat)   LAYOUT="flat" ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -56,7 +63,16 @@ PITCH_PROBLEM=$(yq --input-format=json '.pitch.problem' "$PROPOSAL" | tr -d '"')
 
 ENTITY_DIR="docs/ship-flow"
 TODO_DIR="${ENTITY_DIR}/todos"
-PITCH_PATH="${ENTITY_DIR}/${PITCH_ID}-${PITCH_SLUG}.md"
+
+# Layout-aware path computation
+if [ "$LAYOUT" = "folder" ]; then
+  PITCH_FOLDER="${ENTITY_DIR}/${PITCH_ID}-${PITCH_SLUG}"
+  PITCH_README="${PITCH_FOLDER}/README.md"
+  PITCH_SPEC="${PITCH_FOLDER}/spec.md"
+  PITCH_PATH="$PITCH_README"
+else
+  PITCH_PATH="${ENTITY_DIR}/${PITCH_ID}-${PITCH_SLUG}.md"
+fi
 
 CHILD_COUNT=$(yq --input-format=json '.children | length' "$PROPOSAL")
 CHILDREN_PATHS=()
@@ -76,9 +92,14 @@ done
 DEL_COUNT=$(yq --input-format=json '.deleted_from_shape | length' "$PROPOSAL")
 
 if [ "$DRY_RUN" = "1" ]; then
-  echo "# shape-confirm --dry-run"
+  echo "# shape-confirm --dry-run (layout=$LAYOUT)"
   echo "Would write:"
-  echo "  pitch: $PITCH_PATH"
+  if [ "$LAYOUT" = "folder" ]; then
+    echo "  pitch README: ${PITCH_README}"
+    echo "  pitch spec:   ${PITCH_SPEC}"
+  else
+    echo "  pitch: $PITCH_PATH"
+  fi
   for c in "${CHILDREN_PATHS[@]}"; do echo "  child: $c"; done
   for r in "${RH_PATHS[@]}"; do echo "  rabbit: $r"; done
   echo "Would patch: ROADMAP.md sections next, later, not-doing"
@@ -88,8 +109,64 @@ fi
 # === Real write phase ===
 mkdir -p "$ENTITY_DIR" "$TODO_DIR"
 
-# 1. Write pitch entity
-cat > "$PITCH_PATH" <<EOF
+# 1. Write pitch entity (layout-aware)
+if [ "$LAYOUT" = "folder" ]; then
+  mkdir -p "$PITCH_FOLDER"
+  # README.md — frontmatter + stage-artifact-links section
+  cat > "$PITCH_README" <<EOF
+---
+id: "${PITCH_ID}"
+title: "${PITCH_TITLE}"
+status: sharp
+pattern: pitch
+appetite: "${PITCH_APPETITE}"
+layout: folder
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| spec | [spec.md](spec.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+  # spec.md — problem / appetite / children / assumptions / rabbit-holes
+  cat > "$PITCH_SPEC" <<EOF
+# ${PITCH_TITLE} — Spec
+
+## Problem
+
+${PITCH_PROBLEM}
+
+## Appetite
+
+${PITCH_APPETITE}
+
+## Children
+
+$(for i in $(seq 0 $((CHILD_COUNT - 1))); do
+  c_id=$(yq --input-format=json ".children[$i].id" "$PROPOSAL" | tr -d '"')
+  c_slug=$(yq --input-format=json ".children[$i].slug" "$PROPOSAL" | tr -d '"')
+  echo "- ${c_id}-${c_slug}"
+done)
+
+## Assumptions
+
+(fill in at shape stage)
+
+## Rabbit Holes
+
+$(for i in $(seq 0 $((RH_COUNT - 1))); do
+  rh_slug=$(yq --input-format=json ".rabbit_holes[$i].slug" "$PROPOSAL" | tr -d '"')
+  echo "- ${rh_slug}"
+done)
+
+## Deletes
+
+(fill in from deleted_from_shape)
+EOF
+  WRITTEN_FILES=("$PITCH_README" "$PITCH_SPEC")
+else
+  cat > "$PITCH_PATH" <<EOF
 ---
 id: "${PITCH_ID}"
 title: "${PITCH_TITLE}"
@@ -102,7 +179,8 @@ appetite: "${PITCH_APPETITE}"
 
 ${PITCH_PROBLEM}
 EOF
-WRITTEN_FILES=("$PITCH_PATH")
+  WRITTEN_FILES=("$PITCH_PATH")
+fi
 
 # 2. Write children entity files
 for i in $(seq 0 $((CHILD_COUNT - 1))); do
