@@ -353,6 +353,29 @@ check_layer_a_delegation() {
   return "$fail"
 }
 
+check_team_fallback_documented() {
+  # Verify every stage SKILL.md references a fallback path for teammate/subagent unavailability.
+  # Mirrors check_layer_a_delegation convention; prose-level grep — can't verify
+  # the prose gets executed, but prose presence > prose absence for an unproven primitive.
+  # Accepts: "fresh subagent" | "fresh Agent" | "team unavailable" | "phantom"
+  # | "fallback" | explicit "no TeamCreate" annotation (any case).
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local fail=0
+  local sk n
+  for sk in "${STAGE_SKILLS[@]}"; do
+    local skill_file="${skills_dir}/${sk}/SKILL.md"
+    [ -f "$skill_file" ] || continue
+    n=$({ grep -cEi -e "fresh.subagent|fresh.Agent|team.unavailable|phantom|fallback|no TeamCreate" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${n:-0}" = "0" ]; then
+      echo "ERROR [team-fallback-documented]: ${sk}/SKILL.md has no TeamCreate/SendMessage fallback reference (add one of: 'fresh subagent', 'fresh Agent', 'team unavailable', 'phantom', 'fallback', or a 'no TeamCreate — pure inline orchestration' annotation; see INVARIANTS.md Principle 6 Rule A Fallback)" >&2
+      fail=1
+    fi
+  done
+  return "$fail"
+}
+
 check_cross_review_gate() {
   # Verify every stage SKILL.md has a cross-review gate with 5-factor rubric.
   # Requires: cross-review mention + "5-factor rubric" + "Feasibility" (case-insensitive).
@@ -490,6 +513,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     pitch-assumptions) check_pitch_assumptions; exit $? ;;
     stage-artifact-path) check_stage_artifact_path; exit $? ;;
     layer-a-delegation) check_layer_a_delegation; exit $? ;;
+    team-fallback-documented) check_team_fallback_documented; exit $? ;;
     cross-review-gate) check_cross_review_gate; exit $? ;;
     structural-parity-dc) check_structural_parity_dc; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
@@ -524,6 +548,7 @@ check_rid_placeholder || FAIL=1
 check_pitch_assumptions || FAIL=1
 check_stage_artifact_path || FAIL=1
 check_layer_a_delegation || FAIL=1
+check_team_fallback_documented || FAIL=1
 check_cross_review_gate || FAIL=1
 check_structural_parity_dc || FAIL=1
 

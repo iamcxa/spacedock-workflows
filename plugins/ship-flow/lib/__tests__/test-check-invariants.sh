@@ -480,6 +480,47 @@ layer_a_fail() {
 if layer_a_fail 2>/dev/null; then echo "OK layer-a-delegation: no Layer A → fail"
 else echo "FAIL layer-a-delegation: no Layer A → fail"; FAIL=1; fi
 
+# ========== team-fallback-documented: SKILL references TeamCreate/SendMessage fallback ==========
+
+# Pass: SKILL has "fresh subagent" reference
+team_fallback_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nWhen SendMessage fails, use fresh subagent with captured context.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check team-fallback-documented >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if team_fallback_pass 2>/dev/null; then echo "OK team-fallback-documented: fresh subagent present → pass"
+else echo "FAIL team-fallback-documented: fresh subagent present → pass"; FAIL=1; fi
+
+# Pass: SKILL has explicit "no TeamCreate" annotation
+team_fallback_pass_explicit() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\n<!-- no TeamCreate — pure inline orchestration -->\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check team-fallback-documented >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if team_fallback_pass_explicit 2>/dev/null; then echo "OK team-fallback-documented: explicit no-TeamCreate annotation → pass"
+else echo "FAIL team-fallback-documented: explicit no-TeamCreate annotation → pass"; FAIL=1; fi
+
+# Fail: SKILL silent on fallback
+team_fallback_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  printf '# ship-plan\n\nLayer A: dispatches planner subagent. No word on infrastructure failure.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check team-fallback-documented >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if team_fallback_fail 2>/dev/null; then echo "OK team-fallback-documented: no fallback prose → fail"
+else echo "FAIL team-fallback-documented: no fallback prose → fail"; FAIL=1; fi
+
 # ========== cross-review-gate: SKILL has 5-factor rubric ==========
 
 # Pass: SKILL has cross-review gate + 5-factor rubric + Feasibility
