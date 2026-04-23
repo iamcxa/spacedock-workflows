@@ -12,7 +12,7 @@ You run SHAPE. Output: `docs/<wf>/<id>-<slug>/spec.md`. Captain has ONE gate per
 **Shape Up vocabulary** (load-bearing — entity-body schema depends on these names):
 - **Pitch** — parent entity. Fields: `problem`, `appetite`, `children[]`, `rabbit_holes[]`, `deleted_from_shape[]`, `stated_assumptions[]`, `dag_mermaid`.
 - **Appetite** — time budget (`small-batch` 2-3d / `medium-batch` 1-2w / `big-batch` 6w). Scope fits budget; budget does not flex.
-- **Rabbit hole** — follow-up captured to `docs/<wf>/todos/`. **Delete (Musk step 2)** — claim rejected with reason. **Shaped child** — vertical E2E slice (`pattern: shaped-child`). **DAG** — mermaid child-dependency diagram; feeds FO Pitch Orchestration.
+- **Rabbit hole** — follow-up captured to `docs/<wf>/todos/`. **Rejected alternative** — claim considered-then-rejected with reason (populates from brainstorming Q-loop or scope-cut during decompose). **Shaped child** — vertical E2E slice (`pattern: shaped-child`). **DAG** — mermaid child-dependency diagram; feeds FO Pitch Orchestration.
 
 ## When to use
 
@@ -32,7 +32,7 @@ You run SHAPE. Output: `docs/<wf>/<id>-<slug>/spec.md`. Captain has ONE gate per
 
 Main agent runs inline. Use TaskCreate to mark phases on main-agent path (skip if a named teammate owns the pitch end-to-end).
 
-**Phases**: `intake` → `L0-research` → `L1-research` → `L2-research` → `musk-decompose` → `assumption-extract` → `compose-proposal` → `cross-review` → `captain-gate`
+**Phases**: `intake` → `L0-research` → `L1-research` → `L2-research` → `scope-decompose` → `assumption-extract` → `appetite-fit-check` → `compose-proposal` → `cross-review` → `captain-gate`
 
 ### Intake
 
@@ -52,13 +52,28 @@ Record stage-start ISO timestamp. Resolve `WORKFLOW_DIR` from `docs/*/README.md`
 
 RULE: L0 via fresh subagent is non-negotiable. Opus 4.7 handles the rest naturally — don't over-teach.
 
-### Musk decompose, appetite, assumptions
+### Scope discipline: appetite, decompose, assumptions
 
-Musk 5 steps (requirements → **delete** → simplify → speed up → automate). Rejected claim → `deleted_from_shape[]` with `reason`. Empty array on non-trivial = Musk skipped → loop back. "Worth doing eventually" → `rabbit_holes[]`; "wrong / redundant / ceremonial" → `deleted_from_shape[]`.
+**Appetite is a budget (not estimate)**: pick `small-batch` (2-3d, 1-3 children) / `medium-batch` (1-2w, 3-6 children) / `big-batch` (6w classic, 5-10 children). Scope fits budget; budget does not stretch. Exceeds big-batch → flag `[EPIC?]`, recommend sub-pitch.
 
-Pick `small-batch` / `medium-batch` / `big-batch`. Exceeds big-batch → flag `[EPIC?]`, recommend sub-pitch.
+**Vertical-slice children**: each child ships E2E standalone. "all-API" / "all-UI" / "every-depends-on-every" = fake decomposition → re-cut.
 
-Emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/references/entity-body-schema.yaml`). **Mandatory**: ≥1 `criticality: critical`. Run each critical's verification now (30s soft cap); record resolved confidence in `confidence_at_shape`. **Do NOT reproduce verification output in the proposal** — `verified_by` + bumped `confidence_at_shape` is the full trace. Raw grep/read results belong to plan-stage research, not shape-stage proposal.
+**Rejected alternatives** → `deleted_from_shape[]` (field name retained for shape-confirm.sh compat; semantics = "considered but not in scope"). Populate from: (a) brainstorming Q-loop's considered-then-rejected branches, (b) intake clarification (captain said A → rejected B), (c) scope-cut during decompose (feature trimmed to fit appetite). "Worth doing eventually" → `rabbit_holes[]` instead. Musk 5-step procedure intentionally NOT enforced (opus-4.7-naturally-does, MEMORY 2026-04-23); scope protection comes from the appetite-fit check below, not from a forced-delete ritual.
+
+**Assumptions**: emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/references/entity-body-schema.yaml`). **Mandatory**: ≥1 `criticality: critical`. Run each critical's verification now (30s soft cap); record resolved confidence in `confidence_at_shape`. **Do NOT reproduce verification output in the proposal** — `verified_by` + bumped `confidence_at_shape` is the full trace. Raw grep/read results belong to plan-stage research, not shape-stage proposal.
+
+### Appetite-fit check (before compose) — scope cap enforcement
+
+After decomposition and before composing the proposal, verify children fit the declared appetite:
+
+- **Per-child estimate vs per-child cap**: `small-batch` per child ≤ 2 days; `medium-batch` per child ≤ 3 days; `big-batch` per child ≤ 1 week.
+- **Sum of children's estimates** ≤ 80% of appetite budget (20% headroom for cross-review iteration + unforeseen).
+
+If fit check **fails**:
+- **Re-cut, don't stretch** — move a child to `rabbit_holes[]`, compress child scope, merge thin children. Do NOT extend appetite.
+- **If cut fails** (all children load-bearing + cannot compress) → auto-route to Mode B (captain clarifies which concerns to drop) OR flag `[EPIC?]` and recommend sub-pitch.
+
+**Why this exists**: opus 4.7 default bias = thoroughness (add) not ruthlessness (cut). Without an explicit fit check, children inflate past appetite and "out of scope" proposals ship. Fit check forces the cut decision BEFORE captain sees the proposal.
 
 ### Architecture-impact (only when ARCHITECTURE.md moves)
 
@@ -121,7 +136,7 @@ Children (N, each vertical E2E that ships standalone):
 Rabbit holes (auto-captured to docs/<wf>/todos/ on confirm):
   - <one-line>
 
-Musk deletes (NOT captured — rationale for the record):
+Rejected alternatives (NOT captured — rationale for the record):
   - <claim> — <reason>
 
 Stated assumptions:
@@ -140,7 +155,7 @@ Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 
 ### Cross-review gate (before captain gate) — Principle 6 Rule C
 
-Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 5-factor rubric (**feasibility** within appetite / **executable scope** true E2E vertical / **quality** Musk deletes + critical assumptions / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to Musk decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
+Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 5-factor rubric (**feasibility** appetite-fit within budget / **executable scope** true E2E vertical / **quality** rejected alternatives ≥1 + critical assumption ≥1 + appetite-fit check ran / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to scope-decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
 
 **Proposal budget**: the proposal text passed to the cross-reviewer MUST be ≤400 words. Longer = detail creep; trim BEFORE dispatching cross-review, not after.
 
@@ -152,7 +167,7 @@ Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no 
 
 **Delegation**: `superpowers:brainstorming` owns the HARD-GATE Q-loop. Do NOT re-teach.
 
-**Flow**: announce mode → `Skill: superpowers:brainstorming` → on completion apply Mode A Layer B wrap on the brainstorm report (appetite, Musk decompose to vertical children, ≥1 critical assumption, DAG, architecture-impact if needed) → cross-review gate → present proposal → captain gate.
+**Flow**: announce mode → `Skill: superpowers:brainstorming` → on completion apply Mode A Layer B wrap on the brainstorm report (appetite + vertical-slice decompose + appetite-fit check + ≥1 critical assumption + DAG + architecture-impact if needed). Rejected-alternatives populate from brainstorming's Q-loop considered-then-dropped branches. → cross-review gate → present proposal → captain gate.
 
 Exception rationale: brainstorming's Q-loop handles discovery; Shape Up framing (appetite/DAG/deletes/assumptions) is Layer B, not in superpowers.
 
@@ -209,13 +224,13 @@ Stage continuation — SendMessage to named teammate (~10× faster than fresh di
 
 ## Proposal JSON schema (machine contract for shape-confirm.sh)
 
-Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — SHOULD have ≥1; empty = Musk smell). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`.
+Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`.
 
 ---
 
 ## Invariants + red flags (STOP and rerun if violated)
 
-- Musk step 2 delete ≥1 on non-trivial; ≥1 critical assumption; appetite is budget not estimate.
+- Rejected alternative ≥1 on non-trivial pitch; ≥1 critical assumption; appetite is budget not estimate; **appetite-fit check ran before compose** (scope cap enforcement).
 - Children = vertical E2E; all-API / all-UI / every-depends-on-every = fake decomposition.
 - Mode A: no multi-turn captain Qs before proposal. One intake clarification max → else route to Mode B.
 - Atomic writes via `shape-confirm.sh` only; no direct entity/ROADMAP edits; no `-a`/`-A` staging.
