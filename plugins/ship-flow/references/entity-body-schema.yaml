@@ -149,7 +149,7 @@ stages:
           section_tag: architecture-impact
           layer: decision
           optional: true
-          purpose: "Entity-declared architectural change. Consumed by ship-review `architecture-canon` mod to patch ARCHITECTURE.md atomically with read-first CAS (#060)."
+          purpose: "Entity-declared architectural change. Consumed by ship-review to patch ARCHITECTURE.md atomically with read-first CAS."
           fields:
             - name: target_section
               required: true
@@ -620,7 +620,7 @@ stages:
           layer: implementation
           condition: "Only when ## Sharp Output → ### Architecture Impact is present"
           fields:
-            - { name: mod_citations, type: list, format: "- architecture-canon mod: {section} patched via {mod-file}" }
+            - { name: patch_citations, type: list, format: "- {section} patched via ship-review (commit: {sha})" }
             - { name: patch_committed, type: boolean }
         d2_knowledge_candidates:
           section: "### D2 Knowledge Candidates"

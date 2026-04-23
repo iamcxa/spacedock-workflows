@@ -46,7 +46,7 @@ maps:
         requires_diagram: false
       - section_tag: decisions
         title: "Decisions (ADR index)"
-        purpose: "Auto-appended ADR index by architecture-canon mod (#060)"
+        purpose: "ADR index — each row links to an entity that declared an architecture change via architecture-impact block"
         requires_diagram: false
 
   PRODUCT.md:
