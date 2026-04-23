@@ -59,22 +59,39 @@ FAIL=0
 # ---- Check functions (stubs in T3; bodies filled in T6/T7/T8) ----
 
 check_skill_count() {
-  # DC-6 — Principle 2: skill count ≤ 7
+  # DC-6 — Principle 2: stage skill count ≤ 7; utility skills uncapped.
+  # Explicit allowlists — catches unclassified additions immediately.
+  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect)
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
-  local n=0
-  if [ -d "$skills_dir" ]; then
-    # shellcheck disable=SC2012  # ls is fine here; no weird filenames expected in skills/
-    n=$(ls -1 "$skills_dir"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+  [ -d "$skills_dir" ] || return 0
+
+  local fail=0
+  local stage_count=0
+  local sk
+
+  # Walk every skill directory and classify
+  for sk_dir in "$skills_dir"/*/; do
+    sk="$(basename "$sk_dir")"
+    [ -f "${sk_dir}SKILL.md" ] || continue
+
+    local in_stage=0 in_utility=0
+    for s in "${STAGE_SKILLS[@]}";   do [ "$sk" = "$s" ] && in_stage=1   && break; done
+    for u in "${UTILITY_SKILLS[@]}"; do [ "$sk" = "$u" ] && in_utility=1 && break; done
+
+    if [ "$in_stage" = "1" ]; then
+      stage_count=$((stage_count + 1))
+    elif [ "$in_utility" = "0" ]; then
+      echo "ERROR [Principle 2]: unclassified skill '$sk' — add to STAGE_SKILLS or UTILITY_SKILLS in check-invariants.sh. See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
+      fail=1
+    fi
+  done
+
+  if [ "$stage_count" -gt 7 ]; then
+    echo "ERROR [Principle 2]: stage skill count > 7 (got $stage_count; cap is 7). See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
+    fail=1
   fi
-  # TEMP Phase 2 cap raised to 10 for (6 stage + 4 utility) split.
-  # Phase 3 replaces this with proper stage/utility separation logic per
-  # refined Principle 2 in INVARIANTS.md (see Principle 6 Rule B + utility
-  # category bullets). Bug tracked: improve-skill-count-split-check.
-  if [ "$n" -gt 10 ]; then
-    echo "ERROR [Principle 2]: skill count > 10 (got $n; hard cap pending Phase 3 split). See plugins/ship-flow/INVARIANTS.md#principle-2" >&2
-    return 1
-  fi
-  return 0
+  return "$fail"
 }
 
 check_preamble_regrowth() {

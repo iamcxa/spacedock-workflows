@@ -112,21 +112,74 @@ else echo "SKIP DC-5 shellcheck (not installed)"; fi
 # Note: tests below use `[ "$rc" = "1" ]` (exact exit 1) not `!= 0` to avoid
 # false-pass when script is missing (exit 127 "command not found" would pass `!= 0`).
 
-# ========== DC-6: skill count > 10 triggers fail (exit 1) ==========
-dc6_skill_count() {
+# ========== DC-6: split counting — stage ≤ 7, utility uncapped, orphan fails ==========
+
+# DC-6a: 6 stage skills (current post-wave5b count) → pass
+dc6a_stage_count_6_pass() {
   local d; d="$(create_mock_plugin_dir)" || return 1
-  # Create 11 stub SKILL.md files → should trigger fail (Phase 2 cap = 10)
-  for i in 1 2 3 4 5 6 7 8 9 10 11; do
-    mkdir -p "$d/plugins/ship-flow/skills/stub-$i"
-    echo "# stub $i" > "$d/plugins/ship-flow/skills/stub-$i/SKILL.md"
+  for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
+  done
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check skill-count >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if dc6a_stage_count_6_pass 2>/dev/null; then echo "OK DC-6a stage=6 passes"
+else echo "FAIL DC-6a stage=6 passes"; FAIL=1; fi
+
+# DC-6b: 8 stage skills → fail (exceeds cap of 7)
+dc6b_stage_count_8_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review ship-alpha ship-beta; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
   done
   local rc
   bash "$CHECK_SCRIPT" --test-fixture "$d" --check skill-count >/dev/null 2>&1; rc=$?
   rm -rf "$d"
   [ "$rc" = "1" ]
 }
-if dc6_skill_count 2>/dev/null; then echo "OK DC-6 skill count guard fails at 11 skills"
-else echo "FAIL DC-6 skill count guard fails at 11 skills"; FAIL=1; fi
+if dc6b_stage_count_8_fail 2>/dev/null; then echo "OK DC-6b stage=8 fails (cap 7)"
+else echo "FAIL DC-6b stage=8 fails (cap 7)"; FAIL=1; fi
+
+# DC-6c: 3 utility skills (all known) alongside 6 stage → pass (utility uncapped)
+dc6c_utility_uncapped_pass() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
+  done
+  for sk in add-todos ship-onboard ship-runtime-detect; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
+  done
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check skill-count >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if dc6c_utility_uncapped_pass 2>/dev/null; then echo "OK DC-6c utility skills uncapped (6 stage + 3 utility = pass)"
+else echo "FAIL DC-6c utility skills uncapped"; FAIL=1; fi
+
+# DC-6d: orphan skill (not in either allowlist) → fail
+dc6d_orphan_skill_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
+  done
+  # Add an unclassified skill
+  mkdir -p "$d/plugins/ship-flow/skills/ship-mystery"
+  echo "# mystery" > "$d/plugins/ship-flow/skills/ship-mystery/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check skill-count >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if dc6d_orphan_skill_fail 2>/dev/null; then echo "OK DC-6d orphan skill fails"
+else echo "FAIL DC-6d orphan skill fails"; FAIL=1; fi
 
 # ========== DC-7: preamble regrowth (≥ 2 copies, not allowlisted) triggers fail ==========
 # Uses `## Verify Stage Preamble` — in check's signatures list but NOT in 046f-deferred
