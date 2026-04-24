@@ -103,7 +103,7 @@ After each stage's .md lands, dispatch cross-review to the counterpart teammate.
 - Within team: cross-teammate counterpart (planner ↔ executer; verifier reviews against either).
 - No team member available: fresh **sonnet** by default; upgrade to fresh **opus** when entity's `appetite: big-batch`.
 
-**FO verdict**: **PROCEED** → TaskUpdate stage=completed, advance. **VETO** → loop stage back to original teammate with reviewer feedback (max 2 loops; after 2 → `PROMPT_CAPTAIN`). **PROMPT_CAPTAIN** → halt pipeline, present stage artifact + reviewer concern; captain decides continue/abort.
+**FO verdict**: **PROCEED** → TaskUpdate stage=completed, advance. **VETO** → loop stage back to original teammate with reviewer feedback (max 2 loops; after 2 → `PROMPT_CAPTAIN`). **PROMPT_CAPTAIN** → halt pipeline, present stage artifact + reviewer concern; captain decides continue/abort. **Note**: this cap governs automated planner↔executer VETO only; post-ship captain-smoke feedback uses the separate Step 7 cap.
 
 ## Step 6 — Ship-final stage (this skill)
 
@@ -115,6 +115,34 @@ After `review.md` cross-review PROCEED:
 4. TaskUpdate ship-final=completed.
 
 **Merge decision is captain's.** `/ship` does NOT auto-merge. Captain may comment on PR or run `gh pr merge` manually.
+
+## Step 7 — Captain-smoke feedback loop (post-ship-final)
+
+After `ship.md` lands and captain starts browser smoke-testing the shipped feature:
+
+### Triage incoming findings
+
+Captain smoke findings fall into three buckets:
+1. **In-scope fix** — bug introduced by this entity OR explicitly within this entity's design contract. Route to executer via SendMessage with a concrete fix list.
+2. **Pre-existing bug** — surfaced by captain's smoke but not caused by this entity's commits. File via `/add-todos` as a rabbit hole immediately. Do NOT bundle into this entity.
+3. **New feature request** — genuinely new capability. File via `/add-todos` or `/shape` new entity. Do NOT bundle.
+
+### Round cap (distinct from Step 5 automated VETO loop)
+
+Captain-smoke feedback allows **max 2 consecutive rounds without `PROMPT_CAPTAIN`**. At round 3:
+- HALT auto-dispatch.
+- Present to captain with explicit prompt: "Round 3 captain-smoke feedback detected. Options: (a) continue — YOU approve each specific fix item individually; (b) ship current state, file remaining findings as follow-up entities; (c) abort — roll back worktree, discard pipeline."
+- Do NOT silently continue. Captain's explicit choice is required.
+
+### Why distinct from Step 5 VETO loop
+
+Step 5 is **automated planner↔executer VETO** — max 2 prevents infinite auto-loop between agents. Captain-smoke is **human-in-loop iteration** where captain's sequential discoveries often cascade (fixing A reveals B). Same numeric cap would over-constrain legitimate captain exploration. Both caps are independent and tracked separately per entity.
+
+### Captain smoke is the final gate
+
+After Step 7 resolves (PROCEED or captain-approved ship-current-state):
+- Push + `gh pr create` awaits captain's explicit approval per CLAUDE.md autonomous boundary.
+- Merge decision remains captain's (`gh pr merge` or dashboard).
 
 ---
 
