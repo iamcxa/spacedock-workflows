@@ -145,19 +145,26 @@ Pick 2 DCs: (1) **highest-risk** (priority `e2e > api > ui > cli > skill`; break
 
 Re-run every DC procedure via 4.2 type-dispatch table. Each result: infra-fail (feedback automated) or assertion-fail (specific evidence logged).
 
-### 4.4 — Agent-browser escalation (UI-type DCs)
+### 4.4 — Captain-smoke pre-automation (UI-type DCs)
 
-After code-level DC verification, if any DC has type `ui` AND `e2e-pipeline` is installed (`claude plugins list | grep e2e-pipeline`), dispatch per DC to the narrowest primitive:
+Run automated pre-check BEFORE handing to captain for manual visual smoke. Captain's eyeball is the final pass, NOT the first line of defence — automated pre-check catches regressions before captain context switch.
 
-| Primitive | When |
-|---|---|
-| `e2e-pipeline:e2e-test` | Flow YAML exists at `.claude/e2e/flows/<feature>.yaml` — full flow execution with asserts |
-| `e2e-pipeline:e2e-walkthrough` | No flow; visual screenshot + optional video of affected pages |
-| `e2e-pipeline:ui-verify` | Declarative computed-style regression — fixed selectors × expected CSS values (design tokens / layout dimensions / theme changes) |
+**Primitive triage** (dispatch per DC to the narrowest that fits):
 
-If `## Design Reference` present → compare screenshots against reference images. No reference → verify DC assertions against rendered UI. e2e-pipeline absent → log `visual verification skipped` but do NOT block.
+| Primitive | When | Input |
+|---|---|---|
+| `e2e-pipeline:ui-verify` | Static CSS / tokens / computed-style regression — fixed selectors × expected values | `.claude/e2e/ui-verify/<slug>.yaml` |
+| `e2e-pipeline:e2e-test` | Dynamic behavior / DOM assertion / navigation / step-based flow | `.claude/e2e/flows/<slug>.yaml` |
+| `e2e-pipeline:e2e-walkthrough` | No declarative artifact; exploratory screenshot + optional video of affected pages | affected route list |
+| `agent-browser` CLI (break-glass) | skill wrapper unavailable / mapping missing / skill invocation errors | inline JS via `eval` on live dev server |
 
-Record verdicts under `### UAT → visual:` subsection.
+**Fallback cascade**: declarative skill → agent-browser CLI → manual captain smoke. At least one tier MUST run on every UI-type DC. `visual verification skipped` log is only acceptable when BOTH (a) entity has zero UI-type DCs AND (b) spec.md explicitly flags captain-smoke not required.
+
+**Artifact requirement**: every automated pre-check MUST produce either (a) a report at `.claude/e2e/reports/<slug>-<stage>-<timestamp>.md` OR (b) an inline report block in `verify.md` `### UAT → visual:` subsection. Include ≥1 screenshot (agent-browser `screenshot <path>` command or skill's own capture) for the primary affected route — audit trail for future session-resume + captain review.
+
+If `## Design Reference` present → compare screenshots against reference images. No reference → verify DC assertions against rendered UI.
+
+Record verdicts under `### UAT → visual:` subsection, including which primitive ran + report path + screenshot path + per-DC pass/fail.
 
 ---
 

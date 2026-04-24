@@ -108,6 +108,13 @@ Every DC MUST have a runnable verify procedure. "Manual check" = plan failure.
 
 Note: `ui` type uses `-sfN` (Next.js 16 Turbopack SSR chunks — MEMORY #073). Backward-compatible.
 
+**Declarative e2e artifact requirement (UI-type DCs)**: when ≥1 DC has type `ui` or `e2e`, plan's task list MUST include authoring the declarative YAML so ship-verify Step 4.4 can run automated pre-smoke:
+- **Static CSS / design tokens / computed-style regression** → `.claude/e2e/ui-verify/<entity-slug>.yaml` (schema: `e2e-pipeline:ui-verify`). Wraps `getComputedStyle(selector)[prop]` equality checks against tokens.
+- **Dynamic DOM / navigation / event / interaction** → `.claude/e2e/flows/<entity-slug>.yaml` (schema: `e2e-pipeline:e2e-flow`). Step-based browser flow with assert primitives.
+- Both require `.claude/e2e/mappings/<mapping>.yaml` (auth + base_url + test_accounts). If missing → plan's first UI task is mapping bootstrap.
+- Plan-stage DC: YAML file exists at canonical path AND imports valid mapping. Consumer: ship-verify Step 4.4 auto-runs matching skill.
+- Fallback when skill wrapper unavailable / mapping missing: inline `agent-browser` CLI script as a verify-time DC (declarative YAML preferred; CLI only as break-glass).
+
 ### Step 4 — Self-review (plan-checker-lite)
 
 Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
