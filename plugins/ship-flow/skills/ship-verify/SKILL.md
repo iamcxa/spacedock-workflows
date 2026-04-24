@@ -201,6 +201,26 @@ For each eligible finding: Edit fix → re-run affected quality check → commit
 
 Record fixes in `### Verdict → auto_fixes:` with `{finding-id, commit-sha, before/after summary}`.
 
+### Step 5.5 — Strengthen weak DCs in-place (before verdict)
+
+When re-running a DC reveals the test mechanism has a coverage gap (tautological assertion, single-source-of-truth where multi-source would be more robust, narrow case coverage), verifier MAY extend the test in-place — preempting the finding rather than deferring as a follow-up that dies in backlog.
+
+**Apply only when ALL criteria met**:
+- Re-run shows the DC is technically passing but assertion is weak (e.g., asserts source X equals source X re-framed; or only one of N possible sources-of-truth is checked) AND
+- Strengthening fits in entity's EXISTING test files (no new files / no new test infra) AND
+- Strengthening is ≤30 LOC net AND
+- Strengthened DC still GREEN against current implementation
+
+For each eligible DC: Edit test → re-run → confirm GREEN under new assertion → commit with explicit path (`git add <test-path> && git commit -m "test(<entity>): strengthen DC-<N> — add <Mth> source-of-truth (verify)" -- <test-path>`).
+
+Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before→after sources count, summary}`.
+
+**Anti-pattern**: do NOT change WHAT the DC asserts (spec drift); do NOT add logic the implementation doesn't yet support (scope expansion). Only ADD an additional source-of-truth that confirms the same assertion via a different mechanism.
+
+**Why distinct from Step 5 auto-fix**: auto-fix repairs an existing finding (something was wrong); strengthening preempts findings (test passes but could be more rigorous). Both apply at verify stage; both commit BEFORE PASS verdict.
+
+**Origin**: pitch-096.5 ship-verify — DC-5 structural-parity originally asserted column count via 2 sources (header tags + CSS `gridTemplateColumns` track count). Verifier added 3rd source (row cell count) at commit `6dea77fe`; refactor that decoupled cells from header would have silently broken parity if only 2 sources agreed. **Cousin**: D1 `Bundle mid-wave fixes into wave-task commit (2026-04-21)` — same "fix at moment of discovery" principle, executer-stage equivalent.
+
 ---
 
 ## Step 6 — Write `verify.md` + cross-review gate
