@@ -519,6 +519,108 @@ layer_a_fail_silent() {
 if layer_a_fail_silent 2>/dev/null; then echo "OK layer-a-delegation: silent SKILL → fail"
 else echo "FAIL layer-a-delegation: silent SKILL → fail"; FAIL=1; fi
 
+# ========== layer-a-table-parity: SKILL has canonical H2 + description-prefix ==========
+
+# Pass: SKILL has both canonical `## Layer A delegation (Principle 6 Rule B)` H2
+# AND description-frontmatter `Layer A delegation:` prefix.
+layer_a_parity_pass_baseline() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  cat > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md" <<'EOF'
+---
+name: ship-plan
+description: "Use when writing a plan. Layer A delegation: superpowers:writing-plans owns authoring."
+---
+
+# ship-plan
+
+## Layer A delegation (Principle 6 Rule B)
+
+`superpowers:writing-plans` owns plan authoring.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-table-parity >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if layer_a_parity_pass_baseline 2>/dev/null; then echo "OK layer-a-table-parity: canonical H2 + description-prefix → pass"
+else echo "FAIL layer-a-table-parity: canonical H2 + description-prefix → pass"; FAIL=1; fi
+
+# Fail: SKILL has description-prefix but missing `## Layer A delegation` H2
+layer_a_parity_fail_missing_heading() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  cat > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md" <<'EOF'
+---
+name: ship-plan
+description: "Use when writing a plan. Layer A delegation: superpowers:writing-plans owns authoring."
+---
+
+# ship-plan
+
+Skill: superpowers:writing-plans is invoked but no canonical H2 section.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-table-parity >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if layer_a_parity_fail_missing_heading 2>/dev/null; then echo "OK layer-a-table-parity: missing H2 heading → fail"
+else echo "FAIL layer-a-table-parity: missing H2 heading → fail"; FAIL=1; fi
+
+# Fail: SKILL has H2 but description-frontmatter lacks `Layer A delegation:` prefix
+layer_a_parity_fail_missing_description_prefix() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  cat > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md" <<'EOF'
+---
+name: ship-plan
+description: "Use when writing a plan. No prefix here."
+---
+
+# ship-plan
+
+## Layer A delegation (Principle 6 Rule B)
+
+`superpowers:writing-plans` owns plan authoring.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-table-parity >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if layer_a_parity_fail_missing_description_prefix 2>/dev/null; then echo "OK layer-a-table-parity: missing description-prefix → fail"
+else echo "FAIL layer-a-table-parity: missing description-prefix → fail"; FAIL=1; fi
+
+# Pass: multi-mode stage (ship-shape) with documented `Layer A exception` in place of H2
+# — mirrors ship-shape Mode A autonomous-proposer pattern.
+layer_a_parity_pass_mode_a_exception() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/plugins/ship-flow/skills/ship-shape"
+  cat > "$d/plugins/ship-flow/skills/ship-shape/SKILL.md" <<'EOF'
+---
+name: ship-shape
+description: "Use when shaping. Mode A: autonomous proposer (Layer A exception — documented in SKILL.md)."
+---
+
+# ship-shape
+
+## Mode B — Interactive Q-loop (Layer A exception)
+
+Delegates to `superpowers:brainstorming` when captain selects interactive.
+
+## Mode C — Skill-authoring (Layer A exception)
+
+Delegates to `superpowers:writing-skills` for skill design.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-table-parity >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if layer_a_parity_pass_mode_a_exception 2>/dev/null; then echo "OK layer-a-table-parity: ship-shape multi-mode exception → pass"
+else echo "FAIL layer-a-table-parity: ship-shape multi-mode exception → pass"; FAIL=1; fi
+
 # ========== team-fallback-documented: SKILL references TeamCreate/SendMessage fallback ==========
 
 # Pass: SKILL has "fresh subagent" reference
