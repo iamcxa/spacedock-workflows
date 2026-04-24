@@ -141,8 +141,8 @@ Step 5 is **automated planner↔executer VETO** — max 2 prevents infinite auto
 ### Captain smoke is the final gate
 
 After Step 7 resolves (PROCEED or captain-approved ship-current-state):
-- Push + `gh pr create` awaits captain's explicit approval per CLAUDE.md autonomous boundary.
-- Merge decision remains captain's (`gh pr merge` or dashboard).
+- Push + `gh pr create` proceed **autonomously** — no captain approval needed when all cross-reviews PROCEED. Captain pauses only on: VETO / PROMPT_CAPTAIN verdict, post-PR-create conflict check that fails auto-resolve gate, or BLOCKING captain-smoke finding. Bad-news-early still applies — if anything surfaces during push/PR-create, surface it BEFORE proceeding. Adopter projects wanting stricter default can add a scoped override in their project-level `CLAUDE.md`.
+- Merge decision remains captain's (`gh pr merge` or dashboard). `/ship` does NOT auto-merge.
 
 ---
 
