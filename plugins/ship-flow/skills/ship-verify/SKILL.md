@@ -1,6 +1,6 @@
 ---
 name: ship-verify
-description: "Use when verifying execute output before ship — standalone via `/verify <entity-id>` or pipeline-dispatched by `/ship`. Agent-autonomous ROI gate: scoped quality checks on touched surfaces, spot-check critical DCs, auto-fix NITs inline, escalate to agent-browser e2e for UI DCs. Output: `docs/<wf>/<id>-<slug>/verify.md`."
+description: "Use when verifying execute output before ship — standalone via `/verify <entity-id>` or pipeline-dispatched by `/ship`. Agent-autonomous ROI gate: scoped quality checks on touched surfaces, spot-check critical DCs, auto-fix NITs inline, escalate to agent-browser e2e for UI DCs. Output: `docs/<wf>/<id>-<slug>/verify.md`. Layer A delegation: e2e-pipeline:e2e-test / e2e-pipeline:e2e-walkthrough / e2e-pipeline:ui-verify for agent-browser UI-DC verification; pr-review-toolkit reviewer personas for haiku review passes."
 user-invocable: true
 argument-hint: "<entity-id> [--fast | --full]"
 ---
@@ -10,6 +10,17 @@ argument-hint: "<entity-id> [--fast | --full]"
 You run VERIFY. Output: `docs/<wf>/<id>-<slug>/verify.md`. **You are NOT the author of the code** — review as an independent agent. PASS advances to review; FAIL feeds back to execute (max 2 rounds).
 
 **Three concerns, one stage**: Quality (mechanical gate on touched surfaces) + Review (classified findings from dispatched haiku reviewers) + UAT (done-criteria evidence review + spot-check).
+
+## Layer A delegation (Principle 6 Rule B)
+
+`e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, and `e2e-pipeline:ui-verify` own agent-browser UI-DC verification (flow execution, walkthrough recording, computed-style regression). `pr-review-toolkit:code-reviewer` / `silent-failure-hunter` / `trailofbits:*` / `comment-analyzer` / `code-simplifier` / `pr-test-analyzer` / `type-design-analyzer` own haiku reviewer personas. **Do NOT re-teach.** Ship-verify wraps with Layer B augmentation:
+
+- ROI-aware scoped quality gate (touched-surfaces-only when changed-LOC stays under threshold).
+- Classified findings (BLOCKING / WARNING / NIT) + auto-fix NITs inline.
+- Spot-check critical DCs with declarative e2e YAML when available; fall back to `curl -sfN` + `grep` for UI-type DCs.
+- Cross-review gate (5-factor rubric: feasibility / executable scope / quality / DC adequacy / canonical sync) with fresh-subagent fallback per Principle 6 Rule A.
+
+---
 
 ## When to use
 

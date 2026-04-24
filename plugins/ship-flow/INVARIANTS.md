@@ -185,7 +185,12 @@ All stages use the same reviewer fallback pattern (Q1 from Wave 2 captain answer
 3. Stage transition lacks cross-review gate.
 4. Cross-review 5-factor rubric adapted per stage MUST keep the same factor names (feasibility / executable scope / quality / DC adequacy / canonical sync) — rubric drift breaks cross-stage review-pattern recognition.
 
-**Enforcement**: Tier B (design-review / Captain-Gate Checklist). No grep enforcement — dispatch choice depends on context that grep cannot see.
+**Enforcement** (two-tier, refined 2026-04-24 by #097):
+
+- **Tier A — mechanical structural parity** (grep-enforced by `check_layer_a_table_parity` in `plugins/ship-flow/bin/check-invariants.sh`). Every stage SKILL.md that the master table (lines 157-168) assigns a concrete Layer A delegate MUST carry the canonical `## Layer A delegation (Principle 6 Rule B)` H2 heading AND a `description:` frontmatter `Layer A delegation: ...` prefix. Multi-mode stages (ship-shape) may substitute a documented `Layer A exception` annotation. Pure-orchestration stages (ship) are exempt (master-table cell `—`). Also see sibling mechanical checks: `check_layer_a_delegation` (invocation presence) and `check_team_fallback_documented` + `check_cross_review_gate` (Principle 6 Rule A + C).
+- **Tier B — design-review / Captain-Gate Checklist**. Context-dependent dispatch choices remain Tier B: whether a documented Mode-A-style exception is *justified* in the current spec, whether a delegate's scope boundary respects Layer B augmentation boundaries, whether cross-plugin invocations preserve attribution. Grep cannot see this — design-review owns it.
+
+Tier A covers master-table-to-SKILL presence; Tier B covers dispatch-choice appropriateness. The two are complementary, not overlapping.
 
 **Rationale**:
 - Opus 4.7 + 1M context + prompt cache make "fresh subagent per stage" (4.6-era defence) obsolete.
