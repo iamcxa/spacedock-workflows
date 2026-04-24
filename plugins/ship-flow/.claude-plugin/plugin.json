@@ -1,6 +1,6 @@
 {
   "name": "ship-flow",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Ship-focused development pipeline. SHAPE once with captain, then agents autonomously plan → execute → ship.",
   "author": { "name": "Kent" },
   "repository": "https://github.com/spacedock-dev/spacebridge",

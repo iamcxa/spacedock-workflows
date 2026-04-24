@@ -258,8 +258,49 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 
 ---
 
+## Release Notes
+
+### 0.5.0 — 2026-04-24
+
+**Theme**: Ship-flow 2.0 — formalized captain-in-loop autonomous pipeline for Claude 4.7.
+
+**For adopters upgrading from 0.4.0**:
+
+- Three skill entry points replace the single-entry 1.x model:
+  - `/shape "<directive>"` — framing gate; captain reviews once, then autonomy takes over.
+  - `/ship <entity-id|requirement>` — dispatches plan → execute → verify → review → ship-final.
+  - `/verify <entity-id>` — standalone fast-feedback outside the pipeline loop.
+- Per-stage `.md` artifacts land in the entity folder (`docs/<wf>/<id>-<slug>/{spec,plan,execute,verify,review,ship}.md`). Work is resumable after session reset; audit trails self-contain. Legacy flat entities (`docs/<wf>/<id>-<slug>.md`) remain supported.
+- Cross-review gate at every stage transition (5-factor rubric: feasibility / executable scope / quality / DC adequacy / canonical sync). Verdict `PROCEED | VETO | PROMPT_CAPTAIN`; VETO loops capped at 2 rounds before escalation.
+- Named-teammate pattern per pitch (Principle 6 Rule A): `planner` (opus) + `executer` (sonnet) + `verifier` (opus/sonnet). Stage transitions use `SendMessage` — ~10× faster than fresh-subagent dispatch via hot-context reuse.
+- Seven principles codified in `INVARIANTS.md` with `bin/check-invariants.sh` grep enforcement — catches harness regressions (preamble regrowth, skill-count bloat, stale line-anchors, Layer A delegation drift, cross-review gate absence, structural-parity DC gaps) at CI-time.
+- Three-layer skill architecture (Layer A superpowers atomic / Layer B ship-flow augmentation / Layer C canonical primitives) enables dogfood portability across projects.
+
+**Layer C primitives introduced**:
+
+- `lib/write-stage-artifact.sh` — per-stage `.md` atomic writer with explicit pathspec.
+- `lib/shape-confirm.sh --layout=folder` — entity folder initializer (`README.md` + `spec.md` skeleton).
+- `bin/check-invariants.sh` — Principle 2 split counting (stage ≤ 7 / utility uncapped) + 4 new checks (stage-artifact-path, layer-a-delegation, cross-review-gate, structural-parity-dc).
+
+**Breaking**:
+
+- `ship-sharp` alias removed. `ship-shape` is canonical — update any captain muscle-memory or docs referencing `/ship-sharp`.
+
+**Unchanged**:
+
+- Escape hatches in `/shape` (directive <80 chars + `fix|bump|typo|rename|patch|bugfix|hotfix` keyword → route to `/ship`).
+- Commission flow: `/spacedock:commission` with `ship-flow` template still scaffolds `docs/<wf>/README.md` + initial canonical docs.
+- Layer C primitives `extract-section.sh` / `extract-map.sh` / `patch-map.sh` remain the atomic + CAS + cross-platform interface.
+
+**Upgrade path**: no migration required. Existing flat-layout entities continue to work; new entities from `/shape` default to folder layout.
+
+**Design context**: design rationale lives in the sections above (opus-4.7-naturally-does vs load-bearing harness split, 3-layer skill architecture, principle enforcement). Full 6-wave implementation record at `docs/ship-flow/ship-shape-v2-implementation.md` (entity #085, merge `d8934761`).
+
+---
+
 ## Revision
 
+- **2026-04-24** — 0.5.0 plugin release (see §Release Notes above).
 - **2026-04-23** — Ship-flow 2.0 landed via pitch #085 (merge commit `d8934761`). This README authored post-ship as the canonical plugin-level design doc.
 
 ---

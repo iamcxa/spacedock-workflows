@@ -2,7 +2,7 @@
 ## Discovered by spacedock:workflow-adopt to bootstrap via commission.
 
 name: ship-flow
-description: "Ship-focused pipeline. SHARP once with captain, then agents autonomously plan → execute → verify → ship."
+description: "Ship-focused pipeline. SHAPE once with captain, then agents autonomously plan → execute → verify → ship."
 plugin: ship-flow
 
 entity:
