@@ -412,6 +412,58 @@ check_cross_review_gate() {
   return "$fail"
 }
 
+check_layer_a_table_parity() {
+  # Verify every stage SKILL.md that declares a concrete Layer A delegate in
+  # the INVARIANTS.md master table (lines 157-168) carries BOTH:
+  #   (1) the canonical H2 heading `## Layer A delegation (Principle 6 Rule B)`
+  #   (2) a description-frontmatter prefix `description: "... Layer A delegation: ..."`
+  #
+  # Exception: SKILLs whose master-table row lists the delegate as "—" (pure
+  # orchestration — `ship`) are exempt. Multi-mode stages (ship-shape 3 rows)
+  # pass if they carry an explicit `Layer A exception` annotation in lieu of
+  # the canonical H2 — mirrors Mode A/B/C documented-exception pattern.
+  #
+  # Rationale (#097): master-table-to-SKILL.md structural drift is the failure
+  # mode that 088.1's invocation-strict check_layer_a_delegation could not
+  # detect (prose-level invocation presence passes even when the canonical
+  # declaration section is missing).
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  # Stages that MUST carry canonical H2 + description-prefix (concrete delegate).
+  local REQUIRE_CANONICAL=(ship-plan ship-execute ship-verify ship-review)
+  # Stages that MAY use `Layer A exception` annotation instead (multi-mode).
+  local ALLOW_EXCEPTION=(ship-shape)
+  # Stages that are exempt entirely (master-table cell is "—").
+  # Currently: ship (pure orchestration). Kept explicit for audit trail.
+  local fail=0
+  local sk has_h2 has_desc has_exception
+  for sk in "${REQUIRE_CANONICAL[@]}"; do
+    local skill_file="${skills_dir}/${sk}/SKILL.md"
+    [ -f "$skill_file" ] || continue
+    has_h2=$({ grep -cE "^## Layer A delegation" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    has_desc=$({ grep -cE '^description:.*Layer A delegation:' "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${has_h2:-0}" = "0" ]; then
+      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md missing canonical \`## Layer A delegation (Principle 6 Rule B)\` H2 heading — INVARIANTS.md:157-168 master table declares a concrete Layer A delegate for this stage" >&2
+      fail=1
+    fi
+    if [ "${has_desc:-0}" = "0" ]; then
+      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md frontmatter \`description:\` lacks \`Layer A delegation: ...\` prefix — required for structural parity with INVARIANTS.md:157-168 master table" >&2
+      fail=1
+    fi
+  done
+  for sk in "${ALLOW_EXCEPTION[@]}"; do
+    local skill_file="${skills_dir}/${sk}/SKILL.md"
+    [ -f "$skill_file" ] || continue
+    has_h2=$({ grep -cE "^## Layer A delegation" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    has_exception=$({ grep -cE "Layer A exception" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${has_h2:-0}" = "0" ] && [ "${has_exception:-0}" = "0" ]; then
+      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md is a multi-mode stage but has neither \`## Layer A delegation\` H2 nor a documented \`Layer A exception\` annotation — INVARIANTS.md:161-163 requires one form" >&2
+      fail=1
+    fi
+  done
+  return "$fail"
+}
+
 check_structural_parity_dc() {
   # Scan active entity .md files. For entities declaring type=ui or containing
   # ## Design Reference, verify at least one DC mentions structural parity.
@@ -528,6 +580,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     layer-a-delegation) check_layer_a_delegation; exit $? ;;
     team-fallback-documented) check_team_fallback_documented; exit $? ;;
     cross-review-gate) check_cross_review_gate; exit $? ;;
+    layer-a-table-parity) check_layer_a_table_parity; exit $? ;;
     structural-parity-dc) check_structural_parity_dc; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
@@ -563,6 +616,7 @@ check_stage_artifact_path || FAIL=1
 check_layer_a_delegation || FAIL=1
 check_team_fallback_documented || FAIL=1
 check_cross_review_gate || FAIL=1
+check_layer_a_table_parity || FAIL=1
 check_structural_parity_dc || FAIL=1
 
 exit $FAIL
