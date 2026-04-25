@@ -80,6 +80,60 @@ sample_proposal() {
     "title": "Test pitch",
     "appetite": "2 days",
     "problem": "Testing shape-confirm.sh",
+    "acceptance_outcome": "Captain receives a working shape-confirm test suite that exercises every JSON proposal field including this acceptance_outcome itself.",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B"
+  },
+  "children": [
+    {"id": "090.1", "slug": "child-a", "title": "Child A", "depends_on": []},
+    {"id": "090.2", "slug": "child-b", "title": "Child B", "depends_on": ["090.1"]}
+  ],
+  "rabbit_holes": [
+    {"slug": "rh-test", "claim": "Test rabbit hole"}
+  ],
+  "deleted_from_shape": [
+    {"claim": "Do not build X", "reason": "Out of appetite"}
+  ]
+}
+EOF
+}
+
+proposal_without_acceptance_outcome() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing shape-confirm.sh",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B"
+  },
+  "children": [
+    {"id": "090.1", "slug": "child-a", "title": "Child A", "depends_on": []},
+    {"id": "090.2", "slug": "child-b", "title": "Child B", "depends_on": ["090.1"]}
+  ],
+  "rabbit_holes": [
+    {"slug": "rh-test", "claim": "Test rabbit hole"}
+  ],
+  "deleted_from_shape": [
+    {"claim": "Do not build X", "reason": "Out of appetite"}
+  ]
+}
+EOF
+}
+
+proposal_with_short_acceptance_outcome() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing shape-confirm.sh",
+    "acceptance_outcome": "too short",
     "stated_assumptions": [],
     "dag_mermaid": "graph LR\n  A --> B"
   },
@@ -166,6 +220,54 @@ pushd "$TMP" >/dev/null || exit 1
 assert_exit 1 \
   "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$BAD_PROP'" \
   "DC-30a malformed JSON"
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-31: missing acceptance_outcome → exit 10 ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal.json"
+proposal_without_acceptance_outcome > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 10 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP'" \
+  "DC-31a acceptance_outcome empty rejected"
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-32: short acceptance_outcome → exit 10 ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal.json"
+proposal_with_short_acceptance_outcome > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 10 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP'" \
+  "DC-32a acceptance_outcome short rejected"
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-33: acceptance_outcome rendered into spec.md (folder layout) ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal.json"
+sample_proposal > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 0 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
+  "DC-33a happy path folder layout"
+if grep -q "Captain receives a working shape-confirm" docs/ship-flow/090-test-pitch/spec.md 2>/dev/null; then
+  echo "OK DC-33b acceptance_outcome rendered into spec.md"
+else
+  echo "FAIL DC-33b acceptance_outcome missing from spec.md"
+  FAIL=1
+fi
+if grep -q "## Acceptance Outcome" docs/ship-flow/090-test-pitch/spec.md 2>/dev/null; then
+  echo "OK DC-33c spec.md has Acceptance Outcome section heading"
+else
+  echo "FAIL DC-33c spec.md missing Acceptance Outcome heading"
+  FAIL=1
+fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
