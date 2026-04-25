@@ -11,6 +11,22 @@ You are running the ADD-TODOS skill. Your job is to classify and file one or mor
 
 **Core contract:** minimal friction. No shaping, no questions. Parse → classify → file → commit. Report slugs filed.
 
+## Decision: todo vs sharp entity directly
+
+This skill captures TODOS — items deferred to later. If the item warrants immediate sharp-entity creation (claiming `--next-id` and writing spec.md), use `/ship-flow:ship-shape <directive>` instead. Decision rule:
+
+| Condition | Use |
+|-----------|-----|
+| Scope clear + design settled + **starting work now** | `/ship-flow:ship-shape` (skip todo, directly entity) |
+| Scope clear + design settled + waiting on prerequisite | this skill (todo) |
+| Scope fuzzy / multiple alternatives still considered | this skill (todo) |
+| Depends on upstream entity outcome | this skill (todo) |
+| Want to batch-process related ideas | this skill (todo) |
+
+**Why**: entity creation immediately claims `--next-id` (MEMORY #5 atomic discipline). Don't lock IDs for work you're not about to execute — parallel sessions will be blocked or race. Todos are cheap capture + late binding via `/ship-flow:ship-shape <todo-tid>` when ready to start.
+
+**Failure modes**: premature entity = empty placeholder folders littering `docs/<wf>/`; over-todo = backlog rot. Balance via the "starting now?" criterion above.
+
 ## Input parsing
 
 The argument may contain multiple ideas. Split on:
