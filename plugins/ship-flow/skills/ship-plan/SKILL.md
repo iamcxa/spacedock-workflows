@@ -153,6 +153,22 @@ Plan.md sections: `## Research Summary` (findings + open questions if contradict
 
 Mark TaskCreate sub-task `emit-plan.md` completed; return to /ship for advance to execute.
 
+### Step 6.1 — Advance entity status (frontmatter wiring)
+
+After stage artifact lands, advance sibling `index.md` frontmatter atomically:
+
+    INDEX_MD="<entity-folder>/index.md"
+    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
+      --entity="$INDEX_MD" \
+      --new-status=plan \
+      --stage-name=plan \
+      --stage-file=plan.md \
+      --if-hash="$H" \
+      --commit-as="plan(<id>): advance status to plan"
+
+On exit 6 (stale hash): write `## Plan Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
+
 ---
 
 ## Invariants + red flags (STOP if violated)

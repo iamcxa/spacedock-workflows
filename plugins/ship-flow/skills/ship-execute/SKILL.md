@@ -208,6 +208,22 @@ Execute.md sections: `## Execution Log` (per-task table), `## Issues Found`, `##
 
 Return to /ship; advance to verify.
 
+### Step 7.1 — Advance entity status (frontmatter wiring)
+
+After stage artifact lands, advance sibling `index.md` frontmatter atomically:
+
+    INDEX_MD="<entity-folder>/index.md"
+    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
+      --entity="$INDEX_MD" \
+      --new-status=execute \
+      --stage-name=execute \
+      --stage-file=execute.md \
+      --if-hash="$H" \
+      --commit-as="execute(<id>): advance status to execute"
+
+On exit 6 (stale hash): write `## Execute Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
+
 ---
 
 ## Inline-on-main ship pattern (2-commit, no PR)
