@@ -54,9 +54,28 @@ done
 [ -f "$ENTITY" ] || { echo "Error: entity not found: $ENTITY" >&2; exit 3; }
 [ -n "$IF_HASH" ] || { echo "Error: --if-hash required" >&2; exit 7; }
 
-# Check if already at target status — idempotent no-op
+# Check if already at target status — may skip status update but still register artifact
 CURRENT_STATUS="$(awk 'BEGIN{d=0} /^---$/{d++; if(d==2)exit} d==1 && /^status:[[:space:]]/{print; exit}' "$ENTITY" | awk '{print $2}')"
+STATUS_ALREADY_SET=0
 if [ "$CURRENT_STATUS" = "$NEW_STATUS" ]; then
+  STATUS_ALREADY_SET=1
+fi
+
+# Check if stage artifact already registered — skip register+render if both already done
+STAGE_ALREADY_REGISTERED="$(awk -v stage="$STAGE_NAME" '
+  BEGIN{d=0;in_so=0;found=0}
+  /^---$/{d++; if(d==2)exit}
+  d==1 && /^stage_outputs:[[:space:]]*$/{in_so=1;next}
+  d==1 && in_so && /^[[:space:]]/{
+    line=$0; sub(/^[[:space:]]+/,"",line)
+    split(line,p,":"); if(p[1]==stage){found=1}; next
+  }
+  d==1 && in_so && /^[^[:space:]]/{in_so=0}
+  END{print found}
+' "$ENTITY")"
+
+# Fully idempotent: status already set AND artifact already registered
+if [ "$STATUS_ALREADY_SET" = "1" ] && [ "$STAGE_ALREADY_REGISTERED" = "1" ]; then
   exit 0
 fi
 
@@ -74,16 +93,17 @@ bash "${SCRIPT_DIR}/register-stage-output.sh" \
 RC=$?
 [ "$RC" -eq 0 ] || exit "$RC"
 
-# Step 2: update-entity-status (advances status field)
-# Re-read hash after Step 1 modified the file
-H="$(sha256_of "$ENTITY")"
-bash "${SCRIPT_DIR}/update-entity-status.sh" \
-  --entity="$ENTITY" \
-  --new-status="$NEW_STATUS" \
-  --if-hash="$H" \
-  --commit-as="${COMMIT_MSG}: advance status to ${NEW_STATUS}"
-RC=$?
-[ "$RC" -eq 0 ] || exit "$RC"
+# Step 2: update-entity-status (advances status field) — skip if already at target
+if [ "$STATUS_ALREADY_SET" = "0" ]; then
+  H="$(sha256_of "$ENTITY")"
+  bash "${SCRIPT_DIR}/update-entity-status.sh" \
+    --entity="$ENTITY" \
+    --new-status="$NEW_STATUS" \
+    --if-hash="$H" \
+    --commit-as="${COMMIT_MSG}: advance status to ${NEW_STATUS}"
+  RC=$?
+  [ "$RC" -eq 0 ] || exit "$RC"
+fi
 
 # Step 3: render-stage-links (re-renders body table from frontmatter)
 # Re-read hash after Step 2 modified the file
