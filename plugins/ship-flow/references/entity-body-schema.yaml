@@ -75,6 +75,12 @@ frontmatter:
       description: "Assumptions to verify during shape and re-verify at stage entry (Phase 4)."
       required_when: "pattern in [pitch, shaped-child]"
       invariant: "at least 1 assumption with criticality=critical when pattern=pitch"
+    acceptance_outcome:
+      type: string
+      description: "User-observable answer to 'what does the captain GET when this pitch ships?' Anchors captain-gate confirm/refine. Pitch 100 source: prevents foundation-only ceremony where children produce placeholder files nothing consumes."
+      required_when: "pattern == pitch"
+      min_length: 50
+      invariant: "must describe observable user-facing outcome, not internal artifact list"
 
 # --- Stage Sections ---
 # Each stage defines: reads (from previous stages), output, report, uat (optional)

@@ -117,7 +117,7 @@ Skip when: pitch is pure internal refactor, bug fix, or infrastructure (no user-
 
 ### Compose + present proposal
 
-**Fat-marker-sketch rule**: Children are titles, not specs. Stated assumptions are claims + confidence + criticality + `verified_by`, not verification RESULTS. DCs, tool choices, file paths, greppable queries, npm-dep choices, LOC estimates all belong to PLAN. If a child description exceeds one line of vertical-slice intent, or if an assumption reproduces verification output, delete detail and keep the claim.
+**Fat-marker-sketch rule**: Children are titles, not specs. Stated assumptions are claims + confidence + criticality + `verified_by`, not verification RESULTS. DCs, tool choices, file paths, greppable queries, npm-dep choices, LOC estimates all belong to PLAN. If a child description exceeds one line of vertical-slice intent, or if an assumption reproduces verification output, delete detail and keep the claim. Acceptance outcome MUST be user-observable (what captain receives) — NOT artifact list / infrastructure description / "support for X". One captain-readable claim per pitch.
 
 ONE block — captain's only view until gate:
 
@@ -126,6 +126,9 @@ Pitch proposal: <title>
 
 Problem:
 <1-3 sentences — gap, who feels it, why now. No solution language.>
+
+Acceptance Outcome (what the captain GETS when this ships — user-observable):
+<1-3 sentences. NO internal artifacts. NO "infrastructure for X". Anchor for confirm/refine.>
 
 Appetite: <small-batch | medium-batch | big-batch> (<concrete time budget>)
 
@@ -226,13 +229,14 @@ Stage continuation — SendMessage to named teammate (~10× faster than fresh di
 
 ## Proposal JSON schema (machine contract for shape-confirm.sh)
 
-Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`.
+Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acceptance_outcome` (≥50 chars, user-observable, mandatory), `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`.
 
 ---
 
 ## Invariants + red flags (STOP and rerun if violated)
 
 - Rejected alternative ≥1 on non-trivial pitch; ≥1 critical assumption; appetite is budget not estimate; **appetite-fit check ran before compose** (scope cap enforcement).
+- Pitch missing `acceptance_outcome` OR <50 chars → silent foundation-only-ceremony risk; shape-confirm.sh rejects with exit 10. Source: pitch 096 demo (3 of 4 children would have shipped placeholder files nothing consumed).
 - Children = vertical E2E; all-API / all-UI / every-depends-on-every = fake decomposition.
 - Mode A: no multi-turn captain Qs before proposal. One intake clarification max → else route to Mode B.
 - Atomic writes via `shape-confirm.sh` only; no direct entity/ROADMAP edits; no `-a`/`-A` staging.
