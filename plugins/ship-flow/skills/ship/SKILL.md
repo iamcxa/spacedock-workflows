@@ -110,6 +110,23 @@ After each stage's .md lands, dispatch cross-review to the counterpart teammate.
 After `review.md` cross-review PROCEED:
 
 1. **Compose `ship.md`** inside entity folder. Content: PR URL, deploy reference (if deployed), merge status, customer-visible summary (1-2 sentences drawn from spec.md + execute.md). Single atomic commit via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
+
+   **After `ship.md` lands, advance sibling `index.md` frontmatter atomically:**
+
+       INDEX_MD="<entity-folder>/index.md"
+       H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+       bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
+         --entity="$INDEX_MD" \
+         --new-status=ship \
+         --stage-name=ship \
+         --stage-file=ship.md \
+         --if-hash="$H" \
+         --commit-as="ship(<id>): advance status to ship"
+
+   Note: `ship→done` flip on PR-merge is **out of scope** for this step — covered by existing `commission/bin/status --set ... status=done` in inline-on-main path; `warn-state-drift` Rule A flags drift if missed.
+
+   On exit 6 (stale hash): write `## Ship Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
+
 2. **Create PR** via `gh pr create` with title from entity + body referencing all stage artifacts (plan/execute/verify/review links).
 3. **Announce** to captain: entity shipped + PR URL + stage artifact paths.
 4. TaskUpdate ship-final=completed.
