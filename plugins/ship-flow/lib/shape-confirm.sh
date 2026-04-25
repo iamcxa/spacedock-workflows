@@ -57,11 +57,22 @@ PITCH_SLUG=$(yq --input-format=json '.pitch.slug' "$PROPOSAL" | tr -d '"')
 PITCH_TITLE=$(yq --input-format=json '.pitch.title' "$PROPOSAL" | tr -d '"')
 PITCH_APPETITE=$(yq --input-format=json '.pitch.appetite' "$PROPOSAL" | tr -d '"')
 PITCH_PROBLEM=$(yq --input-format=json '.pitch.problem' "$PROPOSAL" | tr -d '"')
+PITCH_ACCEPTANCE_OUTCOME=$(yq --input-format=json '.pitch.acceptance_outcome' "$PROPOSAL" | tr -d '"')
 
 [ -n "$PITCH_ID" ] && [ -n "$PITCH_SLUG" ] && [ -n "$PITCH_TITLE" ] || {
   echo "Error: proposal missing pitch.id / pitch.slug / pitch.title" >&2
   exit 10
 }
+
+# Acceptance Outcome required for pitches (Phase 100)
+if [ -z "$PITCH_ACCEPTANCE_OUTCOME" ] || [ "$PITCH_ACCEPTANCE_OUTCOME" = "null" ]; then
+  echo "Error: pitch.acceptance_outcome is required (user-observable answer to 'what does captain GET?'). See docs/ship-flow/100-shape-acceptance-outcome-gate/spec.md" >&2
+  exit 10
+fi
+if [ "${#PITCH_ACCEPTANCE_OUTCOME}" -lt 50 ]; then
+  echo "Error: pitch.acceptance_outcome too short (${#PITCH_ACCEPTANCE_OUTCOME} chars, min 50). Describe an observable outcome, not an artifact list." >&2
+  exit 10
+fi
 
 ENTITY_DIR="docs/ship-flow"
 TODO_DIR="${ENTITY_DIR}/todos"
@@ -140,6 +151,10 @@ EOF
 
 ${PITCH_PROBLEM}
 
+## Acceptance Outcome
+
+${PITCH_ACCEPTANCE_OUTCOME}
+
 ## Appetite
 
 ${PITCH_APPETITE}
@@ -181,6 +196,10 @@ appetite: "${PITCH_APPETITE}"
 ### Problem
 
 ${PITCH_PROBLEM}
+
+### Acceptance Outcome
+
+${PITCH_ACCEPTANCE_OUTCOME}
 EOF
   WRITTEN_FILES=("$PITCH_PATH")
 fi
