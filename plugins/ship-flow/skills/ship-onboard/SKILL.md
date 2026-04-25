@@ -1,6 +1,6 @@
 ---
 name: ship-onboard
-description: "Use when adopting ship-flow in a new repo. Scans codebase to generate initial PRODUCT.md + ROADMAP.md drafts for captain confirmation. Run once per repo."
+description: "Use when adopting ship-flow in a new repo, AFTER /spacebridge:workflow-adopt has installed the workflow scaffolding (or the captain has manually created docs/<wf>/). Scans codebase to generate initial PRODUCT.md + ROADMAP.md drafts for captain confirmation. Run once per repo. For fresh-fresh repos with no workflow yet, run /spacebridge:workflow-adopt first."
 user-invocable: true
 argument-hint: ""
 ---
@@ -18,6 +18,28 @@ You are running the ONBOARD skill for ship-flow. This runs once when ship-flow i
 0. Detect mode: Check if captain invoked with a PRS fragment argument:
    - If captain provided a PRS fragment (product requirements specification — a structured list of functional requirements, user stories, or feature bullets describing an existing or planned product area): → enter **midway mode** (proceed to Midway Mode section below).
    - If no PRS provided: → enter **greenfield mode** (proceed to Step 1: Codebase Scan).
+
+0.5. Detect workflow scaffolding (greenfield mode only):
+   ```bash
+   find . -maxdepth 3 -name "README.md" \
+     -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/vendor/*" \
+     -exec grep -l "commissioned-by:" {} \; 2>/dev/null
+   ```
+   - If `docs/<wf>/README.md` with `commissioned-by:` frontmatter found → workflow scaffolding exists. Skip the prerequisite suggestion below; proceed to step 1 (PRODUCT.md / ROADMAP.md check). Ship-onboard focuses only on PRODUCT/ROADMAP **content** drafting, not workflow structure.
+   - If NO `commissioned-by:` README found → workflow scaffolding missing. Continue to step 0.6.
+
+0.6. Suggest workflow-adopt prerequisite (greenfield mode only — skip if step 0.5 found scaffolding):
+
+   > No workflow scaffolding detected. ship-onboard drafts PRODUCT.md and ROADMAP.md (project **content**) but does not install workflow stages, gates, or skill bindings (project **structure**).
+   >
+   > Recommended: run `/spacebridge:workflow-adopt` first to install workflow scaffolding from a plugin template (ship-flow, build-pipeline, or other), then re-run `/ship-flow:ship-onboard` for PRODUCT/ROADMAP drafting.
+   >
+   > Continue with ship-onboard anyway? (y / n / abort)
+   >   y: proceed without workflow scaffolding (PRODUCT.md and ROADMAP.md will land at repo root; you can wire them into a workflow later)
+   >   n: stop here — captain runs /spacebridge:workflow-adopt first
+   >   abort: same as n
+
+   Wait for captain answer. On `y`: continue to step 1. On `n` / `abort`: STOP with message "Run /spacebridge:workflow-adopt first; then re-invoke /ship-flow:ship-onboard."
 
 1. Check if PRODUCT.md or ROADMAP.md already exist at project root:
    ```bash
