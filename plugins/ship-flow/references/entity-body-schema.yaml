@@ -79,6 +79,12 @@ frontmatter:
       type: object
       description: "Map of stage_name → relative path to stage artifact .md. Maintained by lib/register-stage-output.sh after each ship-* SKILL emits its artifact. Canonical source of truth for which stages have produced output. Body section <!-- section:stage-artifact-links --> is the derived view."
       example: '{ plan: "plan.md", execute: "execute.md" }'
+    acceptance_outcome:
+      type: string
+      description: "User-observable answer to 'what does the captain GET when this pitch ships?' Anchors captain-gate confirm/refine. Pitch 100 source: prevents foundation-only ceremony where children produce placeholder files nothing consumes."
+      required_when: "pattern == pitch"
+      min_length: 50
+      invariant: "must describe observable user-facing outcome, not internal artifact list"
 
 # --- Stage Sections ---
 # Each stage defines: reads (from previous stages), output, report, uat (optional)
