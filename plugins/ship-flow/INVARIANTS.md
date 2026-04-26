@@ -68,6 +68,9 @@ The pre-2026-04-23 "temp cap = 10" rule is superseded: `check-invariants.sh --ch
 
 **Source**: `memory/ship-flow-harness-diagnosis.md:17,19` + entity 056 haiku-roster-collapse (shipped 2026-04-20).
 
+
+**Severity-disagreement aggregation (101.3)**: when ship-verify dispatches the default haiku pair, aggregate verdicts via FAIL > WARN > PASS rule; codified at `ship-verify/SKILL.md → ### Severity-disagreement aggregation`. This is NOT a fan-out cap change; pair count remains 2 unconditional (Principle 3 budget). Future opt-in 3rd reviewer would still need `# opt-in:` annotation.
+
 **Related D1 evidence** (2026-04-21, from entity 064): "Haiku reviewer fertility by diff domain — shell-primitive diffs (420-line bash) → 3-of-3 spot-check match (100%); prompt-text diffs (SKILL.md) → 50–100% hallucination rate because haiku anchors to pre-execute line numbers that no longer exist post-restructure." Keep default 2 haiku for source-file diffs; skip entirely for non-source-only diffs.
 
 ---
@@ -153,6 +156,19 @@ Stage skills SHOULD augment with Layer B when superpowers atomic skill has scope
 
 **Rule C (Cross-Review Gate)**:
 Each stage transition has a cross-review gate. Primary author's teammate counterpart reviews output with structured prompt (feasibility / executable / quality / DC adequacy / canonical sync). FO decides final gate: veto / proceed / prompt captain.
+
+
+**Verdict-flip whitelist (density-aware autonomy, pitch 101)**:
+When a cross-review emits PROMPT_CAPTAIN on a high-density entity, FO MAY flip to PROCEED if and only if:
+- Gate input: `bash density-classify.sh --is-high --entity=<path>` exits 0 (Principle 4 boolean-gate; 4-tier enum NOT exposed here)
+- Transition: PROMPT_CAPTAIN → PROCEED only; VETO is never flipped
+- WHITELIST (4 boolean predicates, each evaluates true/false on a reason vector):
+  - `reason_matches_skill_precedent` — finding cites a skill preset rule the repo already enforces
+  - `reason_matches_canonical_constraint` — finding traces to PRODUCT.md / ARCHITECTURE.md hard constraint already documented
+  - `reason_matches_precedent_count_ge_2` — finding pattern has ≥2 prior shipped precedents in `_archive/done/`
+  - `reason_is_NIT_class` — severity classification = NIT (per ship-verify Step 4.6 mechanical auto-fix rule)
+- Each flip MUST append a decisions.md row (see `docs/ship-flow/_mods/decisions-log.md`)
+- Principle 4 cross-reference: the 4-row whitelist is itself 4 boolean predicates evaluable without runtime enum lookup
 
 **Reviewer-unresponsive circuit breaker**: if the cross-review teammate is unresponsive (phantom team / SendMessage timeout / fresh-Agent stall), fall back per Rule A Fallback above — fresh sonnet by default, fresh opus when `appetite: big-batch`. Do not block stage advancement on an unresponsive reviewer. Each stage SKILL cross-review subsection MUST reference this fallback (pitch 091 grep-enforces this cross-reference; see `check_cross_review_gate` / `check_team_fallback_documented`).
 
