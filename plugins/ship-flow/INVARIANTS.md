@@ -166,7 +166,7 @@ Each stage transition has a cross-review gate. Primary author's teammate counter
 | ship | — | pure orchestration (5-stage dispatch) | N/A — no logic to delegate |
 | ship-plan | `superpowers:writing-plans` | TDD order, wave safety, placeholder-free prose, task atomicity | No — Layer B wraps with scope anchoring + runtime detection + plan-checker |
 | ship-execute | `superpowers:subagent-driven-development` | task = subagent, status protocol, review loop | No — Layer B wraps with wave graph + escalation ladder + pathspec-lock + Mode B re-entry |
-| ship-verify | `e2e-pipeline:e2e-test` / `e2e-pipeline:e2e-walkthrough` / `ui-verify` | agent-browser E2E verification for UI-typed DCs | No — Layer B wraps with ROI-aware scoped gate + spot-check UAT |
+| ship-verify | `worktree-dev-server` (project skill) + `e2e-pipeline:e2e-test` / `e2e-pipeline:e2e-walkthrough` / `ui-verify` | runtime preflight (dev server up gate) + agent-browser E2E verification for UI-typed DCs | No — Layer B wraps with ROI-aware scoped gate + spot-check UAT + runtime mandate (post-2026-04-26 carlove SEC-10/15 retro: no artifact-only PASS) |
 | ship-review | `pr-review-toolkit:review-pr` (optional for big-batch) | multi-persona PR review (code-reviewer / silent-failure-hunter / security-reviewer) | No — Layer B wraps with ARCHITECTURE.md / ROADMAP / PRODUCT canonical doc sync |
 
 **Cross-review gate 5-factor rubric examples** (adapted per stage — see each stage SKILL.md for full text):
@@ -175,7 +175,7 @@ Each stage transition has a cross-review gate. Primary author's teammate counter
 |---|---|---|---|---|
 | **Feasibility** | tasks achievable single-dispatch? | wave plan executed cleanly (no terminal BLOCKs)? | gate scope correct (scoped vs full)? | PR size reasonable? |
 | **Executable scope** | tasks atomic 1:1 with waves? | commits 1:1 with tasks (preserves bisect)? | verdict supported by evidence? | review scope matches actual diff? |
-| **Quality** | Verification Spec covers every DC (≥1 structural-parity for UI)? | atomic pathspec, T1+T2 passed per task? | ≥1 critical assumption verified? | no silent failures; arch commits BEFORE PR body cites? |
+| **Quality** | Verification Spec covers every DC (≥1 structural-parity for UI)? | atomic pathspec, T1+T2 passed per task? | ≥1 critical assumption verified at runtime (Step 4.0 dev server up; per-DC runtime command captured)? | no silent failures; arch commits BEFORE PR body cites? |
 | **DC adequacy** | observable (no "works correctly")? | AC procedures ran; output captured? | spot-checks critical DCs? | PR body DC+Verification table reproducible copy-paste? |
 | **Canonical sync** | ARCHITECTURE.md touches planned? | architecture-impact blocks updated post-execute? | canonical docs consistent post-execute? | ROADMAP + PRODUCT updated; Architecture Changes cited? |
 
