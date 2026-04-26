@@ -9,14 +9,15 @@
 #   - UAT block uses the Verification Spec table format (typed DC)
 #   - Sections are append-only within a stage; later stages never modify earlier sections
 #
-# Section Tags (v1.1):
+# Section Tags (v1.2):
 #   - Each section/subsection has section_tag: and layer: fields
 #   - section_tag: used for HTML comment wrapping: <!-- section:{tag} --> ... <!-- /section:{tag} -->
 #   - layer: decision | implementation — enables layer-based filtering across entities
 #   - Tags are invisible in rendered markdown (GitHub, Claude Design, dashboard)
 #   - Extract via: bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
+# Section Tags (v1.2): + answers_density (Principle 4 boolean-gate); lazy-classified at first ship-* invocation
 
-schema_version: "1.1"
+schema_version: "1.2"
 
 # --- Frontmatter (YAML in entity file header) ---
 frontmatter:
@@ -81,6 +82,10 @@ frontmatter:
       required_when: "pattern == pitch"
       min_length: 50
       invariant: "must describe observable user-facing outcome, not internal artifact list"
+    answers_density:
+      type: enum
+      values: [high, medium, low, vacuum]
+      description: "Density classification (Principle 4 boolean-gate). Lazy-set at first ship-* invocation via density-classify.sh --entity=<index.md>. FO auto-proceeds (no captain gate) when value=high. External boolean surface: --is-high exits 0 iff value=high."
 
 # --- Stage Sections ---
 # Each stage defines: reads (from previous stages), output, report, uat (optional)
