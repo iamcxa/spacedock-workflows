@@ -51,8 +51,8 @@ Skip if no file:line citations (common for S-size).
 ### Step 2 — Research (size-adaptive, produce+review)
 
 - **S** — skip research. Proceed to Step 3.
-- **M** — dispatch Agent A (sonnet producer: codebase impact + lib constraints, <400 words, file:line citations) → Agent B (sonnet reviewer: APPROVED / GAPS / CONTRADICTION, <300 words). Max 1 gap-fill round.
-- **L** — dispatch 3-5 parallel producers (upstream constraints / existing patterns / lib surface / gotchas / reference examples), each <200 words, file:line citations. Reviewer runs cross-domain + coverage check. Max 1 gap-fill round.
+- **M** — dispatch Agent A (sonnet producer: codebase impact + lib constraints, <400 words, file:line citations; include recent debrief warnings from `docs/<wf>/_debriefs/` — read `## Issues — Workflow` / `## Filed (backlog)` sections, schema at `plugins/ship-flow/references/debrief-schema.yaml`) → Agent B (sonnet reviewer: APPROVED / GAPS / CONTRADICTION, <300 words). Max 1 gap-fill round.
+- **L** — dispatch 3-5 parallel producers (upstream constraints / existing patterns / lib surface / gotchas / reference examples), each <200 words, file:line citations; one producer dedicated to recent debrief warnings (`docs/<wf>/_debriefs/` last 3-5 files, extract `## Issues — Workflow` / `## Filed (backlog)` / `## Observations`). Reviewer runs cross-domain + coverage check. Max 1 gap-fill round.
 
 **Contradiction**: write both verbatim as Open Question in `## Research Summary`. Never silently resolve.
 
