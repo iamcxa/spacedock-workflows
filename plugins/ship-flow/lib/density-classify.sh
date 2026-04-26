@@ -65,7 +65,6 @@ fi
 
 ENTITY_DIR=""
 WORKFLOW_DIR=""
-AREA_KEYWORD=""
 
 if [ -n "$ENTITY" ]; then
   [ -f "$ENTITY" ] || { echo "Error: entity file not found: $ENTITY" >&2; exit 2; }
@@ -77,11 +76,7 @@ if [ -n "$ENTITY" ]; then
     # e.g., /path/to/docs/ship-flow/101-slug/index.md → docs/ship-flow
     WORKFLOW_DIR="$(echo "$ENTITY" | grep -oE 'docs/[^/]+' | head -1 || echo 'docs/ship-flow')"
   fi
-  # Extract slug/title from entity for keyword matching
-  AREA_KEYWORD="$(grep -E '^(slug|title):' "$ENTITY" 2>/dev/null | head -1 | sed 's/^[^:]*:[[:space:]]*//' | tr -d '"' | cut -c1-40 || echo '')"
 else
-  # --directive mode: extract area keyword from directive text
-  AREA_KEYWORD="$(echo "$DIRECTIVE" | tr -s '[:space:]' ' ' | cut -c1-60)"
   WORKFLOW_DIR="docs/ship-flow"
 fi
 
@@ -152,8 +147,7 @@ fi
 # and does not indicate this specific repo has the workflow skill installed).
 PLUGIN_HITS=0
 if [ -d "$REPO_ROOT/plugins" ]; then
-  PLUGIN_HITS="$({ find "$REPO_ROOT/plugins" -name "SKILL.md" 2>/dev/null | \
-    xargs grep -l "$WF_NAME" 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
+  PLUGIN_HITS="$({ find "$REPO_ROOT/plugins" -name "SKILL.md" -exec grep -l "$WF_NAME" {} + 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
 fi
 [ "$PLUGIN_HITS" -ge 1 ] && S2=1
 
