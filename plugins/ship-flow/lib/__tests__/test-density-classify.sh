@@ -56,15 +56,18 @@ EOF
   echo "$dir"
 }
 
-# low-density fixture: zero hits across all 4 signals
+# low-density fixture: exactly 1 signal — S3 has ≥2 archived precedents, rest zero
 make_low_density_fixture() {
   local dir
   dir="$(mktemp -d)"
   cat > "$dir/CLAUDE.md" <<'EOF'
 # Generic Project
-No ship-flow references here.
+No relevant workflow guidance here.
 EOF
+  # S3: 2 archive entries → exactly 1 signal fires
   mkdir -p "$dir/docs/ship-flow/_archive"
+  echo "slug: past-1" > "$dir/docs/ship-flow/_archive/001-past-1.md"
+  echo "slug: past-2" > "$dir/docs/ship-flow/_archive/002-past-2.md"
   cat > "$dir/ARCHITECTURE.md" <<'EOF'
 # Architecture
 No relevant sections.
