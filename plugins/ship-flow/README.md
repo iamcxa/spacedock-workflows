@@ -125,6 +125,40 @@ Verdict: `PROCEED` | `VETO` (feedback-to-upstream, ≤2 rounds) | `PROMPT_CAPTAI
 
 ---
 
+## Bidirectional lifecycle
+
+The ship-flow plugin participates in a **bidirectional adoption lifecycle** with the projects that use it.
+
+```mermaid
+flowchart LR
+  subgraph Plugin["Plugin canonical (ship-flow)"]
+    P[README + INVARIANTS\nSKILL.md files]
+  end
+  subgraph Projects["Adopted projects"]
+    A[spacedock-ui\ndocs/ship-flow/]
+    B[carlove\ndocs/ship-flow/]
+  end
+
+  P -- "1 workflow-adopt\n(initial setup)" --> A
+  P -- "1 workflow-adopt\n(initial setup)" --> B
+  P -- "2 workflow-sync\n(pull updates)" --> A
+  P -- "2 workflow-sync\n(pull updates)" --> B
+  A -- "3 debrief-promote\n(push learnings)" --> P
+  B -- "3 debrief-promote\n(push learnings)" --> P
+```
+
+The cycle: plugin knowledge flows **down** to projects on adoption/sync, and project learnings flow **up** back into the plugin via debrief aggregation.
+
+| Journey | Trigger | Skill | Mechanism |
+|---|---|---|---|
+| Initial adoption | New project wants ship-flow | `spacedock:workflow-adopt` | Scaffold `docs/<wf>/`, `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` |
+| Sync updates | Plugin ships new patterns | `spacedock:workflow-sync` | Pull changed SKILL.md / INVARIANTS sections into project |
+| Promote learnings | Projects accumulate `_debriefs/` | `spacebridge:debrief-promote` | Aggregate STRONG/WARN patterns → plugin canonical |
+
+**`_debriefs/` convention**: each project accumulates session debriefs under `docs/<wf>/_debriefs/<date>-<seq>.md` (schema: `references/debrief-schema.yaml`). After ≥2 projects have debriefs, run `spacebridge:debrief-promote` to surface cross-project STRONG signals back into plugin docs.
+
+---
+
 ## Skill triggers
 
 | Skill | Trigger pattern | Output artifact | Captain in loop? |
