@@ -68,6 +68,9 @@ The pre-2026-04-23 "temp cap = 10" rule is superseded: `check-invariants.sh --ch
 
 **Source**: `memory/ship-flow-harness-diagnosis.md:17,19` + entity 056 haiku-roster-collapse (shipped 2026-04-20).
 
+
+**Severity-disagreement aggregation (101.3)**: when ship-verify dispatches the default haiku pair, aggregate verdicts via FAIL > WARN > PASS rule; codified at `ship-verify/SKILL.md → ### Severity-disagreement aggregation`. This is NOT a fan-out cap change; pair count remains 2 unconditional (Principle 3 budget). Future opt-in 3rd reviewer would still need `# opt-in:` annotation.
+
 **Related D1 evidence** (2026-04-21, from entity 064): "Haiku reviewer fertility by diff domain — shell-primitive diffs (420-line bash) → 3-of-3 spot-check match (100%); prompt-text diffs (SKILL.md) → 50–100% hallucination rate because haiku anchors to pre-execute line numbers that no longer exist post-restructure." Keep default 2 haiku for source-file diffs; skip entirely for non-source-only diffs.
 
 ---
