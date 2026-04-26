@@ -13,6 +13,25 @@
 # Each sub-step re-reads the hash from disk (read-first CAS pattern).
 # Returns first non-zero exit from any helper.
 #
+# DESTRUCTIVE-ON-LEGACY WARNING (2026-04-26 D2-3 from pitch-099):
+#   The render-stage-links sub-step rebuilds the body table from
+#   `stage_outputs:` frontmatter ONLY — it does NOT preserve existing
+#   body table rows whose stages are absent from the frontmatter map.
+#   ~14 legacy entities (Rounds 1-3 of 2026-04-25 sweep + 098, plus any
+#   entity that shipped before commit 997ea60d) have hand-Edit body tables
+#   with EMPTY stage_outputs. Invoking advance-stage.sh on them will
+#   silently NUKE their body table rows.
+#
+#   Discipline before invoking against any entity:
+#     1. awk '/^---$/{c++; if(c==2)exit} c==1' index.md | grep -q '^stage_outputs:'
+#     2. If empty, BACKFILL stage_outputs first by mirroring the body
+#        table rows into the frontmatter map (one-time per legacy entity).
+#     3. Then run advance-stage.sh — render-stage-links will preserve
+#        everything because frontmatter now matches body.
+#
+#   Long-term fix (not built): --accept-existing or --seed-from-disk.
+#   See MEMORY: advance-stage-destructive-on-legacy-bodies.md.
+#
 # Exit codes:
 #   0  success (or no-op if already at new-status)
 #   1  usage / unknown option
