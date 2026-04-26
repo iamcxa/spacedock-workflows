@@ -271,4 +271,72 @@ fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
-exit $FAIL
+# ── DC-101.1-6: answers_density emitted in folder layout (pitch-101 Task 2) ──
+echo
+echo "--- DC-101.1-6: answers_density in folder layout ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-density.json"
+cat > "$PROP" <<'ENDJSON'
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing answers_density emission",
+    "acceptance_outcome": "shape-confirm.sh emits answers_density field when present in proposal JSON pitch object for both folder and flat layouts.",
+    "answers_density": "medium",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B"
+  },
+  "children": [],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+ENDJSON
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1
+if grep -qE '^answers_density:[[:space:]]*"medium"' docs/ship-flow/090-test-pitch/index.md 2>/dev/null; then
+  echo "OK DC-101.1-6: folder layout index.md contains answers_density: \"medium\""
+else
+  echo "FAIL DC-101.1-6: folder layout index.md missing answers_density line (expected red before Task 6)"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+# ── DC-101.1-7: answers_density emitted in flat layout (pitch-101 Task 2) ──
+echo
+echo "--- DC-101.1-7: answers_density in flat layout ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-density-flat.json"
+cat > "$PROP" <<'ENDJSON'
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing answers_density emission flat layout",
+    "acceptance_outcome": "shape-confirm.sh emits answers_density field when present in proposal JSON pitch object for both folder and flat layouts.",
+    "answers_density": "medium",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B"
+  },
+  "children": [],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+ENDJSON
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=flat >/dev/null 2>&1
+if grep -qE '^answers_density:[[:space:]]*"medium"' docs/ship-flow/090-test-pitch.md 2>/dev/null; then
+  echo "OK DC-101.1-7: flat layout .md contains answers_density: \"medium\""
+else
+  echo "FAIL DC-101.1-7: flat layout .md missing answers_density line (expected red before Task 6)"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+exit "$FAIL"
