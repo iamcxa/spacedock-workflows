@@ -1,0 +1,33 @@
+: <<'MARKDOWN'
+# Debrief Schema Migration: vN → vN+1
+
+This mod template handles migration of existing debrief files when
+`plugins/ship-flow/references/debrief-schema.yaml` schema_version is incremented.
+
+Usage: bash plugins/ship-flow/_mods/migrate-debrief-vN-to-vN+1.md.template [--dry-run] [--workflow-dir <dir>]
+MARKDOWN
+
+set -euo pipefail
+
+DRY_RUN=0
+WORKFLOW_DIR="docs/ship-flow"
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=1 ;;
+    --workflow-dir=*) WORKFLOW_DIR="${arg#--workflow-dir=}" ;;
+  esac
+done
+
+DEBRIEFS_DIR="$WORKFLOW_DIR/_debriefs"
+SCHEMA="plugins/ship-flow/references/debrief-schema.yaml"
+
+echo "=== Debrief Schema Migration Stub ==="
+echo "Schema: $SCHEMA"
+echo "Debriefs dir: $DEBRIEFS_DIR"
+echo "Dry run: $DRY_RUN"
+echo ""
+echo "TODO: populate with actual field/section changes when schema_version increments."
+echo "Pattern: for each .md in $DEBRIEFS_DIR, audit required_fields + required_sections,"
+echo "         apply renames/additions as needed, update schema_version in frontmatter."
+echo ""
+echo "Reference: plugins/ship-flow/_mods/architecture-canon.md for mod pattern."

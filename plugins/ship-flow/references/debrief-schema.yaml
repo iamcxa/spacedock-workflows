@@ -1,0 +1,48 @@
+# Debrief schema v1 — documents the actual section/frontmatter convention
+# produced by `spacedock:debrief` skill as observed across 6 debriefs (2026-04-22 to 2026-04-25).
+# Forward-compatibility aliases for spec-proposed names (## Footguns, ## D2 Candidates, etc.)
+# are reserved for v2 if `spacedock:debrief` skill evolves to use them.
+
+schema_version: 1
+
+# Frontmatter fields expected in each debrief .md file
+required_fields:
+  - session-date    # ISO date (YYYY-MM-DD)
+  - sequence        # integer (e.g. 1, 2, 3)
+  - first-commit    # 7-char git SHA
+  - last-commit     # 7-char git SHA
+  - duration        # human string (e.g. "3h 20m")
+
+optional_fields:
+  - session-type    # string (e.g. "ship", "debug", "research")
+  - scope-note      # free-text context
+
+# H2 sections required in every debrief document body
+required_sections:
+  - "## Shipped"
+  - "## Filed (backlog)"
+  - "## Issues — Spacedock"
+  - "## Issues — Workflow"
+  - "## Non-PR commits (workflow-only)"
+  - "## Observations"
+  - "## Decisions"
+  - "## What's Next"
+
+# Optional H2 sections (present when applicable)
+optional_sections:
+  - "## Rejected / Non-shipped terminal"
+  - "## Pending merge"
+
+# Forward-compatibility aliases (v2 reservation)
+# If spacedock:debrief skill evolves to use these section names, update schema_version to 2.
+forward_compatibility_aliases:
+  footguns_v2:
+    - "## Footguns"
+    - "## Issues — Workflow"   # current equivalent
+  d2_candidates_v2:
+    - "## D2 Candidates"
+    - "## Filed (backlog)"     # current equivalent
+  skill_source_lift_v2:
+    - "## Lifted to skill source"
+  cross_project_signals_v2:
+    - "## Cross-project signals"
