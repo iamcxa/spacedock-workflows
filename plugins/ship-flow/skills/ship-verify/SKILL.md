@@ -120,6 +120,26 @@ Cost: ~$0.05/haiku. Default M/L = $0.10.
 - **WARNING** (potential bug / weak edge case) → log; proceed if no BLOCKING.
 - **NIT** (style / minor) → consider auto-fix per Step 5.
 
+### Severity-disagreement aggregation
+
+When the default haiku pair (`code-reviewer` + `silent-failure-hunter`) both return findings, aggregate using **FAIL > WARN > PASS** (strict dominance):
+
+| Reviewer A | Reviewer B | Aggregate |
+|---|---|---|
+| BLOCKING | any | BLOCKING |
+| WARNING | BLOCKING | BLOCKING |
+| WARNING | WARNING | WARNING |
+| WARNING | NIT or PASS | WARNING |
+| NIT | NIT or PASS | NIT |
+| PASS | PASS | PASS |
+
+At the verdict-mapping layer (Step 5 cross-review gate): **PROMPT_CAPTAIN > VETO > PROCEED** — the worse verdict wins.
+
+**Note**: Spec 101.3 originally framed PAR as adding a 2nd reviewer to the baseline. Current ship-verify SKILL.md already runs the default haiku pair unconditionally on source diffs (the pair IS the baseline). This section codifies the aggregation rule that was previously implicit; reviewer count unchanged. See `docs/ship-flow/101-density-aware-autonomy/plan.md` D1 for cross-review adjudication record.
+
+**Density-aware gate**: the above aggregation is unconditional (Path X). On `density:high` entities, verdict-flip for PROMPT_CAPTAIN is handled downstream in `ship/SKILL.md → Verdict-flip transformation` (101.2 territory), NOT at reviewer dispatch level.
+
+
 ---
 
 ## Step 4 — UAT (spot-check default, full re-run fallback)
