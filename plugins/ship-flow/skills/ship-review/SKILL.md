@@ -195,6 +195,24 @@ Return to /ship; advance to ship-final stage (PR creation + captain merge gate).
 
 **Frontmatter write scope — ONLY `token_actual`.** Do NOT write `status`, `completed`, `verdict`, `pr`, `worktree` — these are FO-owned at terminal transition or pr-merge mod's concern.
 
+### Step 8.1 — Advance entity status (frontmatter wiring)
+
+After stage artifact lands, advance sibling `index.md` frontmatter atomically:
+
+    INDEX_MD="<entity-folder>/index.md"
+    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
+      --entity="$INDEX_MD" \
+      --new-status=ship \
+      --stage-name=review \
+      --stage-file=review.md \
+      --if-hash="$H" \
+      --commit-as="review(<id>): advance status to ship"
+
+Note: `--stage-name=review` (artifact filename) but `--new-status=ship` — no `review` enum value in status field; review stage's terminal output is PR creation, so status advances to `ship`.
+
+On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
+
 ---
 
 ## Invariants + red flags (STOP if violated)

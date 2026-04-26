@@ -23,6 +23,9 @@ The flow does NOT teach me how to think. It keeps me honest across boundaries wh
 
 ## Design principles (opus-4.7-era)
 
+> **Bad news early, no surprises.** Surface blockers, risks, and wrong assumptions to the captain immediately — never let them accumulate to a surprise. This applies across all stages, all teammates, all projects. (Motto codified from `_debriefs/` pattern audit, 2026-04-26.)
+
+
 ### 1. Opus-naturally-does vs load-bearing harness split
 
 The primary design rule (MEMORY 2026-04-23 `opus-4.7-naturally-does-vs-load-bearing-harness`).
@@ -119,6 +122,40 @@ captain intent (vague / concept / issue)
 | Canonical sync | ARCHITECTURE/PRODUCT/README/ROADMAP patches aggregated cleanly with CAS integrity? |
 
 Verdict: `PROCEED` | `VETO` (feedback-to-upstream, ≤2 rounds) | `PROMPT_CAPTAIN`.
+
+---
+
+## Bidirectional lifecycle
+
+The ship-flow plugin participates in a **bidirectional adoption lifecycle** with the projects that use it.
+
+```mermaid
+flowchart LR
+  subgraph Plugin["Plugin canonical (ship-flow)"]
+    P[README + INVARIANTS\nSKILL.md files]
+  end
+  subgraph Projects["Adopted projects"]
+    A[spacedock-ui\ndocs/ship-flow/]
+    B[carlove\ndocs/ship-flow/]
+  end
+
+  P -- "1 workflow-adopt\n(initial setup)" --> A
+  P -- "1 workflow-adopt\n(initial setup)" --> B
+  P -- "2 workflow-sync\n(pull updates)" --> A
+  P -- "2 workflow-sync\n(pull updates)" --> B
+  A -- "3 debrief-promote\n(push learnings)" --> P
+  B -- "3 debrief-promote\n(push learnings)" --> P
+```
+
+The cycle: plugin knowledge flows **down** to projects on adoption/sync, and project learnings flow **up** back into the plugin via debrief aggregation.
+
+| Journey | Trigger | Skill | Mechanism |
+|---|---|---|---|
+| Initial adoption | New project wants ship-flow | `spacedock:workflow-adopt` | Scaffold `docs/<wf>/`, `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` |
+| Sync updates | Plugin ships new patterns | `spacedock:workflow-sync` | Pull changed SKILL.md / INVARIANTS sections into project |
+| Promote learnings | Projects accumulate `_debriefs/` | `spacebridge:debrief-promote` | Aggregate STRONG/WARN patterns → plugin canonical |
+
+**`_debriefs/` convention**: each project accumulates session debriefs under `docs/<wf>/_debriefs/<date>-<seq>.md` (schema: `references/debrief-schema.yaml`). After ≥2 projects have debriefs, run `spacebridge:debrief-promote` to surface cross-project STRONG signals back into plugin docs.
 
 ---
 
@@ -222,6 +259,8 @@ SendMessage(to: "verifier", message: "...verify brief with execute.md...")
 ## For adopters
 
 **Commissioning to a new repo**: use `/spacedock:commission` with `ship-flow` as template plugin. The commissioner scaffolds `docs/<wf>/README.md` with `entry-point:` frontmatter + creates initial `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` with section tags for `patch-map.sh`.
+
+**Debrief convention**: after each shipped pitch, run `spacedock:debrief` to write a session debrief under `docs/<wf>/_debriefs/<date>-<seq>.md`. Debriefs follow the schema in `references/debrief-schema.yaml` (required sections: `## Shipped`, `## Filed (backlog)`, `## Issues — Workflow`, `## Issues — Spacedock`, `## Non-PR commits (workflow-only)`, `## Observations`, `## Decisions`, `## What's Next`). The `spacebridge:debrief-promote` skill aggregates cross-project debrief patterns and promotes STRONG signals back into plugin canonical docs.
 
 **Canonical docs section-tagging contract** (required for Layer C primitive compatibility):
 ```markdown

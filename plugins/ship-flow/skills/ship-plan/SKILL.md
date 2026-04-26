@@ -51,8 +51,8 @@ Skip if no file:line citations (common for S-size).
 ### Step 2 — Research (size-adaptive, produce+review)
 
 - **S** — skip research. Proceed to Step 3.
-- **M** — dispatch Agent A (sonnet producer: codebase impact + lib constraints, <400 words, file:line citations) → Agent B (sonnet reviewer: APPROVED / GAPS / CONTRADICTION, <300 words). Max 1 gap-fill round.
-- **L** — dispatch 3-5 parallel producers (upstream constraints / existing patterns / lib surface / gotchas / reference examples), each <200 words, file:line citations. Reviewer runs cross-domain + coverage check. Max 1 gap-fill round.
+- **M** — dispatch Agent A (sonnet producer: codebase impact + lib constraints, <400 words, file:line citations; include recent debrief warnings from `docs/<wf>/_debriefs/` — read `## Issues — Workflow` / `## Filed (backlog)` sections, schema at `plugins/ship-flow/references/debrief-schema.yaml`) → Agent B (sonnet reviewer: APPROVED / GAPS / CONTRADICTION, <300 words). Max 1 gap-fill round.
+- **L** — dispatch 3-5 parallel producers (upstream constraints / existing patterns / lib surface / gotchas / reference examples), each <200 words, file:line citations; one producer dedicated to recent debrief warnings (`docs/<wf>/_debriefs/` last 3-5 files, extract `## Issues — Workflow` / `## Filed (backlog)` / `## Observations`). Reviewer runs cross-domain + coverage check. Max 1 gap-fill round.
 
 **Contradiction**: write both verbatim as Open Question in `## Research Summary`. Never silently resolve.
 
@@ -152,6 +152,22 @@ Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-a
 Plan.md sections: `## Research Summary` (findings + open questions if contradictions + reviewer verdict), `## Size Re-evaluation`, `## Verification Spec` (table from Step 3.5), `## Plan` (TDD tasks from Step 3), `## Plan Report` (status, stage_cost: dispatches×model, iterations, dimensions pass/fail, reviewer verdict, scope anchoring, task count, model split, started/completed/duration).
 
 Mark TaskCreate sub-task `emit-plan.md` completed; return to /ship for advance to execute.
+
+### Step 6.1 — Advance entity status (frontmatter wiring)
+
+After stage artifact lands, advance sibling `index.md` frontmatter atomically:
+
+    INDEX_MD="<entity-folder>/index.md"
+    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
+      --entity="$INDEX_MD" \
+      --new-status=plan \
+      --stage-name=plan \
+      --stage-file=plan.md \
+      --if-hash="$H" \
+      --commit-as="plan(<id>): advance status to plan"
+
+On exit 6 (stale hash): write `## Plan Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 
 ---
 

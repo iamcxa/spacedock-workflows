@@ -138,6 +138,8 @@ Stage skills MUST codify a fallback path for teammate-unavailable OR subagent-st
 3. If no → redo the stage work (inline or via new fresh-Agent with same prompt). The `git stash` state may hold uncommitted subagent edits; inspect and salvage via `git stash show` + explicit pathspec commit if the edits are correct.
 4. Capture recurrence: 3+ stall events in successive sessions → escalate to rabbit-hole `auto-recover-stalled-subagent-commits` (automated git introspection pattern).
 
+**Team-spawn-retry discipline** (`team-spawn-retry-discipline`): When a newly-spawned teammate receives a SendMessage that races its first-turn idle transition, the message queues but is only read on next wake — resulting in apparent non-response. Reliable mitigation: re-send the same nudge SendMessage after the first `idle_notification` fires (cost ~1 extra turn). Observed 4× in pitch-092/093 session; fix works 100%. Apply this discipline before escalating to full Rule A Fallback. See MEMORY `agent-teams-spawn-proceed-race` for field evidence.
+
 **Failure to codify fallback** → Tier B (design-review gate) violation. Stage SKILLs MUST contain at least one of the tokens `fresh subagent`, `fresh Agent`, `team unavailable`, `phantom`, `fallback`, OR an explicit comment `<!-- no TeamCreate — pure inline orchestration -->` annotation.
 
 **Rule B (3-Layer Skill Architecture)**:

@@ -47,6 +47,7 @@ Record stage-start ISO timestamp. Resolve `WORKFLOW_DIR` from `docs/*/README.md`
 ### Research (L0 → L1 → L2; skip layers that don't apply)
 
 - **L0 codebase** — dispatch **fresh-context subagent** (do NOT grep from orchestrating context). Return: `affected_files`, `existing_patterns`, `constraints`, `prior_entities[≤5]`, `open_questions[]`.
+- **L0 debrief-read** — read `docs/<wf>/_debriefs/*.md` (most recent 3-5 files) for `recent_warnings[]`: issues from `## Issues — Workflow` / `## Issues — Spacedock`, D2-candidates from `## Filed (backlog)`. Schema: `plugins/ship-flow/references/debrief-schema.yaml`. Surface any warning directly relevant to the current shape's domain into `open_questions[]`.
 - **L1 library** — inline via trained knowledge / Context7. Subagent only for wide API surface.
 - **L2 web** — 1-2 `WebSearch` queries only when L0+L1 leave a load-bearing claim unresolved. Usually skip.
 
@@ -60,7 +61,7 @@ RULE: L0 via fresh subagent is non-negotiable. Opus 4.7 handles the rest natural
 
 **Rejected alternatives** → `deleted_from_shape[]` (field name retained for shape-confirm.sh compat; semantics = "considered but not in scope"). Populate from: (a) brainstorming Q-loop's considered-then-rejected branches, (b) intake clarification (captain said A → rejected B), (c) scope-cut during decompose (feature trimmed to fit appetite). "Worth doing eventually" → `rabbit_holes[]` instead. Musk 5-step procedure intentionally NOT enforced (opus-4.7-naturally-does, MEMORY 2026-04-23); scope protection comes from the appetite-fit check below, not from a forced-delete ritual.
 
-**Assumptions**: emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/references/entity-body-schema.yaml`). **Mandatory**: ≥1 `criticality: critical`. Run each critical's verification now (30s soft cap); record resolved confidence in `confidence_at_shape`. **Do NOT reproduce verification output in the proposal** — `verified_by` + bumped `confidence_at_shape` is the full trace. Raw grep/read results belong to plan-stage research, not shape-stage proposal.
+**Assumptions**: emit `stated_assumption` per load-bearing claim (schema: `plugins/ship-flow/references/entity-body-schema.yaml`). Surface any `recent_warnings[]` from `_debriefs/` debrief-read as `criticality: moderate` assumptions when they affect the current domain. **Mandatory**: ≥1 `criticality: critical`. Run each critical's verification now (30s soft cap); record resolved confidence in `confidence_at_shape`. **Do NOT reproduce verification output in the proposal** — `verified_by` + bumped `confidence_at_shape` is the full trace. Raw grep/read results belong to plan-stage research, not shape-stage proposal.
 
 ### Appetite-fit check (before compose) — scope cap enforcement
 
