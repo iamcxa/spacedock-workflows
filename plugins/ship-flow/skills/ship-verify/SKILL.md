@@ -1,6 +1,6 @@
 ---
 name: ship-verify
-description: "Use when verifying execute output before ship — standalone via `/verify <entity-id>` or pipeline-dispatched by `/ship`. Agent-autonomous ROI gate: scoped quality checks on touched surfaces, spot-check critical DCs, auto-fix NITs inline, escalate to agent-browser e2e for UI DCs. Output: `docs/<wf>/<id>-<slug>/verify.md`. Layer A delegation: e2e-pipeline:e2e-test / e2e-pipeline:e2e-walkthrough / e2e-pipeline:ui-verify for agent-browser UI-DC verification; pr-review-toolkit reviewer personas for haiku review passes."
+description: "Use when verifying execute output before ship — standalone via `/verify <entity-id>` or pipeline-dispatched by `/ship`. Agent-autonomous ROI gate: scoped quality checks on touched surfaces, spot-check critical DCs against a LIVE worktree dev server (artifact-only is rejected), auto-fix NITs inline. Output: `docs/<wf>/<id>-<slug>/verify.md`. Layer A delegation: worktree-dev-server (project-level skill) for runtime preflight; e2e-pipeline:e2e-test/walkthrough/ui-verify for agent-browser UI-DC verification; pr-review-toolkit personas for haiku review."
 user-invocable: true
 argument-hint: "<entity-id> [--fast | --full]"
 ---
@@ -144,7 +144,27 @@ At the verdict-mapping layer (Step 5 cross-review gate): **PROMPT_CAPTAIN > VETO
 
 ## Step 4 — UAT (spot-check default, full re-run fallback)
 
-**Default: spot-check ≤2 critical DCs + evidence review.** Full re-run is fallback, not default. Evidence: 2026-04 D1 n=31 DCs changed 0 verdicts on full re-run.
+**Default**: spot-check ≤2 critical DCs + evidence review (full re-run is fallback). 2026-04 D1: n=31 DCs, 0 verdict changes on full re-run.
+
+**Runtime mandate** (carlove SEC-10/15 retro, 2026-04-26): DC re-runs in 4.2/4.3/4.4 MUST execute against a **live runtime** — worktree dev server up + API reachable + browser able to load route. Artifact-only verification (compiled script, type-check, unit tests) is **insufficient**: 4 critical bugs slipped past artifact-green verify on SEC-10 #574 + SEC-15 #573, caught by reviewers in 4 minutes.
+
+### 4.0 — Runtime preflight (hard gate — runs before 4.1)
+
+No DC may be marked PASS via a runtime path until preflight succeeds:
+
+1. **Dev server up** — `Skill: "worktree-dev-server"` (project-level skill convention; adopters host their own boot helper under that name). MUST report reachable port per surface in `plan.md → files_modified`.
+2. **API reachable** (router / contract touched) — `curl -sfN <api>/<liveness>` → HTTP 2xx; capture status + body excerpt.
+3. **Browser loads route** (UI-type DC) — `curl -sfN <ui-route> | head -200` returns rendered shell.
+
+| Preflight outcome | Action |
+|---|---|
+| All required steps green | Proceed to 4.1 / 4.2 |
+| Dev server fails (port conflict / missing migrations / env / deps) | **BLOCKER.** Write `verify.md` `status: blocked, reason: dev server unavailable — <cause>` + PROMPT_CAPTAIN. Do NOT route around with `API offline → conditional pass`, `artifact-only`, or `visual verification skipped`. |
+| API / browser probe fails post-boot | Treat as real DC failure → feedback to execute (max 2 rounds). |
+
+**Anti-pattern** (Pilot Wave 1): verifier logged `DC-3 conditional (unit coverage verified, API offline)` and advanced to PASS — compiled artifact existed; API never hit; contract-shape bug caught by reviewers in 4 minutes. **Conditional-pass on missing runtime = verifier bug**, not an escape hatch.
+
+Record commands + outputs in `### Runtime Verification` (template in Step 6).
 
 ### 4.1 — Evidence review
 
@@ -156,15 +176,17 @@ Read `execute.md → ## Execute UAT` (or `## Execute Output → ### Done Criteri
 
 ### 4.2 — Spot-check
 
-Pick 2 DCs: (1) **highest-risk** (priority `e2e > api > ui > cli > skill`; break ties by assertion complexity), (2) **random** from remaining. Re-run per type:
+Pick 2 DCs: (1) **highest-risk** (priority `e2e > api > ui > cli > skill`; ties by assertion complexity), (2) **random** from remaining. **All primitives below execute against the live runtime from Step 4.0; unit-test path alone does NOT satisfy spot-check**:
 
-| Type | Primitive |
+| Type | Primitive (runtime-mandatory) |
 |---|---|
 | `cli` | Bash: command + exit code + output grep |
-| `api` | Bash: curl + status + response shape |
-| `ui` | Bash: `curl -sfN <route> \| grep <assertion>` (MEMORY turbopack-streaming — `-N` mandatory for Next.js 16). Flow exists → `Skill: e2e-pipeline:e2e-test` |
-| `skill` | `Skill("<skill-name>")` with probe prompt, check output shape |
-| `e2e` | `Skill: e2e-pipeline:e2e-test` if flow present; else degrade to `ui` + warn |
+| `api` | `curl -sfN <api>/<endpoint>` on live server + status + JSON shape assertion. Unit/contract tests alone insufficient (SEC-15 V1: static type-check OK, runtime `lt` returned 400). |
+| `ui` | `curl -sfN <route> \| grep <assertion>` (MEMORY turbopack-streaming — `-N` mandatory for Next.js 16). Flow present → `Skill: e2e-pipeline:e2e-test` (live server, NOT compile-only). |
+| `skill` | `Skill("<name>")` with probe prompt, check output shape |
+| `e2e` | `Skill: e2e-pipeline:e2e-test` actually runs `npx playwright test .claude/e2e/compiled/<flow>.spec.ts` against live server. **Compile-only (artifact + type-check green) FAILS verify.** SEC-10 C8: chip-click step missing option-select; artifact existed, browser would have asserted-failed. No flow file → degrade to `ui` AND log `[D2-candidate]` for missing coverage. |
+
+**New API contract surface — mandatory curl smoke** (separate from spot-check sampling): every NEW `api`-type DC (router endpoint, filter contract, query schema) requires ≥1 curl probe on the live server exercising a non-trivial path (real filter operator / RBAC verb / query shape). Sampling 2-of-N can miss the new contract; per-new-surface curl cannot. Record in `### Runtime Verification → api smokes`.
 
 | Spot-check outcome | Action |
 |---|---|
@@ -178,7 +200,7 @@ Re-run every DC procedure via 4.2 type-dispatch table. Each result: infra-fail (
 
 ### 4.4 — Captain-smoke pre-automation (UI-type DCs)
 
-Run automated pre-check BEFORE handing to captain for manual visual smoke. Captain's eyeball is the final pass, NOT the first line of defence — automated pre-check catches regressions before captain context switch.
+Automated pre-check runs BEFORE captain manual visual smoke. Captain's eyeball is final pass, not first defence.
 
 **Primitive triage** (dispatch per DC to the narrowest that fits):
 
@@ -189,9 +211,11 @@ Run automated pre-check BEFORE handing to captain for manual visual smoke. Capta
 | `e2e-pipeline:e2e-walkthrough` | No declarative artifact; exploratory screenshot + optional video of affected pages | affected route list |
 | `agent-browser` CLI (break-glass) | skill wrapper unavailable / mapping missing / skill invocation errors | inline JS via `eval` on live dev server |
 
-**Fallback cascade**: declarative skill → agent-browser CLI → manual captain smoke. At least one tier MUST run on every UI-type DC. `visual verification skipped` log is only acceptable when BOTH (a) entity has zero UI-type DCs AND (b) spec.md explicitly flags captain-smoke not required.
+**Runtime-mandatory cascade** (SEC-10 C8): declarative skill → agent-browser CLI → manual captain smoke. ≥1 tier MUST **execute against the live worktree dev server** (Step 4.0 green) on every UI-type DC. The cascade picks WHICH primitive — not WHETHER one runs.
 
-**Artifact requirement**: every automated pre-check MUST produce either (a) a report at `.claude/e2e/reports/<slug>-<stage>-<timestamp>.md` OR (b) an inline report block in `verify.md` `### UAT → visual:` subsection. Include ≥1 screenshot (agent-browser `screenshot <path>` command or skill's own capture) for the primary affected route — audit trail for future session-resume + captain review.
+**Anti-pattern**: `visual verification skipped` is only acceptable when BOTH (a) entity has zero UI-type DCs AND (b) spec.md explicitly flags captain-smoke not required. Dev server unavailable → escalate per Step 4.0 (BLOCKER); do NOT silently skip. Compile artifact + type-check green is NOT a valid runtime substitute.
+
+**Artifact requirement**: every pre-check produces (a) report at `.claude/e2e/reports/<slug>-<stage>-<ts>.md` OR (b) inline block in `verify.md` `### UAT → visual:`. Include ≥1 screenshot for the primary affected route. Compiled-artifact path alone is NOT a report — the report MUST cite runtime output (browser console, screenshot, playwright `--reporter=line` excerpt).
 
 If `## Design Reference` present → compare screenshots against reference images. No reference → verify DC assertions against rendered UI.
 
@@ -251,8 +275,33 @@ Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before�
 - `### Quality Gate` — per-surface scoping decisions + check results + pre-existing attributions
 - `### Review Findings` — pre-scan + classified haiku table (file:line, severity, source, description)
 - `### Knowledge Captures` — `[D1]` / `[D2-candidate]` / `[inlined]` tags
-- `### UAT` — mode line + results table with `Verify` column (`spot-checked` / `trust (evidence: <ref>)` / `re-run (fallback)`)
+- `### Runtime Verification` — Step 4.0 preflight + per-DC runtime probes (template below). **Mandatory** if entity has any `api`/`ui`/`e2e`-type DC.
+- `### UAT` — mode line + results table with `Verify` column. Per-DC entry MUST be `DC-X PASS (runtime: <command> → <result excerpt>)`; legacy `conditional (artifact-only)` / `API offline` shorthand is rejected.
 - `### Verdict` — `status:` (grep gate — `passed` | `failed` | `blocked`), `stage_cost:`, `auto_fixes:`, `started_at:` / `completed_at:` / `duration_minutes:`
+
+**`### Runtime Verification` template** (capture every executed runtime command for audit + replay):
+
+```markdown
+<!-- section:runtime-verification -->
+### Runtime Verification
+
+Preflight (Step 4.0):
+- dev_server: `Skill: worktree-dev-server` → frontend:<port>, api:<port> @ <ISO ts>
+- api_health: `curl -sfN <api>/<liveness>` → 200, body excerpt
+- ui_shell:   `curl -sfN <route> | head -100` → rendered shell match
+
+Per-DC runtime probes:
+
+| DC | Type | Command | Result | Verdict |
+|---|---|---|---|---|
+| DC-N | api/ui/e2e | `<runtime command>` | `<status / assertion / artifact path>` | PASS/FAIL |
+
+API smokes (one per NEW api-type DC, per Step 4.2):
+- `<contract surface>`: `curl …` → <status + assertion>
+
+Preflight or probe failures: <none | bullets with cause + remediation>
+<!-- /section:runtime-verification -->
+```
 
 FO greps `^status:` for the machine-readable gate. `Verdict:` line is human-facing summary.
 
@@ -296,6 +345,7 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 
 ## Invariants + red flags (STOP or escalate if violated)
 
+- **Runtime preflight (Step 4.0) MUST run before any DC re-run.** Dev server unavailable → `status: blocked`, PROMPT_CAPTAIN. NEVER advance with `conditional pass`, `API offline`, `artifact-only`, or `visual verification skipped`. Compile-only verification (artifact + type-check + unit tests) is insufficient — gate requires `e2e-pipeline:e2e-test` (or `npx playwright test …`) actually executes against live server. Every NEW api-type DC requires ≥1 curl probe against the live contract surface; sampling 2-of-N cannot substitute. (carlove SEC-10/15 Pilot Wave 1 retro, 2026-04-26.)
 - Quality gate is scoped to touched surfaces (MEMORY #10); full-project noise ≠ failure.
 - Per-error attribution: pattern-in-other-files does NOT excuse execute-introduced line (MEMORY #078).
 - Haiku spot-check = 100% of citations, not sample (MEMORY #078 precedent).
@@ -319,8 +369,9 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - Runtime detect: `ship-flow:ship-runtime-detect`.
 - Layer A — haiku reviewers: `pr-review-toolkit:code-reviewer`, `pr-review-toolkit:silent-failure-hunter`, `trailofbits:*`, `pr-review-toolkit:{pr-test-analyzer,type-design-analyzer,comment-analyzer,code-simplifier}`.
 - Layer A — agent-browser: `e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, `e2e-pipeline:ui-verify`.
+- Layer A — runtime preflight: project's documented dev-server boot helper (conventionally `Skill: "worktree-dev-server"` — project-level skill in adopting repos; not a ship-flow plugin skill). Required by Step 4.0.
 - Layer A — inline review: `superpowers:verification-before-completion` (compatible mental model).
 - Upstream: `ship-flow:ship-shape` (team spawn), `ship-flow:ship` (pipeline entry).
 - Downstream: `ship-flow:ship-review` (reads `verify.md → status:`).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (Rule A continuity + Rule B 3-layer + Rule C cross-review).
-- MEMORY: #5 (--next-id), #10 (scoped-gate), #14/#25/#37 (pathspec / staging), #30 (verification-dispatch), #35 (dispatch discipline, amended by Principle 6 Rule A), #078 (per-error attribution + 100% spot-check), opus-4.7-naturally-does (2026-04-23 harness diet), nextjs-16-streaming-curl-flag (turbopack `-N` requirement).
+- MEMORY: #5 (--next-id), #10 (scoped-gate), #14/#25/#37 (pathspec / staging), #30 (verification-dispatch), #35 (dispatch discipline, amended by Principle 6 Rule A), #078 (per-error attribution + 100% spot-check), opus-4.7-naturally-does (2026-04-23 harness diet), nextjs-16-streaming-curl-flag (turbopack `-N` requirement), **carlove-pilot-wave-1 (2026-04-26: SEC-10 #574 + SEC-15 #573 — 4 critical bugs in 4 minutes after artifact-only verify PASS; trigger for Step 4.0 + Runtime Verification subsection)**.

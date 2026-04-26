@@ -117,7 +117,7 @@ captain intent (vague / concept / issue)
 |---|---|
 | Feasibility | Is the output implementable within the pitch's appetite? |
 | Executable scope | Does the work stay within the declared children / artifact boundaries? |
-| Quality | Layer B invariants honored (Musk deletes, critical assumption, atomic commits, vertical slices)? |
+| Quality | Layer B invariants honored (Musk deletes, critical assumption, atomic commits, vertical slices)? Verify-stage critical assumption verified at **live runtime** (dev server up + per-DC command captured), not artifact-only? |
 | DC adequacy | Done criteria observable, not "works correctly" prose? |
 | Canonical sync | ARCHITECTURE/PRODUCT/README/ROADMAP patches aggregated cleanly with CAS integrity? |
 
