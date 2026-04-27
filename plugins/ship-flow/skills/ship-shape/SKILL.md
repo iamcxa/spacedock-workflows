@@ -225,14 +225,24 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
 
 ## Named-teammate spawn (Principle 6 Rule A)
 
-On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size).
+On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size). **When pitch trigger fires `affects_ui:true OR file globs *.tsx|*.css|*.html OR explicit --design flag`, also spawn `designer` (opus) — gates the conditional `design` stage between shape and plan.**
 
 ```
+# Default spawn (all pitches):
 TeamCreate(team_name: "pitch-<id>", members: ["planner", "executer", "verifier"])
 Agent(team_name: "pitch-<id>", name: "planner", model: "opus", task: "Planner for pitch-<id>. Read docs/<wf>/<id>-<slug>/spec.md.")
 Agent(team_name: "pitch-<id>", name: "executer", model: "sonnet", task: "Executer for pitch-<id>. Atomic commits, DC-first.")
+# Conditional spawn — only when UI-trigger fires (affects_ui:true OR *.tsx|*.css|*.html glob OR --design flag):
+Agent(team_name: "pitch-<id>", name: "designer", model: "opus", task: "Designer for pitch-<id>. Read spec.md; route Category 0/A/B/C/D; emit design.md + plugins/<app>/design/* on Category 0.")
 SendMessage(to: "planner", body: "Proceed to /plan for pitch-<id>. Read spec.md; output plan.md.")
 ```
+
+**Conditional design-stage trigger** (FO check, runs after shape-confirm.sh):
+- `affects_ui:true` field set in entity frontmatter (sharp-stage-set; default false), OR
+- any `Files modified` or `architecture-impact` block citing path matching glob `*.tsx | *.css | *.html`, OR
+- captain explicit `--design` flag on `/shape` invocation.
+
+When ANY trigger fires, FO advances entity to `design` stage (skill: `ship-flow:ship-design`); otherwise auto-skip to `plan` per `skip-when: "!affects_ui"` README.md state declaration.
 
 Stage continuation — SendMessage to named teammate (~10× faster than fresh dispatch). **Fresh-subagent reserved for Rule A exceptions**: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages.
 

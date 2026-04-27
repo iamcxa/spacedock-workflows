@@ -24,7 +24,7 @@ frontmatter:
   required:
     id: { type: string, example: '"017"', description: "Sequential zero-padded, unique within workflow" }
     title: { type: string, example: '"DAG + Kanban view components"' }
-    status: { type: enum, values: [draft, sharp, plan, execute, verify, ship, done], description: "Current pipeline stage" }
+    status: { type: enum, values: [draft, sharp, design, plan, execute, verify, ship, done], description: "Current pipeline stage" }
   optional:
     source: { type: string, description: "Where idea came from" }
     started: { type: iso8601, description: "When active work began" }
@@ -42,6 +42,15 @@ frontmatter:
     token_budget: { type: number, unit: USD }
     token_actual: { type: number, unit: USD, description: "Accumulated by FO across stages" }
     pr_feedback_round: { type: number, default: 0 }
+    affects_ui:
+      type: bool
+      optional: true
+      set_at: shape
+      default: false
+      description: |
+        True when shape detects UI-affecting changes (frontend file globs *.tsx|*.css|*.html, or
+        explicit captain --design flag). Drives design-stage conditional skip-when. Set by
+        ship-shape SKILL during shape stage based on Mode A/B/C trigger detection.
     entity_type: { type: enum, values: [entity, epic], default: entity, description: "entity = normal pipeline entity; epic = decomposed into children, FO skips (status: epic bypasses stage_by_name dispatch)" }
     children: { type: list, items: string, example: '["child-slug-1", "child-slug-2"]', description: "Child entity slugs — set by ship-shape epic mode when decomposing. Epic entity status is frozen at 'epic'; children flow through the pipeline independently." }
     plugin: { type: string, pattern: "^[a-z][a-z0-9-]*$", description: "Kebab-case plugin slug — scopes entity to a plugin in a monorepo (e.g., 'ship-flow', 'spacebridge'). When set, resolve_map_path uses plugins/{plugin}/ prefix for canonical doc paths. Optional: omit for repo-root-scoped entities (backward compat)." }
@@ -283,6 +292,53 @@ stages:
     uat: null  # sharp defines DC, doesn't verify
 
   # ===== PLAN =====
+  # ===== DESIGN =====
+  design:
+    reads:
+      - "## Sharp Output → Problem (exploration cite, contradictions)"
+      - "## Sharp Output → Done Criteria (UI-typed, design-affected)"
+    output:
+      section: "## Design Output"
+      section_tag: design-output
+      layer: design
+      subsections:
+        captain_decisions:
+          section: "### Captain Decisions"
+          section_tag: captain-decisions
+          layer: design
+          fields:
+            - name: items
+              type: list
+              format: "- **D{N}|Captain decision**: {claim} (ref: {file}:{line} contradiction pair)"
+              description: "Each contradiction-resolved decision; >=6 for non-trivial pitches"
+        artifact_bundle:
+          section: "### Artifact Bundle Manifest"
+          section_tag: artifact-bundle
+          layer: design
+          fields:
+            - name: artifacts
+              type: table
+              columns: ["Path", "Type", "Purpose"]
+              description: "design-system.md / tokens.css / specimens / composite mockup"
+        plan_constraints:
+          section: "### Constraints for Plan Stage"
+          section_tag: plan-constraints
+          layer: design
+          fields:
+            - { name: content, type: prose, description: "Visual / interaction / token constraints plan stage MUST honor" }
+    report:
+      section: "## Design Report"
+      section_tag: design-report
+      layer: design
+      fields:
+        - { name: status, type: enum, values: [passed, gaps-noted, blocked, partial], grepable: true }
+        - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
+        - { name: iterations, type: string, description: "N (Q-loop iterations) + 1 (cross-review)" }
+        - { name: contradictions_resolved, type: number }
+        - { name: captain_decisions, type: number }
+        - { name: reviewer_verdict, type: enum, values: [PROCEED, VETO, PROMPT_CAPTAIN] }
+    uat: null  # design defines visual contract, does not verify
+
   plan:
     reads:
       - "## Sharp Output (all subsections)"

@@ -153,8 +153,9 @@ After `review.md` cross-review PROCEED:
    On exit 6 (stale hash): write `## Ship Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 
 2. **Create PR** via `gh pr create` with title from entity + body referencing all stage artifacts (plan/execute/verify/review links).
-3. **Announce** to captain: entity shipped + PR URL + stage artifact paths.
-4. TaskUpdate ship-final=completed.
+3. **Post-create auto-review** — invoke the workflow's pr-merge mod `Hook: post-create` (`docs/<wf>/_mods/pr-merge.md`). The FO computes a 5-signal confidence score (verify gate / quality gates / outstanding feedback / rebase clean / token spend); on score ≥90 auto-applies the policy steps (mark Ready via `gh pr ready` + request Copilot review with graceful skip if absent); on 80-89 surfaces breakdown to captain and asks; on <80 surfaces concerns and skips. Tagging `@claude review` is intentionally NOT a default step — adopters who have the Claude Code Action wired can extend in a project-scoped override of the mod. Failure of any post-create step is non-blocking — log + surface, never halt ship-final.
+4. **Announce** to captain: entity shipped + PR URL + stage artifact paths + post-create auto-review outcome (Ready ✓ / Copilot reviewer id or "skipped" / score breakdown if <90).
+5. TaskUpdate ship-final=completed.
 
 **Merge decision is captain's.** `/ship` does NOT auto-merge. Captain may comment on PR or run `gh pr merge` manually.
 

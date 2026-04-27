@@ -142,6 +142,33 @@ At the verdict-mapping layer (Step 5 cross-review gate): **PROMPT_CAPTAIN > VETO
 
 ---
 
+## Step 3.5 — Designer ui-verify (conditional)
+
+**Trigger**: entity body contains `## Design Output` OR entity folder contains `design.md`.
+
+**Why named teammate, not fresh haiku**: designer@pitch-XX holds full design-context continuity (Principle 6 Rule A). Haiku has no context on captain Q-loop decisions (D1-D6) or category-specific rationale. A fresh subagent would re-derive from scratch; named teammate catches regressions against decisions already made.
+
+**Dispatch**:
+```
+SendMessage(to: "designer@pitch-XX",
+  body: "UI-verify requested for <entity-id>. Attach execute diff + design artifacts.
+  Execute diff: git diff <execute_base>..HEAD -- <ui_files>
+  Design reference: <entity-folder>/design.md (or plugins/<app>/design/)
+  Return findings as: BLOCKING / WARN / NIT with file:line citations.")
+```
+
+**Designer findings integration**:
+- Append designer findings to `### Review Findings` in `verify.md` under subsection `#### Design Parity`.
+- Apply same classify/spot-check rules as haiku findings: drop hallucinated citations (>30% → discard agent).
+- BLOCKING design-parity finding → feedback to execute (counts toward 2-round max).
+- WARN → log; does NOT block advance if no other BLOCKING.
+
+**Skip when**:
+- Entity `affects_ui: false` AND no `## Design Output` in entity body AND no `design.md` in entity folder.
+- Captain explicitly marks `designer-verify: skip` in verify.md frontmatter.
+
+---
+
 ## Step 4 — UAT (spot-check default, full re-run fallback)
 
 **Default**: spot-check ≤2 critical DCs + evidence review (full re-run is fallback). 2026-04 D1: n=31 DCs, 0 verdict changes on full re-run.

@@ -61,7 +61,7 @@ FAIL=0
 check_skill_count() {
   # DC-6 — Principle 2: stage skill count ≤ 7; utility skills uncapped.
   # Explicit allowlists — catches unclassified additions immediately.
-  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
   local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect)
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
@@ -347,7 +347,7 @@ check_layer_a_delegation() {
   # skip the delegate when the prompt doesn't feel like it needs a sub-skill.
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
-  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
   local fail=0
   local sk
   for sk in "${STAGE_SKILLS[@]}"; do
@@ -374,7 +374,7 @@ check_team_fallback_documented() {
   # | "fallback" | explicit "no TeamCreate" annotation (any case).
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
-  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
   local fail=0
   local sk n
   for sk in "${STAGE_SKILLS[@]}"; do
@@ -394,7 +394,7 @@ check_cross_review_gate() {
   # Requires: cross-review mention + "5-factor rubric" + "Feasibility" (case-insensitive).
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
-  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
   local fail=0
   local sk
   for sk in "${STAGE_SKILLS[@]}"; do
