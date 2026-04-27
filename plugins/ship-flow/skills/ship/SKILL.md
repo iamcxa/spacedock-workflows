@@ -103,6 +103,31 @@ After each stage's .md lands, dispatch cross-review to the counterpart teammate.
 - Within team: cross-teammate counterpart (planner ↔ executer; verifier reviews against either).
 - No team member available: fresh **sonnet** by default; upgrade to fresh **opus** when entity's `appetite: big-batch`.
 
+**Verdict-flip transformation (density-aware autonomy, pitch 101)**:
+
+When a cross-review returns PROMPT_CAPTAIN, FO evaluates the density gate BEFORE halting:
+
+```
+if PROMPT_CAPTAIN
+   AND is_high_density(entity) == true   # bash density-classify.sh --is-high exits 0
+   AND reason_predicate in WHITELIST:
+     emit PROCEED
+     append decisions.md row(stage, original_verdict=PROMPT_CAPTAIN, flipped_to=PROCEED, reason_predicate, source_citation)
+     git add docs/<wf>/<entity>/decisions.md && git commit -m "decision: verdict-flip <stage>" -- docs/<wf>/<entity>/decisions.md
+else:
+     KEEP original verdict (VETO stays VETO; PROMPT_CAPTAIN stays PROMPT_CAPTAIN)
+```
+
+**Boolean-gate compliance (Principle 4)**: external input is the SINGLE boolean `is_high_density(entity)`. The 4-tier enum is internal display only — NOT exposed at the gate. Gate logic: `(is_high_density && reason_in_whitelist) ? FLIP : KEEP`.
+
+**WHITELIST** (boolean predicates; each evaluates true/false on a reason vector):
+- `reason_matches_skill_precedent` — finding cites a skill preset rule the repo already enforces
+- `reason_matches_canonical_constraint` — finding traces to PRODUCT.md / ARCHITECTURE.md hard constraint already documented
+- `reason_matches_precedent_count_ge_2` — finding pattern has >=2 prior shipped precedents in `_archive/done/`
+- `reason_is_NIT_class` — severity classification = NIT (per ship-verify Step 4.6 mechanical auto-fix rule)
+
+**Applies only to**: PROMPT_CAPTAIN -> PROCEED transitions. VETO is never flipped.
+
 **FO verdict**: **PROCEED** → TaskUpdate stage=completed, advance. **VETO** → loop stage back to original teammate with reviewer feedback (max 2 loops; after 2 → `PROMPT_CAPTAIN`). **PROMPT_CAPTAIN** → halt pipeline, present stage artifact + reviewer concern; captain decides continue/abort. **Note**: this cap governs automated planner↔executer VETO only; post-ship captain-smoke feedback uses the separate Step 7 cap.
 
 ## Step 6 — Ship-final stage (this skill)

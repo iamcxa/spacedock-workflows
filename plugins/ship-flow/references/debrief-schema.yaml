@@ -32,6 +32,7 @@ required_sections:
 optional_sections:
   - "## Rejected / Non-shipped terminal"
   - "## Pending merge"
+  - "## Designer Perspective"   # present when session includes design stage; documents category classification, Q-loop captain decisions (D1-DN), and designer_lessons for future pitches
 
 # Forward-compatibility aliases (v2 reservation)
 # If spacedock:debrief skill evolves to use these section names, update schema_version to 2.

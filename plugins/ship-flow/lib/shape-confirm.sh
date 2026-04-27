@@ -58,6 +58,7 @@ PITCH_TITLE=$(yq --input-format=json '.pitch.title' "$PROPOSAL" | tr -d '"')
 PITCH_APPETITE=$(yq --input-format=json '.pitch.appetite' "$PROPOSAL" | tr -d '"')
 PITCH_PROBLEM=$(yq --input-format=json '.pitch.problem' "$PROPOSAL" | tr -d '"')
 PITCH_ACCEPTANCE_OUTCOME=$(yq --input-format=json '.pitch.acceptance_outcome' "$PROPOSAL" | tr -d '"')
+PITCH_ANSWERS_DENSITY=$(yq --input-format=json '.pitch.answers_density // ""' "$PROPOSAL" | tr -d '"')
 
 [ -n "$PITCH_ID" ] && [ -n "$PITCH_SLUG" ] && [ -n "$PITCH_TITLE" ] || {
   echo "Error: proposal missing pitch.id / pitch.slug / pitch.title" >&2
@@ -135,6 +136,7 @@ status: sharp
 pattern: pitch
 appetite: "${PITCH_APPETITE}"
 layout: folder
+$([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
 ---
 
 <!-- section:stage-artifact-links -->
@@ -191,6 +193,7 @@ title: "${PITCH_TITLE}"
 status: sharp
 pattern: pitch
 appetite: "${PITCH_APPETITE}"
+$([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
 ---
 
 ### Problem

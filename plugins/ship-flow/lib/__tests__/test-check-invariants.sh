@@ -773,4 +773,69 @@ EOF
 if structural_parity_grandfather 2>/dev/null; then echo "OK structural-parity-dc: grandfather allowlist skips pre-#048 entity"
 else echo "FAIL structural-parity-dc: grandfather allowlist skips pre-#048 entity"; FAIL=1; fi
 
+
+# ── DC-17: verdict-flip-whitelist invariant check (pitch-101 T13) ────────────
+
+echo "--- DC-17: verdict-flip-whitelist check ---"
+
+# Case (a): current repo with T10+T12 verdict-flip block → check exits 0
+if bash "$CHECK_SCRIPT" --check verdict-flip-whitelist >/dev/null 2>&1; then
+  echo "OK DC-17a: verdict-flip-whitelist check exits 0 on current repo"
+else
+  echo "FAIL DC-17a: verdict-flip-whitelist check failed on current repo"; FAIL=1
+fi
+
+# Case (b): fixture with enum-string gate → check exits non-zero with ERROR
+verdict_flip_fixture_bad() {
+  local d
+  d="$(mktemp -d)"
+  mkdir -p "$d/plugins/ship-flow/skills/ship"
+  cat > "$d/plugins/ship-flow/skills/ship/SKILL.md" << 'SKILLEOF'
+---
+description: "ship skill"
+---
+## Step 5 — Cross-review gate
+**Verdict-flip transformation (density-aware autonomy, pitch 101)**:
+
+**WHITELIST**:
+- `reason_matches_skill_precedent`
+
+verdict_mode: "ask"
+SKILLEOF
+  local rc stderr_out
+  stderr_out="$(bash "$CHECK_SCRIPT" --test-fixture "$d" --check verdict-flip-whitelist 2>&1 >/dev/null)"
+  rc=$?
+  rm -rf "$d"
+  [ "$rc" != "0" ] && echo "$stderr_out" | grep -qiE 'ERROR|enum.string'
+}
+if verdict_flip_fixture_bad 2>/dev/null; then
+  echo "OK DC-17b: verdict-flip-whitelist check fails on enum-string gate fixture"
+else
+  echo "FAIL DC-17b: verdict-flip-whitelist check should fail on enum-string gate fixture"; FAIL=1
+fi
+
+# Case (c): fixture missing verdict-flip block entirely → check exits non-zero
+verdict_flip_fixture_missing() {
+  local d
+  d="$(mktemp -d)"
+  mkdir -p "$d/plugins/ship-flow/skills/ship"
+  cat > "$d/plugins/ship-flow/skills/ship/SKILL.md" << 'SKILLEOF'
+---
+description: "ship skill"
+---
+## Step 5 — Cross-review gate
+No verdict-flip here.
+SKILLEOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check verdict-flip-whitelist >/dev/null 2>&1
+  rc=$?
+  rm -rf "$d"
+  [ "$rc" != "0" ]
+}
+if verdict_flip_fixture_missing 2>/dev/null; then
+  echo "OK DC-17c: verdict-flip-whitelist check fails when block absent"
+else
+  echo "FAIL DC-17c: verdict-flip-whitelist check should fail when block absent"; FAIL=1
+fi
+
 exit $FAIL

@@ -116,6 +116,16 @@ Schema: `entity-body-schema.yaml` → `readme-impact` block. Consumer: ship-revi
 
 Skip when: pitch is pure internal refactor, bug fix, or infrastructure (no user-facing surface change).
 
+### Density classification (preflight)
+
+Run before composing the proposal:
+
+```bash
+bash plugins/ship-flow/lib/density-classify.sh --entity=<path-to-index.md>
+```
+
+Output: `high | medium | low | vacuum`. Include as `answers_density` in the proposal JSON pitch block (see schema below). FO uses this to auto-proceed without captain gate when `high`. Skip when entity index does not yet exist (first-time shape of a directive).
+
 ### Compose + present proposal
 
 **Fat-marker-sketch rule**: Children are titles, not specs. Stated assumptions are claims + confidence + criticality + `verified_by`, not verification RESULTS. DCs, tool choices, file paths, greppable queries, npm-dep choices, LOC estimates all belong to PLAN. If a child description exceeds one line of vertical-slice intent, or if an assumption reproduces verification output, delete detail and keep the claim. Acceptance outcome MUST be user-observable (what captain receives) — NOT artifact list / infrastructure description / "support for X". One captain-readable claim per pitch.
@@ -215,14 +225,24 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
 
 ## Named-teammate spawn (Principle 6 Rule A)
 
-On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size).
+On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size). **When pitch trigger fires `affects_ui:true OR file globs *.tsx|*.css|*.html OR explicit --design flag`, also spawn `designer` (opus) — gates the conditional `design` stage between shape and plan.**
 
 ```
+# Default spawn (all pitches):
 TeamCreate(team_name: "pitch-<id>", members: ["planner", "executer", "verifier"])
 Agent(team_name: "pitch-<id>", name: "planner", model: "opus", task: "Planner for pitch-<id>. Read docs/<wf>/<id>-<slug>/spec.md.")
 Agent(team_name: "pitch-<id>", name: "executer", model: "sonnet", task: "Executer for pitch-<id>. Atomic commits, DC-first.")
+# Conditional spawn — only when UI-trigger fires (affects_ui:true OR *.tsx|*.css|*.html glob OR --design flag):
+Agent(team_name: "pitch-<id>", name: "designer", model: "opus", task: "Designer for pitch-<id>. Read spec.md; route Category 0/A/B/C/D; emit design.md + plugins/<app>/design/* on Category 0.")
 SendMessage(to: "planner", body: "Proceed to /plan for pitch-<id>. Read spec.md; output plan.md.")
 ```
+
+**Conditional design-stage trigger** (FO check, runs after shape-confirm.sh):
+- `affects_ui:true` field set in entity frontmatter (sharp-stage-set; default false), OR
+- any `Files modified` or `architecture-impact` block citing path matching glob `*.tsx | *.css | *.html`, OR
+- captain explicit `--design` flag on `/shape` invocation.
+
+When ANY trigger fires, FO advances entity to `design` stage (skill: `ship-flow:ship-design`); otherwise auto-skip to `plan` per `skip-when: "!affects_ui"` README.md state declaration.
 
 Stage continuation — SendMessage to named teammate (~10× faster than fresh dispatch). **Fresh-subagent reserved for Rule A exceptions**: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages.
 
@@ -230,7 +250,7 @@ Stage continuation — SendMessage to named teammate (~10× faster than fresh di
 
 ## Proposal JSON schema (machine contract for shape-confirm.sh)
 
-Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acceptance_outcome` (≥50 chars, user-observable, mandatory), `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`.
+Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acceptance_outcome` (≥50 chars, user-observable, mandatory), `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`. `answers_density` (optional, `high | medium | low | vacuum`): emit when pre-classified; omit to defer lazy classification.
 
 ---
 

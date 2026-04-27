@@ -80,3 +80,18 @@ maps:
         title: "Shipped"
         purpose: "History of shipped entities"
         requires_diagram: false
+  plugins/spacebridge/design/design-system.md:
+    path: "plugins/spacebridge/design/design-system.md"
+    sections:
+      - section_tag: foundations
+        title: "Foundations"
+        purpose: "Color, typography, spacing, borders, shadows, motion tokens (§1-6)"
+        requires_diagram: false
+      - section_tag: components
+        title: "Components"
+        purpose: "Component specimens (each with HTML + design rationale)"
+        requires_diagram: false
+      - section_tag: patterns
+        title: "Composition Principles & Patterns"
+        purpose: "How components compose into screens (§7)"
+        requires_diagram: false

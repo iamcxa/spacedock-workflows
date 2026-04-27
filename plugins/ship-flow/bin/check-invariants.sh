@@ -61,7 +61,7 @@ FAIL=0
 check_skill_count() {
   # DC-6 — Principle 2: stage skill count ≤ 7; utility skills uncapped.
   # Explicit allowlists — catches unclassified additions immediately.
-  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
   local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect)
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
@@ -347,7 +347,7 @@ check_layer_a_delegation() {
   # skip the delegate when the prompt doesn't feel like it needs a sub-skill.
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
-  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
   local fail=0
   local sk
   for sk in "${STAGE_SKILLS[@]}"; do
@@ -374,7 +374,7 @@ check_team_fallback_documented() {
   # | "fallback" | explicit "no TeamCreate" annotation (any case).
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
-  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
   local fail=0
   local sk n
   for sk in "${STAGE_SKILLS[@]}"; do
@@ -394,7 +394,7 @@ check_cross_review_gate() {
   # Requires: cross-review mention + "5-factor rubric" + "Feasibility" (case-insensitive).
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
-  local STAGE_SKILLS=(ship-shape ship ship-plan ship-execute ship-verify ship-review)
+  local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
   local fail=0
   local sk
   for sk in "${STAGE_SKILLS[@]}"; do
@@ -461,6 +461,39 @@ check_layer_a_table_parity() {
       fail=1
     fi
   done
+  return "$fail"
+}
+
+
+check_verdict_flip_whitelist() {
+  # Verify ship/SKILL.md contains a verdict-flip block with:
+  #   1. is_high_density or verdict.flip/verdict_flip reference
+  #   2. WHITELIST with >=1 boolean predicate row (reason_* pattern)
+  #   3. No enum-string gates (verdict_mode: ask|skip|auto anti-pattern)
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  local skill_file="${skills_dir}/ship/SKILL.md"
+  [ -f "$skill_file" ] || { echo "ERROR [verdict-flip-whitelist]: ship/SKILL.md not found" >&2; return 1; }
+  local fail=0
+
+  # Check 1: verdict-flip/is_high_density present
+  if ! grep -qE 'verdict.flip|verdict_flip|is_high_density' "$skill_file" 2>/dev/null; then
+    echo "ERROR [verdict-flip-whitelist]: ship/SKILL.md missing verdict-flip block (no verdict-flip or is_high_density pattern)" >&2
+    fail=1
+  fi
+
+  # Check 2: WHITELIST with >=1 boolean predicate row
+  WHITELIST_ROWS=$({ awk '/^\*\*WHITELIST\*\*/,/^##/' "$skill_file" 2>/dev/null | { grep -E '^[[:space:]]*-[[:space:]]+.reason_[a-zA-Z0-9_]+' 2>/dev/null || true; } | wc -l | tr -d ' '; })
+  if [ "${WHITELIST_ROWS:-0}" -lt 1 ]; then
+    echo "ERROR [verdict-flip-whitelist]: ship/SKILL.md WHITELIST has 0 boolean predicate rows (need >= 1 reason_* row)" >&2
+    fail=1
+  fi
+
+  # Check 3: no enum-string gates
+  if grep -A50 'Verdict-flip transformation' "$skill_file" 2>/dev/null | grep -qE '(reason|verdict)[[:space:]]*[:=][[:space:]]*["'"'"']?(ask|skip|auto)'; then
+    echo "ERROR [verdict-flip-whitelist]: ship/SKILL.md verdict-flip block contains enum-string gate (Principle 4 violation)" >&2
+    fail=1
+  fi
+
   return "$fail"
 }
 
@@ -582,6 +615,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     cross-review-gate) check_cross_review_gate; exit $? ;;
     layer-a-table-parity) check_layer_a_table_parity; exit $? ;;
     structural-parity-dc) check_structural_parity_dc; exit $? ;;
+    verdict-flip-whitelist) check_verdict_flip_whitelist; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
