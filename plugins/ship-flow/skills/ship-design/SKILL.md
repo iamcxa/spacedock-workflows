@@ -223,11 +223,15 @@ Verdict: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**. Each verdict
 
 Read the incoming `### Hand-off to Design` block from the entity body (written by ship-shape Phase 8). Verify all `open_design_questions` are resolved via `captain_decisions` before emitting.
 
-Emit `### Hand-off to Plan`:
-- `design_constraints`: visual / token / interaction constraints plan MUST honor (source: captain_decisions)
-- `open_decisions`: any design decisions still pending captain input (ideally empty)
-- `artifact_paths`: paths to committed design artifacts (tokens.css, specimens, composite mockup)
-- `render_fidelity_targets`: specific render fidelity checks plan should encode as DCs — e.g., "var(--primary) used for CTA buttons (not #3b82f6)", "ViewSwitcher is interactive `<button>` not static `<div>`", "sidebar is full-height flex column not floating overlay"
+Emit `### Hand-off to Plan` (structured fields per `entity-body-schema.yaml → stages.design.hand_off_to_plan`):
+- `design_constraints[]` — each item: `{type: token-binding | layout | interaction, assertion, rationale_decision: D{N}, source_artifact}` — `type` enum mandatory; `rationale_decision: D{N}` MUST cross-reference a `**D{N}|Captain decision**` in Phase 8 Captain Decisions (validated by `validate-d-references.sh`).
+- `open_decisions[]` — any design decisions still pending captain input (ideally empty; non-empty → plan Step 1.6 BLOCKER).
+- `artifact_paths[]` — paths to committed design artifacts (`tokens.css`, specimens, composite mockup).
+- `render_fidelity_targets[]` — each item: `{selector, css_property, expected_value, rationale_decision: D{N}}` — feeds ship-verify Step 3.6 ui-verify YAML; `rationale_decision: D{N}` MUST cross-reference Phase 8.
+
+**Design-skipped path** (G14): when design stage is skipped (`!affects_ui` route from shape), the entity body MUST still contain `### Hand-off to Plan` with single field `design-skipped: true`. Emitted by ship-shape Phase 8 hand-off when `affects_ui: false`. Plan Step 1.6 reads this marker to bypass design-DC import explicitly (vs absence of the block, which is ambiguous).
+
+**Why D{N} backref enforced per item**: plan Step 1.6 imports each constraint as a DC and carries `rationale_decision: D{N}`; without source-side enforcement, design can emit constraints that have no captain-decision anchor, breaking audit trail. `validate-d-references.sh` (lib) catches missing/dangling D{N} refs at design Phase 9 emit-time.
 <!-- /section:hand_off_to_plan -->
 
 ---

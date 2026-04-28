@@ -61,7 +61,10 @@ Skip if no file:line citations (common for S-size).
 
 ### Step 1.6 — Import Design DCs from Hand-off (G10, 2026-04-29)
 
-**Trigger**: entity body contains `### Hand-off to Plan` block (written by ship-design Phase 9). Skip when block absent (design stage skipped per `!affects_ui` route) or block has explicit `design-skipped: true`.
+**Trigger** (G14, 2026-04-29 disambiguation): entity body MUST contain `### Hand-off to Plan` block. Two paths:
+- Block has `design-skipped: true` → design intentionally bypassed (shape Phase 8 stub for `affects_ui: false` route); log `## Plan Imported Design DCs: design-skipped (no UI surface)` and proceed.
+- Block has design-emitted fields (`design_constraints[]` / `render_fidelity_targets[]`) → run mechanical mapping below.
+- Block ABSENT entirely → **BLOCKER** (status: blocked, reason: `hand-off-to-plan absent — neither design-skipped stub nor design output found`). Either shape Phase 8 missed the stub emit OR design errored without writing hand-off. Do not silently treat as "no UI" — that's the ambiguity G14 fixes.
 
 **Read** via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> hand_off_to_plan` (handles folder + flat layouts).
 

@@ -184,7 +184,7 @@ SendMessage(to: "designer@pitch-XX",
 
 **Why this is separate from Step 3.5**: Step 3.5 dispatches designer teammate (LLM) to read source diff against design artifacts. LLM reading CSS/JSX source has weak intuition for **rendered computed style** — cascade specificity, Tailwind v4 `@theme` indirection, flex-shrink, margin-collapse all resolve at render time, not parse time. `var(--primary)` in source and hardcoded `#3b82f6` in source can both look correct to LLM yet produce different rendered values. Step 3.6 closes the LLM-vs-rendered gap by invoking the `ui-verify` skill (headless browser computed-style probe).
 
-**Trigger**: entity `affects_ui: true` AND `### Hand-off to Plan` contains `render_fidelity_targets[]` with ≥1 entry. (Imported via ship-plan Step 1.6; see ship-plan/SKILL.md.)
+**Trigger** (G14, 2026-04-29 disambiguation): entity `affects_ui: true` AND `### Hand-off to Plan` block lacks `design-skipped: true` AND contains `render_fidelity_targets[]` with ≥1 entry. (`design-skipped: true` short-circuits past Step 3.6; absence of hand-off block entirely is already BLOCKED at plan Step 1.6, so verify can assume the block is well-formed when it reaches here.)
 
 **Dispatch**:
 ```

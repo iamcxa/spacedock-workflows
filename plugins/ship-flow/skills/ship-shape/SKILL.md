@@ -337,6 +337,8 @@ Emit `### Hand-off to Design`:
 - `pm_framing_output`: reference to problem-framing-canvas or press-release artifact path if run in shape
 
 If `affects_ui: false` in entity frontmatter → omit `ui_surfaces` and `framework_detected`; set `open_design_questions: []`.
+
+**Design-skipped passthrough** (G14): when `affects_ui: false`, ALSO emit a stub `### Hand-off to Plan` block with `design-skipped: true` (single field). Rationale: plan Step 1.6 reads `### Hand-off to Plan` to decide whether to import design DCs. Absence of the block is ambiguous (design halted? design errored? affects_ui=false?). Explicit `design-skipped: true` lets plan distinguish "design intentionally bypassed" from "block missing — error". Validated by `check-invariants.sh --check plan-imported-design-dcs-emitted`.
 <!-- /section:hand_off_to_design -->
 
 ---
