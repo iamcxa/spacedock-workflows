@@ -1,0 +1,52 @@
+# stack-skill-map.yaml — Framework → Stack Skill Mapping
+# Entity: #106 pipeline-render-fidelity-hardening T2.2
+# Consumed by: ship-runtime-detect Step R6, stage SKILL Boot Self-Check
+#
+# Schema: each entry maps (framework + optional theme_indirection) → skills[]
+# Skills are loaded automatically when answers_density: high; proposed to FO when low/vacuum.
+
+schema_version: "1.0"
+
+mappings:
+  - framework: next.js
+    theme_indirection: tailwind-v4
+    skills:
+      - vercel:react-best-practices
+      - vercel:nextjs
+      - vercel:turbopack
+      - vercel:shadcn
+    notes: "Full Tailwind v4 + Next.js stack. shadcn included for design-token alignment."
+
+  - framework: next.js
+    theme_indirection: tailwind-v3
+    skills:
+      - vercel:react-best-practices
+      - vercel:nextjs
+      - vercel:turbopack
+    notes: "Next.js with plain Tailwind v3 (no @theme inline indirection)."
+
+  - framework: next.js
+    theme_indirection: none
+    skills:
+      - vercel:react-best-practices
+      - vercel:nextjs
+    notes: "Next.js without Tailwind."
+
+  - framework: refine
+    theme_indirection: tailwind-v4
+    skills:
+      - vercel:nextjs
+      - vercel:shadcn
+    notes: "Refine framework typically runs on Next.js; Tailwind v4 adds shadcn."
+
+  - framework: refine
+    theme_indirection: none
+    skills:
+      - vercel:nextjs
+    notes: "Refine framework without Tailwind."
+
+  - framework: unknown
+    theme_indirection: "*"
+    skills: []
+    escape_hatch: "SendMessage(FO) with framework_detected=unknown — FO confirms before proceeding"
+    notes: "Unknown framework triggers FO ask-fallback per T3.3."

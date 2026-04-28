@@ -11,6 +11,17 @@ You run VERIFY. Output: `docs/<wf>/<id>-<slug>/verify.md`. **You are NOT the aut
 
 **Three concerns, one stage**: Quality (mechanical gate on touched surfaces) + Review (classified findings from dispatched haiku reviewers) + UAT (done-criteria evidence review + spot-check).
 
+## Boot Self-Check
+
+Run before any verify work. Stop and SendMessage(FO) if any check fails.
+
+1. **Entity status**: read entity frontmatter `status:` — must be `execute`. If still `plan` → execute not done; if `verify` → verify already ran (check for re-entry / feedback round).
+2. **execute.md present**: `<entity-folder>/execute.md` exists and has `## Execute UAT` section. If absent → SendMessage(FO): "execute.md missing — cannot verify without execute evidence."
+3. **Hand-off to Verify present**: entity body contains `### Hand-off to Verify` block. If absent → SendMessage(FO): "Missing Hand-off to Verify — executer did not complete handoff."
+4. **Git state**: `git log --oneline -1` matches expected execute commits. If HEAD is older than execute stage → stale worktree, surface before proceeding.
+5. **Dev server** (if `affects_ui: true`): invoke `worktree-dev-server` check — port responsive before running UI-type DCs.
+6. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
+
 ## Layer A delegation (Principle 6 Rule B)
 
 `e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, and `e2e-pipeline:ui-verify` own agent-browser UI-DC verification (flow execution, walkthrough recording, computed-style regression). `pr-review-toolkit:code-reviewer` / `silent-failure-hunter` / `trailofbits:*` / `comment-analyzer` / `code-simplifier` / `pr-test-analyzer` / `type-design-analyzer` own haiku reviewer personas. **Do NOT re-teach.** Ship-verify wraps with Layer B augmentation:
@@ -248,6 +259,28 @@ If `## Design Reference` present → compare screenshots against reference image
 
 Record verdicts under `### UAT → visual:` subsection, including which primitive ran + report path + screenshot path + per-DC pass/fail.
 
+### Step 4.5 — Render Fidelity (T6.3, #106)
+
+**Mandatory for all UI-type entities** (`affects_ui: true`). Cannot be skipped unless entity has zero UI-type DCs AND captain-smoke not required.
+
+**Preflight gate** (BLOCKER if fails): Dev server MUST be live (`worktree-dev-server` check). If not live → escalate per Step 4.0. No escape.
+
+**Process**:
+1. Invoke `e2e-pipeline:ui-verify` against live worktree dev server for each UI-type DC. Capture `getComputedStyle` results for key selectors.
+2. If `## Design Output` present in entity body (design stage ran): compare rendered token values against `plugins/<app>/design/tokens.css` — must match. Flag any `D{N}|Captain decision` token that renders as hardcoded value (not CSS var reference).
+3. Emit `### Render Fidelity` subsection in `verify.md` with:
+   - `render_fidelity_status: pass|fail|not-applicable`
+   - Per-component table: `Component | Expected token | Rendered value | Match?`
+   - `## Design Output` alignment: list each D{N} decision and whether rendered output honors it
+   - Screenshot path(s) for primary affected route(s)
+
+**Failure criteria** (BLOCKING):
+- Any UI-type DC rendered output does not match design token (when `## Design Output` present)
+- Fake/stub interactive element (`<div onClick>` instead of `<button>`) detected in render
+- Sidebar layout structural mismatch vs design spec
+
+**Emit to entity body**: `render_fidelity_status` field feeds `### Hand-off to Review` block for cross-review audit trail.
+
 ---
 
 ## Step 5 — Auto-fix NITs inline (before verdict)
@@ -336,7 +369,7 @@ FO greps `^status:` for the machine-readable gate. `Verdict:` line is human-faci
 
 Dispatch cross-review to counterpart teammate (`planner` if `verifier` just wrote) after `verify.md` lands. Reviewer model fallback when no team: fresh **sonnet** default; upgrade to fresh **opus** when entity's `appetite: big-batch`.
 
-5-factor rubric adapted for verify:
+7-factor rubric adapted for verify (per INVARIANTS Principle 6 Rule C #106 T1.3 + T6.4):
 
 | Factor | Verify interpretation |
 |---|---|
@@ -345,8 +378,19 @@ Dispatch cross-review to counterpart teammate (`planner` if `verifier` just wrot
 | **Quality** | ≥1 critical assumption verified? pre-scan ran? |
 | **DC adequacy** | scoped-gate spot-checks critical DCs? |
 | **Canonical sync** | canonical docs consistent post-execute (architecture-impact blocks applied)? |
+| **Reverse-audit previous stage** | does verify's DC results expose a gap in execute's commit coverage? Specifically: does the `### Hand-off to Verify` `dc_status` list any FAIL that execute didn't surface? Is `render_fidelity_evidence` present for UI-type entities — and if missing, flag for `render_fidelity_status: fail`? |
+| **Render Fidelity + captain-ack audit trail** | (T6.4) `### Render Fidelity` present for UI entities with `render_fidelity_status: pass\|fail\|not-applicable`? Screenshot ≥1 per route? Stub-flag audit: every `## Plan Report → Stub Flags` entry has captain-ack in `### Hand-off to Review`? |
 
-Verdict: **PROCEED** → TaskUpdate verify=completed, FO advances. **VETO** → feedback-to-execute (max 2 rounds per stage; round 3 → PROMPT_CAPTAIN). **PROMPT_CAPTAIN** → halt, present `verify.md` + reviewer concern.
+**Reverse-audit prompt template** (T3.2 — paste verbatim into reviewer dispatch):
+```
+Reverse-audit: Read the entity's `### Hand-off to Verify` block.
+(a) List every `dc_status` entry marked FAIL or SKIP — did execute.md surface these explicitly? (BLOCKING if execute silently skipped a failing DC)
+(b) For UI-type entities: is `render_fidelity_evidence` present with ≥1 browser-verified artifact? (BLOCKING if absent — per FM#4 fidelity gap prevention)
+(c) Does `### Hand-off to Review` reflect the actual verify verdict honestly? (WARNING if verdict is softened relative to DC evidence)
+Coaching note: silent DC failures here propagate to main as undetected regressions — enforces FM#4 (fidelity gap) and Bad-news-early motto.
+```
+
+Verdict: **PROCEED** → TaskUpdate verify=completed, FO advances. **VETO** → feedback-to-execute (max 2 rounds per stage; round 3 → PROMPT_CAPTAIN). **PROMPT_CAPTAIN** → halt, present `verify.md` + reviewer concern. Each verdict MUST include a one-sentence coaching note per INVARIANTS Rule C ABC clause.
 
 **Circuit breaker**: if `SendMessage(planner)` is unresponsive (phantom team / timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus on `big-batch`. Do not block on an unresponsive reviewer.
 
@@ -385,6 +429,18 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - Explicit pathspec on every commit (MEMORY #14/#25/#37). No `-a`/`-A`.
 - Parallel-session diff: scope review to `files_modified` when `git log <execute_base>..HEAD --oneline | grep -v <this-slug>` non-empty.
 - Feedback-to-execute capped at 2 rounds per gate (quality / review-BLOCKING / UAT); round 3 → PROMPT_CAPTAIN. Infra-fail (missing binary / server down) auto-routes; assertion-fail requires specific evidence.
+
+<!-- section:hand_off_to_review -->
+## Step 6 (Hand-off): Emit Hand-off to Review + Read Incoming Hand-off
+
+**Read incoming**: at Step 1, read `### Hand-off to Verify` from entity body. Cross-check `dc_status` vs Verification Spec — any FAIL in execute-side DC → re-run that DC before trusting execute evidence.
+
+**Emit** `### Hand-off to Review` after verify.md is written:
+- `verify_verdict`: `passed` or `failed` (must be `passed` for review to proceed)
+- `blocking_issues`: list of any BLOCKING findings from verify; must be empty for review to proceed
+- `canonical_docs_touched`: confirm which canonical docs were updated in execute (INVARIANTS / README / schema); review cross-checks these
+- `render_fidelity_status`: result of `### Render Fidelity` subsection — `pass`, `not-applicable`, or `fail: <reason>`
+<!-- /section:hand_off_to_review -->
 
 ---
 

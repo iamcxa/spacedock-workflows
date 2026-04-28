@@ -290,6 +290,17 @@ stages:
         - { name: stage_cost, type: string, format: "$X.XX (description)", grepable: true }
         - { name: path, type: enum, values: [shape+sharp, sharp-only, escape-hatch] }
     uat: null  # sharp defines DC, doesn't verify
+    hand_off_to_design:
+      section: "### Hand-off to Design"
+      section_tag: hand-off-to-design
+      layer: decision
+      description: "Explicit hand-off from shape/sharp to design stage. Consumed by design stage Boot Self-Check."
+      fields:
+        - { name: ui_surfaces, type: list, description: "Visible UI surfaces requiring design attention" }
+        - { name: framework_detected, type: string, description: "Output from ship-runtime-detect Step R5 (framework + theme_indirection)" }
+        - { name: design_canonical_dir, type: string, description: "Path to design system canonical dir (e.g., plugins/<app>/design/)" }
+        - { name: open_design_questions, type: list, description: "Design decisions still unresolved — must be resolved in design stage" }
+        - { name: pm_framing_output, type: string, description: "Reference to problem-framing-canvas / press-release artifacts if run in shape stage" }
 
   # ===== PLAN =====
   # ===== DESIGN =====
@@ -338,6 +349,17 @@ stages:
         - { name: captain_decisions, type: number }
         - { name: reviewer_verdict, type: enum, values: [PROCEED, VETO, PROMPT_CAPTAIN] }
     uat: null  # design defines visual contract, does not verify
+    hand_off_to_plan:
+      section: "### Hand-off to Plan"
+      section_tag: hand-off-to-plan
+      layer: design
+      description: "Explicit hand-off from design to plan stage. Consumed by plan stage Boot Self-Check."
+      fields:
+        - { name: design_constraints, type: list, description: "Visual / token / interaction constraints plan MUST honor" }
+        - { name: open_decisions, type: list, description: "Design decisions still pending captain input" }
+        - { name: artifact_paths, type: list, description: "Design artifact paths (tokens.css, specimens, mockups)" }
+        - { name: render_fidelity_targets, type: list, description: "Specific render fidelity checks plan should encode as DCs (e.g., token alignment, no fake-button)" }
+        - { name: storyboard_frames, type: list, description: "6-frame user-flow narrative from Phase 1.5 storyboard skill — each frame has actor + action/state + expectation. Verifier uses frames as render-fidelity contract; any unsatisfied frame BLOCKS at review stage." }
 
   plan:
     reads:
@@ -407,6 +429,16 @@ stages:
         - { name: task_count, type: number }
         - { name: model_split, type: string, description: "N haiku, M sonnet" }
     uat: null  # plan defines procedures, doesn't verify
+    hand_off_to_execute:
+      section: "### Hand-off to Execute"
+      section_tag: hand-off-to-execute
+      layer: implementation
+      description: "Explicit hand-off from plan to execute stage. Consumed by execute stage Boot Self-Check."
+      fields:
+        - { name: wave_order, type: string, description: "Wave dispatch order (W0 → W1 → W2a/b/c → W3 → W4)" }
+        - { name: critical_assumptions, type: list, description: "Assumptions to re-verify at execute boot" }
+        - { name: architecture_context, type: string, description: "Canonical doc touches required (INVARIANTS, README, schema)" }
+        - { name: stub_flags, type: list, description: "Tasks flagged as v1-stub requiring captain-ack before cross-review PROCEED" }
 
   # ===== EXECUTE =====
   execute:
@@ -461,6 +493,16 @@ stages:
         - name: results
           type: table
           columns: ["DC", "Type", "Assertion", "Verify Procedure", "Result", "Evidence"]
+    hand_off_to_verify:
+      section: "### Hand-off to Verify"
+      section_tag: hand-off-to-verify
+      layer: implementation
+      description: "Explicit hand-off from execute to verify stage. Consumed by verify stage Boot Self-Check."
+      fields:
+        - { name: commit_list, type: list, description: "All commits landed (SHA + task ID + summary)" }
+        - { name: dc_status, type: list, description: "Execute-side DC results (PASS/FAIL per DC)" }
+        - { name: deviations, type: list, description: "Any plan deviations with rationale" }
+        - { name: render_fidelity_evidence, type: string, description: "Dev server URL or screenshot path for UI-type entities" }
 
   # ===== VERIFY =====
   # 2026-04-19 D1 measurement consolidation: 3 sections (Output, Report, UAT) merged into one ## Verify
@@ -544,12 +586,35 @@ stages:
             - { name: started_at, type: string, format: "ISO 8601" }
             - { name: completed_at, type: string, format: "ISO 8601" }
             - { name: duration_minutes, type: number }
+        render_fidelity:
+          section: "### Render Fidelity"
+          section_tag: render-fidelity
+          layer: implementation
+          description: "Step 4.5 output (T6.3, #106) — mandatory for UI-type entities. Compares live rendered output vs design canonical tokens."
+          fields:
+            - { name: render_fidelity_status, type: enum, values: [pass, fail, not-applicable], grepable: true }
+            - name: component_table
+              type: table
+              columns: ["Component", "Expected token", "Rendered value", "Match?"]
+            - { name: design_decisions_honored, type: list, format: "D{N}: {decision} → {rendered-outcome} (pass|fail)" }
+            - { name: screenshot_paths, type: list, description: "≥1 screenshot for primary affected route" }
+            - { name: fake_button_detected, type: boolean, description: "True if <div onClick> detected instead of <button>" }
     legacy_sections:
       description: "Pre-2026-04-19 layout used 3 separate H2 sections. Readers (ship-review, ship-execute pr-feedback mode) accept both layouts."
       sections:
         - "## Verify Output (legacy → ## Verify with ### Quality Gate, ### Review Findings, ### Knowledge Captures)"
         - "## Verify Report (legacy → ## Verify → ### Verdict)"
         - "## Verify UAT (legacy → ## Verify → ### UAT)"
+    hand_off_to_review:
+      section: "### Hand-off to Review"
+      section_tag: hand-off-to-review
+      layer: implementation
+      description: "Explicit hand-off from verify to review stage. Consumed by review stage Boot Self-Check."
+      fields:
+        - { name: verify_verdict, type: string, description: "passed | failed — authoritative verify outcome" }
+        - { name: blocking_issues, type: list, description: "Any BLOCKING findings from verify; must be empty for PROCEED" }
+        - { name: canonical_docs_touched, type: list, description: "INVARIANTS / README / schema changes confirmed in execute" }
+        - { name: render_fidelity_status, type: string, description: "Result of ## Render Fidelity subsection (pass | not-applicable)" }
 
   # ===== SHIP =====
   ship:
@@ -642,6 +707,16 @@ stages:
         - "## Ship Output (legacy → ## Ship with same subsections)"
         - "## Ship Report (legacy → ## Ship → ### Verdict)"
     uat: null  # ship doesn't verify — verify already passed
+    hand_off_to_ship:
+      section: "### Hand-off to Ship"
+      section_tag: hand-off-to-ship
+      layer: implementation
+      description: "Explicit hand-off from review to ship stage. Consumed by ship stage Boot Self-Check."
+      fields:
+        - { name: pr_url, type: string, description: "PR URL ready for merge" }
+        - { name: review_verdict, type: string, description: "PROCEED verdict from review cross-review gate" }
+        - { name: captain_ack_stubs, type: list, description: "Stub flags cleared or pre-acked by captain" }
+        - { name: roadmap_row_ready, type: boolean, description: "ROADMAP.md Now → Shipped row prepared" }
 
   # ===== REVIEW =====
   review:

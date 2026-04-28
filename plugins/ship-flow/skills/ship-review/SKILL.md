@@ -11,6 +11,17 @@ You run REVIEW. Output: `<entity-folder>/review.md`. Dispatched by `/ship` to `p
 
 **Pipeline position**: reads `verify.md` (must have PASS verdict) → dispatches 4-doc canonical patches to `planner` → drafts PR body → produces `review.md` → cross-review gate → advance to ship-final.
 
+## Boot Self-Check
+
+Run before any review work. Stop and SendMessage(FO) if any check fails.
+
+1. **Entity status**: read entity frontmatter `status:` — must be `verify`. If `execute` → verify not done; if `review` → review already ran (check for re-entry).
+2. **verify.md PASS**: `<entity-folder>/verify.md` exists AND `## Verify Report` verdict = PASS. If FAIL or missing → SendMessage(FO): "verify.md has FAIL verdict — review cannot proceed."
+3. **Hand-off to Review present**: entity body contains `### Hand-off to Review` block. If absent → SendMessage(FO): "Missing Hand-off to Review — verifier did not complete handoff."
+4. **Canonical docs readable**: `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md` all exist at repo root. If any missing → note in review.md skip-rationale (non-blocking for docs that don't apply).
+5. **Planner teammate**: verify `planner` teammate is reachable (SendMessage test). If unresponsive → use Rule A Fallback for canonical docs dispatch.
+6. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
+
 ## Entity body contract (schema-as-prose)
 
 - Reads: `verify.md` verdict (PASS required), `execute.md` execution log, `spec.md` problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`.
@@ -169,7 +180,7 @@ Dispatch cross-review to `executer` teammate (reviews PR body + canonical-docs d
 
 **Layer A expansion per sizing rule** (see Layer A delegation section above): `appetite: big-batch` → ALWAYS invoke `Skill: pr-review-toolkit:review-pr` for multi-persona PR body review. `appetite: medium-batch` → invoke only if entity frontmatter `pr-review-opt-in: true`. `appetite: small-batch` → skip.
 
-5-factor rubric adapted for review stage:
+7-factor rubric adapted for review stage (per INVARIANTS Principle 6 Rule C #106 T1.3 + T6.4):
 
 1. **Feasibility** — PR size reasonable; branch ready for captain smoke?
 2. **Executable scope** — review scope matches actual diff (no omitted file / no scope creep)?
@@ -180,8 +191,19 @@ Dispatch cross-review to `executer` teammate (reviews PR body + canonical-docs d
    - **PRODUCT.md**: constraints / user stories align with spec.md intent?
    - **README.md**: `entry_critical` readme-impact blocks carefully applied (prose-varying needs closer audit)? Install / usage prose reads naturally?
    - **ROADMAP.md**: status flip matches pitch actual verdict? Shipped row carries correct date + PR placeholder?
+6. **Reverse-audit previous stage** — does review's canonical-sync check expose a gap in verify's render-fidelity assessment? Specifically: is `render_fidelity_status` from `### Hand-off to Review` consistent with what the PR diff shows? If `affects_ui: true` and `render_fidelity_status: not-applicable`, flag for captain review.
+7. **Render Fidelity + captain-ack audit trail** (T6.4, #106) — does the React rendered output match design canonical (token alignment, no fake-button, sidebar layout)? AND are all stub flags captain-acked with timestamp + decision in `## Review Report → Captain-Ack Audit`? Specifically: (a) `render_fidelity_status: fail` → VETO; (b) any `## Plan Report → Stub Flags` entry without matching captain-ack record → BLOCKING; (c) every stub flag entry must have `pre-acked-stubs: true` in frontmatter OR explicit captain rationale timestamp in Review Report.
 
-Verdict: **PROCEED** / **VETO** (loop to fix sections) / **PROMPT_CAPTAIN**.
+**Reverse-audit prompt template** (T3.2 — paste verbatim into reviewer dispatch):
+```
+Reverse-audit: Read the entity's `### Hand-off to Review` block.
+(a) Is `render_fidelity_status` consistent with the PR diff? Read `git diff <base>..HEAD -- "*.tsx" "*.css"` — any visual changes present but render_fidelity_status = "not-applicable"? (PROMPT_CAPTAIN if mismatch)
+(b) Does verify.md `## Execute UAT` cover all DC types listed in plan.md `## Verification Spec`? (WARNING if gap)
+(c) Are all 4 canonical docs (ARCHITECTURE / PRODUCT / README / ROADMAP) either patched with a SHA or explicitly skipped with rationale? (BLOCKING if any doc silently omitted)
+Coaching note: render_fidelity gap here is the last catch before captain merge — enforces FM#4 and ensures ABC coaching chain is complete end-to-end.
+```
+
+Verdict: **PROCEED** / **VETO** (loop to fix sections) / **PROMPT_CAPTAIN**. Each verdict MUST include a one-sentence coaching note per INVARIANTS Rule C ABC clause.
 
 **Circuit breaker**: if `SendMessage(executer)` is unresponsive (phantom team / timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus on `big-batch`. Do not block on an unresponsive reviewer.
 
@@ -235,6 +257,18 @@ On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.m
 - Impact block schema violation (missing target_section / malformed before-after) → HALT; fix in shape stage.
 - Token overrun (actual > budget × 2): note in Review Report, do not block.
 - Total stage >15 min elapsed → write `review.md` partial + `⚠️ INCOMPLETE` markers + Review Report status=partial. Never exit without emitting review.md.
+
+<!-- section:hand_off_to_ship -->
+## Final Step (Hand-off): Emit Hand-off to Ship + Read Incoming Hand-off
+
+**Read incoming**: at Step 1, read `### Hand-off to Review` from entity body. Verify `verify_verdict: passed` before proceeding. Check `canonical_docs_touched` — confirm all planned canonical doc patches landed in execute commits.
+
+**Emit** `### Hand-off to Ship` after review.md is written:
+- `pr_url`: PR URL ready for merge
+- `review_verdict`: `PROCEED` verdict from cross-review gate (required for ship to proceed)
+- `captain_ack_stubs`: stub flags cleared or pre-acked by captain (from Plan Report stub_flags — must be resolved)
+- `roadmap_row_ready`: `true` if ROADMAP.md Now → Shipped row is prepared; `false` + reason if not
+<!-- /section:hand_off_to_ship -->
 
 ---
 

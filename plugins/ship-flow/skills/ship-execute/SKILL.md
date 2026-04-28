@@ -11,6 +11,17 @@ You run EXECUTE. Output: `<entity-folder>/execute.md`. Dispatched by `/ship` to 
 
 **Pipeline position**: reads `plan.md` → wave-by-wave dispatch + review → commits → produces `execute.md` → cross-review gate → advance to verify.
 
+## Boot Self-Check
+
+Run before any execute work. Stop and SendMessage(FO) if any check fails.
+
+1. **Entity status**: read entity frontmatter `status:` — must be `plan`. If `sharp` → plan not done; if `execute` → re-entry (check for `pr_feedback_round` Mode B signal).
+2. **plan.md present**: `<entity-folder>/plan.md` exists and has `## Plan` section with tasks. If absent → SendMessage(FO): "plan.md missing for `<entity>` — cannot execute without task list."
+3. **Hand-off to Execute present**: entity body contains `### Hand-off to Execute` block. If absent → SendMessage(FO): "Missing Hand-off to Execute — planner did not complete handoff."
+4. **Branch check**: confirm current branch matches entity worktree (if worktree pattern). Abort if on main without `--inline-on-main` flag.
+5. **Clean working tree**: `git status --porcelain` returns empty. If dirty → surface to FO before first wave dispatch.
+6. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
+
 ## Entity body contract (schema-as-prose)
 
 - Reads: `plan.md` (`## Plan`, `## Verification Spec`), sharp `## Done Criteria`, `## PR Review Feedback` (if Mode B).
@@ -188,15 +199,26 @@ Log to `## Knowledge Captures`:
 
 Dispatch cross-review to `verifier` teammate (pipeline path) or fresh sonnet (no team). Upgrade to fresh **opus** when `appetite: big-batch`.
 
-5-factor rubric adapted for execute stage:
+6-factor rubric adapted for execute stage (per INVARIANTS Principle 6 Rule C #106 T1.3):
 
 1. **Feasibility** — wave plan executed cleanly (no terminal BLOCKs / no forced `--no-verify`)?
 2. **Executable scope** — commits match tasks 1:1? one-commit-per-task preserved?
 3. **Quality** — atomic commits used explicit pathspec (no `-A` / `-am`)? T1+T2 passed per task?
 4. **DC adequacy** — AC verification ran all procedures; failures noted honestly?
 5. **Canonical sync** — architecture-impact blocks updated post-execute if ARCHITECTURE.md moved?
+6. **Reverse-audit previous stage** — does execute evidence expose a gap in the plan's wave ordering or stub-flag coverage? Specifically: were any `stub_flags` from `### Hand-off to Execute` captain-acked before proceeding? Did any task deviate from plan — and is the deviation captured in `### Hand-off to Verify`?
+7. **Render Fidelity + captain-ack audit trail** (T6.4, #106) — for UI entities: does execute commit introduce any hardcoded hex values instead of CSS custom properties? AND are all stub tasks from plan executed with captain-ack recorded in `### Hand-off to Verify → stub_ack_log`?
 
-Verdict: **PROCEED** / **VETO** (loop to fix) / **PROMPT_CAPTAIN**.
+**Reverse-audit prompt template** (T3.2 — paste verbatim into reviewer dispatch):
+```
+Reverse-audit: Read the entity's `### Hand-off to Execute` block.
+(a) List every `stub_flags` entry — was each captain-acked before wave execution? (BLOCKING if any un-acked stub executed)
+(b) Compare plan task list vs Execution Log — any task added, removed, or scope-expanded? (WARNING if yes; BLOCKING if scope-expanded without capture in Hand-off to Verify)
+(c) Does `### Hand-off to Verify` capture all deviations from plan? (BLOCKING if deviation present but not documented)
+Coaching note: undocumented plan deviations here cause verifier to check wrong behavior — enforces MEMORY #14 attribution discipline.
+```
+
+Verdict: **PROCEED** / **VETO** (loop to fix) / **PROMPT_CAPTAIN**. Each verdict MUST include a one-sentence coaching note per INVARIANTS Rule C ABC clause.
 
 **Circuit breaker**: if `SendMessage(verifier)` is unresponsive (phantom team / timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus on `big-batch`. Do not block on an unresponsive reviewer.
 
@@ -270,6 +292,18 @@ git commit -m "done + archive: #<NNN> <slug> (verdict=PASSED, inline-on-main)" -
 - BLOCKED ladder: 3 tiers → terminal failure + auto-issue entity.
 - PR-feedback: `pr_feedback_round > 3` → escalate captain.
 - Total stage >30 min elapsed → write `execute.md` with partial content + `⚠️ INCOMPLETE` markers + Execute Report status=partial. Never exit without emitting execute.md.
+
+<!-- section:hand_off_to_verify -->
+## Final Step (Hand-off): Emit Hand-off to Verify + Read Incoming Hand-off
+
+**Read incoming**: at Step 1, read `### Hand-off to Execute` from entity body. Re-verify `critical_assumptions` before wave dispatch. Check `stub_flags` — confirm captain-ack present before proceeding.
+
+**Emit** `### Hand-off to Verify` after execute.md is written:
+- `commit_list`: all commits landed (SHA + task ID + 1-line summary)
+- `dc_status`: execute-side DC results per DC (PASS/FAIL with evidence command + output)
+- `deviations`: any plan deviations with rationale (e.g., "T1.3 split into 2 commits because FM#4 amendment required separate pathspec")
+- `render_fidelity_evidence`: for UI-type entities, dev server URL or screenshot path proving rendered output matches design canonical; "N/A" for non-UI entities
+<!-- /section:hand_off_to_verify -->
 
 ---
 

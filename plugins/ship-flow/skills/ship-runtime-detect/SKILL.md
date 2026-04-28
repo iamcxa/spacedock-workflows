@@ -152,3 +152,88 @@ When `detected_stacks` is empty after Step R1:
 
    Please confirm or provide correct commands via docs/{workflow}/README.md frontmatter under `commands:`.
    ```
+
+### Step R5: Detect Framework + Theme Indirection (UI entities)
+
+Run when entity has `affects_ui: true` OR the codebase contains frontend files (*.tsx, *.css). Produces `framework_detected`, `theme_indirection`, and `design_canonical_dir` consumed by ship-shape Phase 8, ship-plan Step 3, and ship-verify Step 4.5.
+
+```bash
+framework_detected=""
+theme_indirection=""
+design_canonical_dir=""
+
+# Next.js probe
+ls next.config.ts next.config.js next.config.mjs 2>/dev/null | head -1 | grep -q . && framework_detected="next.js"
+
+# Refine probe
+grep -qE '"@refinedev' package.json 2>/dev/null && framework_detected="refine"
+
+# Tailwind v4 indirection probe
+if find . -name "*.css" -not -path "*/node_modules/*" | head -5 | xargs grep -l "@theme inline" 2>/dev/null | grep -q .; then
+  theme_indirection="tailwind-v4"
+  # Locate design canonical dir (convention: plugins/<app>/design/ or src/design/)
+  design_canonical_dir=$(find . -path "*/design/*.css" -not -path "*/node_modules/*" 2>/dev/null | head -1 | sed 's|/[^/]*$||' || echo "")
+fi
+
+# Fallback: plain Tailwind v3 (tailwind.config.ts without @theme inline)
+if [ -z "$theme_indirection" ] && ls tailwind.config.ts tailwind.config.js 2>/dev/null | head -1 | grep -q .; then
+  theme_indirection="tailwind-v3"
+fi
+
+echo "framework_detected: ${framework_detected:-unknown}"
+echo "theme_indirection: ${theme_indirection:-none}"
+echo "design_canonical_dir: ${design_canonical_dir:-unknown}"
+```
+
+**Produces** (additional variables for UI entities):
+
+| Variable | Shape | Description |
+|----------|-------|-------------|
+| `framework_detected` | string | `next.js`, `refine`, `unknown` |
+| `theme_indirection` | string | `tailwind-v4`, `tailwind-v3`, `none` |
+| `design_canonical_dir` | string | Path to design system canonical CSS dir |
+
+### Step R6: Framework → Stack Skill Mapping
+
+Map `framework_detected` + `theme_indirection` to auto-loaded skills. Source: `plugins/ship-flow/references/stack-skill-map.yaml`.
+
+```bash
+# Load mapping from stack-skill-map.yaml
+SKILL_MAP="${WORKFLOW_DIR:-docs/ship-flow}/../../../plugins/ship-flow/references/stack-skill-map.yaml"
+[ -f "$SKILL_MAP" ] || SKILL_MAP="plugins/ship-flow/references/stack-skill-map.yaml"
+
+# Resolve skills for detected framework
+if [ "$framework_detected" = "next.js" ]; then
+  auto_skills="vercel:react-best-practices,vercel:nextjs,vercel:turbopack"
+  [ "$theme_indirection" = "tailwind-v4" ] && auto_skills="${auto_skills},vercel:shadcn"
+elif [ "$framework_detected" = "refine" ]; then
+  auto_skills="vercel:nextjs"
+else
+  auto_skills=""
+fi
+
+echo "auto_skills: ${auto_skills:-none}"
+```
+
+**Density gate** (Boot Self-Check integration, #106 T3.4):
+
+```bash
+# Read entity density from frontmatter
+density=$(grep -m1 "^answers_density:" "$ENTITY_INDEX" 2>/dev/null | awk '{print $2}' || echo "vacuum")
+
+if [ "$density" = "high" ]; then
+  # Auto-load auto_skills; skip FO ask
+  echo "density=high: auto-loading skills: ${auto_skills:-none}"
+  # Stage agent proceeds with auto_skills loaded
+else
+  # low or vacuum: mandatory FO ask before proceeding
+  echo "density=${density}: SendMessage(FO) required before loading skills"
+  # SendMessage(FO) with structured prompt:
+  # "framework_detected=${framework_detected}, theme_indirection=${theme_indirection}"
+  # "proposed auto_skills: ${auto_skills:-none}"
+  # "Confirm auto-load or provide override"
+fi
+```
+
+- `answers_density: high` → auto-load `auto_skills`; skip FO ask
+- `answers_density: low|vacuum` → SendMessage(FO) with framework + skill proposal; wait for confirmation before any skill invocation

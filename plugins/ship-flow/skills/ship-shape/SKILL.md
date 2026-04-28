@@ -14,6 +14,16 @@ You run SHAPE. Output: `docs/<wf>/<id>-<slug>/spec.md`. Captain has ONE gate per
 - **Appetite** — time budget (`small-batch` 2-3d / `medium-batch` 1-2w / `big-batch` 6w). Scope fits budget; budget does not flex.
 - **Rabbit hole** — follow-up captured to `docs/<wf>/todos/`. **Rejected alternative** — claim considered-then-rejected with reason (populates from brainstorming Q-loop or scope-cut during decompose). **Shaped child** — vertical E2E slice (`pattern: shaped-child`). **DAG** — mermaid child-dependency diagram; feeds FO Pitch Orchestration.
 
+## Boot Self-Check
+
+Run before any shape work. Stop and SendMessage(FO) if any check fails.
+
+1. **Entity intake**: directive is non-empty. If empty → SendMessage(FO): "Empty directive — provide problem statement or todo-tid."
+2. **Mode routing**: apply escape hatch rules and Mode C/B/A routing before proceeding to shape flow.
+3. **WORKFLOW_DIR**: verify `$WORKFLOW_DIR` resolves to a readable `docs/ship-flow/` (or equivalent). If unset → SendMessage(FO): "WORKFLOW_DIR unset — cannot locate entity folder."
+4. **Team spawn**: confirm `planner` and `executer` teammate slots available for this pitch. If TeamCreate fails → note fallback per Principle 6 Rule A Fallback.
+5. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
+
 ## When to use
 
 `/shape "<free text>"` — Mode A (default). `/shape --discuss "<text>"` — Mode B Q-loop. `/shape <todo-tid>` — promote captured todo. `/shape <entity-id>` — shape existing draft.
@@ -126,6 +136,16 @@ bash plugins/ship-flow/lib/density-classify.sh --entity=<path-to-index.md>
 
 Output: `high | medium | low | vacuum`. Include as `answers_density` in the proposal JSON pitch block (see schema below). FO uses this to auto-proceed without captain gate when `high`. Skip when entity index does not yet exist (first-time shape of a directive).
 
+### PM-Skill Framing (Mode A Layer A — before Compose)
+
+Before composing the proposal, invoke PM skills for structured problem framing when directive is non-trivial (>80 chars AND not a fix/bugfix/hotfix):
+
+1. **Problem framing**: `Skill: problem-framing-canvas` — maps the problem space (who, what, why now, evidence). Output feeds `Problem:` block in proposal.
+2. **Scope decomposition guidance**: `Skill: opportunity-solution-tree` — identifies solution space branches; feeds `Children:` vertical-slice selection and `Rejected alternatives:`.
+3. **Acceptance outcome framing**: `Skill: press-release` — user-observable outcome written from captain's perspective; feeds `Acceptance Outcome:` block.
+
+Skip PM-skill invocation when: directive <80 chars, fix/rename/bump/hotfix pattern, or `--fast` flag. In skip case, author Problem/Acceptance Outcome inline.
+
 ### Compose + present proposal
 
 **Fat-marker-sketch rule**: Children are titles, not specs. Stated assumptions are claims + confidence + criticality + `verified_by`, not verification RESULTS. DCs, tool choices, file paths, greppable queries, npm-dep choices, LOC estimates all belong to PLAN. If a child description exceeds one line of vertical-slice intent, or if an assumption reproduces verification output, delete detail and keep the claim. Acceptance outcome MUST be user-observable (what captain receives) — NOT artifact list / infrastructure description / "support for X". One captain-readable claim per pitch.
@@ -169,7 +189,7 @@ Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 
 ### Cross-review gate (before captain gate) — Principle 6 Rule C
 
-Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 5-factor rubric (**feasibility** appetite-fit within budget / **executable scope** true E2E vertical / **quality** rejected alternatives ≥1 + critical assumption ≥1 + appetite-fit check ran / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to scope-decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
+Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 6-factor rubric (per INVARIANTS Principle 6 Rule C #106 T1.3): **feasibility** appetite-fit within budget / **executable scope** true E2E vertical / **quality** rejected alternatives ≥1 + critical assumption ≥1 + appetite-fit check ran / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected / **Reverse-audit previous stage** (no prior stage at shape — ask: does the spec expose any design constraint the prior debrief flagged as a gap?), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to scope-decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
 
 **Proposal budget**: the proposal text passed to the cross-reviewer MUST be ≤400 words. Longer = detail creep; trim BEFORE dispatching cross-review, not after.
 
@@ -275,6 +295,24 @@ Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acc
 
 ---
 
+<!-- section:hand_off_to_design -->
+## Phase 8: Emit Hand-off to Design
+
+After captain confirms the spec, write the `### Hand-off to Design` block in the entity body. This is the explicit hand-off consumed by the design stage Boot Self-Check.
+
+Read the incoming hand-off from the prior stage (none for shape — this is stage 1).
+
+Emit `### Hand-off to Design`:
+- `ui_surfaces`: list visible UI surfaces inferred from spec (tabs, sidebars, buttons, forms)
+- `framework_detected`: run `Skill: ship-flow:ship-runtime-detect` Step R5 → record `framework=X theme_indirection=Y design_canonical_dir=Z`
+- `open_design_questions`: unresolved design decisions from spec Scope In (e.g., color tokens, layout choice)
+- `pm_framing_output`: reference to problem-framing-canvas or press-release artifact path if run in shape
+
+If `affects_ui: false` in entity frontmatter → omit `ui_surfaces` and `framework_detected`; set `open_design_questions: []`.
+<!-- /section:hand_off_to_design -->
+
+---
+
 ## References
 
 - Entity schema: `plugins/ship-flow/references/entity-body-schema.yaml`.
@@ -283,4 +321,5 @@ Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acc
 - Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
 - Layer A: `superpowers:brainstorming` (Mode B), `superpowers:writing-skills` (Mode C).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
+- Hand-off schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.sharp.hand_off_to_design`.
 - MEMORY: #5, #14, #25, #30, #35 (amended by Principle 6 Rule A), #37, opus-4.7-naturally-does (2026-04-23 harness diet).

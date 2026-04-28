@@ -85,6 +85,8 @@ The pre-2026-04-23 "temp cap = 10" rule is superseded: `check-invariants.sh --ch
 
 **Captain-Gate Checklist (Tier B fallback)** — see below.
 
+**Stub-ack boolean extension** (#106 T6.2): `pre-acked-stubs: true|false` in entity frontmatter is a Principle 4 boolean gate — not an enum. If `pre-acked-stubs: true`, ship-plan Step 4 dim 10 auto-clears all stub flags found in task bodies. If `pre-acked-stubs: false` (default), each stub task requires an explicit Stub Flag entry in `## Plan Report` with captain rationale before cross-review PROCEED. This is deterministically computable from frontmatter — no prose judgment call required.
+
 **Source**: `memory/ship-flow-harness-diagnosis.md:18,51` (captain "execute → verify 應該不用問我才對" complaint 2026-04-18; treated as boolean-vs-enum contract gap).
 
 ---
@@ -107,6 +109,8 @@ The pre-2026-04-23 "temp cap = 10" rule is superseded: `check-invariants.sh --ch
 **Size cap**: **none** (script-mediated access decouples cost from length). Entities may grow as long as section tags keep them surgically accessible. Observed healthy ceiling: ~1,400 lines (049 at 1,401 shipped cleanly; war-room-visual-polish at 1,266 predates script infra and is the historical trigger for the now-retired cap).
 
 **Source**: `memory/ship-flow-harness-diagnosis.md:20,49` (original) + captain in-session reformulation (2026-04-21). Evidence: #049 entity-section-tagging (shipped 1,401 LOC, no operational pain) + #053 write-section-helper + #059 flow-map-schema-v1.
+
+**5d · Indirection-sweep mandatory** (#106 T6.1): When `ship-runtime-detect Step R5` produces `theme_indirection: tailwind-v4` (or any non-empty value), `ship-plan` MUST auto-emit a Wave 0 task: `T0.X: Audit @theme inline indirection layer — verify design tokens align with CSS custom properties, no hardcoded hex values in component files`. Plan cross-review BLOCKS if `theme_indirection != ""` and this task is absent. Rationale: Tailwind v4 `@theme inline` indirection silently breaks token alignment when components use hardcoded values — plan-time sweep is the earliest catch. Tier A enforcement: `check-invariants.sh --check indirection-sweep-emitted` (fixture-based).
 
 ---
 
@@ -142,6 +146,23 @@ Stage skills MUST codify a fallback path for teammate-unavailable OR subagent-st
 
 **Failure to codify fallback** → Tier B (design-review gate) violation. Stage SKILLs MUST contain at least one of the tokens `fresh subagent`, `fresh Agent`, `team unavailable`, `phantom`, `fallback`, OR an explicit comment `<!-- no TeamCreate — pure inline orchestration -->` annotation.
 
+**FO Ask-Fallback (missing context escalation)** (#106 T3.3):
+
+When a stage agent's Boot Self-Check detects missing context that it cannot resolve autonomously (unset `$WORKFLOW_DIR`, unknown framework detected, missing canonical dir, missing Hand-off block), it MUST escalate via `SendMessage(FO)` with a structured prompt — NOT guess or silently proceed.
+
+Standard ask-fallback prompt structure:
+```
+SendMessage(to: "FO", body: """
+Boot Self-Check blocked on: <stage-skill> for entity <entity-id>
+Missing context: <what is missing>
+Expected: <what the stage needs to proceed>
+Action needed: <what FO should provide or confirm>
+Fallback if FO unreachable: <safe default or halt>
+""")
+```
+
+Enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check ask-fallback-coverage` greps each stage SKILL for `SendMessage.*FO|SendMessage\(FO\)` — FAIL if any stage SKILL lacks this pattern. Tier A.
+
 **Rule B (3-Layer Skill Architecture)**:
 Stage skills SHOULD delegate to Layer A superpowers atomic skill for core logic.
 
@@ -155,7 +176,10 @@ Stage skills composed via 3 layers:
 Stage skills SHOULD augment with Layer B when superpowers atomic skill has scope gap (research depth, self-review). Stage skills MUST integrate via Layer C for canonical state.
 
 **Rule C (Cross-Review Gate)**:
-Each stage transition has a cross-review gate. Primary author's teammate counterpart reviews output with structured prompt (feasibility / executable / quality / DC adequacy / canonical sync). FO decides final gate: veto / proceed / prompt captain.
+Each stage transition has a cross-review gate. Primary author's teammate counterpart reviews output with structured prompt covering 7 factors: (1) feasibility, (2) executable, (3) quality, (4) DC adequacy, (5) canonical sync, (6) coaching hygiene (ABC clause), (7) render fidelity / captain-ack audit trail (UI entities). FO decides final gate: veto / proceed / prompt captain.
+
+**Rule C — Always Be Coaching (ABC) clause** (#106 T4.2):
+Every cross-review finding, VETO, or PROMPT_CAPTAIN verdict MUST include a one-sentence coaching note naming: (a) which Principle / Failure Mode / INVARIANT the finding enforces, and (b) what past failure or future harm the rule prevents. This is not optional verbosity — it is the mechanism by which the captain builds model across sessions. Enforcement: ship-verify Step 4.6 spot-check audit includes "did the cross-review gate include coaching notes?" as a boolean DC. Finding severity NIT may omit coaching note (mechanical fix, no model-building value).
 
 
 **Verdict-flip whitelist (density-aware autonomy, pitch 101)**:
@@ -177,15 +201,21 @@ When a cross-review emits PROMPT_CAPTAIN on a high-density entity, FO MAY flip t
 | Stage skill | Layer A delegate | Scope | Exception? |
 |---|---|---|---|
 | ship-shape (Mode A) | — | autonomous proposer owns flow | Yes — documented in SKILL.md (brainstorming's HARD-GATE Q-loop conflicts with autonomous contract) |
+| ship-shape (Mode A — PM framing) | `problem-framing-canvas` | problem space mapping (who, what, why now, evidence) → feeds Problem: block | No — PM framing is Layer A delegation within Mode A compose phase (#106 T4.1) |
+| ship-shape (Mode A — scope guidance) | `opportunity-solution-tree` | solution branch decomposition → feeds Children: + Rejected alternatives: | No — OST delegation within Mode A compose phase (#106 T4.1) |
+| ship-shape (Mode A — acceptance framing) | `press-release` | user-observable outcome from captain's perspective → feeds Acceptance Outcome: | No — press-release delegation within Mode A compose phase (#106 T4.1) |
 | ship-shape (Mode B) | `superpowers:brainstorming` | HARD-GATE Q-loop for ambiguous intake | No — clean delegation, Shape Up framing wraps brainstorm output |
 | ship-shape (Mode C) | `superpowers:writing-skills` | skill design + claude 4.7 knowledge + RED/GREEN/REFACTOR | No — Shape Up framing wraps skill design |
+| ship-design (Phase 1.5) | `storyboard` | 6-frame user-flow narrative — frames feed Phase 2 contradiction-detect + Phase 8 hand-off-to-plan `storyboard_frames`; verifier uses as render-fidelity contract (#106 post-merge polish) | No — Layer B wraps with 6-frame structure validation; fallback inline 6-bullet list if plugin absent |
+| ship-design (Phase 3) | `design-flow` | contradiction-resolution Q-loop + design distillation (#106 T5.2) | No — Layer B wraps with 5-category classifier + per-app design-system.md; fallback `superpowers:brainstorming` if plugin absent |
+| ship-design (Phase 9 adversarial) | `design-review` | independent visual review (designer/verifier separation invariant per DC-5.4) | No — same fallback as Phase 3 when plugin absent |
 | ship | — | pure orchestration (5-stage dispatch) | N/A — no logic to delegate |
 | ship-plan | `superpowers:writing-plans` | TDD order, wave safety, placeholder-free prose, task atomicity | No — Layer B wraps with scope anchoring + runtime detection + plan-checker |
 | ship-execute | `superpowers:subagent-driven-development` | task = subagent, status protocol, review loop | No — Layer B wraps with wave graph + escalation ladder + pathspec-lock + Mode B re-entry |
 | ship-verify | `worktree-dev-server` (project skill) + `e2e-pipeline:e2e-test` / `e2e-pipeline:e2e-walkthrough` / `ui-verify` | runtime preflight (dev server up gate) + agent-browser E2E verification for UI-typed DCs | No — Layer B wraps with ROI-aware scoped gate + spot-check UAT + runtime mandate (post-2026-04-26 carlove SEC-10/15 retro: no artifact-only PASS) |
 | ship-review | `pr-review-toolkit:review-pr` (optional for big-batch) | multi-persona PR review (code-reviewer / silent-failure-hunter / security-reviewer) | No — Layer B wraps with ARCHITECTURE.md / ROADMAP / PRODUCT canonical doc sync |
 
-**Cross-review gate 5-factor rubric examples** (adapted per stage — see each stage SKILL.md for full text):
+**Cross-review gate 6-factor rubric** (base 5 + 1 stage-specific extension per #106 T1.3; adapted per stage — see each stage SKILL.md for full text):
 
 | Factor | ship-plan | ship-execute | ship-verify | ship-review |
 |---|---|---|---|---|
@@ -194,6 +224,13 @@ When a cross-review emits PROMPT_CAPTAIN on a high-density entity, FO MAY flip t
 | **Quality** | Verification Spec covers every DC (≥1 structural-parity for UI)? | atomic pathspec, T1+T2 passed per task? | ≥1 critical assumption verified at runtime (Step 4.0 dev server up; per-DC runtime command captured)? | no silent failures; arch commits BEFORE PR body cites? |
 | **DC adequacy** | observable (no "works correctly")? | AC procedures ran; output captured? | spot-checks critical DCs? | PR body DC+Verification table reproducible copy-paste? |
 | **Canonical sync** | ARCHITECTURE.md touches planned? | architecture-impact blocks updated post-execute? | canonical docs consistent post-execute? | ROADMAP + PRODUCT updated; Architecture Changes cited? |
+| **Reverse-audit previous stage** | Does the plan's scope expose a gap in the preceding design stage's hand-off block? | Does execute evidence expose a gap in the plan's wave ordering or stub-flag coverage? | Does verify's DC results expose a gap in execute's commit coverage? | Does review's canonical-sync check expose a gap in verify's render-fidelity assessment? |
+
+**Rubric extension table** (stage-specific factors MAY be appended beyond base 6 with explicit namespacing):
+
+| Extension factor | Stage | Namespacing | When required |
+|---|---|---|---|
+| `Render Fidelity` | ship-review (T6.4) | Appended as 7th factor | When `affects_ui: true` AND `render_fidelity_status` present in hand-off to review |
 
 All stages use the same reviewer fallback pattern (Q1 from Wave 2 captain answers): cross-teammate counterpart → fresh sonnet default → fresh opus when `appetite: big-batch`. Verdict set: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**.
 
@@ -201,7 +238,7 @@ All stages use the same reviewer fallback pattern (Q1 from Wave 2 captain answer
 1. Agent dispatches fresh-context subagent for within-pitch stage transition without justifying one of the exceptions in Rule A.
 2. Stage skill reinvents Layer A logic (e.g., rewrites brainstorming procedure) instead of invoking the superpowers atomic skill — OR creates an undocumented Layer A exception.
 3. Stage transition lacks cross-review gate.
-4. Cross-review 5-factor rubric adapted per stage MUST keep the same factor names (feasibility / executable scope / quality / DC adequacy / canonical sync) — rubric drift breaks cross-stage review-pattern recognition.
+4. Cross-review rubric MUST keep base 5 factor names verbatim (feasibility / executable scope / quality / DC adequacy / canonical sync) — factor renaming or reordering breaks cross-stage review-pattern recognition. Additional stage-specific factors MAY be appended with explicit namespacing (e.g., `Reverse-audit`, `Render Fidelity`) and MUST be documented in the rubric extension table above. The base-5 → base-6 extension (adding `Reverse-audit`) shipped with #106 T1.3 is the canonical precedent for this extension mechanism.
 
 **Enforcement** (two-tier, refined 2026-04-24 by #097):
 

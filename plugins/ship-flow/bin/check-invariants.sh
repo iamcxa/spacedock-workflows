@@ -595,6 +595,98 @@ check_pitch_assumptions() {
   return 0
 }
 
+check_workflow_dir_portability() {
+  # DC-1.4 (T1.4): Operational instructions in stage SKILLs must not hard-code
+  # "docs/ship-flow/" as a literal path — they must use $WORKFLOW_DIR or
+  # relative resolution from README frontmatter.
+  # Exceptions: References sections (after "## References"), comments,
+  # example blocks (inside ``` fenced code showing path *templates*).
+  local skill_dir="${ROOT}/plugins/ship-flow/skills"
+  local fail=0
+  # Pattern: operational mention of docs/ship-flow/ NOT in a References section
+  # Strategy: flag lines containing literal "docs/ship-flow/" that are NOT
+  # inside fenced code blocks showing templates AND NOT in ## References sections.
+  # Simplified heuristic: grep for operational uses (Resolve, Read, bash, git add)
+  # that also contain "docs/ship-flow/" without $WORKFLOW_DIR nearby.
+  local operational_pattern='(bash|Resolve|git add|git commit|write-stage-artifact|extract-section|patch-map|density-classify).*docs/ship-flow/'
+  local violations=0
+  for skill_file in "${skill_dir}"/*/SKILL.md; do
+    [ -f "$skill_file" ] || continue
+    # Exclude lines inside ## References section and fenced code blocks showing template paths
+    local matches
+    matches=$(grep -nE "$operational_pattern" "$skill_file" 2>/dev/null || true)
+    [ -z "$matches" ] && continue
+    matches=$(echo "$matches" | \
+      grep -v "# template\|<entity>\|<id>-<slug>\|<slug[0-9]*>\|<NNN>\|\.\.\." || true)
+    [ -z "$matches" ] && continue
+    matches=$(echo "$matches" | grep -v '\$WORKFLOW_DIR' || true)
+    [ -z "$matches" ] && continue
+    local match_count
+    match_count=$(echo "$matches" | wc -l | tr -d ' ')
+    if [ "$match_count" -gt 0 ]; then
+      echo "WARN [DC-1.4 workflow-dir-portability]: $skill_file has $match_count operational hard-coded 'docs/ship-flow/' path(s) — use \$WORKFLOW_DIR" >&2
+      violations=$((violations + 1))
+    fi
+  done
+  if [ "$violations" -gt 0 ]; then
+    echo "FAIL DC-1.4 workflow-dir-portability ($violations skill files with hard-coded paths)"
+    return 1
+  fi
+  echo "OK DC-1.4 workflow-dir-portability (0 violations)"
+  return 0
+}
+
+check_ask_fallback_coverage() {
+  # DC-3.3 (T3.3): Every stage SKILL must contain SendMessage(FO) ask-fallback
+  # in its Boot Self-Check section — so missing context triggers FO escalation
+  # rather than silent guessing (WORKFLOW_DIR unset, unknown framework, etc.).
+  local skill_dir="${ROOT}/plugins/ship-flow/skills"
+  local stage_skills=("ship-shape" "ship-plan" "ship-execute" "ship-verify" "ship-review" "ship-design")
+  local fail=0
+  for skill in "${stage_skills[@]}"; do
+    local skill_file="${skill_dir}/${skill}/SKILL.md"
+    [ -f "$skill_file" ] || { echo "WARN [DC-3.3 ask-fallback]: $skill_file not found" >&2; fail=1; continue; }
+    if ! grep -qE 'SendMessage.*FO|SendMessage\(FO\)' "$skill_file" 2>/dev/null; then
+      echo "FAIL [DC-3.3 ask-fallback]: $skill_file missing SendMessage(FO) ask-fallback pattern" >&2
+      fail=1
+    fi
+  done
+  if [ "$fail" -gt 0 ]; then
+    echo "FAIL DC-3.3 ask-fallback-coverage"
+    return 1
+  fi
+  echo "OK DC-3.3 ask-fallback-coverage (all ${#stage_skills[@]} stage SKILLs have SendMessage(FO))"
+  return 0
+}
+
+check_reverse_audit_prompts() {
+  # DC-3.2 (#106 T3.2 + review-stage Fix 2 Path A): Every applicable stage SKILL
+  # MUST contain a "Reverse-audit prompt template" section so cross-review
+  # reverse-audit (factor 6) has concrete prior-stage section names to audit.
+  # Threshold: ≥4 of 5 applicable stage SKILLs (ship-design exempt — no upstream
+  # stage to reverse-audit; ship-shape exempt — first stage in pipeline).
+  local skill_dir="${ROOT}/plugins/ship-flow/skills"
+  local applicable_skills=("ship-plan" "ship-execute" "ship-verify" "ship-review" "ship-design")
+  local hits=0
+  local missing=()
+  for skill in "${applicable_skills[@]}"; do
+    local skill_file="${skill_dir}/${skill}/SKILL.md"
+    [ -f "$skill_file" ] || { missing+=("${skill} (file absent)"); continue; }
+    if grep -qiE 'Reverse-audit prompt template' "$skill_file" 2>/dev/null; then
+      hits=$((hits + 1))
+    else
+      missing+=("${skill}")
+    fi
+  done
+  if [ "$hits" -lt 4 ]; then
+    echo "FAIL DC-3.2 reverse-audit-prompts: $hits of ${#applicable_skills[@]} stage SKILLs have prompt templates (≥4 required)"
+    [ ${#missing[@]} -gt 0 ] && echo "  Missing: ${missing[*]}" >&2
+    return 1
+  fi
+  echo "OK DC-3.2 reverse-audit-prompts ($hits of ${#applicable_skills[@]} stage SKILLs have Reverse-audit prompt template)"
+  return 0
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -616,6 +708,9 @@ if [ -n "$SINGLE_CHECK" ]; then
     layer-a-table-parity) check_layer_a_table_parity; exit $? ;;
     structural-parity-dc) check_structural_parity_dc; exit $? ;;
     verdict-flip-whitelist) check_verdict_flip_whitelist; exit $? ;;
+    workflow-dir-portability) check_workflow_dir_portability; exit $? ;;
+    ask-fallback-coverage) check_ask_fallback_coverage; exit $? ;;
+    reverse-audit-prompts) check_reverse_audit_prompts; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -652,5 +747,7 @@ check_team_fallback_documented || FAIL=1
 check_cross_review_gate || FAIL=1
 check_layer_a_table_parity || FAIL=1
 check_structural_parity_dc || FAIL=1
+check_workflow_dir_portability || FAIL=1
+check_ask_fallback_coverage || FAIL=1
 
 exit $FAIL

@@ -11,6 +11,17 @@ You run PLAN. Output: `<entity-folder>/plan.md`. Dispatched by `/ship` to `plann
 
 **Pipeline position**: reads `spec.md` + parent cross-entity contracts → produces `plan.md` → cross-review gate → advance to execute.
 
+## Boot Self-Check
+
+Run before any plan work. Stop and SendMessage(FO) if any check fails.
+
+1. **Entity status**: read entity frontmatter `status:` — must be `sharp` or `design` (post-design stage). If `draft` → shape first; if `plan` → plan already exists, check for re-entry signal.
+2. **Hand-off present**: entity body contains `### Hand-off to Plan` block (from ship-shape or ship-design). If absent → SendMessage(FO): "Missing Hand-off to Plan in `<entity-path>` — cannot proceed without design intent."
+3. **Team context**: verify `planner` teammate is active (this agent). Note `executer` teammate name for Step 6 SendMessage.
+4. **PRODUCT.md readable**: `plugins/<app>/PRODUCT.md` exists and is readable. If absent → SendMessage(FO): "PRODUCT.md missing — constraints source unavailable."
+5. **Framework detection** (if `affects_ui: true`): Run ship-runtime-detect Step R5 to confirm `framework_detected` + `theme_indirection` for plan's verification spec.
+6. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
+
 ## Entity body contract (schema-as-prose)
 
 - Reads: `spec.md` (`## Sharp Output` / `## Shape Output` — problem, done criteria, size, scope, assumptions, children DAG), parent entity `## Cross-Entity Contracts` if `parent:` set, `PRODUCT.md` constraints.
@@ -89,6 +100,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
 - Runtime detection — invoke `ship-flow:ship-runtime-detect` before tasks get written; propagate `{commands.test/build/typecheck/lint/dev}` into every task's Done field.
 - TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `**TDD:** skip — <reason>`.
 - Wave rules: wave 0 = test infra; wave N+1 depends only on ≤N outputs; no `files_modified` overlap within a wave; no cycle.
+- **T0.X auto-indirection-sweep** (T6.1, #106): when `theme_indirection` from ship-runtime-detect Step R5 is non-empty (e.g. `tailwind-v4`), auto-emit a Wave 0 task in the plan: `T0.X: Audit @theme inline indirection layer — verify design tokens align with CSS custom properties, no hardcoded hex values in component files`. REFUSE to emit a plan without this task when `theme_indirection != ""`. Enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check indirection-sweep-emitted` (fixture-based).
 
 ### Step 3.5 — Verification spec (structural parity enforcement)
 
@@ -128,20 +140,32 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 7. **TDD compliance** — test-first order on code tasks; `TDD: skip` tasks have valid reason.
 8. **Stale-line-anchor** — every `file:line` citation re-read; content-matches / line-shifted / contradicted (BLOCKER) / phantom path (BLOCKER). Catches #1 cause of execute BLOCKED returns.
 9. **Design reference compliance** — skip if no `## Design Reference` section; else cross-check visual attrs (fill/stroke/colors/dimensions) against cited spec files. Flag deviations.
+10. **Stub-captain-ack scan** (T6.2, #106): grep every task body for keywords `stub|fake|placeholder|v1.*only|wired only for`. For each match: check entity frontmatter `pre-acked-stubs: true` OR check that the Plan Report has a `## Stub Flag` entry for this task with explicit captain rationale. If neither present → `BLOCK: stub task without captain ack` (literal string required for test DC). Populate `## Plan Report → Stub Flags` table with all stub tasks found. Cross-review PROCEED blocked until all stubs either pre-acked or cleared.
 
 ### Step 5 — Cross-review gate (Principle 6 Rule C)
 
 Dispatch cross-review to `executer` teammate (pipeline path) or fresh sonnet (no team). Upgrade to fresh **opus** when `appetite: big-batch`.
 
-5-factor rubric adapted for plan stage:
+6-factor rubric adapted for plan stage (per INVARIANTS Principle 6 Rule C #106 T1.3):
 
 1. **Feasibility** — tasks achievable by single agent in one dispatch each?
 2. **Executable scope** — tasks are atomic commits aligned 1:1 with waves?
 3. **Quality** — Verification Spec covers every DC with runnable procedure (≥1 structural-parity DC for UI)?
 4. **DC adequacy** — observable DCs per task; no "works correctly" / "handles all cases"?
 5. **Canonical sync** — ARCHITECTURE.md touches planned? architecture-impact draft per affected child?
+6. **Reverse-audit previous stage** — does the plan's scope expose a gap in the preceding design stage's `### Hand-off to Plan` block? Specifically: are all `render_fidelity_targets` from design encoded as DCs? Are `design_constraints` honored in plan tasks?
+7. **Render Fidelity + captain-ack audit trail** (T6.4, #106) — for UI entities: does plan have ≥1 structural-parity DC per component in design canonical? AND are all stub tasks captain-acked (either `pre-acked-stubs: true` in frontmatter or explicit `## Plan Report → Stub Flags` entries)?
 
-Verdict: **PROCEED** / **VETO** (max 2 loops back to Step 3 with reviewer feedback; round 3 → PROMPT_CAPTAIN) / **PROMPT_CAPTAIN**.
+**Reverse-audit prompt template** (T3.2 — paste verbatim into reviewer dispatch):
+```
+Reverse-audit: Read the entity's `### Hand-off to Plan` block.
+(a) List every `render_fidelity_target` — does plan.md have a DC for each? (BLOCKING if any missing)
+(b) List every `design_constraint` — does each appear in at least one plan task or Verification Spec row? (WARNING if any absent)
+(c) Are `open_decisions` empty? If not empty, is there a plan task that resolves each? (PROMPT_CAPTAIN if unresolved)
+Coaching note: render_fidelity gaps here become silent UI regressions at verify — enforces FM#4 (fidelity gap) prevention.
+```
+
+Verdict: **PROCEED** / **VETO** (max 2 loops back to Step 3 with reviewer feedback; round 3 → PROMPT_CAPTAIN) / **PROMPT_CAPTAIN**. Each verdict MUST include a one-sentence coaching note per INVARIANTS Rule C ABC clause.
 
 **Circuit breaker**: if `SendMessage(executer)` is unresponsive (phantom team / timeout / fresh-Agent stall), fall back per INVARIANTS Rule A Fallback — fresh sonnet by default, fresh opus on `big-batch`. Do not block on an unresponsive reviewer.
 
@@ -189,6 +213,18 @@ On exit 6 (stale hash): write `## Plan Report status: blocked, reason: index.md 
 - Self-review loop: max 3 iterations → proceed with gaps noted in Plan Report.
 - Cross-review reviewer: max 1 round per VETO; 2 VETOs total before PROMPT_CAPTAIN.
 - Total stage >20 min elapsed → write `plan.md` with partial content + `⚠️ INCOMPLETE` markers + Plan Report status=partial, then return. Never exit without emitting plan.md.
+
+<!-- section:hand_off_to_execute -->
+## Step 6 (Hand-off): Emit Hand-off to Execute + Read Incoming Hand-off
+
+**Read incoming**: at Step 1, read `### Hand-off to Plan` from entity body. Verify `design_constraints` honored in plan tasks; encode `render_fidelity_targets` as DCs.
+
+**Emit** `### Hand-off to Execute` after plan.md is written:
+- `wave_order`: exact wave dispatch order (e.g., "W0 → W1 (T1.1→T1.2→T1.3→T1.4) → W2a → W2b → W2c → W3 → W4")
+- `critical_assumptions`: assumptions to re-verify at execute boot (from Assumption Re-validation section)
+- `architecture_context`: canonical doc touches required (INVARIANTS, README, schema) — drives execute commit order
+- `stub_flags`: tasks containing `stub|fake|placeholder|v1.*only|wired only for` — must appear in Plan Report as captain-ack flags
+<!-- /section:hand_off_to_execute -->
 
 ---
 
