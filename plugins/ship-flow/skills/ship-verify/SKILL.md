@@ -187,12 +187,21 @@ SendMessage(to: "designer@pitch-XX",
 **Trigger** (G14, 2026-04-29 disambiguation): entity `affects_ui: true` AND `### Hand-off to Plan` block lacks `design-skipped: true` AND contains `render_fidelity_targets[]` with ≥1 entry. (`design-skipped: true` short-circuits past Step 3.6; absence of hand-off block entirely is already BLOCKED at plan Step 1.6, so verify can assume the block is well-formed when it reaches here.)
 
 **Dispatch**:
-```
-Skill: ui-verify
-  Targets: each render_fidelity_target from plan's "## Plan Imported Design DCs" section
-  Per-target assertion: getComputedStyle resolution matches design-system.md tokens.css value
-  Per-target visual check (when applicable): screenshot diff against plugins/<app>/design/components/<name>.html baseline (≤1% pixel threshold)
-```
+
+1. Generate ui-verify YAML spec from entity hand-off:
+   ```bash
+   bash plugins/ship-flow/lib/generate-ui-verify-spec.sh <entity-folder> <mapping-name> [auth-account] \
+     > .claude/e2e/ui-verify/<entity-slug>.yaml
+   ```
+   `<mapping-name>` is the e2e-pipeline mapping filename without `.yaml` (e.g., `spacebridge`). The script reads `render_fidelity_targets[]` from the entity's `### Hand-off to Plan`, converts each to a ui-verify check (kebab→camel CSS property names, D{N} backref preserved in check name).
+
+2. Invoke ui-verify against the generated spec:
+   ```
+   Skill: ui-verify
+     YAML: .claude/e2e/ui-verify/<entity-slug>.yaml
+   ```
+
+ui-verify backend (e2e-pipeline plugin) drives a real browser via `agent-browser`, runs `getComputedStyle()` per check, and emits PASS/FAIL with a report. Pixel-diff baseline (when present at `plugins/<app>/design/baseline/<component>.png`) is checked separately by ui-verify's screenshot mode (see ui-verify SKILL.md `--no-screenshot` flag).
 
 **ui-verify findings integration**:
 - Append to `### Review Findings` in `verify.md` under subsection `#### Mechanical UI Parity`.

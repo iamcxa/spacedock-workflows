@@ -68,6 +68,18 @@ Skip if no file:line citations (common for S-size).
 
 **Read** via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> hand_off_to_plan` (handles folder + flat layouts).
 
+**Mechanical mapping** delegated to lib script:
+```bash
+bash plugins/ship-flow/lib/import-design-dcs.sh <entity-folder> >> <entity-folder>/plan.md
+```
+The script reads structured `### Hand-off to Plan`, emits `## Plan Imported Design DCs` table directly. Falls back to MIGRATE-FIRST notice when entity is in legacy prose format. **Do NOT manually transcribe** — that's the LLM-drift mode this script eliminates.
+
+Pre-import validation (run in this order):
+- `bash plugins/ship-flow/lib/validate-handoff-schema.sh <entity-folder>` — structural check
+- `bash plugins/ship-flow/lib/validate-d-references.sh <entity-folder>` — D{N} backref consistency
+
+If either validator fails → BLOCKER (status: blocked, reason: hand-off schema invalid; details from script stderr).
+
 **Mechanical mapping** (each item becomes a DC anchored to a wave):
 
 | Hand-off field | Becomes | Wave |
