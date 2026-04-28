@@ -40,7 +40,7 @@ for arg in "$@"; do
   esac
 done
 
-USAGE="Usage: write-stage-artifact.sh --stage=<plan|execute|verify|review|ship> --entity=<id>-<slug> --content=<path> --workflow-dir=<dir> [--if-hash=<sha256>]"
+USAGE="Usage: write-stage-artifact.sh --stage=<plan|design|execute|verify|review|ship> --entity=<id>-<slug> --content=<path> --workflow-dir=<dir> [--if-hash=<sha256>]"
 
 [ -n "$STAGE" ]        || { echo "Error: --stage required. $USAGE" >&2; exit 1; }
 [ -n "$ENTITY" ]       || { echo "Error: --entity required. $USAGE" >&2; exit 1; }
@@ -49,8 +49,8 @@ USAGE="Usage: write-stage-artifact.sh --stage=<plan|execute|verify|review|ship> 
 
 # Validate stage value
 case "$STAGE" in
-  plan|execute|verify|review|ship) ;;
-  *) echo "Error: --stage must be one of: plan execute verify review ship (got: $STAGE)" >&2; exit 1 ;;
+  plan|design|execute|verify|review|ship) ;;
+  *) echo "Error: --stage must be one of: plan design execute verify review ship (got: $STAGE)" >&2; exit 1 ;;
 esac
 
 [ -f "$CONTENT" ] || { echo "Error: content file not found: $CONTENT" >&2; exit 3; }

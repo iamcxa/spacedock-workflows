@@ -390,8 +390,10 @@ check_team_fallback_documented() {
 }
 
 check_cross_review_gate() {
-  # Verify every stage SKILL.md has a cross-review gate with 5-factor rubric.
-  # Requires: cross-review mention + "5-factor rubric" + "Feasibility" (case-insensitive).
+  # Verify every stage SKILL.md has a cross-review gate with N-factor rubric.
+  # Requires: cross-review mention + "[5-9]-factor rubric" + "Feasibility" (case-insensitive).
+  # Accepts 5/6/7/8/9-factor variants per pitch-106 INVARIANTS FM#4 amendment
+  # (base 5 + stage-specific extensions like Reverse-audit, Render Fidelity).
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
   local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
@@ -402,10 +404,10 @@ check_cross_review_gate() {
     [ -f "$skill_file" ] || continue
     local has_gate has_rubric has_feasibility
     has_gate=$({ grep -ciE "cross-review gate|cross.review" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
-    has_rubric=$({ grep -cF "5-factor rubric" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
+    has_rubric=$({ grep -cE "[5-9]-factor rubric" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
     has_feasibility=$({ grep -ciF "feasibility" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
     if [ "${has_gate:-0}" = "0" ] || [ "${has_rubric:-0}" = "0" ] || [ "${has_feasibility:-0}" = "0" ]; then
-      echo "ERROR [cross-review-gate]: ${sk}/SKILL.md missing cross-review gate section or 5-factor rubric (needs cross-review + '5-factor rubric' + 'Feasibility')" >&2
+      echo "ERROR [cross-review-gate]: ${sk}/SKILL.md missing cross-review gate section or N-factor rubric (needs cross-review + '[5-9]-factor rubric' + 'Feasibility')" >&2
       fail=1
     fi
   done
@@ -619,6 +621,7 @@ check_workflow_dir_portability() {
     matches=$(echo "$matches" | \
       grep -v "# template\|<entity>\|<id>-<slug>\|<slug[0-9]*>\|<NNN>\|\.\.\." || true)
     [ -z "$matches" ] && continue
+    # shellcheck disable=SC2016  # intentional literal-$WORKFLOW_DIR match (do not expand)
     matches=$(echo "$matches" | grep -v '\$WORKFLOW_DIR' || true)
     [ -z "$matches" ] && continue
     local match_count
