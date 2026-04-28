@@ -176,6 +176,9 @@ Rejected alternatives (NOT captured — rationale for the record):
 Stated assumptions:
   A1 (critical, <conf>%): <claim>
 
+Pre-mortem (1 sentence, ≤30 words; pick exactly one category):
+  <category>: <projected failure mode if pitch ships per spec but doesn't deliver value>
+
 DAG:
 ```mermaid
 graph LR
@@ -187,9 +190,23 @@ Confirm / refine: "<text>" / reject ?
 
 Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 
+### Pre-mortem (mandatory on non-trivial pitch; before cross-review)
+
+After composing the proposal, write **one sentence** answering: "If this pitch ships exactly per spec but post-ship inspection finds it isn't delivering value, what's the single most likely cause?" Append as `pre_mortem` (1 sentence, ≤30 words; pick **exactly one** category):
+
+- **wrong-problem** — acceptance outcome solved, but problem misframed (solving the wrong gap).
+- **wrong-dcs** — children pass verify but their aggregate doesn't deliver the acceptance outcome (vanity DCs).
+- **wrong-framing-lens** — engineering decomposition applied to a relational / aesthetic / macro problem; Musk-lens mismatch (route to Naval / Buffett / Covey / Feynman / Dalio context next time).
+- **hidden-dependency** — load-bearing assumption stayed implicit (never made it to `stated_assumptions[]`).
+- **over-conviction** — proposal text contains "一定 / 顯然 / 必須 / clearly / obviously" without Loss Function check; captain bias signal per MEMORY Conviction Calibration.
+
+**Skip-when**: same threshold as escape-hatch (directive <80 chars AND fix/typo/rename/bump/patch/bugfix/hotfix). Otherwise mandatory.
+
+**Why this exists**: Cross-review uses the same 6-factor rubric the proposer used to compose. Both can miss the same blind spot (composing-rubric overlap). Pre-mortem forces a future-failure perspective the composing rubric cannot generate. The `over-conviction` category is the named hook for MEMORY's "一定 / 顯然 / 必須" signal — surfaces captain bias as a structural gate, not a vibe check.
+
 ### Cross-review gate (before captain gate) — Principle 6 Rule C
 
-Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 6-factor rubric (per INVARIANTS Principle 6 Rule C #106 T1.3): **feasibility** appetite-fit within budget / **executable scope** true E2E vertical / **quality** rejected alternatives ≥1 + critical assumption ≥1 + appetite-fit check ran / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected / **Reverse-audit previous stage** (no prior stage at shape — ask: does the spec expose any design constraint the prior debrief flagged as a gap?), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to scope-decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
+Dispatch cross-review to `executer` teammate. **Reviewer model fallback when no team**: fresh **sonnet** by default; upgrade to fresh **opus** when `appetite: big-batch` (scope warrants heavier independent review). Apply the 7-factor rubric (per INVARIANTS Principle 6 Rule C #106 T1.3 + pre-mortem extension): **feasibility** appetite-fit within budget / **executable scope** true E2E vertical / **quality** rejected alternatives ≥1 + critical assumption ≥1 + appetite-fit check ran / **DC adequacy** observable done-checks / **canonical sync** architecture-impact block when ARCHITECTURE.md affected / **Reverse-audit previous stage** (no prior stage at shape — ask: does the spec expose any design constraint the prior debrief flagged as a gap?) / **pre-mortem credibility** (does the named category match the most plausible failure mode? does the one-sentence projection survive a "wait, isn't X more likely?" challenge? rote-pick of `hidden-dependency` without supporting reasoning = WARN), rating each PASS/WARN/FAIL, then emit verdict: **PROCEED** → present to captain; **VETO** → silently loop to scope-decompose with feedback; **PROMPT_CAPTAIN** → present proposal + reviewer concern together.
 
 **Proposal budget**: the proposal text passed to the cross-reviewer MUST be ≤400 words. Longer = detail creep; trim BEFORE dispatching cross-review, not after.
 
@@ -270,13 +287,14 @@ Stage continuation — SendMessage to named teammate (~10× faster than fresh di
 
 ## Proposal JSON schema (machine contract for shape-confirm.sh)
 
-Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acceptance_outcome` (≥50 chars, user-observable, mandatory), `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`. `answers_density` (optional, `high | medium | low | vacuum`): emit when pre-classified; omit to defer lazy classification.
+Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acceptance_outcome` (≥50 chars, user-observable, mandatory), `appetite`, `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`, `pre_mortem` (mandatory on non-trivial pitch; object with `category` enum: `wrong-problem | wrong-dcs | wrong-framing-lens | hidden-dependency | over-conviction` and `one_liner` ≤30 words)), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`. `answers_density` (optional, `high | medium | low | vacuum`): emit when pre-classified; omit to defer lazy classification.
 
 ---
 
 ## Invariants + red flags (STOP and rerun if violated)
 
 - Rejected alternative ≥1 on non-trivial pitch; ≥1 critical assumption; appetite is budget not estimate; **appetite-fit check ran before compose** (scope cap enforcement).
+- **Pre-mortem mandatory on non-trivial pitch** (escape-hatch threshold — directive ≥80 chars OR not fix/typo/rename/bump/patch/bugfix/hotfix). Missing `pre_mortem` → cross-review VETO (loops to scope-decompose). Anchor: composing-rubric blind spot — proposer + reviewer share the 6-factor rubric, so pre-mortem provides an orthogonal future-failure axis the composing rubric cannot generate. Conviction Calibration tie-in: `over-conviction` category is the named hook for MEMORY "一定/顯然/必須" signal.
 - Pitch missing `acceptance_outcome` OR <50 chars → silent foundation-only-ceremony risk; shape-confirm.sh rejects with exit 10. Source: pitch 096 demo (3 of 4 children would have shipped placeholder files nothing consumed).
 - Children = vertical E2E; all-API / all-UI / every-depends-on-every = fake decomposition.
 - Mode A: no multi-turn captain Qs before proposal. One intake clarification max → else route to Mode B.
