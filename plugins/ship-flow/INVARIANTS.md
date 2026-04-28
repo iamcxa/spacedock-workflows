@@ -271,6 +271,36 @@ Tier A covers master-table-to-SKILL presence; Tier B covers dispatch-choice appr
 
 ---
 
+### Principle 8: Artifact verbosity discipline
+
+**Rule**: Stage report `.md` files MUST budget body content. Verbose evidence (raw command output, full DC tables, multi-section trace) goes inside `<details>` blocks or links to commits/PR; main body holds 1-paragraph TL;DR + structured findings table only.
+
+**Per-stage line caps** (body content; frontmatter + section markers excluded):
+
+| Stage artifact | Cap | Rationale |
+|---|---|---|
+| plan.md | ≤200 lines | Plan structure (waves + tasks + DCs) is essentially tabular; verbose research goes in `<details>` |
+| execute.md | ≤150 lines | Per-task DC results table is the consumable; raw command output → `<details>` |
+| verify.md | ≤120 lines | A4 gate table + render fidelity table are the consumables; everything else → link |
+| review.md | ≤100 lines | Self-review verdict + canonical-sync result; PR draft is its OWN consumable |
+| ship.md | ≤60 lines | Customer-visible summary + PR URL + ROI table; no procedural trace |
+
+**Failure mode**: Stage artifacts that read like running session logs (e.g. pitch-107's execute.md @ 315 lines, verify.md @ 258 lines for a 160-LOC code change). The PR body + ship.md are what humans actually consume; intermediate stage trace is internal-only and accumulates as drift bait.
+
+**Pattern enforcement**:
+1. **TL;DR first** — 1-paragraph plain-prose summary at the top of each stage report.
+2. **Structured findings table** — BLOCKING/WARN/NIT classification with file:line citations.
+3. **Link out, don't re-cite** — reference INVARIANTS / MEMORY / commit SHAs instead of inlining.
+4. **`<details>` for raw evidence** — full command output, full DC re-runs, full diff dumps go inside collapsible blocks.
+
+**Grep check (proposed, not yet wired)**: `wc -l <stage>.md` should be ≤ cap when section markers + frontmatter excluded. Future `check-invariants.sh --check artifact-verbosity` candidate.
+
+**Source**: pitch-107 dogfood observation (2026-04-28). Stage artifacts totaled ~840 lines for 160 LOC code change; consumable artifacts (PR body + ship.md) = ~270 lines; remainder was internal trace nobody reads. 60-70% reduction achievable without losing audit value if discipline is enforced upfront.
+
+**Adopter discipline note**: each stage SKILL.md Output section should reference this principle with a 1-line callout (`Verbosity budget: see INVARIANTS Principle 8 — N-line target`). Initial commit lands canonical rule; per-SKILL pointers propagated in follow-up.
+
+---
+
 ## Captain-Gate Checklist
 
 Used for design-review of any skill/plan/entity change that may create a captain-interrupt decision point (Principle #4 Tier B fallback + manual reviewer checklist).
