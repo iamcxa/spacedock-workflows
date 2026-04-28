@@ -17,7 +17,8 @@
 #   - Extract via: bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}
 # Section Tags (v1.2): + answers_density (Principle 4 boolean-gate); lazy-classified at first ship-* invocation
 
-schema_version: "1.2"
+schema_version: "1.3"
+# v1.3 (2026-04-29): + pre_mortem block (PR #43); design_constraints[] + render_fidelity_targets[] structured object schema (G9/G12); hand_off_to_plan.design-skipped marker (G14); removed plan_constraints subsection (G8 dedup, source-of-truth = hand_off_to_plan).
 
 # --- Frontmatter (YAML in entity file header) ---
 frontmatter:
@@ -95,6 +96,21 @@ frontmatter:
       required_when: "pattern == pitch"
       min_length: 50
       invariant: "must describe observable user-facing outcome, not internal artifact list"
+    pre_mortem:
+      type: object
+      schema:
+        category:
+          type: enum
+          values: [wrong-problem, wrong-dcs, wrong-framing-lens, hidden-dependency, over-conviction]
+          description: "Named failure mode if pitch ships per spec but doesn't deliver value"
+        one_liner:
+          type: string
+          max_words: 30
+          description: "One-sentence projected failure mode in plain language"
+      description: "PR #43 pre-mortem gate (rubber-stamp guard) — orthogonal future-failure axis cross-review uses as 7th rubric factor. Forces captain to name the most plausible failure mode before commit."
+      required_when: "pattern in [pitch, shaped-child] AND directive non-trivial (≥80 chars OR not fix/typo/rename/bump/patch/bugfix/hotfix)"
+      invariant: "category must be one of the 5 enum values; one_liner must be ≤30 words; missing pre_mortem on non-trivial pitch → cross-review VETO (loops to scope-decompose)"
+      coupled_to: "ship-shape Step 5 captain gate; cross-review 7-factor rubric (axis 7: pre-mortem credibility)"
     answers_density:
       type: enum
       values: [high, medium, low, vacuum]
@@ -331,12 +347,11 @@ stages:
               type: table
               columns: ["Path", "Type", "Purpose"]
               description: "design-system.md / tokens.css / specimens / composite mockup"
-        plan_constraints:
-          section: "### Constraints for Plan Stage"
-          section_tag: plan-constraints
-          layer: design
-          fields:
-            - { name: content, type: prose, description: "Visual / interaction / token constraints plan stage MUST honor" }
+        # G8 dedup (2026-04-29, PR #44): plan_constraints subsection retired.
+        # Single-source-of-truth = stages.design.hand_off_to_plan.design_constraints[].
+        # Rationale: dual-write let captain edits diverge between the two blocks,
+        # leaving plan stage reading stale or contradictory data.
+        # Migration: bash plugins/ship-flow/lib/migrate-design-constraints.sh <entity>
     report:
       section: "## Design Report"
       section_tag: design-report
@@ -353,12 +368,64 @@ stages:
       section: "### Hand-off to Plan"
       section_tag: hand-off-to-plan
       layer: design
-      description: "Explicit hand-off from design to plan stage. Consumed by plan stage Boot Self-Check."
+      description: "Single-source-of-truth contract from design to plan (G8 dedup, PR #44). Consumed by plan Step 1.6 Import Design DCs."
       fields:
-        - { name: design_constraints, type: list, description: "Visual / token / interaction constraints plan MUST honor" }
-        - { name: open_decisions, type: list, description: "Design decisions still pending captain input" }
-        - { name: artifact_paths, type: list, description: "Design artifact paths (tokens.css, specimens, mockups)" }
-        - { name: render_fidelity_targets, type: list, description: "Specific render fidelity checks plan should encode as DCs (e.g., token alignment, no fake-button)" }
+        - name: design-skipped
+          type: boolean
+          default: false
+          description: "G14 (2026-04-29): set true by ship-shape Phase 8 when affects_ui=false — design intentionally bypassed, plan Step 1.6 short-circuits. When false (or absent), design-emitted fields below are required."
+          required: true
+          mutually_exclusive_with: "design_constraints, render_fidelity_targets (when design-skipped=true, these MUST be empty/omitted)"
+        - name: design_constraints
+          type: list
+          items:
+            type: object
+            schema:
+              type:
+                type: enum
+                values: [token-binding, layout, interaction]
+                description: "G9 (2026-04-29): structured constraint type. token-binding = CSS var binding; layout = flex/grid/positioning rule; interaction = click/keyboard/focus contract."
+              assertion:
+                type: string
+                description: "Machine-checkable assertion text — feeds plan Step 1.6 ui DC encode. Format: '<selector>.<property> = <expected>' or behavioral predicate."
+              rationale_decision:
+                type: string
+                pattern: "^D[0-9]+$"
+                description: "G12 (2026-04-29): MUST cross-reference a **D{N}|Captain decision** in Phase 8 Captain Decisions. Validated by validate-d-references.sh."
+              source_artifact:
+                type: string
+                description: "Path to design artifact establishing this constraint (e.g., plugins/<app>/design/tokens.css, components/<name>.html)"
+          required_when: "design-skipped == false"
+          description: "Visual / token / interaction constraints plan MUST honor. Each item structured (G9). D{N} backref enforced (G12)."
+        - { name: open_decisions, type: list, description: "Design decisions still pending captain input. Non-empty → plan Step 1.6 BLOCKER (bounce to designer@pitch-XX)." }
+        - name: artifact_paths
+          type: list
+          items:
+            type: object
+            schema:
+              path: { type: string, description: "Repo-relative path to artifact" }
+              sha256: { type: string, description: "Optional checksum for drift detection (loophole #11, deferred — emit when supported)" }
+          description: "Design artifact paths (tokens.css, specimens, mockups). sha256 deferred until lib supports."
+        - name: render_fidelity_targets
+          type: list
+          items:
+            type: object
+            schema:
+              selector:
+                type: string
+                description: "CSS selector targeting the element (e.g., '.cta-button', '[data-testid=\"sidebar\"]')"
+              css_property:
+                type: string
+                description: "CSS property name to assert (e.g., 'background-color', 'display', 'flex-direction')"
+              expected_value:
+                type: string
+                description: "Expected resolved computed-style value. For tokens use the resolved value, e.g., 'rgb(59, 130, 246)' resolved from var(--primary). ui-verify backend reads tokens.css to resolve indirection."
+              rationale_decision:
+                type: string
+                pattern: "^D[0-9]+$"
+                description: "G12 (2026-04-29): cross-reference Phase 8 Captain Decision."
+          required_when: "design-skipped == false"
+          description: "G12 structured (2026-04-29). Feeds plan Step 1.6 ui-typed DC + ship-verify Step 3.6 ui-verify spec. Each target = one computed-style assertion."
         - { name: storyboard_frames, type: list, description: "6-frame user-flow narrative from Phase 1.5 storyboard skill — each frame has actor + action/state + expectation. Verifier uses frames as render-fidelity contract; any unsatisfied frame BLOCKS at review stage." }
 
   plan:
