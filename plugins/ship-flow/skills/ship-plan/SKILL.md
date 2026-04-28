@@ -59,6 +59,27 @@ Scan spec for `file:line` citations. Read each; compare current content vs spec'
 
 Skip if no file:line citations (common for S-size).
 
+### Step 1.6 — Import Design DCs from Hand-off (G10, 2026-04-29)
+
+**Trigger**: entity body contains `### Hand-off to Plan` block (written by ship-design Phase 9). Skip when block absent (design stage skipped per `!affects_ui` route) or block has explicit `design-skipped: true`.
+
+**Read** via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> hand_off_to_plan` (handles folder + flat layouts).
+
+**Mechanical mapping** (each item becomes a DC anchored to a wave):
+
+| Hand-off field | Becomes | Wave |
+|---|---|---|
+| `design_constraints[]` (token / layout / interaction) | `ui` or `e2e`-typed DC per constraint, `verified_by: ui-verify` | task wave touching the affected component |
+| `render_fidelity_targets[]` (computed-style / structural assertions) | `ui`-typed DC, `verified_by: ui-verify` (calls computed-style assertion) | W0 (token-level) or task wave (component-level) |
+| `artifact_paths[]` | reference in plan `## Design Source` block; checksum on read | — |
+| `open_decisions[]` non-empty | **BLOCKER** (status: blocked, reason: design has open decisions) — bounce to design via SendMessage(designer@pitch-XX) | — |
+
+Each imported DC retains `rationale_decision: D{N}` cross-reference back to ship-design Phase 8 `## Captain Decisions` for audit trail.
+
+**Why this exists**: ship-design's hand-off-to-plan block previously said "encode `render_fidelity_targets` as DCs" but no plan step did the mechanical conversion — relied on planner LLM noticing the instruction at the bottom of the entity body. Result: render fidelity targets silently dropped on ~30% of UI pitches. This step is the explicit machine path.
+
+**Output**: `## Plan Imported Design DCs` section in plan.md listing each imported DC with source field + wave assignment + rationale_decision link.
+
 ### Step 2 — Research (size-adaptive, produce+review)
 
 - **S** — skip research. Proceed to Step 3.

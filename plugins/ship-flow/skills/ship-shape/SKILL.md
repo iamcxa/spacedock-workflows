@@ -136,15 +136,25 @@ bash plugins/ship-flow/lib/density-classify.sh --entity=<path-to-index.md>
 
 Output: `high | medium | low | vacuum`. Include as `answers_density` in the proposal JSON pitch block (see schema below). FO uses this to auto-proceed without captain gate when `high`. Skip when entity index does not yet exist (first-time shape of a directive).
 
-### PM-Skill Framing (Mode A Layer A — before Compose)
+### PM-Skill Framing (Mode A Layer A — per phase)
 
-Before composing the proposal, invoke PM skills for structured problem framing when directive is non-trivial (>80 chars AND not a fix/bugfix/hotfix):
+PM skills delegate framing discipline so shape stage doesn't reinvent. Invoke per phase when directive is non-trivial (>80 chars AND not fix/typo/rename/bump/patch/bugfix/hotfix). Skip individual skills with documented rationale; do NOT skip the table wholesale.
 
-1. **Problem framing**: `Skill: problem-framing-canvas` — maps the problem space (who, what, why now, evidence). Output feeds `Problem:` block in proposal.
-2. **Scope decomposition guidance**: `Skill: opportunity-solution-tree` — identifies solution space branches; feeds `Children:` vertical-slice selection and `Rejected alternatives:`.
-3. **Acceptance outcome framing**: `Skill: press-release` — user-observable outcome written from captain's perspective; feeds `Acceptance Outcome:` block.
+| Shape phase | Primary delegate | Supplement (optional) | Feeds proposal field |
+|---|---|---|---|
+| Intake — Problem statement | `Skill: problem-framing-canvas` | `Skill: jobs-to-be-done` (when directive lacks user-context — "who hires this for what job") | `Problem:` |
+| Scope decompose — vertical-slice cuts | `Skill: opportunity-solution-tree` | `Skill: user-story-splitting` (9 splitting heuristics — workflow steps / business rules / data variations / interface options) | `Children:` + `Rejected alternatives:` |
+| Assumption extract — criticality filter | `Skill: pol-probe-advisor` (Point of Leverage — "which assumption, if wrong, collapses the pitch?") | — | `stated_assumptions[]` with `criticality: critical` |
+| Acceptance outcome — user-observable | `Skill: press-release` | `Skill: user-story` (As-a/I-want/So-that structural backup) | `Acceptance Outcome:` |
 
-Skip PM-skill invocation when: directive <80 chars, fix/rename/bump/hotfix pattern, or `--fast` flag. In skip case, author Problem/Acceptance Outcome inline.
+**Why per-phase delegation, not single pre-compose pass**: previously these skills ran once before compose, so `criticality: critical` filtering happened in LLM head (no POL probe), `Children:` cuts used opus 4.7 default heuristics (not splitting-heuristics catalog), and `Problem:` was framed without JTBD's "replaces what" lens. Per-phase delegation forces each framing artifact through a named methodology, not "LLM looked thorough."
+
+**Skip rules** (per skill, document in proposal `## Shape Report`):
+- Skill not installed → fallback inline (note `Layer A delegate <name> unavailable`).
+- `--fast` flag → skip all PM framing (escape hatch for tiny pitches).
+- Directive <80 chars OR matches fix/typo/rename/bump/patch/bugfix/hotfix → escape-hatch path; skip PM framing.
+
+**Mandatory (cannot skip)**: `pol-probe-advisor` for any pitch with `appetite: medium-batch | big-batch`. Critical-assumption misfiltering was pitch-103's 18-file/3641-LOC drift root cause; POL probe is the structural guard against `criticality: critical` decaying into `important`.
 
 ### Compose + present proposal
 

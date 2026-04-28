@@ -180,6 +180,35 @@ SendMessage(to: "designer@pitch-XX",
 
 ---
 
+## Step 3.6 — ui-verify mechanical check (forced when affects_ui)
+
+**Why this is separate from Step 3.5**: Step 3.5 dispatches designer teammate (LLM) to read source diff against design artifacts. LLM reading CSS/JSX source has weak intuition for **rendered computed style** — cascade specificity, Tailwind v4 `@theme` indirection, flex-shrink, margin-collapse all resolve at render time, not parse time. `var(--primary)` in source and hardcoded `#3b82f6` in source can both look correct to LLM yet produce different rendered values. Step 3.6 closes the LLM-vs-rendered gap by invoking the `ui-verify` skill (headless browser computed-style probe).
+
+**Trigger**: entity `affects_ui: true` AND `### Hand-off to Plan` contains `render_fidelity_targets[]` with ≥1 entry. (Imported via ship-plan Step 1.6; see ship-plan/SKILL.md.)
+
+**Dispatch**:
+```
+Skill: ui-verify
+  Targets: each render_fidelity_target from plan's "## Plan Imported Design DCs" section
+  Per-target assertion: getComputedStyle resolution matches design-system.md tokens.css value
+  Per-target visual check (when applicable): screenshot diff against plugins/<app>/design/components/<name>.html baseline (≤1% pixel threshold)
+```
+
+**ui-verify findings integration**:
+- Append to `### Review Findings` in `verify.md` under subsection `#### Mechanical UI Parity`.
+- Token-resolution mismatch (computed value differs from tokens.css declaration) → **BLOCKING**.
+- Pixel-diff exceeds 1% but token resolution OK → WARN (often CSS reset / font-load timing — designer teammate reviews in 3.5).
+- Baseline screenshot missing for cited specimen → **BLOCKING** (designer should have emitted baseline at Phase 7 captain confirm — feedback to design).
+
+**Skip when**:
+- Entity `affects_ui: false` (skipped by trigger).
+- `### Hand-off to Plan` absent OR `render_fidelity_targets[]` empty (no DCs to mechanically check).
+- `ui-verify` skill not installed → emit WARN `ui-verify unavailable` in `verify.md`; do NOT silently skip — captain must see the gap.
+
+**Why not fold into Step 3.5**: 3.5 owns semantic review (D1-D6 captain decisions, designer hot context). 3.6 owns mechanical assertion (computed-style equality, pixel diff). Different failure modes, different tools, different reviewers — folding loses the distinction and lets LLM rationalize past rendered-value mismatches that are categorically not a judgment call.
+
+---
+
 ## Step 4 — UAT (spot-check default, full re-run fallback)
 
 **Default**: spot-check ≤2 critical DCs + evidence review (full re-run is fallback). 2026-04 D1: n=31 DCs, 0 verdict changes on full re-run.

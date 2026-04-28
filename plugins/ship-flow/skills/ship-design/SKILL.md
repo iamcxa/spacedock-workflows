@@ -158,10 +158,11 @@ Otherwise: auto-skip to plan per `skip-when: "!affects_ui"` in `docs/ship-flow/R
 ### Phase 8 — Emit design.md (entity body)
 
 1. Write `<entity-folder>/design.md` per `entity-body-schema.yaml → stages.design`:
-   - `## Design Output / ### Captain Decisions` — list all `D{N}|Captain decision` entries with file:line contradiction cite.
+   - `## Design Output / ### Captain Decisions` — list all `D{N}|Captain decision` entries with file:line contradiction cite. (Captain-readable narrative; rationale source for plan/verify cross-references via `D{N}`.)
    - `## Design Output / ### Artifact Bundle Manifest` — table (Path / Type / Purpose) of all emitted files.
-   - `## Design Output / ### Constraints for Plan Stage` — token / interaction constraints plan stage MUST honor.
    - `## Design Report` — status / stage_cost / iterations / contradictions_resolved / captain_decisions / reviewer_verdict.
+
+**Single-source-of-truth rule** (G8 dedup, 2026-04-29): `### Hand-off to Plan` (Phase 9 hand-off block) is the **only** structured contract plan stage reads. Do NOT duplicate `design_constraints` / `render_fidelity_targets` here in `## Design Output`. Phase 8 holds captain-readable narrative + audit trail (Decisions, Manifest, Report); Phase 9 holds machine-readable contract (constraints, render-fidelity targets, artifact paths, open decisions). Plan Step 1.6 reads Phase 9 hand-off; cross-references back to Phase 8 Captain Decisions via `D{N}` markers when rationale needed.
 
 ### Phase 9 — Cross-review gate
 
