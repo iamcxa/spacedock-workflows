@@ -690,6 +690,126 @@ check_reverse_audit_prompts() {
   return 0
 }
 
+# ---- C1-C5: 2026-04-29 tooling bundle (PR #43 + #44 mechanical enforcement) ----
+
+# Helper: locate the entity index file (folder layout: <dir>/README.md; flat: <dir>.md)
+_entity_index_for_dir() {
+  local d="$1"
+  if [ -f "${d%/}/README.md" ]; then echo "${d%/}/README.md"
+  elif [ -f "${d%/}.md" ]; then echo "${d%/}.md"
+  else echo ""
+  fi
+}
+
+# Helper: directive non-trivial — title ≥80 chars OR not in escape-hatch keyword list
+_directive_non_trivial() {
+  local f="$1"
+  local title
+  title=$(grep -m1 '^title:' "$f" 2>/dev/null | sed -E 's/^title:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/')
+  [ -z "$title" ] && return 0  # no title → assume non-trivial (better safe)
+  if [ "${#title}" -ge 80 ]; then return 0; fi
+  # title <80 chars — escape-hatch if matches keyword
+  if echo "$title" | grep -qiE '\b(fix|typo|rename|bump|patch|bugfix|hotfix)\b'; then
+    return 1  # trivial (escape hatch)
+  fi
+  return 0
+}
+
+check_pre_mortem_emitted() {
+  # C1 — PR #43: every non-trivial pitch must emit pre_mortem field in frontmatter.
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0 f
+  for f in "$docs_dir"/*.md "$docs_dir"/*/README.md; do
+    [ -f "$f" ] || continue
+    grep -qE '^pattern:[[:space:]]*pitch' "$f" || continue
+    _directive_non_trivial "$f" || continue
+    if ! grep -qE '^pre_mortem:' "$f"; then
+      echo "FAIL C1 pre-mortem-emitted: '$(basename "$(dirname "$f")")' (or $(basename "$f")) missing pre_mortem field. See ship-shape/SKILL.md ### Pre-mortem (mandatory on non-trivial pitch)." >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C1 pre-mortem-emitted"
+  return "$fail"
+}
+
+check_pol_probe_invoked() {
+  # C2 — PR #44: every medium-batch | big-batch pitch must invoke pol-probe-advisor.
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0 f
+  for f in "$docs_dir"/*.md "$docs_dir"/*/spec.md "$docs_dir"/*/README.md; do
+    [ -f "$f" ] || continue
+    grep -qE '^appetite:[[:space:]]*(medium-batch|big-batch)' "$f" || continue
+    if ! grep -qE 'pol-probe-advisor' "$f"; then
+      echo "FAIL C2 pol-probe-invoked: '$(basename "$f")' (medium/big-batch) missing pol-probe-advisor invocation. See ship-shape/SKILL.md PM-Skill Framing — pol-probe-advisor MANDATORY for medium-batch | big-batch (pitch-103 critical-assumption misfilter precedent)." >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C2 pol-probe-invoked"
+  return "$fail"
+}
+
+check_no_design_constraints_dual_write() {
+  # C3 — PR #44 G8 dedup: design.md must NOT have retired '### Constraints for Plan Stage'.
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0 f
+  for f in "$docs_dir"/*/design.md; do
+    [ -f "$f" ] || continue
+    if grep -qE '^### Constraints for Plan Stage' "$f"; then
+      echo "FAIL C3 no-design-constraints-dual-write: '$(basename "$(dirname "$f")")/design.md' has retired '### Constraints for Plan Stage' (G8 dedup). Run lib/migrate-design-constraints.sh '$f'." >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C3 no-design-constraints-dual-write"
+  return "$fail"
+}
+
+check_plan_imported_design_dcs_emitted() {
+  # C4 — PR #44 G10: when affects_ui=true + hand-off non-skipped, plan.md must have ## Plan Imported Design DCs.
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0 d plan readme
+  for d in "$docs_dir"/*/; do
+    plan="${d}plan.md"
+    [ -f "$plan" ] || continue
+    readme=$(_entity_index_for_dir "$d")
+    [ -n "$readme" ] || continue
+    grep -qE '^affects_ui:[[:space:]]*true' "$readme" || continue
+    grep -qE '^### Hand-off to Plan' "$readme" || continue
+    grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' "$readme" && continue
+    if ! grep -qE '^## Plan Imported Design DCs' "$plan"; then
+      echo "FAIL C4 plan-imported-design-dcs-emitted: '$(basename "$d")plan.md' missing '## Plan Imported Design DCs' (affects_ui=true + design hand-off non-skipped). See ship-plan/SKILL.md ### Step 1.6." >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C4 plan-imported-design-dcs-emitted"
+  return "$fail"
+}
+
+check_verify_mechanical_ui_parity_emitted() {
+  # C5 — PR #44 Step 3.6: when affects_ui=true + render_fidelity_targets non-empty, verify.md must have #### Mechanical UI Parity.
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0 d verify readme
+  for d in "$docs_dir"/*/; do
+    verify="${d}verify.md"
+    [ -f "$verify" ] || continue
+    readme=$(_entity_index_for_dir "$d")
+    [ -n "$readme" ] || continue
+    grep -qE '^affects_ui:[[:space:]]*true' "$readme" || continue
+    grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' "$readme" && continue
+    grep -qE 'render_fidelity_targets:|^[[:space:]]*-[[:space:]]+selector:' "$readme" || continue
+    if ! grep -qE '^#### Mechanical UI Parity' "$verify"; then
+      echo "FAIL C5 verify-mechanical-ui-parity-emitted: '$(basename "$d")verify.md' missing '#### Mechanical UI Parity' (affects_ui=true + render_fidelity_targets present). See ship-verify/SKILL.md ## Step 3.6." >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C5 verify-mechanical-ui-parity-emitted"
+  return "$fail"
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -714,6 +834,11 @@ if [ -n "$SINGLE_CHECK" ]; then
     workflow-dir-portability) check_workflow_dir_portability; exit $? ;;
     ask-fallback-coverage) check_ask_fallback_coverage; exit $? ;;
     reverse-audit-prompts) check_reverse_audit_prompts; exit $? ;;
+    pre-mortem-emitted) check_pre_mortem_emitted; exit $? ;;
+    pol-probe-invoked) check_pol_probe_invoked; exit $? ;;
+    no-design-constraints-dual-write) check_no_design_constraints_dual_write; exit $? ;;
+    plan-imported-design-dcs-emitted) check_plan_imported_design_dcs_emitted; exit $? ;;
+    verify-mechanical-ui-parity-emitted) check_verify_mechanical_ui_parity_emitted; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -752,5 +877,11 @@ check_layer_a_table_parity || FAIL=1
 check_structural_parity_dc || FAIL=1
 check_workflow_dir_portability || FAIL=1
 check_ask_fallback_coverage || FAIL=1
+# C1-C5: PR #43 + PR #44 mechanical enforcement (2026-04-29)
+check_pre_mortem_emitted || FAIL=1
+check_pol_probe_invoked || FAIL=1
+check_no_design_constraints_dual_write || FAIL=1
+check_plan_imported_design_dcs_emitted || FAIL=1
+check_verify_mechanical_ui_parity_emitted || FAIL=1
 
 exit $FAIL
