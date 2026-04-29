@@ -160,6 +160,26 @@ PM skills delegate framing discipline so shape stage doesn't reinvent. Invoke pe
 
 **Fat-marker-sketch rule**: Children are titles, not specs. Stated assumptions are claims + confidence + criticality + `verified_by`, not verification RESULTS. DCs, tool choices, file paths, greppable queries, npm-dep choices, LOC estimates all belong to PLAN. If a child description exceeds one line of vertical-slice intent, or if an assumption reproduces verification output, delete detail and keep the claim. Acceptance outcome MUST be user-observable (what captain receives) — NOT artifact list / infrastructure description / "support for X". One captain-readable claim per pitch.
 
+#### Layer 1 — Outcome Card (captain-facing, ≤150 words)
+
+The captain's gate surface. Structure (present in this order after section-order randomization — see below):
+
+**`### Will get`** — JTBD-form bullets only. Each bullet MUST use `When [situation], [actor] can [verb] [object]` form. Each bullet MUST carry a `(Check: ...)` annotation referencing the paired `**W<n>**:` line in Layer 2 `### Will-get dogfood checks`. No output descriptions ("X surfaces") — those are not outcomes. **C6 enforcement**: every `**W<n>**:` bullet in `### Will get` must have a matching `**W<n>**:` line in Layer 2 `### Will-get dogfood checks` or gate hard-blocks.
+
+**`### Won't get`** — explicit no-gos: things a rational captain might assume we'd do but won't. Author judgment, no grep enforcement. At least 1 item on non-trivial pitches.
+
+**`### Why this scope`** — one trade-off line naming the rejected alternative and why. Emit only when appetite/surface divergence is non-trivial. Trivial pitches (escape-hatch threshold) omit this line.
+
+**`### Captain Bet (mandatory before approve)`** — captain-authored substance commitment. Template:
+`Bet: when this ships, captain expects [observable outcome] within [time window]. If not, this pitch was wrong about [Layer 1 line].`
+Agent MUST NOT draft and present a filled-in Bet for captain to rubber-stamp. Agent presents the template; captain fills it in. Bet line is always last in Layer 1 (not shuffled). **C7 enforcement**: Layer 1 MUST NOT contain `rubric`, `7-factor`, or `score` tokens or gate hard-blocks.
+
+**Section-order randomization**: at compose time, shuffle the order of `### Will get`, `### Won't get`, `### Why this scope` using a per-gate seed (e.g., sha256 of entity-id + gate-timestamp, take last 4 hex digits mod 6 for permutation index). `### Captain Bet` is always last — not shuffled. Purpose: defeats agent-pattern-match templating across gates, where agent learns "Will get always first → approve on structure".
+
+#### Layer 2 — Detail (drill-down on captain `expand <section>` request)
+
+Not auto-expanded. Captain must explicitly type `expand <section>` to receive it. Includes: pre-mortem, cross-review rubric score, PM artifacts, `### Will-get dogfood checks` (paired W<n> checks), problem evidence, assumptions, rejected alternatives, open questions. Agent presents Layer 1 only at gate; Layer 2 is available on request.
+
 ONE block — captain's only view until gate:
 
 ```
