@@ -905,7 +905,7 @@ check_context_manifest_emitted() {
     entity="$(basename "$(dirname "$f")")"
     # Grace filter: skip pre-110 plans (no started: field or started before 2026-04-29)
     local started
-    started="$(grep -m1 '^started:' "$f" 2>/dev/null | sed 's/started:[[:space:]]*//' || true)"
+    started="$(grep -m1 'started[*]*:' "$f" 2>/dev/null | sed 's/.*started[^:]*:[[:space:]]*//' || true)"
     if [ -z "$started" ] || [[ "$started" < "2026-04-29" ]]; then
       continue
     fi
