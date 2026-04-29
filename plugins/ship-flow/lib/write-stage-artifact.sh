@@ -14,6 +14,7 @@
 #   0 success
 #   1 usage / invalid args
 #   3 content file not found
+#   4 same-file aliasing (--content path resolves to the writer's --stage output path)
 #   6 hash mismatch (--if-hash CAS)
 #   8 git commit failed
 set -euo pipefail
@@ -59,6 +60,25 @@ esac
 ENTITY_FOLDER="${WORKFLOW_DIR}/${ENTITY}"
 OUT_FILE="${ENTITY_FOLDER}/${STAGE}.md"
 
+# Same-file aliasing guard — refuse if --content resolves to the writer's
+# output path. Without this, the brace-group `{ printf; cat $CONTENT; printf } > $OUT_FILE`
+# becomes a self-feeding loop (truncate target → printf header → cat re-reads
+# its own redirect output → unbounded growth until disk-full / OOM). Hit once on
+# pitch-113.2 (1.44 GB blob). Comparison uses inode (-ef) for symlink resilience,
+# with realpath fallback when -ef unavailable.
+if [ -e "$OUT_FILE" ] && [ "$CONTENT" -ef "$OUT_FILE" ] 2>/dev/null; then
+  echo "Error: --content path is the same file as the writer's output ($OUT_FILE). Self-feed loop refused. Pass a separate draft path." >&2
+  exit 4
+elif [ -e "$OUT_FILE" ]; then
+  # -ef unavailable on this shell; fall back to realpath comparison
+  CONTENT_RP="$(cd "$(dirname "$CONTENT")" 2>/dev/null && pwd)/$(basename "$CONTENT")"
+  OUT_RP="$(cd "$(dirname "$OUT_FILE")" 2>/dev/null && pwd)/$(basename "$OUT_FILE")"
+  if [ "$CONTENT_RP" = "$OUT_RP" ]; then
+    echo "Error: --content path is the same file as the writer's output ($OUT_FILE). Self-feed loop refused. Pass a separate draft path." >&2
+    exit 4
+  fi
+fi
+
 # Optional read-first CAS: if --if-hash provided and target file exists, verify hash
 if [ -n "$IF_HASH" ] && [ -f "$OUT_FILE" ]; then
   CURRENT_HASH="$(sha256_of "$OUT_FILE")"
@@ -70,13 +90,22 @@ fi
 
 mkdir -p "$ENTITY_FOLDER"
 
-# Write wrapped content with section tags
+# Write wrapped content with section tags via temp-then-rename (atomic).
+# Writing to a sibling tempfile + mv is immune to same-file aliasing AND gives
+# atomic visibility (readers never see a half-written file). The cat-source and
+# the redirect target are guaranteed to be distinct inodes here.
 ISO_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+TMP_OUT="$(mktemp "${ENTITY_FOLDER}/.${STAGE}.md.XXXXXX")"
+trap 'rm -f "$TMP_OUT"' EXIT
 {
   printf '<!-- section:%s-report -->\n' "$STAGE"
   cat "$CONTENT"
   printf '\n<!-- /section:%s-report -->\n' "$STAGE"
-} > "$OUT_FILE"
+} > "$TMP_OUT"
+# mktemp defaults to 0600; normalize to repo convention 0644 (umask-respecting)
+chmod 0644 "$TMP_OUT"
+mv "$TMP_OUT" "$OUT_FILE"
+trap - EXIT
 
 # Atomic commit with explicit pathspec
 if ! git -C "$WORKFLOW_DIR" rev-parse --git-dir >/dev/null 2>&1; then
