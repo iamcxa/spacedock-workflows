@@ -379,7 +379,7 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 
 ---
 
-### Principle 7: Domain Registry — read-as-context, M1-M5 graceful-degradation surface
+### Principle 9: Domain Registry — read-as-context, M1-M5 graceful-degradation surface
 
 **Rule**: Cross-stage specialist dispatch (design-stage designer, plan-stage architecture-lens,
 verify-stage intent-match-verifier) MUST consult `plugins/ship-flow/registry/defaults.yaml`
