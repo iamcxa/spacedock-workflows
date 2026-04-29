@@ -350,10 +350,11 @@ SendMessage(to: "planner", body: "Proceed to /plan for pitch-<id>. Read spec.md;
 
 **Conditional design-stage trigger** (FO check, runs after shape-confirm.sh):
 - `affects_ui:true` field set in entity frontmatter (sharp-stage-set; default false), OR
+- `domain:` field set in entity frontmatter (sharp-stage-set via registry-classify; default unset), OR
 - any `Files modified` or `architecture-impact` block citing path matching glob `*.tsx | *.css | *.html`, OR
 - captain explicit `--design` flag on `/shape` invocation.
 
-When ANY trigger fires, FO advances entity to `design` stage (skill: `ship-flow:ship-design`); otherwise auto-skip to `plan` per `skip-when: "!affects_ui"` README.md state declaration.
+When ANY trigger fires, FO advances entity to `design` stage (skill: `ship-flow:ship-design`); otherwise auto-skip to `plan` per `skip-when: "!affects_ui && !domain"` README.md state declaration.
 
 Stage continuation — SendMessage to named teammate (~10× faster than fresh dispatch). **Fresh-subagent reserved for Rule A exceptions**: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages.
 
@@ -402,7 +403,25 @@ Emit `### Hand-off to Design`:
 
 If `affects_ui: false` in entity frontmatter → omit `ui_surfaces` and `framework_detected`; set `open_design_questions: []`.
 
-**Design-skipped passthrough** (G14): when `affects_ui: false`, ALSO emit a stub `### Hand-off to Plan` block with `design-skipped: true` (single field). Rationale: plan Step 1.6 reads `### Hand-off to Plan` to decide whether to import design DCs. Absence of the block is ambiguous (design halted? design errored? affects_ui=false?). Explicit `design-skipped: true` lets plan distinguish "design intentionally bypassed" from "block missing — error". Validated by `check-invariants.sh --check plan-imported-design-dcs-emitted`.
+**Design-skipped passthrough** (G14 amended by 113.1): skip only when BOTH `affects_ui: false` AND `domain:` unset. If either is set, emit standard `### Hand-off to Design` and advance to design stage.
+
+When `affects_ui: false` AND `domain:` is unset → omit `ui_surfaces` and `framework_detected`; set `open_design_questions: []`; emit stub `### Hand-off to Plan` with `design-skipped: true` (single field). Rationale: plan Step 1.6 reads `### Hand-off to Plan` to decide whether to import design DCs. Absence of the block is ambiguous (design halted? design errored? affects_ui=false?). Explicit `design-skipped: true` lets plan distinguish "design intentionally bypassed" from "block missing — error". Validated by `check-invariants.sh --check plan-imported-design-dcs-emitted`.
+
+## Phase 8.5 — Domain classification (registry-classify)
+
+After spec is composed (or post-shape-confirm if pre-existing spec), run domain classification once:
+
+```bash
+bash plugins/ship-flow/lib/registry-resolve.sh --classify <entity-folder>/spec.md
+```
+
+Branch on output:
+- `status=ok` + non-empty `matched=<domain>` → set `domain: <domain>` in entity frontmatter (single-domain match). Advance entity to design stage via standard Hand-off to Design path.
+- `status=partial_coverage` + `matched=<dom-list>` + `missing=<dom-list>` → set `domain: <first-matched>`; emit `## Domain Classification Report` block listing partial coverage (ship-design router will surface partial-coverage annotation).
+- `status=ok` + empty `matched=` → no domain match; do NOT set `domain:` (UI-only or no-trigger path proceeds as before).
+- `status=parse_error` / `invalid_trigger_config` (M4 exit 20 / M5 exit 21) → fail loud per INVARIANTS Principle 9; BLOCK shape. Do not proceed to design or plan.
+
+Multi-domain match disambiguation v1: pick `matched[0]` (first registered domain name). v2 multi-domain dispatch is out of 113.1 scope.
 <!-- /section:hand_off_to_design -->
 
 ---
