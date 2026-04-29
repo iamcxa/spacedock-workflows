@@ -37,7 +37,7 @@ domains:
       - "L2 fstore"
       - "L3 view"
     knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
-    # designer_section_anchor populated when 113.3 (schema-designer specialist) ships.
-    # Until then, every schema-domain pitch triggers M1 (HALT-with-options) — by design.
-    designer_section_anchor: ""
+    # First plugin-default specialist, shipped by 113.3. Adopters can full-replace
+    # this domain entry to point at a project-specific schema designer anchor.
+    designer_section_anchor: "ship-design#schema-designer"
     description: "Schema design — drizzle tables, fmodel L1/L2/L3, indexes, FK, migration sequencing"

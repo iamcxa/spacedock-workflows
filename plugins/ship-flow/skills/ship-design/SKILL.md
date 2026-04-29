@@ -125,7 +125,71 @@ Reached only when Phase 0 step 2 returns exit 0 (domain registered + `specialist
 3. Dispatch to specialist sub-section identified by `designer_section_anchor` (e.g., `ship-design#schema-designer` once 113.3 ships). Specialist sub-section defines its own typed `## Design Output` block (e.g., `## Schema Design Output`).
 4. v1 multi-domain disambiguation: if `domain:` frontmatter contains multiple names (comma-separated), use first match. v2 multi-domain dispatch is out of 113.1 scope.
 
-**Until 113.3 ships**: `defaults.yaml` has `designer_section_anchor: ""` for schema domain → every schema-domain pitch triggers M1 (Phase 0 step 2 exit 10 → HALT). This is correct by design — 113.3 populates the anchor.
+**Schema specialist active as of 113.3**: `defaults.yaml` now points schema to
+`designer_section_anchor: "ship-design#schema-designer"`, so schema-domain
+pitches proceed to the specialist path instead of the M1 HALT path. Domains
+without an anchor still use the M1 HALT-with-options surface.
+
+## Schema Designer Specialist
+
+Anchor: `ship-design#schema-designer`
+
+This subsection is invoked only after Phase 0.5 resolves `domain=schema`,
+`registry-resolve.sh --validate --domain=schema` exits 0, and the designer has
+loaded `plugins/ship-flow/references/domain-knowledge/schema.md`. The schema
+designer is still part of the `ship-design` stage skill; do not add a new stage
+skill for this specialist.
+
+### Required output
+
+Emit a typed schema block in `design.md`:
+
+```markdown
+## Schema Design Output
+
+### Layers touched
+- L1 decider:
+- L2 fstore:
+- L3 view:
+
+### Migration safety
+- Additive / destructive:
+- Backfill required:
+- Event-saga implication:
+
+### RBAC and tenancy
+- tenant_id / ownership columns:
+- RBAC subject:
+
+### Projection / fstore rebuild
+- Rebuild strategy:
+- Stale-read tolerance:
+
+### Hand-off constraints for Plan
+- Required plan DCs:
+- Verify-time intent checks:
+```
+
+### Design checklist
+
+Answer each schema-domain question before handing off to plan:
+
+1. Which layers does the pitch touch: L1 decider, L2 fstore, L3 view, or a
+   combination?
+2. Does the migration have event-saga implications such as column removal,
+   foreign-key changes, primary-key changes, or NOT NULL additions without a
+   default?
+3. Do new or modified user-owned tables include tenant isolation and RBAC
+   subject columns?
+4. If an L2 projection shape changes, what is the fstore rebuild strategy?
+5. If an L3 view type changes, is the API/contract impact additive or breaking?
+
+### Hand-off to Plan
+
+The specialist's `### Hand-off constraints for Plan` must name concrete DCs the
+plan stage can verify. Do not emit `## Intent Match Findings` here; pitch 113.4
+owns the verify-stage intent-match verifier. For 113.3, the design stage only
+creates typed intent for later comparison.
 
 ### Phase 1 — Read exploration
 

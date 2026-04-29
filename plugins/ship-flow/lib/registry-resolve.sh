@@ -311,9 +311,10 @@ check_m2_knowledge() {
   local dom="$2"
   local km_path
   km_path="$(get_domain_field "$cfg" "$dom" "knowledge_module")"
-  # Resolve relative to PLUGIN_ROOT
-  local abs_path="${PLUGIN_ROOT}/${km_path}"
-  if [ -n "$km_path" ] && [ ! -f "$abs_path" ]; then
+  # Registry entries may be repo-root paths (`plugins/ship-flow/...`) or
+  # plugin-root-relative paths (`references/...`) for adopter overrides.
+  local plugin_abs_path="${PLUGIN_ROOT}/${km_path}"
+  if [ -n "$km_path" ] && [ ! -f "$km_path" ] && [ ! -f "$plugin_abs_path" ]; then
     echo "status=knowledge_module_missing" >&2
     echo "domain=$dom" >&2
     echo "missing_path=$km_path" >&2
