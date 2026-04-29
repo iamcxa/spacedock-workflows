@@ -1,0 +1,42 @@
+# registry/defaults.yaml — Plugin-default domain registry for ship-flow
+#
+# PURPOSE: Maps domain names to specialist designers + knowledge modules.
+# Consumed by: ship-design router (113.1), schema-designer specialist (113.3),
+#              intent-match-verifier (113.4) via lib/registry-resolve.sh.
+#
+# ADOPTER OVERRIDE: Place project-level overrides at:
+#   .claude/ship-flow/domains.yaml
+# Precedence: project .claude/ship-flow/domains.yaml > this file (full-replace per domain)
+#
+# M1-M5 DEGRADATION PATHS (emitted by registry-resolve.sh):
+#   M1 specialist_missing  — domain matched, designer_section_anchor empty → exit 10
+#   M2 knowledge_module_missing — knowledge_module file absent on disk → exit 11
+#   M3 partial_coverage    — multi-domain spec, some matched / some missing → exit 0
+#   M4 parse_error         — this file malformed → exit 20 (fail loud)
+#   M5 invalid_trigger_config — domain has both trigger_patterns: [] AND spec_keywords: [] → exit 21
+#
+# PORTABILITY (A3/A4): This file contains ONLY generic patterns.
+# NO adopter-specific globs (no *.fmodel.ts, no drizzle/*, no carlove paths).
+# Adopters supply project-specific trigger_patterns via .claude/ship-flow/domains.yaml.
+#
+# VERSIONING: v1 ships with schema domain only (deliberate minimal seed).
+# Additional domains (saga, rbac, contract, etc.) added via future X-children of #113.
+
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns: []
+    spec_keywords:
+      - schema
+      - drizzle
+      - fmodel
+      - migration
+      - column
+      - "L1 decider"
+      - "L2 fstore"
+      - "L3 view"
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    # designer_section_anchor populated when 113.3 (schema-designer specialist) ships.
+    # Until then, every schema-domain pitch triggers M1 (HALT-with-options) — by design.
+    designer_section_anchor: ""
+    description: "Schema design — drizzle tables, fmodel L1/L2/L3, indexes, FK, migration sequencing"
