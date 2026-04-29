@@ -95,6 +95,33 @@ Each imported DC retains `rationale_decision: D{N}` cross-reference back to ship
 
 **Output**: `## Plan Imported Design DCs` section in plan.md listing each imported DC with source field + wave assignment + rationale_decision link.
 
+### Step 1.7 — Architecture-lens dispatch (entity 110, 2026-04-29)
+
+After spec read + design DC import, check whether the spec touches any known cross-cutting domains and dispatch read-only architecture lens agents before research.
+
+**Trigger matching** — read `plugins/ship-flow/references/architecture-lens-triggers.yaml`. For each domain entry:
+1. **File-glob match**: check spec `### Artifacts likely touched` paths against `trigger_patterns` (bash glob, case-insensitive). Match if any path matches any pattern.
+2. **Spec-keyword match**: grep spec body (full text) for each `spec_keywords` entry (case-insensitive). Match if any keyword found.
+3. **OR-semantic**: domain triggers if EITHER file-glob OR spec-keyword matches.
+
+**Trivial escape hatch**: if entity frontmatter `appetite: trivial` AND (`affects_ui: false` OR spec body contains `docs-only: true`) → skip lens dispatch entirely. Still emit `## Context Manifest` with `Lens dispatched: skipped (trivial escape hatch)`.
+
+**Dispatch** — for each matching domain, dispatch `Skill(lens_skill)` with prompt:
+```
+Read spec at {spec_path}. Read {domain_knowledge_refs}. For each cross_cutting_concern listed in your frontmatter, output a structured YAML verdict (FLAG/PASS/SKIP with missing_dc if FLAG). ≤300 words total.
+```
+All matching lenses dispatch **in parallel** (no budget cap for v1). Collect structured YAML verdicts.
+
+**If no domains match** → emit `Lens dispatched: none (no trigger match)` in Context Manifest. Proceed normally.
+
+**Lens FLAG integration** — after all verdicts collected, for each FLAG verdict:
+- Option A: add DC covering the flagged concern to the plan (preferred)
+- Option B: write entry in `## Lens Findings: deferred` section with explicit rationale per skipped FLAG
+
+Gate refuses plan stage advance (Step 6.1) if any FLAG exists without Option A or Option B entry. The `## Lens Findings: deferred` section MUST enumerate each deferred FLAG with: `concern`, `rationale`, `accepted_by` (captain or plan worker with justification).
+
+**Lens output in plan.md** — record all verdicts in `## Context Manifest → Lens dispatched` field. Full structured YAML verdicts stored as `## Lens Raw Verdicts` appendix section (for audit; not required reading for execute stage).
+
 ### Step 2 — Research (size-adaptive, produce+review)
 
 - **S** — skip research. Proceed to Step 3.
@@ -137,6 +164,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
 - TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `**TDD:** skip — <reason>`.
 - Wave rules: wave 0 = test infra; wave N+1 depends only on ≤N outputs; no `files_modified` overlap within a wave; no cycle.
 - **T0.X auto-indirection-sweep** (T6.1, #106): when `theme_indirection` from ship-runtime-detect Step R5 is non-empty (e.g. `tailwind-v4`), auto-emit a Wave 0 task in the plan: `T0.X: Audit @theme inline indirection layer — verify design tokens align with CSS custom properties, no hardcoded hex values in component files`. REFUSE to emit a plan without this task when `theme_indirection != ""`. Enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check indirection-sweep-emitted` (fixture-based).
+- **Lens FLAG integration** (entity 110, 2026-04-29): after Step 1.7 lens verdicts are collected, plan worker MUST for each FLAG verdict: (a) add a DC covering the flagged concern, or (b) write an entry in `## Lens Findings: deferred` with explicit rationale. Gate refuses advance if any FLAG exists without Option A or Option B. Silence is NOT acceptable — the deferred section exists precisely to make punts explicit and captain-visible.
 
 ### Step 3.5 — Verification spec (structural parity enforcement)
 
@@ -177,6 +205,7 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 8. **Stale-line-anchor** — every `file:line` citation re-read; content-matches / line-shifted / contradicted (BLOCKER) / phantom path (BLOCKER). Catches #1 cause of execute BLOCKED returns.
 9. **Design reference compliance** — skip if no `## Design Reference` section; else cross-check visual attrs (fill/stroke/colors/dimensions) against cited spec files. Flag deviations.
 10. **Stub-captain-ack scan** (T6.2, #106): grep every task body for keywords `stub|fake|placeholder|v1.*only|wired only for`. For each match: check entity frontmatter `pre-acked-stubs: true` OR check that the Plan Report has a `## Stub Flag` entry for this task with explicit captain rationale. If neither present → `BLOCK: stub task without captain ack` (literal string required for test DC). Populate `## Plan Report → Stub Flags` table with all stub tasks found. Cross-review PROCEED blocked until all stubs either pre-acked or cleared.
+11. **Context Manifest completeness** (entity 110, 2026-04-29): `## Context Manifest` section present and all 6 fields non-empty: `Skills loaded`, `INVARIANTS sections read`, `Architecture docs consulted`, `Domains touched`, `Lens dispatched`, `Lens findings integrated`. Lens dispatched field must reflect actual Step 1.7 trigger matching results (not copy-pasted from a prior entity). C8 check: `bash plugins/ship-flow/bin/check-invariants.sh --check context-manifest-emitted`.
 
 ### Step 5 — Cross-review gate (Principle 6 Rule C)
 
@@ -209,7 +238,22 @@ Verdict: **PROCEED** / **VETO** (max 2 loops back to Step 3 with reviewer feedba
 
 Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=plan --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive landed at commit `acd73545`). Primitive handles atomic commit with explicit pathspec (MEMORY #14/#25/#37).
 
-Plan.md sections: `## Research Summary` (findings + open questions if contradictions + reviewer verdict), `## Size Re-evaluation`, `## Verification Spec` (table from Step 3.5), `## Plan` (TDD tasks from Step 3), `## Plan Report` (status, stage_cost: dispatches×model, iterations, dimensions pass/fail, reviewer verdict, scope anchoring, task count, model split, started/completed/duration).
+Plan.md sections: `## Research Summary` (findings + open questions if contradictions + reviewer verdict), `## Size Re-evaluation`, `## Verification Spec` (table from Step 3.5), `## Plan` (TDD tasks from Step 3), `## Plan Report` (status, stage_cost: dispatches×model, iterations, dimensions pass/fail, reviewer verdict, scope anchoring, task count, model split, started/completed/duration), `## Context Manifest` (mandatory — see Step 1.7 and dimension 11).
+
+**`## Context Manifest` section format** (mandatory output, entity 110, 2026-04-29):
+
+```markdown
+## Context Manifest
+
+- **Skills loaded**: [comma-separated skills invoked]
+- **INVARIANTS sections read**: [section names with file:line citations]
+- **Architecture docs consulted**: [docs read, with paths]
+- **Domains touched**: [domain names from trigger registry that matched, or "none"]
+- **Lens dispatched**: [list: domain (verdict summary) or "none (no trigger match)" or "skipped (trivial escape hatch)"]
+- **Lens findings integrated**: [N integrated, M deferred-with-rationale, K ignored — must be 0 ignored unless all flags are deferred]
+```
+
+C8 enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check context-manifest-emitted` — fails if section absent in any non-blocked plan.md created after 2026-04-29.
 
 Mark TaskCreate sub-task `emit-plan.md` completed; return to /ship for advance to execute.
 
