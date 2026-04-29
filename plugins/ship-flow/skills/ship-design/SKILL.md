@@ -35,11 +35,12 @@ Fallback: if `design-flow` is unavailable (plugin not installed), fall back to `
 ## Trigger condition
 
 Design stage fires when ANY of:
-- `affects_ui: true` in entity frontmatter (set by shape stage when pitch touches frontend)
+- `affects_ui: true` in entity frontmatter (UI trigger path; set by shape stage when pitch touches frontend)
+- `domain:` frontmatter set in entity, registered in registry (specialist trigger path; set by ship-shape Phase 8.5 via `registry-resolve.sh --classify`; `domain:` set_at shape)
 - `Files modified` or `architecture-impact` cites path matching glob `*.tsx | *.css | *.html`
 - Captain explicit `--design` flag on `/shape` invocation
 
-Otherwise: auto-skip to plan per `skip-when: "!affects_ui"` in `docs/ship-flow/README.md` stages.states.
+Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain"` in `docs/ship-flow/README.md` stages.states.
 
 ---
 
@@ -96,9 +97,35 @@ Otherwise: auto-skip to plan per `skip-when: "!affects_ui"` in `docs/ship-flow/R
 
 ### Phase 0 — Route
 
-1. Read entity spec.md. Determine category per classifier table.
-2. If Category != 0: emit halt message and exit (no design.md written).
-3. Proceed to Phase 1 (Category 0 path).
+1. Read entity frontmatter `affects_ui:` and `domain:`. Record both.
+2. **If `domain:` is set**: invoke registry-resolve to confirm specialist availability:
+   ```bash
+   bash plugins/ship-flow/lib/registry-resolve.sh --validate --domain=<domain-name>
+   ```
+   Branch on exit code:
+   - exit 0 → domain registered + specialist available → proceed to Phase 0.5 (specialist dispatch).
+   - exit 10 (M1 `specialist_missing`) → emit `## Design Output → ### Router HALT` block with all 3 options (skip / generalist-marker / file-specialist-first). SendMessage(FO): halt notice with domain name + options. **STOP** — captain acks one option in entity body, then re-runs design.
+   - exit 11 (M2 `knowledge_module_missing`) → same as M1 path: emit HALT block, SendMessage(FO), **STOP**.
+   - exit 20 / 21 (M4 parse_error / M5 invalid_trigger_config) → fail loud per INVARIANTS Principle 9; SendMessage(FO): "registry config error exit $?; blocking design stage". **STOP**.
+3. **If `domain:` is unset AND `affects_ui: true`**: proceed to UI category-classifier (current Category 0/A/B/C/D logic at Phase 0 step 4).
+4. Read entity spec.md. Determine category per classifier table.
+5. If Category != 0: emit halt message and exit (no design.md written).
+6. Proceed to Phase 1 (Category 0 path).
+
+### Phase 0.5 — Specialist dispatch (domain path only)
+
+Reached only when Phase 0 step 2 returns exit 0 (domain registered + `specialist_missing` = false).
+
+1. Resolve specialist anchor and knowledge module:
+   ```bash
+   bash plugins/ship-flow/lib/registry-resolve.sh --domain=<domain-name>
+   ```
+   Read `designer_section_anchor` and `knowledge_module_path` from output envelope.
+2. Load knowledge module: read `references/domain-knowledge/<domain>.md` before specialist work (domain-specific constraints + anti-patterns + design checklist).
+3. Dispatch to specialist sub-section identified by `designer_section_anchor` (e.g., `ship-design#schema-designer` once 113.3 ships). Specialist sub-section defines its own typed `## Design Output` block (e.g., `## Schema Design Output`).
+4. v1 multi-domain disambiguation: if `domain:` frontmatter contains multiple names (comma-separated), use first match. v2 multi-domain dispatch is out of 113.1 scope.
+
+**Until 113.3 ships**: `defaults.yaml` has `designer_section_anchor: ""` for schema domain → every schema-domain pitch triggers M1 (Phase 0 step 2 exit 10 → HALT). This is correct by design — 113.3 populates the anchor.
 
 ### Phase 1 — Read exploration
 
