@@ -16,8 +16,9 @@
 #   M5 invalid_trigger_config — domain has both trigger_patterns: [] AND spec_keywords: [] → exit 21
 #
 # PORTABILITY (A3/A4): This file contains ONLY generic patterns.
-# NO adopter-specific globs (no *.fmodel.ts, no drizzle/*, no carlove paths).
-# Adopters supply project-specific trigger_patterns via .claude/ship-flow/domains.yaml.
+# NO adopter-specific globs — adopters supply trigger_patterns via .claude/ship-flow/domains.yaml.
+# Examples of adopter-specific patterns that belong in project override, NOT here:
+#   project globs like fmodel patterns, migration path globs, or team-specific keywords.
 #
 # VERSIONING: v1 ships with schema domain only (deliberate minimal seed).
 # Additional domains (saga, rbac, contract, etc.) added via future X-children of #113.
