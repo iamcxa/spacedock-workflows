@@ -864,6 +864,49 @@ check_no_rubric_token() {
   return "$fail"
 }
 
+check_context_manifest_emitted() {
+  # C8 — entity 110: every non-blocked plan.md MUST contain ## Context Manifest section.
+  # Skip plan.md files with status: blocked (blocked plans legitimately skip manifest).
+  # Grace filter: skip plan.md files whose started: field predates 2026-04-29 (pre-110 plans).
+  # Fixture override: if FIXTURE_PLAN set, check only that single file (for DC-6/DC-7 tests).
+  if [ -n "${FIXTURE_PLAN:-}" ]; then
+    local f="$FIXTURE_PLAN"
+    if grep -qE '^## Plan Report' "$f" && grep -qE 'status:[[:space:]]*blocked' "$f"; then
+      echo "OK C8 context-manifest-emitted (blocked plan skipped)"
+      return 0
+    fi
+    if ! grep -qE '^## Context Manifest' "$f"; then
+      echo "FAIL C8 context-manifest-emitted: '$(basename "$f")' missing ## Context Manifest section. See ship-plan/SKILL.md Step 6." >&2
+      return 1
+    fi
+    echo "OK C8 context-manifest-emitted"
+    return 0
+  fi
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0 f entity
+  for f in "$docs_dir"/*/plan.md; do
+    [ -f "$f" ] || continue
+    entity="$(basename "$(dirname "$f")")"
+    # Grace filter: skip pre-110 plans (no started: field or started before 2026-04-29)
+    local started
+    started="$(grep -m1 '^started:' "$f" 2>/dev/null | sed 's/started:[[:space:]]*//' || true)"
+    if [ -z "$started" ] || [[ "$started" < "2026-04-29" ]]; then
+      continue
+    fi
+    # Skip blocked plans
+    if grep -qE 'status:[[:space:]]*blocked' "$f"; then
+      continue
+    fi
+    if ! grep -qE '^## Context Manifest' "$f"; then
+      echo "FAIL C8 context-manifest-emitted: '$entity/plan.md' missing ## Context Manifest section. See ship-plan/SKILL.md Step 6." >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C8 context-manifest-emitted"
+  return "$fail"
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -895,6 +938,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     verify-mechanical-ui-parity-emitted) check_verify_mechanical_ui_parity_emitted; exit $? ;;
     will-get-triple) check_will_get_triple; exit $? ;;
     no-rubric-token) check_no_rubric_token; exit $? ;;
+    context-manifest-emitted) check_context_manifest_emitted; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -942,5 +986,7 @@ check_verify_mechanical_ui_parity_emitted || FAIL=1
 # C6-C7: entity 109 outcome-card layer enforcement (2026-04-29)
 check_will_get_triple || FAIL=1
 check_no_rubric_token || FAIL=1
+# C8: entity 110 context manifest enforcement (2026-04-29)
+check_context_manifest_emitted || FAIL=1
 
 exit $FAIL
