@@ -9,5 +9,5 @@ domains:
       - schema
       - drizzle
     knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
-    designer_section_anchor: "ship-design#nonexistent-schema-designer-anchor"
+    designer_section_anchor: ""
     description: "Schema design (M1 fixture — specialist anchor does not exist)"
