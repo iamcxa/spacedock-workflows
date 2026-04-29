@@ -924,6 +924,28 @@ check_context_manifest_emitted() {
   return "$fail"
 }
 
+check_principle_numbering() {
+  # C9 — INVARIANTS.md: every `^### Principle N:` heading must use a unique N.
+  # Pitch-113.2 incident: T3.1 added "Principle 7: Domain Registry" while file
+  # already had "Principle 7: Metadata-driven portability" — duplicate-N silently
+  # passed because no grep-DC asserted uniqueness. Verifier-side strengthen +
+  # this assertion prevents recurrence. Fixture override: FIXTURE_INVARIANTS=path.
+  local invariants_file="${FIXTURE_INVARIANTS:-${ROOT}/plugins/ship-flow/INVARIANTS.md}"
+  [ -f "$invariants_file" ] || return 0
+  local dups
+  dups="$(grep -oE '^### Principle [0-9]+:' "$invariants_file" \
+    | awk '{print $3}' | tr -d ':' | sort | uniq -d)"
+  if [ -n "$dups" ]; then
+    local n
+    while IFS= read -r n; do
+      echo "ERROR [Principle 5/numbering]: INVARIANTS.md has duplicate '### Principle $n:' headings. See plugins/ship-flow/INVARIANTS.md — each Principle N must use a unique N." >&2
+    done <<< "$dups"
+    return 1
+  fi
+  echo "OK C9 principle-numbering"
+  return 0
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -956,6 +978,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     will-get-triple) check_will_get_triple; exit $? ;;
     no-rubric-token) check_no_rubric_token; exit $? ;;
     context-manifest-emitted) check_context_manifest_emitted; exit $? ;;
+    principle-numbering) check_principle_numbering; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -1005,5 +1028,7 @@ check_will_get_triple || FAIL=1
 check_no_rubric_token || FAIL=1
 # C8: entity 110 context manifest enforcement (2026-04-29)
 check_context_manifest_emitted || FAIL=1
+# C9: pitch-113.2 — INVARIANTS.md duplicate Principle-number detection (2026-04-29)
+check_principle_numbering || FAIL=1
 
 exit $FAIL

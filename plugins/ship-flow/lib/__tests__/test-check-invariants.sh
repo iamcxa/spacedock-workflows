@@ -838,4 +838,38 @@ else
   echo "FAIL DC-17c: verdict-flip-whitelist check should fail when block absent"; FAIL=1
 fi
 
+# ========== C9: principle-numbering — duplicate Principle N triggers fail ==========
+# Pitch-113.2 incident: T3.1 added "Principle 7: Domain Registry" while file
+# already had "Principle 7: Metadata-driven portability". This DC asserts
+# uniqueness via `sort | uniq -d` over the N column in `^### Principle N:` lines.
+TMP_INV="$(mktemp -t test-check-invariants-c9.XXXXXX)"
+
+# C9-pass: live INVARIANTS.md (real file) — must pass at HEAD.
+assert_exit "0" \
+  "FIXTURE_INVARIANTS='${PLUGIN_DIR}/INVARIANTS.md' bash '$CHECK_SCRIPT' --check principle-numbering 2>/dev/null" \
+  "C9 principle-numbering: live INVARIANTS.md has unique Principle Ns"
+
+# C9-fail: synthetic fixture with duplicate "Principle 7" → exit 1 + stderr cite.
+cat > "$TMP_INV" <<'EOF'
+# INVARIANTS
+
+### Principle 1: foo
+text
+
+### Principle 7: bar
+text
+
+### Principle 7: baz (DUPLICATE — should fail)
+text
+EOF
+assert_exit "1" \
+  "FIXTURE_INVARIANTS='$TMP_INV' bash '$CHECK_SCRIPT' --check principle-numbering 2>/dev/null" \
+  "C9 principle-numbering: synthetic fixture with duplicate N=7 fails"
+
+assert_stderr_contains "duplicate '### Principle 7:'" \
+  "FIXTURE_INVARIANTS='$TMP_INV' bash '$CHECK_SCRIPT' --check principle-numbering" \
+  "C9 principle-numbering: error message names the duplicate N"
+
+rm -f "$TMP_INV"
+
 exit $FAIL
