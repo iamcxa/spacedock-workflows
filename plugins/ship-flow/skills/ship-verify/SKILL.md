@@ -216,6 +216,49 @@ ui-verify backend (e2e-pipeline plugin) drives a real browser via `agent-browser
 
 **Why not fold into Step 3.5**: 3.5 owns semantic review (D1-D6 captain decisions, designer hot context). 3.6 owns mechanical assertion (computed-style equality, pixel diff). Different failure modes, different tools, different reviewers — folding loses the distinction and lets LLM rationalize past rendered-value mismatches that are categorically not a judgment call.
 
+### Step 3.7 — Intent-match verifier (schema-domain ad-hoc hook)
+
+**Trigger**: run when any of these are true:
+- Entity frontmatter has `domain: schema`.
+- `bash plugins/ship-flow/lib/registry-resolve.sh --classify <entity spec/index>` resolves or partially resolves to `schema`.
+- The entity has a design artifact (`design.md` or entity body design output) containing `## Schema Design Output`.
+
+**Registry contract**: verify is a registry consumer. Before checking schema intent, run:
+
+```bash
+bash plugins/ship-flow/lib/registry-resolve.sh --validate --domain=schema
+bash plugins/ship-flow/lib/registry-resolve.sh --domain=schema
+```
+
+Respect M1-M5 degradation from Principle 9. Do not hardcode domain-to-specialist mappings inside ship-verify prose; the registry owns specialist and knowledge-module resolution.
+
+**Source contract**: `## Schema Design Output` is the source of truth. Build an intent checklist from the typed output and explicit handoff constraints:
+- L1/L2/L3 relationship intent, including any required denormalized projections.
+- event-saga behavior and sequencing requirements.
+- RBAC read/write boundaries.
+- fstore rebuild and backfill requirements.
+- Explicit "handoff constraints" or "must-not" notes in the schema design output.
+
+**Comparison**: compare execute evidence or diff against the design intent checklist.
+- Use `git diff <execute_base>..HEAD -- <schema/API/migration files>` for structural drift.
+- Use `execute.md -> ## Execute UAT` for evidence drift.
+- If a checklist item has no corresponding changed file, command evidence, or explicit execute note, treat it as unresolved intent.
+- If execute intentionally changed the intent, require an explicit design-stage note or captain decision; otherwise it is drift.
+
+**Output format**: when drift is found, append a top-level block to `verify.md`:
+
+```markdown
+## Intent Match Findings
+
+| Severity | Finding | Evidence | route_to |
+|---|---|---|---|
+| BLOCKING/WARN/NIT | <specific design-vs-execute mismatch> | <file:line, command, or artifact citation> | design/execute |
+```
+
+Use `route_to: design` when the design intent is incomplete, contradicted, impossible to execute, or missing enough detail for execute to be judged fairly. Use `route_to: execute` when the design intent is clear and execute drifted from it; otherwise route to execute. These findings integrate into `### Review Findings` classification: BLOCKING feeds back to the routed stage, WARN logs but does not block if no other BLOCKING finding exists, and NIT can be auto-fixed only if it is mechanical artifact cleanup.
+
+**Boundary**: this is the first ad-hoc verifier for X1/113.4. Do not create a new `intent-match-verifier` stage skill and do not add default haiku fan-out. X2 owns typed contract-registry dispatch for multiple verifier types.
+
 ---
 
 ## Step 4 — UAT (spot-check default, full re-run fallback)
