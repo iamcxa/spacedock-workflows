@@ -275,6 +275,23 @@ On exit 6 (stale hash): write `## Plan Report status: blocked, reason: index.md 
 
 ---
 
+## Post-ship Retro Prompt (entity 110 Captain Bet — SC-810-class prevention)
+
+After this feature ships, re-read the `## Captain Bet` block in the entity body. At the 5-carlove-pitch mark, evaluate outcome:
+
+**Bet substance**: "下 5 個 carlove pitches 不再有 SC-810-class cascade-saga gap."
+
+**Retro procedure**:
+1. Review the last 5 carlove pitches that touched tag/customer/event-saga domains
+2. For each pitch where a cascade-saga gap still occurred, categorize per 4 bet-failure paths:
+   - **Path 1** — Domain not in lens registry (trigger didn't match) → add lens for that domain
+   - **Path 2** — Lens fired but plan worker ignored finding → strengthen W3 gate from gate-with-explicit-deferral to hard-block-no-deferral
+   - **Path 3** — Manifest section missing key dimension → add new manifest field
+   - **Path 4** — Lens fired + plan integrated, but failure still occurred → format-level revisit (meta-level re-shape)
+3. If ≥3 consecutive bets fail → freeze lens registry + trigger re-shape of this pitch
+
+**Kill criterion**: 3 consecutive `Bet ≠ Outcome` → freeze lens registry + re-shape. Single fail → apply specific improvement per 4 paths above.
+
 ## Invariants + red flags (STOP if violated)
 
 - Every DC has a runnable verify procedure. "Manual check" = plan failure.
