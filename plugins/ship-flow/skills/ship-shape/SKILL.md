@@ -220,6 +220,40 @@ Confirm / refine: "<text>" / reject ?
 
 Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 
+#### ASCII DAG for chat presentation (captain UX)
+
+When presenting the captain gate proposal IN CHAT, render the DAG as an **ASCII art diagram** (boxes + arrows), NOT mermaid. Mermaid renders only in artifacts (spec.md, plan.md), not in the captain's terminal. Captain UX preference (codified 2026-04-29 during pitch-108 shape session): "ASCII for chat, mermaid for files."
+
+Pattern:
+```
+┌──────────────────────┐         ┌──────────────────────┐
+│ <id>.1               │ ──────▶ │ <id>.2               │
+│ <slug>               │ depends │ <slug>               │
+│ ~<estimate>d         │   on    │ ~<estimate>d         │
+│                      │         │                      │
+│ • bullet 1           │         │ • bullet 1           │
+│ • bullet 2           │         │ • bullet 2           │
+│                      │         │                      │
+│ DC: <one-liner>      │         │ DC: <one-liner>      │
+└──────────────────────┘         └──────────────────────┘
+   Wave 1 (foundation)              Wave 2 (verifier)
+```
+
+For 3+ children with branches, use:
+```
+                 ┌──────────┐
+              ┌─▶│ <id>.2   │
+              │  └──────────┘
+┌──────────┐  │
+│ <id>.1   │──┤
+└──────────┘  │
+              │  ┌──────────┐
+              └─▶│ <id>.3   │
+                 └──────────┘
+```
+
+The artifact (spec.md / plan.md / index.md) ALWAYS uses mermaid — `shape-confirm.sh` parses mermaid and `dag_mermaid` field in proposal JSON requires mermaid syntax. ASCII is a chat-only render.
+
 ### Pre-mortem (mandatory on non-trivial pitch; before cross-review)
 
 After composing the proposal, write **one sentence** answering: "If this pitch ships exactly per spec but post-ship inspection finds it isn't delivering value, what's the single most likely cause?" Append as `pre_mortem` (1 sentence, ≤30 words; pick **exactly one** category):
