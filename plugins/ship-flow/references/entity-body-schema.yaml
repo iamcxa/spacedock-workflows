@@ -52,6 +52,19 @@ frontmatter:
         True when shape detects UI-affecting changes (frontend file globs *.tsx|*.css|*.html, or
         explicit captain --design flag). Drives design-stage conditional skip-when. Set by
         ship-shape SKILL during shape stage based on Mode A/B/C trigger detection.
+    domain:
+      type: string
+      optional: true
+      set_at: shape
+      default: unset
+      description: |
+        Domain registry name (e.g., "schema") set by ship-shape Phase 8.5 via
+        plugins/ship-flow/lib/registry-resolve.sh --classify on spec.md. Drives
+        design-stage conditional skip-when (alongside affects_ui). Consumed by
+        ship-design Phase 0 router for specialist dispatch (per registry's
+        designer_section_anchor lookup). Empty/unset = no domain match (UI-only
+        or no-trigger path). See plugins/ship-flow/registry/defaults.yaml +
+        adopter override at .claude/ship-flow/domains.yaml.
     entity_type: { type: enum, values: [entity, epic], default: entity, description: "entity = normal pipeline entity; epic = decomposed into children, FO skips (status: epic bypasses stage_by_name dispatch)" }
     children: { type: list, items: string, example: '["child-slug-1", "child-slug-2"]', description: "Child entity slugs — set by ship-shape epic mode when decomposing. Epic entity status is frozen at 'epic'; children flow through the pipeline independently." }
     plugin: { type: string, pattern: "^[a-z][a-z0-9-]*$", description: "Kebab-case plugin slug — scopes entity to a plugin in a monorepo (e.g., 'ship-flow', 'spacebridge'). When set, resolve_map_path uses plugins/{plugin}/ prefix for canonical doc paths. Optional: omit for repo-root-scoped entities (backward compat)." }
