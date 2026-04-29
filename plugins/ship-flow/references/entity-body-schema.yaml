@@ -855,6 +855,17 @@ stages:
           fields:
             - { name: capabilities_added, type: number }
             - { name: stories_added, type: number }
+        umbrella_closeout:
+          section: "### Umbrella Closeout"
+          section_tag: review-umbrella-closeout
+          layer: implementation
+          condition: "Required for shaped-child, pitch, epic, or children[] entities"
+          fields:
+            - { name: required, type: boolean }
+            - { name: parent, type: string, description: "Parent pitch/epic id or slug when applicable" }
+            - { name: roadmap_action, type: string, description: "Moved parent Now/Next → Shipped, or skipped with rationale" }
+            - { name: product_action, type: string, description: "Updated parent aggregate capability, or skipped with rationale" }
+            - { name: architecture_action, type: string, description: "Updated architecture-impact, or skipped with rationale" }
         architecture_changes:
           section: "### Architecture Changes"
           section_tag: review-architecture-changes

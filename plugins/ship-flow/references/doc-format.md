@@ -1,6 +1,6 @@
 # Doc Format Reference
 
-Shared format for PRODUCT.md and ROADMAP.md updates. Read by ship-shape (ROADMAP Now) and ship-review (ROADMAP Shipped + PRODUCT.md).
+Shared format for ARCHITECTURE.md, PRODUCT.md, and ROADMAP.md updates. Read by ship-shape (impact blocks / ROADMAP active rows), ship-review (canonical doc sync), and `docs/ship-flow/_mods/canonical-doc-sync.md` (umbrella closeout timing).
 
 ## Tone
 
@@ -34,6 +34,22 @@ Examples:
 - If shape ran → extract from User Story US-1's "I want {action}" clause
 - If shape didn't run → extract from `## Problem`'s first sentence, rewrite as capability
 - Always end with `(#{entity-id})`
+- For umbrella pitches, write one parent-level capability when the aggregate shipped result changes the product surface; do not write one bullet per shaped child unless the child was independently product-visible.
+
+## ARCHITECTURE.md Formats
+
+### Architecture Patch
+
+`ARCHITECTURE.md` is updated only from `architecture-impact` or an equivalent durable architecture change discovered at review.
+
+Update when the shipped work changes:
+- system structure, container/component boundaries, data-flow contracts, storage/API contracts, or ADR-worthy constraints
+- cross-child aggregate architecture in an umbrella pitch
+
+Skip when the shipped work changes only:
+- prompt text, tests, stage reports, ROADMAP/PRODUCT prose, or local workflow documentation with no durable architecture effect
+
+Every skip must be explicit in `## Canonical Docs Update`.
 
 ### User Story (JTBD format)
 
@@ -87,6 +103,16 @@ Examples:
 ```
 
 **Rule:** "Why it existed" uses present tense (it still exists). Describe the capability, not the bug.
+
+### Umbrella Shipped Row
+
+For `pattern: pitch`, `entity_type: epic`, or parent entities with `children[]`, write the `Shipped` row once when the final child ships or during the first follow-up PR after discovering the omission.
+
+```
+| {parent-id} | {parent title} | {one sentence — aggregate capability now shipped} | {date} | {outcome emoji or PR ref} |
+```
+
+Do not add separate shaped-child rows unless those children had independent ROADMAP rows.
 
 ### Not Doing Row
 

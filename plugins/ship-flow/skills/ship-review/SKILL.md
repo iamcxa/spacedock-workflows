@@ -21,10 +21,11 @@ Run before any review work. Stop and SendMessage(FO) if any check fails.
 4. **Canonical docs readable**: `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md` all exist at repo root. If any missing → note in review.md skip-rationale (non-blocking for docs that don't apply).
 5. **Planner teammate**: verify `planner` teammate is reachable (SendMessage test). If unresponsive → use Rule A Fallback for canonical docs dispatch.
 6. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
+7. **Canonical doc sync mod**: read `docs/ship-flow/_mods/canonical-doc-sync.md` when present. This mod defines doc timing for `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md`, and umbrella closeout.
 
 ## Entity body contract (schema-as-prose)
 
-- Reads: `verify.md` verdict (PASS required), `execute.md` execution log, `spec.md` problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`.
+- Reads: `verify.md` verdict (PASS required), `execute.md` execution log, `spec.md` problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`, `docs/ship-flow/_mods/canonical-doc-sync.md`.
 - Writes: `<entity-folder>/review.md` sections — `## PR Draft` (title + body), `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (verdict / stage_cost / timestamps).
 - Side effects: ARCHITECTURE.md / PRODUCT.md / README.md / ROADMAP.md patched (by `planner` dispatch — NOT by this skill directly).
 - Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.review`.
@@ -52,7 +53,7 @@ Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / 
 ## Flow
 
 **Phases (TaskCreate sub-tasks — inherit from /ship umbrella when pipeline-dispatched):**
-`read-verify` → `dispatch-canonical-patches` → `vcs-detect` → `pr-body-draft` → `token-summary` → `d2-surface` → `cross-review` → `emit-review.md`
+`read-verify` → `dispatch-canonical-patches` → `umbrella-closeout-check` → `vcs-detect` → `pr-body-draft` → `token-summary` → `d2-surface` → `cross-review` → `emit-review.md`
 
 ### Step 1 — Read verify verdict + entity sections
 
@@ -92,6 +93,29 @@ SendMessage to `planner` teammate with a structured prompt. Planner already has 
 - PRODUCT.md: {PRODUCT_COMMIT short-SHA} — {summary} (or "skipped — no product-impact block")
 - README.md: {README_COMMIT short-SHA} — {summary} (or "skipped — no readme-impact block")
 - ROADMAP.md: {ROADMAP_COMMIT short-SHA} — status flipped (or "skipped — no parent roadmap-phase")
+```
+
+### Step 2.5 — Umbrella closeout check
+
+Read `docs/ship-flow/_mods/canonical-doc-sync.md → Hook: umbrella-closeout`.
+
+Run this check when either is true:
+- current entity has `pattern: shaped-child` or `parent_pitch:`
+- current entity has `pattern: pitch`, `entity_type: epic`, or `children[]`
+
+Determine whether the current entity is the last open child by reading the parent entity's `children[]` and sibling statuses/PR states. If all siblings are shipped, merged, rejected, or explicitly deferred, the current PR owns umbrella closeout.
+
+Closeout actions:
+- `ROADMAP.md`: remove the parent umbrella row from `Now`/`Next` and append one aggregate `Shipped` row. Do not add shaped-child roadmap rows unless a child was independently listed.
+- `PRODUCT.md`: patch once when the aggregate result changes a durable capability, user story, or constraint. Prefer a parent-level capability entry over per-child bullets.
+- `ARCHITECTURE.md`: patch only when parent/child `architecture-impact` exists or the aggregate result changes durable architecture. Otherwise record `skipped — no architecture-impact and no durable architecture change`.
+
+If the final child PR already merged before closeout was detected, open a small follow-up PR containing canonical doc closeout plus rule repair. Do not silently leave the parent row in `ROADMAP.md`.
+
+Add the outcome to `## Canonical Docs Update`:
+
+```markdown
+- Umbrella closeout: yes/no — <parent id or rationale>
 ```
 
 ### Step 3 — VCS detection
@@ -200,6 +224,7 @@ Reverse-audit: Read the entity's `### Hand-off to Review` block.
 (a) Is `render_fidelity_status` consistent with the PR diff? Read `git diff <base>..HEAD -- "*.tsx" "*.css"` — any visual changes present but render_fidelity_status = "not-applicable"? (PROMPT_CAPTAIN if mismatch)
 (b) Does verify.md `## Execute UAT` cover all DC types listed in plan.md `## Verification Spec`? (WARNING if gap)
 (c) Are all 4 canonical docs (ARCHITECTURE / PRODUCT / README / ROADMAP) either patched with a SHA or explicitly skipped with rationale? (BLOCKING if any doc silently omitted)
+(d) If this is a shaped-child or parent/epic entity, did the umbrella closeout check run per `canonical-doc-sync`? (BLOCKING if omitted)
 Coaching note: render_fidelity gap here is the last catch before captain merge — enforces FM#4 and ensures ABC coaching chain is complete end-to-end.
 ```
 
@@ -249,6 +274,7 @@ On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.m
 - Layer A delegation (`pr-review-toolkit:*`) owns PR review agent personas — re-teaching = Principle 6 Rule B violation.
 - Cross-review VETO cap 2 rounds; round 3 → PROMPT_CAPTAIN.
 - 4-doc canonical-sync audit in cross-review must cover all 4 docs (or explicit skip-rationale per doc).
+- Umbrella closeout check must run for shaped-child, pitch, epic, or `children[]` entities; omission is BLOCKING.
 
 ## Circuit breakers
 
@@ -268,6 +294,7 @@ On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.m
 - `review_verdict`: `PROCEED` verdict from cross-review gate (required for ship to proceed)
 - `captain_ack_stubs`: stub flags cleared or pre-acked by captain (from Plan Report stub_flags — must be resolved)
 - `roadmap_row_ready`: `true` if ROADMAP.md Now → Shipped row is prepared; `false` + reason if not
+- `umbrella_closeout`: `yes/no` plus parent id or skip rationale
 <!-- /section:hand_off_to_ship -->
 
 ---
@@ -279,6 +306,7 @@ On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.m
 - Section extraction: `plugins/ship-flow/lib/extract-section.sh`.
 - Atomic doc patches: `plugins/ship-flow/lib/patch-map.sh` (read-first CAS via `--if-hash`) — ARCHITECTURE / PRODUCT / ROADMAP only.
 - Doc format rules: `plugins/ship-flow/references/doc-format.md`.
+- Canonical doc timing mod: `docs/ship-flow/_mods/canonical-doc-sync.md`.
 - Layer A: `pr-review-toolkit:review-pr` (PR review agent personas — ALWAYS big-batch; OPTIONAL medium-batch via `pr-review-opt-in: true`; SKIP small-batch).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md`.
 - MEMORY: #14/#25/#37 (pathspec / staging), #30 (verification-dispatch — applies to substantial canonical-doc entries), #35 (dispatch discipline amended by Principle 6), opus-4.7-naturally-does (2026-04-23 harness diet).
