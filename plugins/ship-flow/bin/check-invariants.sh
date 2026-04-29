@@ -864,6 +864,20 @@ check_no_rubric_token() {
   return "$fail"
 }
 
+_check_context_manifest_section_completeness() {
+  # Sub-function: verify all 6 Context Manifest fields are present and non-empty.
+  # Called from check_context_manifest_emitted after section presence is confirmed.
+  # Returns 0 if all fields non-empty, 1 if any field missing or empty.
+  local f="$1" label="$2" fail=0
+  for field in "Skills loaded" "INVARIANTS sections read" "Architecture docs consulted" "Domains touched" "Lens dispatched" "Lens findings integrated"; do
+    if ! grep -qE "\*\*${field}\*\*:[[:space:]]*\S" "$f"; then
+      echo "WARN C8 context-manifest-completeness: '$label' manifest field '$field' missing or empty." >&2
+      fail=1
+    fi
+  done
+  return "$fail"
+}
+
 check_context_manifest_emitted() {
   # C8 — entity 110: every non-blocked plan.md MUST contain ## Context Manifest section.
   # Skip plan.md files with status: blocked (blocked plans legitimately skip manifest).
@@ -879,6 +893,7 @@ check_context_manifest_emitted() {
       echo "FAIL C8 context-manifest-emitted: '$(basename "$f")' missing ## Context Manifest section. See ship-plan/SKILL.md Step 6." >&2
       return 1
     fi
+    _check_context_manifest_section_completeness "$f" "$(basename "$f")" || true
     echo "OK C8 context-manifest-emitted"
     return 0
   fi
@@ -901,6 +916,8 @@ check_context_manifest_emitted() {
     if ! grep -qE '^## Context Manifest' "$f"; then
       echo "FAIL C8 context-manifest-emitted: '$entity/plan.md' missing ## Context Manifest section. See ship-plan/SKILL.md Step 6." >&2
       fail=1
+    else
+      _check_context_manifest_section_completeness "$f" "$entity/plan.md" || true
     fi
   done
   [ "$fail" = "0" ] && echo "OK C8 context-manifest-emitted"
