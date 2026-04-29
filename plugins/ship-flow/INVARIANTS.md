@@ -379,6 +379,35 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 
 ---
 
+### Principle 7: Domain Registry — read-as-context, M1-M5 graceful-degradation surface
+
+**Rule**: Cross-stage specialist dispatch (design-stage designer, plan-stage architecture-lens,
+verify-stage intent-match-verifier) MUST consult `plugins/ship-flow/registry/defaults.yaml`
+(with adopter override at project `.claude/ship-flow/domains.yaml`) via
+`bash plugins/ship-flow/lib/registry-resolve.sh`. Direct hardcoded domain → specialist
+mappings in stage SKILL.md prose are forbidden.
+
+**M1-M5 surface** (the registry's contract with consumers):
+
+- M1 specialist_missing — domain matched, specialist anchor empty → exit 10. Consumer renders HALT-with-options (skip / generalist-marker / file-specialist-first).
+- M2 knowledge_module_missing — domain matched, knowledge module .md absent → exit 11. Same options as M1.
+- M3 partial_coverage — multi-domain spec, some matched / some missing → exit 0, status=partial_coverage. Consumer proceeds with covered specialists, surfaces missing list.
+- M4 parse_error — defaults.yaml malformed → exit 20. Consumer fails loud, blocks all dispatch.
+- M5 invalid_trigger_config — domain entry has empty trigger_patterns AND empty spec_keywords → exit 21. Same as M4.
+
+**Failure modes**:
+1. Stage SKILL.md hardcodes a domain → specialist anchor (bypasses registry) — silent generalist fallback returns
+2. Consumer ignores M1/M2 exit codes (treats them as ok) — exact failure mode #111 diagnoses
+3. Adopter project YAML override silently merged into plugin defaults at runtime without lookup precedence
+
+**Grep check** (Tier B / design-review):
+- `grep -rE 'designer_section_anchor.*=|domain.*specialist' plugins/ship-flow/skills/*/SKILL.md` should return zero hits OUTSIDE the `domain-registry` SKILL.md itself.
+- Tier A automated check deferred until 113.1 / 113.3 land (consumers needed for end-to-end test).
+
+**Source**: pitch-113 (design-stage generalize) parent spec.md + 113.2 first-knowledge-module ship.
+
+---
+
 ## Related Files
 
 - `plugins/ship-flow/bin/check-invariants.sh` — CI grep implementation
