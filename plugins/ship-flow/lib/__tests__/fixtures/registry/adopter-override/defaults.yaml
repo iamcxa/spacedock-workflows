@@ -1,0 +1,13 @@
+# fixture: adopter-override/defaults.yaml
+# Plugin-default registry — schema domain points to plugin-default anchor
+# Tests: adopter project YAML fully overrides per-domain (full-replace, not merge)
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns: []
+    spec_keywords:
+      - schema
+      - drizzle
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#plugin-default-schema-designer"
+    description: "Schema domain (plugin default — should be overridden by project YAML in test)"

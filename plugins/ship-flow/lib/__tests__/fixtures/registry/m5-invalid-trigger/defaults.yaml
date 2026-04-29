@@ -1,0 +1,11 @@
+# fixture: m5-invalid-trigger/defaults.yaml
+# Tests: M5 path — domain entry has both trigger_patterns: [] AND spec_keywords: [] (no way to match)
+# registry-resolve.sh --validate should exit 21, stderr invalid_trigger_config
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns: []
+    spec_keywords: []
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#schema-designer"
+    description: "Schema domain (M5 fixture — empty trigger config)"

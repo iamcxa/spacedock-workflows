@@ -1,0 +1,22 @@
+# fixture: m3-partial-coverage/defaults.yaml
+# Tests: M3 path — spec matches 2 domains, only 1 has a specialist (schema has anchor, saga does not)
+# registry-resolve.sh --classify spec.md should exit 0, stdout partial_coverage + missing=saga
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns: []
+    spec_keywords:
+      - schema
+      - drizzle
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#schema-designer"
+    description: "Schema domain (has specialist)"
+  saga:
+    trigger_patterns: []
+    spec_keywords:
+      - saga
+      - event
+      - dispatch
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/saga.md
+    designer_section_anchor: ""
+    description: "Saga domain (no specialist yet — empty anchor triggers M3)"

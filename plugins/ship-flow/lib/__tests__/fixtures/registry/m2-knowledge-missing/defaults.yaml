@@ -1,0 +1,13 @@
+# fixture: m2-knowledge-missing/defaults.yaml
+# Tests: M2 path — domain matched, knowledge_module references nonexistent file on disk
+# registry-resolve.sh --validate --domain=schema should exit 11, stderr status=knowledge_module_missing
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns: []
+    spec_keywords:
+      - schema
+      - drizzle
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/no-such-module.md
+    designer_section_anchor: "ship-design#schema-designer"
+    description: "Schema design (M2 fixture — knowledge module path does not exist)"

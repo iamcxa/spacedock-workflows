@@ -1,0 +1,17 @@
+# fixture: adopter-override/project-domains.yaml
+# Adopter project-level override — schema domain uses project-specific anchor
+# Tests: registry-resolve.sh --domain=schema returns adopter anchor, not plugin default
+# Full-replace semantics: entire schema domain entry replaced (v1 per-domain full-replace)
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns:
+      - "*.fmodel.ts"
+      - "drizzle/**"
+    spec_keywords:
+      - schema
+      - drizzle
+      - fmodel
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#adopter-project-schema-designer"
+    description: "Schema domain (adopter project override — anchor differs from plugin default)"

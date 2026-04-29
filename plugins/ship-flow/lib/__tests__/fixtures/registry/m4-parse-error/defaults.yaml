@@ -1,0 +1,11 @@
+# fixture: m4-parse-error/defaults.yaml
+# Tests: M4 path — malformed YAML causes parse failure
+# registry-resolve.sh --config=<this-file> should exit 20, stderr parse_error
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns: [unclosed bracket
+    spec_keywords:
+      - schema
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#schema-designer"

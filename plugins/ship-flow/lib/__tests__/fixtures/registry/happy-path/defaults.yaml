@@ -1,0 +1,18 @@
+# fixture: happy-path/defaults.yaml
+# Tests: registry-resolve.sh --list returns schema domain; --classify matches via spec keywords
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns: []
+    spec_keywords:
+      - schema
+      - drizzle
+      - fmodel
+      - migration
+      - column
+      - "L1 decider"
+      - "L2 fstore"
+      - "L3 view"
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#schema-designer"
+    description: "Schema design — drizzle tables, fmodel L1/L2/L3, indexes, FK, migration sequencing"
