@@ -17,7 +17,7 @@ Design intent capture stage for UI pitches. Runs between shape and plan when tri
 
 Run before any design work. Stop and SendMessage(FO) if any check fails.
 
-1. **Trigger valid**: entity has `affects_ui: true` OR `--design` flag OR files match `*.tsx|*.css|*.html`. If no trigger → skip design stage, SendMessage(planner): "Design trigger absent — routing directly to plan."
+1. **Trigger valid**: entity has `affects_ui: true` OR `domain:` frontmatter registered in registry OR `--design` flag OR files match `*.tsx|*.css|*.html`. If `skip-when: "!affects_ui && !domain"` matches and no explicit/file trigger is present → skip design stage, SendMessage(planner): "Design trigger absent per `skip-when: \"!affects_ui && !domain\"` — routing directly to plan."
 2. **Entity status**: read entity frontmatter `status:` — must be `sharp`. If `design` → design already ran (check for re-entry signal).
 3. **Hand-off to Design present**: entity body contains `### Hand-off to Design` block (from ship-shape Phase 8). If absent → SendMessage(FO): "Missing Hand-off to Design — shape stage did not complete handoff."
 4. **Exploration file**: `## Sharp Output → Problem` cites a file:line. Read that file before Phase 1 — if missing → SendMessage(FO): "Exploration file not found: `<path>` — cannot distill design without source."
