@@ -80,6 +80,15 @@ echo "Block 7: ship-shape SKILL.md cites registry-resolve --classify (DC-7)"
 check "ship-shape SKILL.md mentions registry-resolve --classify" \
   "grep -qE 'registry-resolve.*--classify|registry-resolve\.sh.*--classify' '${PLUGIN_ROOT}/skills/ship-shape/SKILL.md'"
 
+# --- Assertion 8: 113.3 — schema-designer specialist contract ---
+echo "Block 8: schema-designer specialist contract (113.3)"
+check "ship-design SKILL.md exposes ship-design#schema-designer anchor" \
+  "grep -qE 'ship-design#schema-designer|Schema Designer Specialist' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md'"
+check "ship-design SKILL.md defines typed Schema Design Output" \
+  "grep -qE '## Schema Design Output' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md'"
+check "ship-design SKILL.md schema specialist covers L1/L2/L3, event-saga, RBAC, and fstore rebuild" \
+  "grep -qE 'L1' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md' && grep -qE 'L2' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md' && grep -qE 'L3' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md' && grep -qE 'event-saga' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md' && grep -qE 'RBAC' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md' && grep -qE 'fstore rebuild' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md'"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 

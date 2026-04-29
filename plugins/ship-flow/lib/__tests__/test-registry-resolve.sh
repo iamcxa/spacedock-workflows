@@ -158,6 +158,15 @@ check_stdout "adopter override: --domain=schema returns adopter anchor (not plug
   "designer_section_anchor=ship-design#adopter-project-schema-designer" \
   "\"$REGISTRY_SCRIPT\" --domain=schema --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
 
+# Assertion 11: live plugin defaults now expose the schema-designer specialist (113.3)
+check_exit "live defaults: schema domain validates with specialist anchor present" \
+  0 \
+  "\"$REGISTRY_SCRIPT\" --validate --domain=schema"
+
+check_stdout "live defaults: schema domain resolves to ship-design#schema-designer" \
+  "designer_section_anchor=ship-design#schema-designer" \
+  "\"$REGISTRY_SCRIPT\" --domain=schema"
+
 # --- Summary ---
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
