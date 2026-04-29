@@ -284,6 +284,16 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
 
 3. **Report**: 1 pitch (folder) + N shaped-children + M rabbit-hole todos + ROADMAP.md rows, ONE commit SHA.
 
+4. **Captain Bet capture** (mandatory on non-trivial pitches before presenting Layer 1):
+
+   Before presenting Layer 1 to captain, verify `### Captain Bet` template line is present in the Layer 1 draft. Gate refuses to advance if Bet line still contains unfilled template placeholders (`[observable outcome]`, `[time window]`, `[Layer 1 line]` verbatim) — those are signals that agent drafted it and captain hasn't committed.
+
+   After captain approves and fills in the Bet line, copy the captain-authored Bet verbatim into the entity body under `## Captain Bet (gate approval <YYYY-MM-DD>)` block. Captain MAY edit any agent-drafted Layer 1 bullet inline, but the Bet line MUST be captain-authored — agent cannot draft a filled-in Bet and then captain rubber-stamp it.
+
+   **Retro prompt** (re-read at ship + 2 weeks): "Did the Bet match outcome? YES / NO / PARTIAL. If NO: which Layer 1 line was wrong?" Track match rate across pitches — 3 consecutive Bet ≠ Outcome retros trigger the kill criterion (freeze format rollout, re-shape entity 109's successor).
+
+   Skip when: escape-hatch (directive <80 chars AND fix/typo/rename/bump/patch/bugfix/hotfix). Otherwise mandatory.
+
 ### Refine / Reject
 
 **Refine** — re-run research + decompose with refinement appended (lean re-run; don't diff-patch). Max 2 rounds; then ask: refine / save draft / reject. **Reject** — do NOT invoke shape-confirm.sh; verify `git status --short` clean; emit `Pitch rejected. No files written.` and EXIT.
