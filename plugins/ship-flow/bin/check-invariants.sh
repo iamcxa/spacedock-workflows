@@ -810,6 +810,60 @@ check_verify_mechanical_ui_parity_emitted() {
   return "$fail"
 }
 
+check_will_get_triple() {
+  # C6 — entity 109: every Will-get W<n> bullet in spec.md must have a matching
+  # W<n> dogfood-check line in Layer 2 ### Will-get dogfood checks.
+  # Skip silently if spec.md has no ## Layer 1 header (pre-109 entities).
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0 f entity wn
+  for f in "$docs_dir"/*/spec.md; do
+    [ -f "$f" ] || continue
+    # Skip silently if no Layer 1 section (pre-109 format)
+    grep -qE '^## Layer 1' "$f" || continue
+    entity="$(basename "$(dirname "$f")")"
+    # Extract W<n> ids from ### Will get section (between ## Layer 1 and ## Layer 2 or EOF)
+    local layer1
+    layer1="$(awk '/^## Layer 1/,/^## Layer 2/' "$f" 2>/dev/null || true)"
+    local wids
+    wids="$(echo "$layer1" | grep -oE '\*\*W[0-9]+\*\*:' | grep -oE 'W[0-9]+')" || true
+    [ -z "$wids" ] && continue
+    # Extract dogfood-check section content (skip header line; stop at next ### or ##)
+    local checks
+    checks="$(awk 'found && /^(##|---)/ {exit} /^### Will-get dogfood checks/ {found=1; next} found' "$f" 2>/dev/null || true)"
+    for wn in $wids; do
+      if ! echo "$checks" | grep -qE "\*\*${wn}\*\*:"; then
+        echo "FAIL C6 will-get-triple: '$entity' ${wn} has no matching dogfood check in '### Will-get dogfood checks'. See ship-shape/SKILL.md Layer 1 discipline rule 1." >&2
+        fail=1
+      fi
+    done
+  done
+  [ "$fail" = "0" ] && echo "OK C6 will-get-triple"
+  return "$fail"
+}
+
+check_no_rubric_token() {
+  # C7 — entity 109: Layer 1 section of spec.md MUST NOT contain rubric/7-factor/score tokens.
+  # Skip silently if spec.md has no ## Layer 1 header (pre-109 entities).
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || return 0
+  local fail=0 f entity layer1
+  for f in "$docs_dir"/*/spec.md; do
+    [ -f "$f" ] || continue
+    # Skip silently if no Layer 1 section (pre-109 format)
+    grep -qE '^## Layer 1' "$f" || continue
+    entity="$(basename "$(dirname "$f")")"
+    # Extract Layer 1 content (between ## Layer 1 and ## Layer 2 or EOF)
+    layer1="$(awk '/^## Layer 1/,/^## Layer 2/' "$f" 2>/dev/null || true)"
+    if echo "$layer1" | grep -iqE '\brubric\b|\b7-factor\b|\bscore\b'; then
+      echo "FAIL C7 no-rubric-token: '$entity' Layer 1 contains rubric/7-factor/score token. See ship-shape/SKILL.md Layer 1 discipline rule 3." >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C7 no-rubric-token"
+  return "$fail"
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -839,6 +893,8 @@ if [ -n "$SINGLE_CHECK" ]; then
     no-design-constraints-dual-write) check_no_design_constraints_dual_write; exit $? ;;
     plan-imported-design-dcs-emitted) check_plan_imported_design_dcs_emitted; exit $? ;;
     verify-mechanical-ui-parity-emitted) check_verify_mechanical_ui_parity_emitted; exit $? ;;
+    will-get-triple) check_will_get_triple; exit $? ;;
+    no-rubric-token) check_no_rubric_token; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -883,5 +939,8 @@ check_pol_probe_invoked || FAIL=1
 check_no_design_constraints_dual_write || FAIL=1
 check_plan_imported_design_dcs_emitted || FAIL=1
 check_verify_mechanical_ui_parity_emitted || FAIL=1
+# C6-C7: entity 109 outcome-card layer enforcement (2026-04-29)
+check_will_get_triple || FAIL=1
+check_no_rubric_token || FAIL=1
 
 exit $FAIL

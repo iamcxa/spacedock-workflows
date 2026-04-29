@@ -160,6 +160,26 @@ PM skills delegate framing discipline so shape stage doesn't reinvent. Invoke pe
 
 **Fat-marker-sketch rule**: Children are titles, not specs. Stated assumptions are claims + confidence + criticality + `verified_by`, not verification RESULTS. DCs, tool choices, file paths, greppable queries, npm-dep choices, LOC estimates all belong to PLAN. If a child description exceeds one line of vertical-slice intent, or if an assumption reproduces verification output, delete detail and keep the claim. Acceptance outcome MUST be user-observable (what captain receives) — NOT artifact list / infrastructure description / "support for X". One captain-readable claim per pitch.
 
+#### Layer 1 — Outcome Card (captain-facing, ≤150 words)
+
+The captain's gate surface. Structure (present in this order after section-order randomization — see below):
+
+**`### Will get`** — JTBD-form bullets only. Each bullet MUST use `When [situation], [actor] can [verb] [object]` form. Each bullet MUST carry a `(Check: ...)` annotation referencing the paired `**W<n>**:` line in Layer 2 `### Will-get dogfood checks`. No output descriptions ("X surfaces") — those are not outcomes. **C6 enforcement**: every `**W<n>**:` bullet in `### Will get` must have a matching `**W<n>**:` line in Layer 2 `### Will-get dogfood checks` or gate hard-blocks.
+
+**`### Won't get`** — explicit no-gos: things a rational captain might assume we'd do but won't. Author judgment, no grep enforcement. At least 1 item on non-trivial pitches.
+
+**`### Why this scope`** — one trade-off line naming the rejected alternative and why. Emit only when appetite/surface divergence is non-trivial. Trivial pitches (escape-hatch threshold) omit this line.
+
+**`### Captain Bet (mandatory before approve)`** — captain-authored substance commitment. Template:
+`Bet: when this ships, captain expects [observable outcome] within [time window]. If not, this pitch was wrong about [Layer 1 line].`
+Agent MUST NOT draft and present a filled-in Bet for captain to rubber-stamp. Agent presents the template; captain fills it in. Bet line is always last in Layer 1 (not shuffled). **C7 enforcement**: Layer 1 MUST NOT contain `rubric`, `7-factor`, or `score` tokens or gate hard-blocks.
+
+**Section-order randomization**: at compose time, shuffle the order of `### Will get`, `### Won't get`, `### Why this scope` using a per-gate seed (e.g., sha256 of entity-id + gate-timestamp, take last 4 hex digits mod 6 for permutation index). `### Captain Bet` is always last — not shuffled. Purpose: defeats agent-pattern-match templating across gates, where agent learns "Will get always first → approve on structure".
+
+#### Layer 2 — Detail (drill-down on captain `expand <section>` request)
+
+Not auto-expanded. Captain must explicitly type `expand <section>` to receive it. Includes: pre-mortem, cross-review rubric score, PM artifacts, `### Will-get dogfood checks` (paired W<n> checks), problem evidence, assumptions, rejected alternatives, open questions. Agent presents Layer 1 only at gate; Layer 2 is available on request.
+
 ONE block — captain's only view until gate:
 
 ```
@@ -263,6 +283,16 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
    `--layout=folder` (default for new pitches) writes `docs/<wf>/<id>-<slug>/README.md` + `spec.md`. **Wave 5 dependency of entity #085**: the `--layout=folder` flag lands in Wave 5; until then flat layout is operational fallback.
 
 3. **Report**: 1 pitch (folder) + N shaped-children + M rabbit-hole todos + ROADMAP.md rows, ONE commit SHA.
+
+4. **Captain Bet capture** (mandatory on non-trivial pitches before presenting Layer 1):
+
+   Before presenting Layer 1 to captain, verify `### Captain Bet` template line is present in the Layer 1 draft. Gate refuses to advance if Bet line still contains unfilled template placeholders (`[observable outcome]`, `[time window]`, `[Layer 1 line]` verbatim) — those are signals that agent drafted it and captain hasn't committed.
+
+   After captain approves and fills in the Bet line, copy the captain-authored Bet verbatim into the entity body under `## Captain Bet (gate approval <YYYY-MM-DD>)` block. Captain MAY edit any agent-drafted Layer 1 bullet inline, but the Bet line MUST be captain-authored — agent cannot draft a filled-in Bet and then captain rubber-stamp it.
+
+   **Retro prompt** (re-read at ship + 2 weeks): "Did the Bet match outcome? YES / NO / PARTIAL. If NO: which Layer 1 line was wrong?" Track match rate across pitches — 3 consecutive Bet ≠ Outcome retros trigger the kill criterion (freeze format rollout, re-shape entity 109's successor).
+
+   Skip when: escape-hatch (directive <80 chars AND fix/typo/rename/bump/patch/bugfix/hotfix). Otherwise mandatory.
 
 ### Refine / Reject
 

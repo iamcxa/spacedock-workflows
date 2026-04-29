@@ -196,6 +196,12 @@ When a cross-review emits PROMPT_CAPTAIN on a high-density entity, FO MAY flip t
 
 **Reviewer-unresponsive circuit breaker**: if the cross-review teammate is unresponsive (phantom team / SendMessage timeout / fresh-Agent stall), fall back per Rule A Fallback above — fresh sonnet by default, fresh opus when `appetite: big-batch`. Do not block stage advancement on an unresponsive reviewer. Each stage SKILL cross-review subsection MUST reference this fallback (pitch 091 grep-enforces this cross-reference; see `check_cross_review_gate` / `check_team_fallback_documented`).
 
+**Verifier-side inline-fix bound** (codified 2026-04-29 via pitch-109 dogfood):
+When verify-stage cross-review surfaces a BLOCKING that is (a) in entity scope, (b) ≤30 LOC, AND (c) mirrors design canon (no invented values), verifier MAY apply the fix inline + commit + continue verify round 2 instead of bouncing back to executer for a feedback round. Trade-off: saves ~1 feedback round (~$0.5-1 cost) at the cost of role-boundary blur. Audit trail: verifier MUST add a "Verifier-applied fixes" section in verify.md naming the deviation + commit SHAs + the in-scope/≤30-LOC justification. Prior precedent: pitch-109 verifier fixed `.wr-tr` token consumption (1-line CSS, mirrored design canon `war-room.html:443`) + DC selector parity (1-line YAML) when D1 BLOCKING surfaced.
+
+**Captain-smoke round-cap concrete-fix exception** (codified 2026-04-29 via pitch-109 dogfood):
+The "max 2 consecutive captain-smoke rounds without PROMPT_CAPTAIN" cap (per ship.md Step 7) refers to **iterative scope-ambiguity** rounds, NOT concrete-bug-with-known-fix rounds. Round 3+ is permitted when the finding is: (a) a concrete single-step bug with explicit captain-given diagnostic (e.g. "press \\ doesn't open HUD because anchor breaks at scrolled wr-shell bottom"), and (b) the fix is a single mechanical change (1-line CSS, single export, single attribute) NOT a re-design or scope re-decomposition. Iterative-ambiguity rounds (captain feedback that surfaces new scope branches each iteration) still cap at 2 → PROMPT_CAPTAIN. Prior precedent: pitch-109 round 3 (`position: absolute → fixed`) was concrete single-line fix from captain's specific diagnostic — sailed past 2-cap cleanly.
+
 **Layer A delegation table** (examples from ship-flow 2.0, #085):
 
 | Stage skill | Layer A delegate | Scope | Exception? |

@@ -115,6 +115,21 @@ frontmatter:
       type: enum
       values: [high, medium, low, vacuum]
       description: "Density classification (Principle 4 boolean-gate). Lazy-set at first ship-* invocation via density-classify.sh --entity=<index.md>. FO auto-proceeds (no captain gate) when value=high. External boolean surface: --is-high exits 0 iff value=high."
+    captain_bet:
+      type: string
+      required_for: "non-trivial pitches at approve gate (same threshold as pre_mortem)"
+      section_tag: captain-bet
+      description: >
+        Captain-authored Bet line captured in entity body at shape gate approve.
+        Form: "Bet: when this ships, captain expects [observable outcome]
+        within [time window]. If not, this pitch was wrong about [Layer 1 line]."
+        Must be captain-authored — agent presents the template; captain fills it in.
+        Agent draft then captain rubber-stamp is invalid (defeats substance commitment).
+        Re-read at post-ship retro (ship + 2 weeks). Outcome match = primary
+        substance-level success signal. 3 consecutive Bet ≠ Outcome → kill criterion
+        (freeze format rollout, re-shape).
+      coupled_to: "ship-shape ### Captain Bet capture step; post-ship retro kill criterion"
+      invariant: "content must NOT still contain [observable outcome] / [time window] / [Layer 1 line] template placeholders — those indicate agent-drafted unfilled stub"
 
 # --- Stage Sections ---
 # Each stage defines: reads (from previous stages), output, report, uat (optional)
