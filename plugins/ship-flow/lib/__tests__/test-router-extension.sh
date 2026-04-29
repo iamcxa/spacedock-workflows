@@ -67,7 +67,7 @@ check "ship-design SKILL.md still has Category 0 path" \
 # --- Assertion 6: DC-6 — entity-body-schema has domain: field with set_at: shape ---
 echo "Block 6: entity-body-schema has domain: field (DC-6)"
 check "entity-body-schema.yaml has domain field with set_at: shape" \
-  "awk '/^[[:space:]]*domain:/{p=1} p && /set_at:[[:space:]]*shape/{found=1; exit} p && /^[[:space:]]*[a-z_]+:[[:space:]]*$/{p=0} END{exit !found}' '${PLUGIN_ROOT}/references/entity-body-schema.yaml'"
+  "awk '/^[[:space:]]*domain:$/{p=1; next} p && /set_at:[[:space:]]*shape/{found=1; exit} p && /^    [a-z_]+:/{p=0} END{exit !found}' '${PLUGIN_ROOT}/references/entity-body-schema.yaml'"
 
 # --- Assertion 7: DC-7 — ship-shape cites registry-resolve --classify ---
 echo "Block 7: ship-shape SKILL.md cites registry-resolve --classify (DC-7)"
