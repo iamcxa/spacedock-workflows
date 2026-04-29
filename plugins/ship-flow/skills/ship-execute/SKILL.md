@@ -24,7 +24,7 @@ Run before any execute work. Stop and SendMessage(FO) if any check fails.
 
 ## Entity body contract (schema-as-prose)
 
-- Reads: `plan.md` (`## Plan`, `## Verification Spec`), sharp `## Done Criteria`, `## PR Review Feedback` (if Mode B).
+- Reads: `plan.md` (`## Plan`, per-task `skills_needed`, `## Verification Spec`), sharp `## Done Criteria`, `## PR Review Feedback` (if Mode B).
 - Writes: `<entity-folder>/execute.md` sections — `## Execution Log` (per-task table: status / wave / model / files / verification), `## Issues Found`, `## Knowledge Captures` (D1/D2), `## Execute UAT` (first-pass AC verification, not authoritative), `## Execute Report` (status / stage_cost / tasks summary).
 - Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.execute`.
 
@@ -73,6 +73,13 @@ Exit after rollback. FO re-dispatches ship-execute (or ship-plan) on next status
 
 Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> plan`. Parse tasks: files, steps, verify commands, model hints, wave assignments.
 
+Parse `skills_needed` from each task block. Accepted forms:
+- `**Skills needed:** {skills_needed: ["test", "tdd"]}`
+- `skills_needed: ["test", "tdd"]`
+- `skills_needed: []` only for docs-only/stage-artifact tasks with explicit `TDD: skip` reason.
+
+If `skills_needed` is missing on a legacy plan, fallback to the existing density-aware skill load / default stage skill set and log `skills_needed missing — fallback to density/default skill load` in `## Issues Found`. Do not block legacy plans solely for absence.
+
 Group by wave (0, 1, 2, ...). Wave dependency sanity: for each task in wave N, every `read_first` path either exists in worktree OR is in `files_modified` of a task in wave <N. Violation → `## Execution Log status: blocked, reason: wave dependency violation` and return. **Never silently reorder waves** — plan stage owns topology.
 
 **Blocker**: plan missing or malformed → `status: blocked` and return.
@@ -104,6 +111,7 @@ Invoke `Skill: superpowers:subagent-driven-development` for dispatch philosophy.
 - Task text from plan (verbatim).
 - Project / entity context.
 - `### Architecture context` block with `$ARCH_SNIPPET` when non-empty.
+- `### Skills required` block with this task's `skills_needed` list. Ask the troop to load/use only those skills first; if the list is empty because the task is docs-only/stage-artifact, say `none — docs-only/stage-artifact`.
 - Status protocol reminder (DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED).
 - Tiered quality check spec (T1 always, T2 if frontend touched).
 - `Do NOT commit — return changed_files and status.` (orchestrator owns commits).
@@ -303,6 +311,7 @@ git commit -m "done + archive: #<NNN> <slug> (verdict=PASSED, inline-on-main)" -
 - `dc_status`: execute-side DC results per DC (PASS/FAIL with evidence command + output)
 - `deviations`: any plan deviations with rationale (e.g., "T1.3 split into 2 commits because FM#4 amendment required separate pathspec")
 - `render_fidelity_evidence`: for UI-type entities, dev server URL or screenshot path proving rendered output matches design canonical; "N/A" for non-UI entities
+- `skills_needed_used`: per-task list copied from plan, or fallback note if missing on a legacy plan
 <!-- /section:hand_off_to_verify -->
 
 ---

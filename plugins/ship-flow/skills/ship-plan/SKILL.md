@@ -161,6 +161,22 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
 
 **Layer B wrap** (ship-plan owns these on top of Layer A output):
 - Runtime detection — invoke `ship-flow:ship-runtime-detect` before tasks get written; propagate `{commands.test/build/typecheck/lint/dev}` into every task's Done field.
+- **Per-task `skills_needed` derivation** (#108.1): after task files are known, populate each task with a `skills_needed: [...]` string array. Derive it by intersecting:
+  - task `files_modified` / `**Files:**` globs
+  - `framework_detected`, `theme_indirection`, and `design_canonical_dir` from `ship-flow:ship-runtime-detect`
+  - density-classified skill set already loaded for `answers_density: high`
+
+  Use concrete file-glob mapping, then trim to the smallest relevant list:
+
+  | File signal | skills_needed candidates |
+  |---|---|
+  | `*.tsx`, `*.jsx`, `components/**`, `app/**`, `ui/**` | `frontend-design`, `react-best-practices`, `test` |
+  | `*.css`, `tokens.css`, `design-system.md`, `design/**` | `frontend-design`, `web-design-guidelines`, `accessibility` |
+  | `*.test.*`, `*.spec.*`, `__tests__/**` | `test`, `tdd` or `test-driven-development` |
+  | `*.sh`, `bin/**`, `lib/**/*.sh` | `test`, `best-practices` |
+  | `*.md`, `SKILL.md`, `docs/**` | `write-docs` when prose is user-facing; omit for stage artifacts |
+
+  Non-trivial plan guard: if a plan has ≥2 implementation tasks touching different file classes, require ≥2 distinct `skills_needed` lists. If every task receives the same list, treat it as boilerplate and revise before emitting plan.md.
 - TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `**TDD:** skip — <reason>`.
 - Wave rules: wave 0 = test infra; wave N+1 depends only on ≤N outputs; no `files_modified` overlap within a wave; no cycle.
 - **T0.X auto-indirection-sweep** (T6.1, #106): when `theme_indirection` from ship-runtime-detect Step R5 is non-empty (e.g. `tailwind-v4`), auto-emit a Wave 0 task in the plan: `T0.X: Audit @theme inline indirection layer — verify design tokens align with CSS custom properties, no hardcoded hex values in component files`. REFUSE to emit a plan without this task when `theme_indirection != ""`. Enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check indirection-sweep-emitted` (fixture-based).
@@ -197,6 +213,7 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 
 1. **Requirement coverage** — every DC maps to ≥1 task.
 2. **Task completeness** — every task has paths / verify command / model hint / wave.
+   - For #108.1+, every implementation task must include `skills_needed: [...]`; docs-only stage-artifact tasks may use `skills_needed: []` only with `TDD: skip — docs-only/stage-artifact`.
 3. **Dependency correctness** — wave graph safe (no cycles / no same-wave `files_modified` overlap / no read_first pulling same-wave outputs).
 4. **Zero-placeholder scan** — grep `TBD | add appropriate | similar to Task N | as needed | fill in | \.\.\.` → fix inline.
 5. **Type/signature consistency** — cross-task function/type signatures match.
@@ -206,6 +223,7 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 9. **Design reference compliance** — skip if no `## Design Reference` section; else cross-check visual attrs (fill/stroke/colors/dimensions) against cited spec files. Flag deviations.
 10. **Stub-captain-ack scan** (T6.2, #106): grep every task body for keywords `stub|fake|placeholder|v1.*only|wired only for`. For each match: check entity frontmatter `pre-acked-stubs: true` OR check that the Plan Report has a `## Stub Flag` entry for this task with explicit captain rationale. If neither present → `BLOCK: stub task without captain ack` (literal string required for test DC). Populate `## Plan Report → Stub Flags` table with all stub tasks found. Cross-review PROCEED blocked until all stubs either pre-acked or cleared.
 11. **Context Manifest completeness** (entity 110, 2026-04-29): `## Context Manifest` section present and all 6 fields non-empty: `Skills loaded`, `INVARIANTS sections read`, `Architecture docs consulted`, `Domains touched`, `Lens dispatched`, `Lens findings integrated`. Lens dispatched field must reflect actual Step 1.7 trigger matching results (not copy-pasted from a prior entity). C8 check: `bash plugins/ship-flow/bin/check-invariants.sh --check context-manifest-emitted`.
+12. **skills_needed non-boilerplate** (#108.1): for plans with ≥2 implementation tasks touching different file classes, grep the task blocks and confirm there are ≥2 distinct `skills_needed` lists. Empty lists or one repeated list across heterogeneous tasks are BLOCKERs.
 
 ### Step 5 — Cross-review gate (Principle 6 Rule C)
 
@@ -321,6 +339,7 @@ After this feature ships, re-read the `## Captain Bet` block in the entity body.
 - `critical_assumptions`: assumptions to re-verify at execute boot (from Assumption Re-validation section)
 - `architecture_context`: canonical doc touches required (INVARIANTS, README, schema) — drives execute commit order
 - `stub_flags`: tasks containing `stub|fake|placeholder|v1.*only|wired only for` — must appear in Plan Report as captain-ack flags
+- `skills_needed_summary`: per-task skills_needed lists and note whether ≥2 distinct lists were produced for heterogeneous task sets
 <!-- /section:hand_off_to_execute -->
 
 ---
