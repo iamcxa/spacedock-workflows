@@ -30,7 +30,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
+PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/.." &> /dev/null && pwd)"
 
 # Default config paths
 DEFAULT_CONFIG="${PLUGIN_ROOT}/registry/defaults.yaml"
