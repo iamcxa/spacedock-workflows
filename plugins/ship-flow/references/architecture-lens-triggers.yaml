@@ -1,0 +1,71 @@
+# architecture-lens-triggers.yaml
+# Registry of domain-specific architecture lens agents for ship-plan Step 1.7.
+# Trigger matching: OR-semantic across trigger_patterns (file-glob) and spec_keywords.
+# Per-lens dispatch: Skill(lens_skill) with spec path + domain_knowledge_refs in prompt.
+# Schema: entity 110 (2026-04-29)
+
+domains:
+  tag:
+    # Trigger: spec touches tag-related files OR spec body mentions tag/taxonomy/dimension
+    trigger_patterns:
+      - "**/tag/**/*.ts"
+      - "**/*tag*.test.ts"
+      - "**/tags/**/*.ts"
+    spec_keywords:
+      - "tag"
+      - "taxonomy"
+      - "dimension"
+      - "entity_tags"
+      - "tag_event"
+      - "tag_dimension"
+    lens_skill: "ship-flow:architecture-lens/tag-domain"
+    model: sonnet
+    cross_cutting_concerns:
+      - "L1 decider + L2 fstore + L3 view materialization wiring (entity_tags must be projection from tag_event stream, not direct write target)"
+      - "cascade saga: tag changes → entity propagation (CustomerArchived → BulkTagRemoved requires real event stream consumer registration)"
+      - "event stream consumer registration (which aggregates subscribe to which tag event kinds)"
+      - "RBAC subjects: tags + tag_dimensions both must appear in PermissionSubject union type"
+
+  customer:
+    # Trigger: spec touches customer/profile files OR spec body mentions customer/profile/employee
+    trigger_patterns:
+      - "**/customer/**/*.ts"
+      - "**/profile/**/*.ts"
+      - "**/customers/**/*.ts"
+      - "**/*customer*.ts"
+    spec_keywords:
+      - "customer"
+      - "profile"
+      - "employee"
+      - "customer_profile"
+      - "CustomerProfile"
+    lens_skill: "ship-flow:architecture-lens/customer-domain"
+    model: sonnet
+    cross_cutting_concerns:
+      - "customer profile contract: which fields are required vs nullable (preferred_time_slots, assigned_employee_id)"
+      - "employee assignment FK: customer_id → employee (CustomerProfile.assigned_employee_id must reference valid employee)"
+      - "cross-table FK propagation: customer_id referenced by tags / vehicles / appointments — cascade delete / archive must propagate"
+      - "RBAC permission subjects: customers + customer_profiles both required in PermissionSubject union"
+
+  event-saga:
+    # Trigger: spec touches saga/event-store/fstore files OR spec mentions cascade/event-stream/saga/projection
+    trigger_patterns:
+      - "**/*saga*.ts"
+      - "**/*event-store*.ts"
+      - "**/*fstore*.ts"
+      - "**/*-fstore.table.ts"
+      - "**/application/**/*materialized-view*.ts"
+    spec_keywords:
+      - "cascade"
+      - "event-stream"
+      - "saga"
+      - "projection"
+      - "materialized view"
+      - "event store"
+      - "fstore"
+    lens_skill: "ship-flow:architecture-lens/event-saga"
+    model: sonnet
+    cross_cutting_concerns:
+      - "event stream consumer registration: which aggregates consume which event kinds (must be explicit in setup.ts, not TODO)"
+      - "projection wiring: which view table is updated by which event stream (materialized-view.ts must register all event handler callbacks)"
+      - "cascade choreography: command A → event B → saga handler → command C (full chain must be traceable; no orphan saga handlers)"
