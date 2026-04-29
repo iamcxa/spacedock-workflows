@@ -402,7 +402,7 @@ mappings in stage SKILL.md prose are forbidden.
 
 **Grep check** (Tier B / design-review):
 - `grep -rE 'designer_section_anchor.*=|domain.*specialist' plugins/ship-flow/skills/*/SKILL.md` should return zero hits OUTSIDE the `domain-registry` SKILL.md itself.
-- Tier A automated check active as of 113.1 (router consumes registry; grep-check validates ship-design Phase 0 cites `registry-resolve.sh`). Tier B (designer_section_anchor outside domain-registry) remains until 113.3 (schema-designer specialist) ships.
+- Tier A automated check active as of 113.1 (router consumes registry; grep-check validates ship-design Phase 0 cites `registry-resolve.sh`). Schema specialist path active as of 113.3: plugin defaults resolve `schema` to `ship-design#schema-designer`, and the schema-designer subsection emits typed `## Schema Design Output`. Tier B remains for future non-schema domains until each domain has its own registered specialist.
 
 **Source**: pitch-113 (design-stage generalize) parent spec.md + 113.2 first-knowledge-module ship + 113.1 router-extension (ship-design consumer).
 
