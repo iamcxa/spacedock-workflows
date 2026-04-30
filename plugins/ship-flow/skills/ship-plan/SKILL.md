@@ -229,7 +229,7 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 
 Dispatch cross-review to `executer` teammate (pipeline path) or fresh sonnet (no team). Upgrade to fresh **opus** when `appetite: big-batch`.
 
-6-factor rubric adapted for plan stage (per INVARIANTS Principle 6 Rule C #106 T1.3):
+Plan-stage cross-review rubric adapted from INVARIANTS Principle 6 Rule C #106 T1.3 plus the ship-plan `skill-coverage` extension:
 
 1. **Feasibility** — tasks achievable by single agent in one dispatch each?
 2. **Executable scope** — tasks are atomic commits aligned 1:1 with waves?
@@ -237,7 +237,14 @@ Dispatch cross-review to `executer` teammate (pipeline path) or fresh sonnet (no
 4. **DC adequacy** — observable DCs per task; no "works correctly" / "handles all cases"?
 5. **Canonical sync** — ARCHITECTURE.md touches planned? architecture-impact draft per affected child?
 6. **Reverse-audit previous stage** — does the plan's scope expose a gap in the preceding design stage's `### Hand-off to Plan` block? Specifically: are all `render_fidelity_targets` from design encoded as DCs? Are `design_constraints` honored in plan tasks?
-7. **Render Fidelity + captain-ack audit trail** (T6.4, #106) — for UI entities: does plan have ≥1 structural-parity DC per component in design canonical? AND are all stub tasks captain-acked (either `pre-acked-stubs: true` in frontmatter or explicit `## Plan Report → Stub Flags` entries)?
+7. **Skill Coverage** (`skill-coverage`, #108.2) — every implementation task has non-empty `skills_needed` and the skills match its `files_modified` / `**Files:**` file globs. Emit exactly one grep-testable summary line when clean: `skill-coverage: PASS`. Emit one line per failing task when not clean: `skill-coverage: FAIL — task <id>: <reason>`. Failure reasons include empty `skills_needed`, boilerplate repeated lists across heterogeneous implementation tasks, or file-glob/skill mismatch. Use these required matches:
+   - `*.tsx`, `*.jsx`, `components/**`, `app/**`, `ui/**` → `react`, `frontend-design`, or `react-best-practices`
+   - `*.css`, `tokens.css`, `design-system.md`, `design/**` → `frontend-design`, `web-design-guidelines`, or `accessibility`
+   - `*.test.*`, `*.spec.*`, `__tests__/**` → `test`, `tdd`, or `test-driven-development`
+   - `*.sh`, `bin/**`, `lib/**/*.sh` → `test` or `best-practices`
+   - Docs-only stage-artifact tasks may use `skills_needed: []` only with `TDD: skip — docs-only/stage-artifact`; user-facing prose docs should use `write-docs`.
+
+UI extension: **Render Fidelity + captain-ack audit trail** (T6.4, #106) — for UI entities: does plan have ≥1 structural-parity DC per component in design canonical? AND are all stub tasks captain-acked (either `pre-acked-stubs: true` in frontmatter or explicit `## Plan Report → Stub Flags` entries)? This remains the render-fidelity named extension documented in INVARIANTS and is not the ship-plan `skill-coverage` line.
 
 **Reverse-audit prompt template** (T3.2 — paste verbatim into reviewer dispatch):
 ```
