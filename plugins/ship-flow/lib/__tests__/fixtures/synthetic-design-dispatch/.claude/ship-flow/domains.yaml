@@ -1,0 +1,26 @@
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns:
+      - "apps/supabase/migrations/**"
+      - "domains/**/src/schema/**"
+      - "domains/**/src/domain/**/{types,decider,view,saga}.ts"
+    spec_keywords:
+      - schema
+      - migration
+      - fmodel
+      - CRM
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#schema-designer"
+    required_skills:
+      - project-db
+      - fmodel
+    skill_hints:
+      plan:
+        - project-db
+        - fmodel
+      execute:
+        - project-db
+        - fmodel
+      verify:
+        - project-db
