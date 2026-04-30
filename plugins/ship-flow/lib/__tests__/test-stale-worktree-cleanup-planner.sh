@@ -92,6 +92,12 @@ assert_contains "PR-pending row is kept" '^KEEP_ACTIVE entity=113\.3-schema-desi
 assert_contains "ambiguous branch safety asks captain" '^NEEDS_CAPTAIN entity=112\.9-local-only-branch reason=branch-has-unmerged-commits worktree="\.worktrees/ship-112\.9-local-only-branch" branch="ship-112\.9-local-only-branch"' "${TMP_DIR}/planner.out"
 assert_not_contains "planner never emits executable destructive command lines" '^(git worktree remove|git branch -d|git branch -D|git push --delete)' "${TMP_DIR}/planner.out"
 
+RC=0
+"${PLANNER}" --workflow-dir "${REPO_ROOT}/docs/ship-flow" > "${TMP_DIR}/workflow.out" 2>&1 || RC=$?
+assert_contains "real workflow mode scans frontmatter worktree rows" '^KEEP_ACTIVE entity=114\.3-stale-worktree-cleanup-planner reason=nonterminal-status-local-exists worktree="\.worktrees/ship-114\.3-stale-worktree-cleanup-planner" branch="ship-114\.3-stale-worktree-cleanup-planner"' "${TMP_DIR}/workflow.out"
+assert_not_contains "real workflow mode does not require normalized ORPHAN rows" 'Usage: stale-worktree-cleanup-planner\.sh --status-boot <file>' "${TMP_DIR}/workflow.out"
+assert_not_contains "real workflow mode never emits executable destructive command lines" '^(git worktree remove|git branch -d|git branch -D|git push --delete)' "${TMP_DIR}/workflow.out"
+
 FIXTURE_AFTER="$(hash_tree "$FIXTURE_ROOT")"
 if [ "$FIXTURE_BEFORE" = "$FIXTURE_AFTER" ]; then
   record_pass "planner leaves status fixture unchanged"
