@@ -94,19 +94,50 @@ echo ""
 echo "| # | Type | Assertion | Rationale (D{N}) | Source artifact |"
 echo "|---|---|---|---|---|"
 
-# Awk-driven extraction: walk the design_constraints[] section, emit one row per item
-echo "$HANDOFF" | awk '
+DC_SOURCE_COUNT=$(echo "$HANDOFF" | awk '
   /design_constraints:/ { in_dc=1; next }
-  /render_fidelity_targets:|artifact_paths:|open_decisions:|^---|^### / { in_dc=0 }
-  in_dc && /^[[:space:]]+- type:/ {
-    if (assertion != "") print "| " (++n) " | " type " | " assertion " | " rd " | " sa " |"
+  /open_decisions:|render_fidelity_targets:|artifact_paths:|^---|^### / { in_dc=0 }
+  in_dc && /^[[:space:]]*-[[:space:]]*(type|assertion):/ { n++ }
+  END { print n+0 }
+')
+
+# Awk-driven extraction: walk the design_constraints[] section, emit one row per item
+echo "$HANDOFF" | awk -v expected="$DC_SOURCE_COUNT" '
+  function emit() {
+    if (started) {
+      if (type == "" || assertion == "" || rd == "") {
+        print "ERROR: malformed design_constraints[] item; expected type, assertion, rationale_decision" > "/dev/stderr"
+        exit 1
+      }
+      print "| " (++n) " | " type " | " assertion " | " rd " | " sa " |"
+    }
+  }
+  /design_constraints:/ { in_dc=1; next }
+  /open_decisions:|render_fidelity_targets:|artifact_paths:|^---|^### / { in_dc=0 }
+  in_dc && /^[[:space:]]*-[[:space:]]*type:/ {
+    emit()
+    started=1
     type=""; assertion=""; rd=""; sa=""
-    sub(/^[[:space:]]+- type:[[:space:]]*/, ""); type=$0
+    sub(/^[[:space:]]*-[[:space:]]*type:[[:space:]]*/, ""); type=$0
+    next
+  }
+  in_dc && /^[[:space:]]*-[[:space:]]*assertion:/ {
+    emit()
+    started=1
+    type=""; assertion=""; rd=""; sa=""
+    sub(/^[[:space:]]*-[[:space:]]*assertion:[[:space:]]*/, ""); assertion=$0
+    next
   }
   in_dc && /^[[:space:]]+assertion:/ { sub(/^[[:space:]]+assertion:[[:space:]]*/, ""); assertion=$0 }
   in_dc && /^[[:space:]]+rationale_decision:/ { sub(/^[[:space:]]+rationale_decision:[[:space:]]*/, ""); rd=$0 }
   in_dc && /^[[:space:]]+source_artifact:/ { sub(/^[[:space:]]+source_artifact:[[:space:]]*/, ""); sa=$0 }
-  END { if (assertion != "") print "| " (++n) " | " type " | " assertion " | " rd " | " sa " |" }
+  END {
+    emit()
+    if (n != expected) {
+      print "ERROR: imported design_constraints count mismatch; source=" expected ", imported=" n > "/dev/stderr"
+      exit 1
+    }
+  }
 '
 
 echo ""
@@ -118,10 +149,10 @@ echo "|---|---|---|---|---|"
 echo "$HANDOFF" | awk '
   /render_fidelity_targets:/ { in_rft=1; next }
   /storyboard_frames:|artifact_paths:|^---|^### / { in_rft=0 }
-  in_rft && /^[[:space:]]+- selector:/ {
+  in_rft && /^[[:space:]]*-[[:space:]]*selector:/ {
     if (selector != "") print "| " (++n) " | `" selector "` | " prop " | " expected " | " rd " |"
     selector=""; prop=""; expected=""; rd=""
-    sub(/^[[:space:]]+- selector:[[:space:]]*/, ""); selector=$0
+    sub(/^[[:space:]]*-[[:space:]]*selector:[[:space:]]*/, ""); selector=$0
   }
   in_rft && /^[[:space:]]+css_property:/ { sub(/^[[:space:]]+css_property:[[:space:]]*/, ""); prop=$0 }
   in_rft && /^[[:space:]]+expected_value:/ { sub(/^[[:space:]]+expected_value:[[:space:]]*/, ""); expected=$0 }

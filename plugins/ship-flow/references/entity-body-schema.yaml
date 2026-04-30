@@ -413,8 +413,8 @@ stages:
             schema:
               type:
                 type: enum
-                values: [token-binding, layout, interaction]
-                description: "G9 (2026-04-29): structured constraint type. token-binding = CSS var binding; layout = flex/grid/positioning rule; interaction = click/keyboard/focus contract."
+                values: [token-binding, layout, interaction, contract, schema-contract, filter-contract, api-contract, data-contract, domain-contract]
+                description: "G9 (2026-04-29): structured constraint type. token-binding/layout/interaction cover UI design; contract/schema-contract/filter-contract/api-contract/data-contract/domain-contract cover non-UI domain specialist hand-offs."
               assertion:
                 type: string
                 description: "Machine-checkable assertion text — feeds plan Step 1.6 ui DC encode. Format: '<selector>.<property> = <expected>' or behavioral predicate."

@@ -56,6 +56,14 @@ check "shape output records resolved domain evidence" \
 check "shape output records HALT-with-options evidence for blocked validation" \
   "awk '/Domain Registry Validation/{in_block=1; next} in_block && /^## /{in_block=0} in_block && /HALT-with-options/{found=1} END{exit !found}' '${SKILL_FILE}'"
 
+echo "Block 5: stale HALT resolution is explicit"
+check "ship-shape defines Registry Validation Resolution block for superseded HALT evidence" \
+  "grep -q 'Registry Validation Resolution' '${SKILL_FILE}'"
+check "resolution block records superseded_by_design_stage_validation" \
+  "grep -q 'superseded_by_design_stage_validation' '${SKILL_FILE}'"
+check "unresolved shape HALT remains blocking evidence" \
+  "grep -q 'otherwise a shape \`HALT-with-options\` remains blocking evidence' '${SKILL_FILE}'"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 

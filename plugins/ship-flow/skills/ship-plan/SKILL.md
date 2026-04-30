@@ -77,14 +77,16 @@ The script reads structured `### Hand-off to Plan`, emits `## Plan Imported Desi
 Pre-import validation (run in this order):
 - `bash plugins/ship-flow/lib/validate-handoff-schema.sh <entity-folder>` — structural check
 - `bash plugins/ship-flow/lib/validate-d-references.sh <entity-folder>` — D{N} backref consistency
+- `bash plugins/ship-flow/lib/import-design-dcs.sh <entity-folder>` — count-preserving import; if it reports `imported design_constraints count mismatch`, BLOCK instead of hand-copying missing rows.
 
 If either validator fails → BLOCKER (status: blocked, reason: hand-off schema invalid; details from script stderr).
+If importer fails or imported row count is lower than source `design_constraints[]`, write `## Plan Report status: blocked, reason: design DC import mismatch` and bounce to design/stage tooling. Do not proceed with a partial `## Plan Imported Design DCs` table.
 
 **Mechanical mapping** (each item becomes a DC anchored to a wave):
 
 | Hand-off field | Becomes | Wave |
 |---|---|---|
-| `design_constraints[]` (token / layout / interaction) | `ui` or `e2e`-typed DC per constraint, `verified_by: ui-verify` | task wave touching the affected component |
+| `design_constraints[]` (UI or domain contract types) | `ui`, `e2e`, `contract`, or `api/schema` typed DC per constraint; UI constraints use `ui-verify`, domain constraints use contract/router/schema tests | task wave touching the affected component |
 | `render_fidelity_targets[]` (computed-style / structural assertions) | `ui`-typed DC, `verified_by: ui-verify` (calls computed-style assertion) | W0 (token-level) or task wave (component-level) |
 | `artifact_paths[]` | reference in plan `## Design Source` block; checksum on read | — |
 | `open_decisions[]` non-empty | **BLOCKER** (status: blocked, reason: design has open decisions) — bounce to design via SendMessage(designer@pitch-XX) | — |

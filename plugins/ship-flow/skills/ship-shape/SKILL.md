@@ -462,6 +462,18 @@ Shape output/frontmatter evidence MUST include a grep-friendly `Domain Registry 
 
 For blocked validation, `HALT-with-options` must name the registry status and offer the same captain-visible choices design uses as second-line defense: `skip`, `generalist-marker`, or `file-specialist-first`. Preserve ship-design HALT behavior; shape-time validation catches the problem earlier, design remains the second line of defense.
 
+If a later rerun or downstream design-stage validation supersedes a stale shape HALT (for example, `knowledge_module_missing` from an old plugin cache, then current registry validation returns `status=ok`), do not delete the original evidence. The downstream artifact MUST add a grep-friendly resolution block:
+
+```text
+### Registry Validation Resolution
+- prior_result: <shape status/result>
+- current_result: ok
+- resolution: superseded_by_design_stage_validation
+- reason: <specialist/knowledge module now present, or adopter config corrected>
+```
+
+Plan stage consumes the latest resolved registry result only when this resolution block is present; otherwise a shape `HALT-with-options` remains blocking evidence.
+
 Multi-domain match disambiguation v1: pick `matched[0]` (first registered domain name). v2 multi-domain dispatch is out of 113.1 scope.
 <!-- /section:hand_off_to_design -->
 

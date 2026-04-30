@@ -71,16 +71,24 @@ DC_BLOCK=$(echo "$HANDOFF" | awk '/design_constraints:/,/render_fidelity_targets
 if [ -n "$DC_BLOCK" ]; then
   # Each item should have type + assertion + rationale_decision
   ITEM_COUNT=$(echo "$DC_BLOCK" | grep -cE '^[[:space:]]*-[[:space:]]*(type|assertion):' || true)
-  TYPE_COUNT=$(echo "$DC_BLOCK" | grep -cE '^[[:space:]]+type:[[:space:]]*(token-binding|layout|interaction)' || true)
-  ASSERTION_COUNT=$(echo "$DC_BLOCK" | grep -cE '^[[:space:]]+assertion:' || true)
+  TYPE_COUNT=$(echo "$DC_BLOCK" | grep -cE '^[[:space:]]*-?[[:space:]]*type:[[:space:]]*(token-binding|layout|interaction|contract|schema-contract|filter-contract|api-contract|data-contract|domain-contract)' || true)
+  ASSERTION_COUNT=$(echo "$DC_BLOCK" | grep -cE '^[[:space:]]*-?[[:space:]]*assertion:' || true)
   RATIONALE_COUNT=$(echo "$DC_BLOCK" | grep -cE '^[[:space:]]+rationale_decision:[[:space:]]*D[0-9]+' || true)
 
   if [ "$TYPE_COUNT" = "0" ] && [ "$ASSERTION_COUNT" = "0" ]; then
     echo "FAIL handoff-schema: design_constraints[] structured fields missing — expected 'type:', 'assertion:', 'rationale_decision: D{N}' per item" >&2
     FAIL=1
   fi
-  if [ -n "$ASSERTION_COUNT" ] && [ "$ASSERTION_COUNT" -gt 0 ] && [ "$RATIONALE_COUNT" -lt "$ASSERTION_COUNT" ]; then
-    echo "FAIL handoff-schema: design_constraints[] $ASSERTION_COUNT assertions but only $RATIONALE_COUNT rationale_decision backrefs (G12 violation)" >&2
+  if [ "$ITEM_COUNT" -gt 0 ] && [ "$TYPE_COUNT" -lt "$ITEM_COUNT" ]; then
+    echo "FAIL handoff-schema: design_constraints[] $ITEM_COUNT items but only $TYPE_COUNT valid type fields" >&2
+    FAIL=1
+  fi
+  if [ "$ITEM_COUNT" -gt 0 ] && [ "$ASSERTION_COUNT" -lt "$ITEM_COUNT" ]; then
+    echo "FAIL handoff-schema: design_constraints[] $ITEM_COUNT items but only $ASSERTION_COUNT assertion fields" >&2
+    FAIL=1
+  fi
+  if [ "$ITEM_COUNT" -gt 0 ] && [ "$RATIONALE_COUNT" -lt "$ITEM_COUNT" ]; then
+    echo "FAIL handoff-schema: design_constraints[] $ITEM_COUNT items but only $RATIONALE_COUNT rationale_decision backrefs (G12 violation)" >&2
     FAIL=1
   fi
 fi
@@ -88,7 +96,7 @@ fi
 # Validate render_fidelity_targets[] structured fields
 RFT_BLOCK=$(echo "$HANDOFF" | awk '/render_fidelity_targets:/,/storyboard_frames:|^### |^---/' | head -80)
 if [ -n "$RFT_BLOCK" ]; then
-  SELECTOR_COUNT=$(echo "$RFT_BLOCK" | grep -cE '^[[:space:]]+selector:' || true)
+  SELECTOR_COUNT=$(echo "$RFT_BLOCK" | grep -cE '^[[:space:]]*-?[[:space:]]*selector:' || true)
   PROPERTY_COUNT=$(echo "$RFT_BLOCK" | grep -cE '^[[:space:]]+css_property:' || true)
   EXPECTED_COUNT=$(echo "$RFT_BLOCK" | grep -cE '^[[:space:]]+expected_value:' || true)
   RFT_RATIONALE_COUNT=$(echo "$RFT_BLOCK" | grep -cE '^[[:space:]]+rationale_decision:[[:space:]]*D[0-9]+' || true)

@@ -175,7 +175,13 @@ Reached only when Phase 0 step 2 returns exit 0 (domain registered + `specialist
    in the design handoff so plan stage can preserve them in `skills_needed`.
    Specialist sub-section defines its own typed `## Design Output` block
    (e.g., `## Schema Design Output`).
-4. v1 multi-domain disambiguation: if `domain:` frontmatter contains multiple names (comma-separated), use first match. v2 multi-domain dispatch is out of 113.1 scope.
+4. If prior shape evidence contains `## Domain Registry Validation` with `result: HALT-with-options` or a non-ok registry status, but this design-stage validation now returns exit 0, emit `### Registry Validation Resolution` in `design.md`:
+   - `prior_result: <status/result from shape>`
+   - `current_result: ok`
+   - `resolution: superseded_by_design_stage_validation`
+   - `reason: <knowledge module/specialist now present, or adopter config corrected>`
+   This preserves the stale HALT evidence instead of pretending it was never emitted, and tells plan stage to consume the current design/plan registry result.
+5. v1 multi-domain disambiguation: if `domain:` frontmatter contains multiple names (comma-separated), use first match. v2 multi-domain dispatch is out of 113.1 scope.
 
 **Schema specialist active as of 113.3**: `defaults.yaml` now points schema to
 `designer_section_anchor: "ship-design#schema-designer"`, so schema-domain
@@ -367,7 +373,7 @@ Verdict: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**. Each verdict
 Read the incoming `### Hand-off to Design` block from the entity body (written by ship-shape Phase 8). Verify all `open_design_questions` are resolved via `captain_decisions` before emitting.
 
 Emit `### Hand-off to Plan` (structured fields per `entity-body-schema.yaml → stages.design.hand_off_to_plan`):
-- `design_constraints[]` — each item: `{type: token-binding | layout | interaction, assertion, rationale_decision: D{N}, source_artifact}` — `type` enum mandatory; `rationale_decision: D{N}` MUST cross-reference a `**D{N}|Captain decision**` in Phase 8 Captain Decisions (validated by `validate-d-references.sh`).
+- `design_constraints[]` — each item: `{type, assertion, rationale_decision: D{N}, source_artifact}` — `type` enum mandatory. UI design uses `token-binding | layout | interaction`; domain specialist design uses `contract | schema-contract | filter-contract | api-contract | data-contract | domain-contract`. `rationale_decision: D{N}` MUST cross-reference a `**D{N}|Captain decision**` in Phase 8 Captain Decisions (validated by `validate-d-references.sh`).
 - `open_decisions[]` — any design decisions still pending captain input (ideally empty; non-empty → plan Step 1.6 BLOCKER).
 - `artifact_paths[]` — paths to committed design artifacts (`tokens.css`, specimens, composite mockup).
 - `render_fidelity_targets[]` — each item: `{selector, css_property, expected_value, rationale_decision: D{N}}` — feeds ship-verify Step 3.6 ui-verify YAML; `rationale_decision: D{N}` MUST cross-reference Phase 8.
