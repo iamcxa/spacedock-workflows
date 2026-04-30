@@ -229,7 +229,7 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 
 Dispatch cross-review to `executer` teammate (pipeline path) or fresh sonnet (no team). Upgrade to fresh **opus** when `appetite: big-batch`.
 
-Plan-stage cross-review rubric adapted from INVARIANTS Principle 6 Rule C #106 T1.3 plus the ship-plan `skill-coverage` extension:
+7-factor rubric adapted for plan stage from INVARIANTS Principle 6 Rule C #106 T1.3 plus the ship-plan `skill-coverage` extension:
 
 1. **Feasibility** — tasks achievable by single agent in one dispatch each?
 2. **Executable scope** — tasks are atomic commits aligned 1:1 with waves?

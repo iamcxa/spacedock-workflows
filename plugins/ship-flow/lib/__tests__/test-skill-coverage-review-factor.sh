@@ -51,6 +51,8 @@ check "shell/lib scripts require test or best-practices" \
 echo "Block 3: rubric/invariant bookkeeping"
 check "skill-coverage is factor 7 in ship-plan cross-review rubric" \
   "grep -qE '7\\. \\*\\*Skill Coverage\\*\\*|7\\. \\*\\*skill-coverage\\*\\*' '${PLAN_SKILL}'"
+check "ship-plan preserves check-invariants N-factor rubric grep contract" \
+  "grep -qE '[5-9]-factor rubric' '${PLAN_SKILL}'"
 check "INVARIANTS documents skill-coverage as ship-plan rubric extension" \
   "grep -q 'skill-coverage' '${INVARIANTS_FILE}' && grep -q 'ship-plan' '${INVARIANTS_FILE}'"
 
