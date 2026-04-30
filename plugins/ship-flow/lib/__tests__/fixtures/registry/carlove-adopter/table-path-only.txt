@@ -1,0 +1,1 @@
+domains/orders/src/read_model/order_summary.table.ts

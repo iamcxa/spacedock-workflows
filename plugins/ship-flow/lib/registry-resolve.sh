@@ -178,6 +178,7 @@ get_spec_keywords() {
       sub(/^      - /, "")
       gsub(/^["'"'"']|["'"'"']$/, "")
       print
+      next
     }
     in_kw && !/^      / { in_kw=0 }
     in_domain && /^  [a-zA-Z]/ && $0 !~ ("^  " dom ":") { in_domain=0; in_kw=0 }
@@ -202,11 +203,46 @@ get_trigger_patterns() {
       sub(/^      - /, "")
       gsub(/^["'"'"']|["'"'"']$/, "")
       print
+      next
     }
     in_tp && !/^      / { in_tp=0 }
     in_domain && /^  [a-zA-Z]/ && $0 !~ ("^  " dom ":") { in_domain=0; in_tp=0 }
     in_domains && /^[^ ]/ && !/^domains:/ { in_domains=0 }
   ' "$cfg"
+}
+
+glob_to_regex() {
+  local pattern="$1"
+  awk -v s="$pattern" '
+    BEGIN {
+      meta = ".^$+()[]{}|\\"
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        n = substr(s, i + 1, 1)
+        if (c == "*" && n == "*") {
+          out = out ".*"
+          i++
+        } else if (c == "*") {
+          out = out "[^[:space:]/]*"
+        } else if (c == "?") {
+          out = out "."
+        } else if (index(meta, c) > 0) {
+          out = out "\\" c
+        } else {
+          out = out c
+        }
+      }
+      print out
+    }
+  '
+}
+
+content_matches_trigger_pattern() {
+  local content="$1"
+  local pattern="$2"
+  local regex
+  regex="$(glob_to_regex "$pattern")"
+  echo "$content" | grep -qE "$regex"
 }
 
 # merge_configs: given plugin + adopter configs, produce effective domain list
@@ -350,8 +386,8 @@ classify_spec() {
     if [ "$matched" = "false" ]; then
       while IFS= read -r pat; do
         [ -z "$pat" ] && continue
-        # For spec classification, trigger_patterns match file paths in spec content
-        if echo "$spec_content" | grep -qE "$pat"; then
+        # For spec classification, trigger_patterns are path globs matched against file paths in spec content.
+        if content_matches_trigger_pattern "$spec_content" "$pat"; then
           matched=true
           break
         fi

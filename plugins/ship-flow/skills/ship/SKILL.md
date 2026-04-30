@@ -73,6 +73,25 @@ Then dispatch each stage to its assigned teammate via SendMessage (hot-context ~
 SendMessage(to: "<teammate>", body: "Run /<stage> for pitch-<id>. Entity folder: docs/<wf>/<id>-<slug>/. Read <prior-stage>.md; output <this-stage>.md via Skill: ship-flow:ship-<stage>. Dispatch cross-review counterpart before returning verdict.")
 ```
 
+### Codex dispatch evidence guard
+
+Codex/FO-dispatched shape, design, and verify workers MUST NOT report completion
+until the expected 113 evidence is produced or explicitly cited in the stage
+artifact. Missing required evidence is a completion blocker; return BLOCKED or
+NEEDS_CONTEXT instead of DONE/PROCEED.
+
+- shape: include `Domain Registry Validation` when domain classification or
+  validation is relevant.
+- design: include `## Schema Design Output` for `domain: schema` or the
+  schema-domain route.
+- verify: include `## Intent Match Findings` when schema design output exists
+  or schema domain triggers.
+
+Per-stage dispatch bodies MUST include: `Codex dispatch evidence guard:
+missing shape/design/verify 113 evidence is a completion blocker; do not report
+completion without the required Domain Registry Validation, ## Schema Design
+Output, or ## Intent Match Findings block for the triggered stage.`
+
 **Fresh-subagent reserved for Rule A exceptions**: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages.
 
 ## Step 4 — Stage flow
