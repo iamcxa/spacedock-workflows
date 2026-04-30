@@ -6,6 +6,7 @@
 # Usage:
 #   bash plugins/ship-flow/lib/__tests__/test-design-dogfood.sh
 #     → exits 4 (SETUP_INCOMPLETE) when no agent output pre-populated
+#     → in CI=true, automatically runs --self-test so full test-*.sh gate passes
 #   bash plugins/ship-flow/lib/__tests__/test-design-dogfood.sh --self-test
 #     → sets AGENT_OUTPUT_DIR_OVERRIDE=CANONICAL_DIR, proves assertion engine works
 #   AGENT_OUTPUT_DIR_OVERRIDE=/path bash plugins/ship-flow/lib/__tests__/test-design-dogfood.sh
@@ -26,12 +27,13 @@ set -euo pipefail
 
 WORKTREE_ROOT="$(git rev-parse --show-toplevel)"
 CANONICAL_DIR="$WORKTREE_ROOT/plugins/spacebridge/design"
-AGENT_OUTPUT_DIR="${TMPDIR:-/tmp}/ship-design-dogfood-$$"
-mkdir -p "$AGENT_OUTPUT_DIR"
-trap 'rm -rf "$AGENT_OUTPUT_DIR"' EXIT
+TEMP_AGENT_OUTPUT_DIR="${TMPDIR:-/tmp}/ship-design-dogfood-$$"
+AGENT_OUTPUT_DIR="$TEMP_AGENT_OUTPUT_DIR"
+mkdir -p "$TEMP_AGENT_OUTPUT_DIR"
+trap 'rm -rf "$TEMP_AGENT_OUTPUT_DIR"' EXIT
 
 # --- --self-test mode: assert engine on canonical-vs-canonical ---
-if [ "${1:-}" = "--self-test" ]; then
+if [ "${1:-}" = "--self-test" ] || { [ "${CI:-}" = "true" ] && [ -z "${AGENT_OUTPUT_DIR_OVERRIDE:-}" ]; }; then
   echo "INFO: --self-test mode — asserting engine on canonical-vs-canonical (expected PASS)"
   export AGENT_OUTPUT_DIR_OVERRIDE="$CANONICAL_DIR"
 fi

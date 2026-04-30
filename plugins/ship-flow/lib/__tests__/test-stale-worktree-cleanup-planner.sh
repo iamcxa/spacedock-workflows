@@ -78,6 +78,7 @@ FIXTURE_BEFORE="$(hash_tree "$FIXTURE_ROOT")"
 WORKFLOW_BEFORE="$(hash_tree "${REPO_ROOT}/docs/ship-flow")"
 BRANCHES_BEFORE="$(git -C "$REPO_ROOT" branch --list | shasum -a 256 | awk '{print $1}')"
 WORKTREES_BEFORE="$(git -C "$REPO_ROOT" worktree list | shasum -a 256 | awk '{print $1}')"
+WORKFLOW_FIXTURE_REPO="${TMP_DIR}/workflow-repo"
 
 RC=0
 "${PLANNER}" --status-boot "$STATUS_BOOT_FIXTURE" > "${TMP_DIR}/planner.out" 2>&1 || RC=$?
@@ -92,8 +93,30 @@ assert_contains "PR-pending row is kept" '^KEEP_ACTIVE entity=113\.3-schema-desi
 assert_contains "ambiguous branch safety asks captain" '^NEEDS_CAPTAIN entity=112\.9-local-only-branch reason=branch-has-unmerged-commits worktree="\.worktrees/ship-112\.9-local-only-branch" branch="ship-112\.9-local-only-branch"' "${TMP_DIR}/planner.out"
 assert_not_contains "planner never emits executable destructive command lines" '^(git worktree remove|git branch -d|git branch -D|git push --delete)' "${TMP_DIR}/planner.out"
 
+git init -q "$WORKFLOW_FIXTURE_REPO"
+git -C "$WORKFLOW_FIXTURE_REPO" config user.email t@t
+git -C "$WORKFLOW_FIXTURE_REPO" config user.name t
+echo "fixture" > "${WORKFLOW_FIXTURE_REPO}/README.md"
+git -C "$WORKFLOW_FIXTURE_REPO" add README.md
+git -C "$WORKFLOW_FIXTURE_REPO" commit -qm initial
+mkdir -p "${WORKFLOW_FIXTURE_REPO}/docs/ship-flow/114.3-stale-worktree-cleanup-planner" "${WORKFLOW_FIXTURE_REPO}/.worktrees"
+cat > "${WORKFLOW_FIXTURE_REPO}/docs/ship-flow/114.3-stale-worktree-cleanup-planner/index.md" <<'EOF'
+---
+id: "114.3"
+status: execute
+worktree: ".worktrees/ship-114.3-stale-worktree-cleanup-planner"
+---
+
+# 114.3 Stale Worktree Cleanup Planner
+EOF
+git -C "$WORKFLOW_FIXTURE_REPO" add docs/ship-flow/114.3-stale-worktree-cleanup-planner/index.md
+git -C "$WORKFLOW_FIXTURE_REPO" commit -qm "add workflow fixture"
+git -C "$WORKFLOW_FIXTURE_REPO" worktree add \
+  "${WORKFLOW_FIXTURE_REPO}/.worktrees/ship-114.3-stale-worktree-cleanup-planner" \
+  -b ship-114.3-stale-worktree-cleanup-planner >/dev/null 2>&1
+
 RC=0
-"${PLANNER}" --workflow-dir "${REPO_ROOT}/docs/ship-flow" > "${TMP_DIR}/workflow.out" 2>&1 || RC=$?
+"${PLANNER}" --workflow-dir "${WORKFLOW_FIXTURE_REPO}/docs/ship-flow" > "${TMP_DIR}/workflow.out" 2>&1 || RC=$?
 assert_contains "real workflow mode scans frontmatter worktree rows" '^KEEP_ACTIVE entity=114\.3-stale-worktree-cleanup-planner reason=nonterminal-status-local-exists worktree="\.worktrees/ship-114\.3-stale-worktree-cleanup-planner" branch="ship-114\.3-stale-worktree-cleanup-planner"' "${TMP_DIR}/workflow.out"
 assert_not_contains "real workflow mode does not require normalized ORPHAN rows" 'Usage: stale-worktree-cleanup-planner\.sh --status-boot <file>' "${TMP_DIR}/workflow.out"
 assert_not_contains "real workflow mode never emits executable destructive command lines" '^(git worktree remove|git branch -d|git branch -D|git push --delete)' "${TMP_DIR}/workflow.out"
