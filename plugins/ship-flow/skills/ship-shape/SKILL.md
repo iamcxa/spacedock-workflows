@@ -336,15 +336,15 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
 
 ## Named-teammate spawn (Principle 6 Rule A)
 
-On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size). **When pitch trigger fires `affects_ui:true OR file globs *.tsx|*.css|*.html OR explicit --design flag`, also spawn `designer` (opus) — gates the conditional `design` stage between shape and plan.**
+On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size). **When pitch trigger fires `affects_ui:true OR domain: OR file globs *.tsx|*.css|*.html OR explicit --design flag`, also spawn `designer` (opus) — gates the conditional `design` stage between shape and plan.**
 
 ```
 # Default spawn (all pitches) — every named teammate is a spacedock:ensign unit (canonical worker primitive):
 TeamCreate(team_name: "pitch-<id>", members: ["planner", "executer", "verifier"])
 Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "planner", model: "opus", task: "Planner for pitch-<id>. Read docs/<wf>/<id>-<slug>/spec.md.")
 Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "executer", model: "sonnet", task: "Executer for pitch-<id>. Atomic commits, DC-first.")
-# Conditional spawn — only when UI-trigger fires (affects_ui:true OR *.tsx|*.css|*.html glob OR --design flag):
-Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "designer", model: "opus", task: "Designer for pitch-<id>. Read spec.md; route Category 0/A/B/C/D; emit design.md + plugins/<app>/design/* on Category 0.")
+# Conditional spawn — when design-trigger fires (affects_ui:true OR domain: OR *.tsx|*.css|*.html glob OR --design flag):
+Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "designer", model: "opus", task: "Designer for pitch-<id>. Read spec.md; route Category 0/A/B/C/D and registered domain lanes; emit design.md plus the narrow artifact bundle required by the selected design-dispatch-manifest.")
 SendMessage(to: "planner", body: "Proceed to /plan for pitch-<id>. Read spec.md; output plan.md.")
 ```
 

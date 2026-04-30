@@ -1,6 +1,6 @@
 ---
 name: ship-design
-description: "Use when shape detects a UI pitch needs design intent before plan — UI files affected (*.tsx, *.css, *.html), or visual ambiguity, or no design reference exists. Agent-autonomous: 5-category classifier (Category 0 distill / A net-new system / B component breakout / C variation / D one-off — v1 ships Category 0 only, A/B/C/D land via carlove dogfood). Dispatched by /ship to `designer@pitch-XX` teammate (opus). Output: `<entity-folder>/design.md` + `plugins/<app>/design/*` artifact bundle. Layer A delegation: storyboard (Phase 1.5 user-flow narrative) + design-flow (Phase 3 contradiction Q-loop) + design-review (Phase 9 adversarial); fallback superpowers:brainstorming when design plugins absent."
+description: "Use when shape detects a UI or domain pitch needs design intent before plan — UI files affected (*.tsx, *.css, *.html), visual ambiguity, no design reference exists, or registered domain frontmatter is present. Agent-autonomous: 5-category classifier (Category 0 distill / A net-new system / B component breakout / C variation / D one-off) plus design-dispatch-manifest routing for ui-designer and domain-designer workers. Output: `<entity-folder>/design.md` + optional `plugins/<app>/design/*` artifact bundle. Layer A delegation: storyboard, design-flow, frontend-design, design-review; fallback superpowers:brainstorming when design plugins absent."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---
@@ -79,17 +79,56 @@ Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain"` in `docs/
 
 ---
 
-## 5-Category classifier (v1 = Category 0 only)
+## 5-Category classifier
 
-| Category | Trigger | v1 |
+| Category | Trigger | Active dispatch path |
 |---|---|---|
-| 0 — Distill from existing exploration | Shape cites exploratory HTML/markdown at file:line; contains ≥2 conflicting design directions | SHIPS v1 |
-| A — Net-new design system | `plugins/<app>/design/` directory absent; first-ever design for this app | DEFERRED (carlove dogfood) |
-| B — Component breakout | design-system.md exists; new component specimen needed | DEFERRED |
-| C — Variation on existing component | design-system.md exists; variant on component spec | DEFERRED |
-| D — One-off visual | Pitch-local mockup only; does NOT touch design-system.md | DEFERRED |
+| 0 — Distill from existing exploration | Shape cites exploratory HTML/markdown at file:line; contains ≥2 conflicting design directions | `ui-designer` distills existing exploration, invokes `storyboard`, `design-flow`, and `design-review` |
+| Category A — Net-new design system | `plugins/<app>/design/` directory absent; first-ever design for this app | `ui-designer` runs full chain: `design-flow` using `design-brief`, `information-architecture`, `design-tokens`, `brief-to-tasks`, then `frontend-design` and `design-review` |
+| Category B — Component breakout | `design-system.md` exists; new component specimen needed | `ui-designer` uses `frontend-design`, `design-tokens` if tokens change, and `design-review`; load `information-architecture` only when component placement/navigation changes |
+| Category C — Variation on existing component | `design-system.md` exists; variant on component spec | `ui-designer` preserves existing design canon, uses `frontend-design`, then `design-review` |
+| Category D — One-off visual | Pitch-local mockup only; does NOT touch design-system.md | `ui-designer` uses `frontend-design`; add `design-review` only for high-risk UI or accessibility-sensitive changes |
 
-**When Category != 0**: report `"Category {X} deferred to carlove dogfood pitch ship-flow-carlove-sync-abcd-dogfood; halt design stage; route to plan with no design output"` and exit. Do NOT fabricate output.
+Category A-D are active. Do not halt solely because the category is A, B, C, or D.
+If required design skills are missing, record the fallback in `Design Report` and
+continue with the narrowest viable route.
+
+## Designer Dispatch Manifest
+
+Before worker dispatch, write a `design-dispatch-manifest` block into
+`design.md` or the design-stage draft. This is the contract between ship-design,
+plan, and execute:
+
+```yaml
+design-dispatch-manifest:
+  lanes:
+    - lane: ui
+      role: ui-designer
+      category: Category A|Category B|Category C|Category D|Category 0
+      required_skills: []
+      outputs: []
+    - lane: domain
+      role: domain-designer
+      domain: schema
+      required_skills: []
+      knowledge_module_path: ""
+      designer_section_anchor: ""
+      outputs: []
+  integration:
+    mode: single-designer|parallel
+    owner: ship-design
+```
+
+Dispatch rules:
+- UI-only small Category C/D work may use `single-designer` mode with one
+  `ui-designer`.
+- Domain-only work may use `single-designer` mode with one `domain-designer`
+  routed through the registry specialist.
+- UI + domain work uses `parallel` designer dispatch: dispatch `ui-designer` and `domain-designer` concurrently, then run an integration pass in ship-design
+  that merges outputs into one `design.md` handoff.
+- Multi-domain or Category A + domain work defaults to `parallel`. Collapse to
+  `single-designer` only when one lane is trivial and the reason is recorded in
+  the manifest.
 
 ---
 
@@ -107,10 +146,17 @@ Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain"` in `docs/
    - exit 10 (M1 `specialist_missing`) → emit `## Design Output → ### Router HALT` block with all 3 options (skip / generalist-marker / file-specialist-first). SendMessage(FO): halt notice with domain name + options. **STOP** — captain acks one option in entity body, then re-runs design.
    - exit 11 (M2 `knowledge_module_missing`) → same as M1 path: emit HALT block, SendMessage(FO), **STOP**.
    - exit 20 / 21 (M4 parse_error / M5 invalid_trigger_config) → fail loud per INVARIANTS Principle 9; SendMessage(FO): "registry config error exit $?; blocking design stage". **STOP**.
-3. **If `domain:` is unset AND `affects_ui: true`**: proceed to UI category-classifier (current Category 0/A/B/C/D logic at Phase 0 step 4).
+3. **If `domain:` is unset AND `affects_ui: true`**: proceed to UI category-classifier (Category 0/A/B/C/D logic at Phase 0 step 4).
 4. Read entity spec.md. Determine category per classifier table.
-5. If Category != 0: emit halt message and exit (no design.md written).
-6. Proceed to Phase 1 (Category 0 path).
+5. Build `design-dispatch-manifest`:
+   - `affects_ui: true` → add `ui` lane with the selected Category.
+   - `domain:` set → add `domain` lane with registry `required_skills`,
+     `skill_hints.*`, `knowledge_module_path`, and `designer_section_anchor`.
+   - both lanes present → `integration.mode: parallel`.
+   - one low-risk lane present → `integration.mode: single-designer`.
+6. Dispatch the manifest lanes. UI lane follows Phase 1-9. Domain lane follows
+   Phase 0.5 and specialist subsection. Integration pass merges lane outputs
+   before `## Constraints for Plan Stage`.
 
 ### Phase 0.5 — Specialist dispatch (domain path only)
 
@@ -123,7 +169,7 @@ Reached only when Phase 0 step 2 returns exit 0 (domain registered + `specialist
    Read `designer_section_anchor`, `knowledge_module_path`, `required_skills`,
    and `skill_hints.*` from the output envelope.
 2. Load knowledge module: read `references/domain-knowledge/<domain>.md` before specialist work (domain-specific constraints + anti-patterns + design checklist).
-3. Dispatch to specialist sub-section identified by `designer_section_anchor`
+3. Dispatch `domain-designer` to specialist sub-section identified by `designer_section_anchor`
    (e.g., `ship-design#schema-designer` once 113.3 ships). Include any
    `required_skills` and relevant `skill_hints.plan` / `skill_hints.execute`
    in the design handoff so plan stage can preserve them in `skills_needed`.

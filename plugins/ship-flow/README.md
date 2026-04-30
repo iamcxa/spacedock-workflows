@@ -357,8 +357,8 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 Incremental additions after the 0.5.0 release that are not yet a named version but are fully shipped on main:
 
 **`design` stage added** (pitch-104):
-- New stage `design` inserted between `shape` and `plan`. Conditional (`manual: conditional`, `skip-when: !affects_ui`). Dispatched by `/ship` to `designer` teammate (opus). Output: `design.md` + `plugins/<app>/design/*` artifact bundle.
-- Stage skill `ship-design` added — 7th and final stage skill (at the ≤7 cap). Delegates to `storyboard` (Phase 1.5 user-flow narrative), `design-flow` (Phase 3 contradiction Q-loop), and `design-review` (Phase 9 adversarial review); fallback to `superpowers:brainstorming` when design plugins absent.
+- New stage `design` inserted between `shape` and `plan`. Conditional (`manual: conditional`, `skip-when: !affects_ui && !domain`). Dispatched by `/ship` to `designer` teammate (opus). Output: `design.md` + narrow artifact bundle required by the selected `design-dispatch-manifest`.
+- Stage skill `ship-design` added — 7th and final stage skill (at the ≤7 cap). Category A-D are active: A runs the full design system chain; B handles component breakout; C handles component variation; D handles one-off visual work. Delegates to `storyboard`, `design-flow`, `frontend-design`, and `design-review`; fallback to `superpowers:brainstorming` when design plugins absent. Registered domain lanes route through `domain-designer` and the domain registry specialist.
 
 **Principle 6 Rule C extensions** (pitch-106):
 - Cross-review rubric extended from 5-factor to 6-factor: `Reverse-audit` added as base 6th factor — each stage's cross-review must check whether its output exposes a gap in the preceding stage's hand-off.
