@@ -1,0 +1,4 @@
+- Remember that ship-flow execute evidence should include exact command names.
+- Follow up: add stale worktree cleanup planner after the resolver dogfood.
+- Workflow doctor dry-run already covers read-only sync drift checks.
+- Spacedock plugin bug: ensign runtime loses packaged skill lookup context.
