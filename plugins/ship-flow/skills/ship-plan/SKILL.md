@@ -166,6 +166,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
   - `framework_detected`, `theme_indirection`, and `design_canonical_dir` from `ship-flow:ship-runtime-detect`
   - density-classified skill set already loaded for `answers_density: high`
   - domain registry routing from `registry-resolve.sh --domain=<domain>` or `--classify <spec>`: preserve `required_skills` and merge `skill_hints.plan` into plan-stage task `skills_needed`
+  - adopter file-signal routing from `.claude/ship-flow/skill-routing.yaml` when present. If absent on a non-trivial multi-surface pitch, run `bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` and surface the draft in `## Context Manifest` before finalizing `skills_needed`.
 
   Use concrete file-glob mapping, then trim to the smallest relevant list:
 
@@ -178,6 +179,12 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
   | `*.test.*`, `*.spec.*`, `__tests__/**` | `test`, `tdd` or `test-driven-development` |
   | `*.sh`, `bin/**`, `lib/**/*.sh` | `test`, `best-practices` |
   | `*.md`, `SKILL.md`, `docs/**` | `write-docs` when prose is user-facing; omit for stage artifacts |
+
+  Adopter `.claude/ship-flow/skill-routing.yaml` entries override the generic
+  table only for matching file signals. Example: `apps/refine-app/src/**` may
+  add `refine-expert`, `antd-expert`, `react-patterns`, and `tailwind-expert`;
+  `apps/expo-app/**` may add `expo-rnr-nativewind` and `expo-accessibility`;
+  `packages/api-contract/src/**/*.schemas.ts` may add `ts-rest` and `api-guide`.
 
   Domain-derived skills are additive, not adopter-specific defaults. `project-db`
   and `fmodel` are generic skill names only when those skills exist in the

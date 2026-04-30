@@ -411,6 +411,25 @@ When `affects_ui: false` AND `domain:` is unset → omit `ui_surfaces` and `fram
 
 After spec is composed (or post-shape-confirm if pre-existing spec), run or instruct the shape worker to run domain classification once whenever the pitch may touch non-UI domains such as schema, saga, RBAC, permissions, data model, migrations, storage, API contract, or workflow runtime:
 
+Before classification, check whether adopter routing exists:
+
+```bash
+test -f .claude/ship-flow/domains.yaml
+test -f .claude/ship-flow/skill-routing.yaml
+```
+
+If `.claude/ship-flow/skill-routing.yaml` is missing, run:
+
+```bash
+bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.
+```
+
+Present the discovered routing draft to the captain and record it in
+`### Project Skills` when accepted. Missing routing is not a hard block for
+small fixes, but non-trivial multi-surface pitches MUST surface the gap before
+plan so planner does not collapse adopter-specific skills into generic
+`project-db` / `fmodel` defaults.
+
 ```bash
 bash plugins/ship-flow/lib/registry-resolve.sh --classify <spec-or-entity-file>
 ```

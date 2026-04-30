@@ -111,6 +111,24 @@ cat package.json 2>/dev/null | grep -A 50 '"dependencies"' | head -30
 cat pyproject.toml 2>/dev/null | grep -A 30 'dependencies'
 ```
 
+### 1.6: Adopter Skill Routing Discovery
+
+Run the adopter skill discovery helper after the baseline codebase scan:
+
+```bash
+bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.
+```
+
+If the output contains one or more `routing:` entries, present the discovered
+`.claude/ship-flow/skill-routing.yaml` draft to the captain before writing it.
+This file is adopter-specific: it captures file-signal skills such as
+`refine-expert`, `expo-rnr-nativewind`, `ts-rest`, or project DB helpers that
+do not belong in plugin defaults.
+
+Keep `.claude/ship-flow/domains.yaml` separate. Domain registry
+`required_skills` stay there; file-signal skills live in
+`.claude/ship-flow/skill-routing.yaml`.
+
 ---
 
 ## Step 2: Generate PRODUCT.md Draft

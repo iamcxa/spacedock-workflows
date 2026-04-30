@@ -324,7 +324,9 @@ stages:
           section_tag: project-skills
           layer: decision
           fields:
-            - { name: content, type: list, description: "Available project-scope skills" }
+            - { name: source, type: enum, values: [manual, discovered, mixed], description: "Where project-scope skill routing came from" }
+            - { name: routing_config, type: path, description: "Usually .claude/ship-flow/skill-routing.yaml" }
+            - { name: content, type: list, description: "Available project-scope skills and file-signal routes" }
     report:
       section: "## Sharp Report"
       section_tag: sharp-report
