@@ -1,0 +1,23 @@
+schema_version: "1.0"
+target_path: .claude/ship-flow/skill-routing.yaml
+source: discovered
+boundary: domain registry required_skills stay in domains.yaml; file-signal skills live here
+routing:
+  - name: refine-web
+    signals: [apps/refine-app/src/**]
+    skills: [refine-expert, antd-expert, react-patterns, tailwind-expert]
+  - name: expo-mobile
+    signals: [apps/expo-app/**]
+    skills: [expo-rnr-nativewind, expo-accessibility, react-patterns]
+  - name: supabase-schema
+    signals: [domains/**/src/schema/**, apps/supabase/migrations/**, apps/supabase/types/**]
+    skills: [project-db, migration-helper]
+  - name: fmodel-domain
+    signals: [domains/**/src/domain/**/{types,decider,view,saga}.ts, apps/deno-api/src/middlewares/fmodel-middleware.ts]
+    skills: [fmodel]
+  - name: api-contract
+    signals: [packages/api-contract/src/**/*.schemas.ts, apps/deno-api/src/routers/**]
+    skills: [ts-rest, api-guide]
+  - name: supabase-edge-functions
+    signals: [apps/supabase/functions/**]
+    skills: [project-supabase-edge-functions, deno-test]

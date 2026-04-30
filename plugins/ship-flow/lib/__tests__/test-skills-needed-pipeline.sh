@@ -50,6 +50,8 @@ check "ship-plan derives fmodel from generic domain model file signals" \
   "grep -q 'domains/\\*\\*/src/domain/\\*\\*/{types,decider,view,saga}.ts' '${PLAN_SKILL}' && grep -q 'apps/deno-api/src/middlewares/fmodel-middleware.ts' '${PLAN_SKILL}' && grep -q 'fmodel' '${PLAN_SKILL}'"
 check "ship-plan incorporates registry required_skills and plan skill_hints" \
   "grep -q 'required_skills' '${PLAN_SKILL}' && grep -q 'skill_hints.plan' '${PLAN_SKILL}'"
+check "ship-plan invokes adopter skill-routing resolver for project file signals" \
+  "grep -q 'resolve-skill-routing.sh' '${PLAN_SKILL}' && grep -q '.claude/ship-flow/skill-routing.yaml' '${PLAN_SKILL}'"
 
 echo "Block 3: execute consumes skills_needed in troop prompts"
 check "ship-execute reads tasks skills_needed from plan" \

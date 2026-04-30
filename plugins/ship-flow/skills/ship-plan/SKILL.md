@@ -166,7 +166,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
   - `framework_detected`, `theme_indirection`, and `design_canonical_dir` from `ship-flow:ship-runtime-detect`
   - density-classified skill set already loaded for `answers_density: high`
   - domain registry routing from `registry-resolve.sh --domain=<domain>` or `--classify <spec>`: preserve `required_skills` and merge `skill_hints.plan` into plan-stage task `skills_needed`
-  - adopter file-signal routing from `.claude/ship-flow/skill-routing.yaml` when present. If absent on a non-trivial multi-surface pitch, run `bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` and surface the draft in `## Context Manifest` before finalizing `skills_needed`.
+  - adopter file-signal routing from `.claude/ship-flow/skill-routing.yaml` when present. For each implementation task, run `bash plugins/ship-flow/lib/resolve-skill-routing.sh --files=<task-files> --config=.claude/ship-flow/skill-routing.yaml` and merge the emitted `skills_needed=` list. If the config is absent on a non-trivial multi-surface pitch, run `bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` and surface the draft in `## Context Manifest` before finalizing `skills_needed`.
 
   Use concrete file-glob mapping, then trim to the smallest relevant list:
 
