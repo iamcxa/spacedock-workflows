@@ -102,20 +102,19 @@ route_matches() {
     }
   ')
 
-  IFS=','
-  for signal in $signals_csv; do
+  while IFS= read -r signal; do
     signal="$(printf '%s' "$signal" | sed 's/^ *//; s/ *$//')"
     [ -n "$signal" ] || continue
     regex="$(glob_to_regex "$signal")"
-    for file in $files_csv; do
+    while IFS= read -r file; do
       file="$(printf '%s' "$file" | sed 's/^ *//; s/ *$//')"
       [ -n "$file" ] || continue
       if printf '%s\n' "$file" | grep -Eq "$regex"; then
         IFS="$old_ifs"
         return 0
       fi
-    done
-  done
+    done <<< "$(printf '%s' "$files_csv" | tr ',' '\n')"
+  done <<< "$(printf '%s' "$signals_csv" | tr ',' '\n')"
   IFS="$old_ifs"
   return 1
 }
@@ -125,8 +124,7 @@ add_unique_csv_items() {
   local item
   local old_ifs="$IFS"
 
-  IFS=','
-  for item in $csv; do
+  while IFS= read -r item; do
     item="$(printf '%s' "$item" | sed 's/^ *//; s/ *$//')"
     [ -n "$item" ] || continue
     if ! printf '%s\n' "$SEEN_ITEMS" | grep -qx "$item"; then
@@ -138,7 +136,7 @@ add_unique_csv_items() {
         OUT_CSV="$item"
       fi
     fi
-  done
+  done <<< "$(printf '%s' "$csv" | tr ',' '\n')"
   IFS="$old_ifs"
 }
 

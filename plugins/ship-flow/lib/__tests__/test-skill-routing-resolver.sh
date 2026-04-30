@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 RESOLVER_SCRIPT="${SCRIPT_DIR}/../resolve-skill-routing.sh"
 FIXTURE_CONFIG="${SCRIPT_DIR}/fixtures/skill-routing-resolver/skill-routing.yaml"
+EXPANSION_FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/skill-routing-resolver/repo-with-matching-files"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
 
 PASS=0
@@ -89,6 +90,9 @@ check_stdout "Edge function task stays separate from migration skills" \
 check_stdout "Mixed task merges and dedupes skills in config order" \
   "skills_needed=refine-expert,antd-expert,react-patterns,tailwind-expert,expo-rnr-nativewind,expo-accessibility" \
   "\"${RESOLVER_SCRIPT}\" --config=\"${FIXTURE_CONFIG}\" --files='apps/refine-app/src/a.tsx,apps/expo-app/components/a.tsx'"
+check_stdout "Signals are not shell-expanded when matching files exist in cwd" \
+  "skills_needed=refine-expert,antd-expert,react-patterns,tailwind-expert" \
+  "cd '${EXPANSION_FIXTURE_ROOT}' && '${RESOLVER_SCRIPT}' --config='../skill-routing.yaml' --files='apps/refine-app/src/pages/customer-profile/list.tsx'"
 
 echo "Block 3: no-match and missing-config behavior is explicit"
 check_stdout "No matching route emits status=no_match and empty skills_needed" \
