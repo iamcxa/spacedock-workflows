@@ -1,0 +1,19 @@
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns:
+      - domains/**/src/schema/**
+      - domains/**/src/**/*.table.ts
+      - apps/supabase/migrations/**
+    spec_keywords:
+      - contract
+      - fmodel
+      - drizzle
+      - schema
+      - migration
+      - "L1 decider"
+      - "L2 fstore"
+      - "L3 view"
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#schema-designer"
+    description: "Synthetic adopter schema work: fmodel contracts, drizzle tables, and Supabase migrations"

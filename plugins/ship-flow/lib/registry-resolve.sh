@@ -259,7 +259,7 @@ merge_configs() {
 
   # Write merged YAML to temp file
   local tmp
-  tmp="$(mktemp /tmp/registry-resolve-merged.XXXXXX.yaml)"
+  tmp="$(mktemp /tmp/registry-resolve-merged.XXXXXX)"
 
   # Get all domain names from both configs
   local plugin_domains adopter_domains all_domains
