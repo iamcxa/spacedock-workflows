@@ -17,7 +17,8 @@ Consult the registry when you need to:
 1. **Classify a pitch** — determine which domain(s) a spec body belongs to.
 2. **Dispatch a specialist** — find the `designer_section_anchor` to route to in `ship-design`.
 3. **Load a knowledge module** — get the path to `references/domain-knowledge/<domain>.md`.
-4. **Surface gaps** — detect missing specialists (M1) or missing knowledge modules (M2).
+4. **Route project skills** — read `required_skills` and stage-specific `skill_hints.*`.
+5. **Surface gaps** — detect missing specialists (M1) or missing knowledge modules (M2).
 
 Skip the registry when:
 - The pitch is `affects_ui: true` and no domain-specific keyword fires (visual/UX-only work).
@@ -63,7 +64,16 @@ matched=<domain1>,<domain2>,...
 missing=<domain1>,<domain2>,...
 knowledge_module_path=<path>
 designer_section_anchor=<anchor>
+required_skills=<skill1>,<skill2>,...
+skill_hints.plan=<skill1>,<skill2>,...
+skill_hints.execute=<skill1>,<skill2>,...
+skill_hints.verify=<skill1>,<skill2>,...
 ```
+
+`required_skills` is a hard routing hint: downstream stages should preserve it
+when deriving `skills_needed`. `skill_hints.<stage>` is stage-specific and may
+be empty. These fields are generic registry metadata; adopter-specific skill
+names belong in `.claude/ship-flow/domains.yaml`, not plugin defaults.
 
 **Exit codes**:
 
@@ -136,6 +146,17 @@ domains:
       - fmodel
     knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
     designer_section_anchor: "ship-design#schema-designer"
+    required_skills:
+      - project-db
+      - fmodel
+    skill_hints:
+      plan:
+        - project-db
+        - fmodel
+      execute:
+        - fmodel
+      verify:
+        - project-db
     description: "Schema domain (project-specific trigger globs)"
 ```
 

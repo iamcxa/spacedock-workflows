@@ -120,9 +120,15 @@ Reached only when Phase 0 step 2 returns exit 0 (domain registered + `specialist
    ```bash
    bash plugins/ship-flow/lib/registry-resolve.sh --domain=<domain-name>
    ```
-   Read `designer_section_anchor` and `knowledge_module_path` from output envelope.
+   Read `designer_section_anchor`, `knowledge_module_path`, `required_skills`,
+   and `skill_hints.*` from the output envelope.
 2. Load knowledge module: read `references/domain-knowledge/<domain>.md` before specialist work (domain-specific constraints + anti-patterns + design checklist).
-3. Dispatch to specialist sub-section identified by `designer_section_anchor` (e.g., `ship-design#schema-designer` once 113.3 ships). Specialist sub-section defines its own typed `## Design Output` block (e.g., `## Schema Design Output`).
+3. Dispatch to specialist sub-section identified by `designer_section_anchor`
+   (e.g., `ship-design#schema-designer` once 113.3 ships). Include any
+   `required_skills` and relevant `skill_hints.plan` / `skill_hints.execute`
+   in the design handoff so plan stage can preserve them in `skills_needed`.
+   Specialist sub-section defines its own typed `## Design Output` block
+   (e.g., `## Schema Design Output`).
 4. v1 multi-domain disambiguation: if `domain:` frontmatter contains multiple names (comma-separated), use first match. v2 multi-domain dispatch is out of 113.1 scope.
 
 **Schema specialist active as of 113.3**: `defaults.yaml` now points schema to

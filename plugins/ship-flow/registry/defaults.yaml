@@ -1,6 +1,7 @@
 # registry/defaults.yaml — Plugin-default domain registry for ship-flow
 #
-# PURPOSE: Maps domain names to specialist designers + knowledge modules.
+# PURPOSE: Maps domain names to specialist designers, knowledge modules, and
+# optional downstream skill routing hints.
 # Consumed by: ship-design router (113.1), schema-designer specialist (113.3),
 #              intent-match-verifier (113.4) via lib/registry-resolve.sh.
 #
@@ -16,7 +17,8 @@
 #   M5 invalid_trigger_config — domain has both trigger_patterns: [] AND spec_keywords: [] → exit 21
 #
 # PORTABILITY (A3/A4): This file contains ONLY generic patterns.
-# NO adopter-specific globs — adopters supply trigger_patterns via .claude/ship-flow/domains.yaml.
+# NO adopter-specific globs or project-level skill names — adopters supply
+# trigger_patterns, required_skills, and skill_hints via .claude/ship-flow/domains.yaml.
 # Examples of adopter-specific patterns that belong in project override, NOT here:
 #   project globs like fmodel patterns, migration path globs, or team-specific keywords.
 #

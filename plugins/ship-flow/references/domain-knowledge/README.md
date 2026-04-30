@@ -32,6 +32,11 @@ consumers call `lib/registry-resolve.sh` to look up the path.
    - `knowledge_module: plugins/ship-flow/references/domain-knowledge/<domain>.md`
    - `spec_keywords` or `trigger_patterns` for classification
    - `designer_section_anchor` once the specialist sub-section is built
+   - optional `required_skills` and `skill_hints` when a matched domain should
+     route downstream plan/execute/verify workers to project-level skills
+
+Keep plugin defaults generic. Project-specific skill names, file globs, and
+team-local domain terminology belong in the adopter override.
 
 ## Structure of each knowledge module
 

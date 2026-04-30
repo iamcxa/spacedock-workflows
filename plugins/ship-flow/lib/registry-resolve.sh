@@ -26,6 +26,10 @@
 #   missing=<domain1>,<domain2>,...
 #   knowledge_module_path=<path>
 #   designer_section_anchor=<anchor>
+#   required_skills=<skill1>,<skill2>,...
+#   skill_hints.plan=<skill1>,<skill2>,...
+#   skill_hints.execute=<skill1>,<skill2>,...
+#   skill_hints.verify=<skill1>,<skill2>,...
 
 set -euo pipefail
 
@@ -209,6 +213,105 @@ get_trigger_patterns() {
     in_domain && /^  [a-zA-Z]/ && $0 !~ ("^  " dom ":") { in_domain=0; in_tp=0 }
     in_domains && /^[^ ]/ && !/^domains:/ { in_domains=0 }
   ' "$cfg"
+}
+
+join_unique_csv() {
+  awk '
+    NF && !seen[$0]++ {
+      if (out != "") out = out ","
+      out = out $0
+    }
+    END { print out }
+  '
+}
+
+# get_domain_list_field: extract a top-level YAML list field for a domain.
+get_domain_list_field() {
+  local cfg="$1"
+  local domain="$2"
+  local field="$3"
+  awk -v dom="$domain" -v fld="$field" '
+    /^domains:/ { in_domains=1; next }
+    in_domains && $0 ~ ("^  " dom ":") { in_domain=1; next }
+    in_domain && $0 ~ ("^    " fld ":") {
+      in_list=1
+      if (/\[\]/) { in_list=0 }
+      next
+    }
+    in_list && /^      - / {
+      sub(/^      - /, "")
+      gsub(/^["'"'"']|["'"'"']$/, "")
+      print
+      next
+    }
+    in_list && !/^      / { in_list=0 }
+    in_domain && /^  [a-zA-Z]/ && $0 !~ ("^  " dom ":") { in_domain=0; in_list=0 }
+    in_domains && /^[^ ]/ && !/^domains:/ { in_domains=0 }
+  ' "$cfg"
+}
+
+# get_skill_hints_for_stage: extract skill_hints.<stage> list for a domain.
+get_skill_hints_for_stage() {
+  local cfg="$1"
+  local domain="$2"
+  local stage="$3"
+  awk -v dom="$domain" -v stage="$stage" '
+    /^domains:/ { in_domains=1; next }
+    in_domains && $0 ~ ("^  " dom ":") { in_domain=1; next }
+    in_domain && /^    skill_hints:/ { in_hints=1; next }
+    in_hints && $0 ~ ("^      " stage ":") {
+      in_stage=1
+      if (/\[\]/) { in_stage=0 }
+      next
+    }
+    in_stage && /^        - / {
+      sub(/^        - /, "")
+      gsub(/^["'"'"']|["'"'"']$/, "")
+      print
+      next
+    }
+    in_stage && !/^        / { in_stage=0 }
+    in_hints && /^    [a-zA-Z]/ { in_hints=0; in_stage=0 }
+    in_domain && /^  [a-zA-Z]/ && $0 !~ ("^  " dom ":") { in_domain=0; in_hints=0; in_stage=0 }
+    in_domains && /^[^ ]/ && !/^domains:/ { in_domains=0 }
+  ' "$cfg"
+}
+
+emit_skill_routes_for_domains() {
+  local cfg="$1"
+  shift
+  local domains=("$@")
+
+  local required plan execute verify dom
+  required="$(
+    for dom in "${domains[@]}"; do
+      [ -z "$dom" ] && continue
+      get_domain_list_field "$cfg" "$dom" "required_skills"
+    done | join_unique_csv
+  )"
+  plan="$(
+    for dom in "${domains[@]}"; do
+      [ -z "$dom" ] && continue
+      get_skill_hints_for_stage "$cfg" "$dom" "plan"
+    done | join_unique_csv
+  )"
+  execute="$(
+    for dom in "${domains[@]}"; do
+      [ -z "$dom" ] && continue
+      get_skill_hints_for_stage "$cfg" "$dom" "execute"
+    done | join_unique_csv
+  )"
+  verify="$(
+    for dom in "${domains[@]}"; do
+      [ -z "$dom" ] && continue
+      get_skill_hints_for_stage "$cfg" "$dom" "verify"
+    done | join_unique_csv
+  )"
+
+  echo "required_skills=$required"
+  echo "skill_hints.plan=$plan"
+  echo "skill_hints.execute=$execute"
+  echo "skill_hints.verify=$verify"
 }
 
 glob_to_regex() {
@@ -424,9 +527,11 @@ classify_spec() {
     echo "status=partial_coverage"
     echo "matched=${matched_str}"
     echo "missing=${missing_str}"
+    emit_skill_routes_for_domains "$cfg" "${matched_domains[@]}"
   else
     echo "status=ok"
     echo "matched=${matched_str}"
+    emit_skill_routes_for_domains "$cfg" "${matched_domains[@]}"
   fi
 }
 
@@ -482,6 +587,7 @@ case "$MODE" in
     echo "domain=$DOMAIN_NAME"
     echo "designer_section_anchor=$local_anchor"
     echo "knowledge_module_path=$local_km"
+    emit_skill_routes_for_domains "$MERGED_CFG" "$DOMAIN_NAME"
     ;;
 
   validate)

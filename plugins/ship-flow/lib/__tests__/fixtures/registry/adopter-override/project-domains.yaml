@@ -14,4 +14,15 @@ domains:
       - fmodel
     knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
     designer_section_anchor: "ship-design#adopter-project-schema-designer"
+    required_skills:
+      - project-db
+      - fmodel
+    skill_hints:
+      plan:
+        - project-db
+        - fmodel
+      execute:
+        - fmodel
+      verify:
+        - project-db
     description: "Schema domain (adopter project override — anchor differs from plugin default)"

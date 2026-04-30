@@ -158,7 +158,24 @@ check_stdout "adopter override: --domain=schema returns adopter anchor (not plug
   "designer_section_anchor=ship-design#adopter-project-schema-designer" \
   "\"$REGISTRY_SCRIPT\" --domain=schema --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
 
-# Assertion 11: live plugin defaults now expose the schema-designer specialist (113.3)
+# Assertion 11: adopter override — project-level skill routing fields are emitted
+check_stdout "adopter override: --domain=schema emits required_skills from project registry" \
+  "required_skills=project-db,fmodel" \
+  "\"$REGISTRY_SCRIPT\" --domain=schema --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
+
+check_stdout "adopter override: --domain=schema emits plan skill_hints from project registry" \
+  "skill_hints.plan=project-db,fmodel" \
+  "\"$REGISTRY_SCRIPT\" --domain=schema --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
+
+check_stdout "adopter override: --classify emits required_skills for matched domain" \
+  "required_skills=project-db,fmodel" \
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/happy-path/spec.md\" --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
+
+check_stdout "adopter override: --classify emits stage skill_hints for matched domain" \
+  "skill_hints.execute=fmodel" \
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/happy-path/spec.md\" --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
+
+# Assertion 12: live plugin defaults now expose the schema-designer specialist (113.3)
 check_exit "live defaults: schema domain validates with specialist anchor present" \
   0 \
   "\"$REGISTRY_SCRIPT\" --validate --domain=schema"
