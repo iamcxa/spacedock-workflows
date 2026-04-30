@@ -171,7 +171,7 @@ SendMessage(to: "designer@pitch-XX",
 **Designer findings integration**:
 - Append designer findings to `### Review Findings` in `verify.md` under subsection `#### Design Parity`.
 - Apply same classify/spot-check rules as haiku findings: drop hallucinated citations (>30% → discard agent).
-- BLOCKING design-parity finding → feedback to execute (counts toward 2-round max).
+- BLOCKING design-parity finding → run Step 3.6.5 Design Feedback Router and feed back to the routed stage (design or execute; counts toward that stage's 2-round max).
 - WARN → log; does NOT block advance if no other BLOCKING.
 
 **Skip when**:
@@ -207,7 +207,7 @@ ui-verify backend (e2e-pipeline plugin) drives a real browser via `agent-browser
 - Append to `### Review Findings` in `verify.md` under subsection `#### Mechanical UI Parity`.
 - Token-resolution mismatch (computed value differs from tokens.css declaration) → **BLOCKING**.
 - Pixel-diff exceeds 1% but token resolution OK → WARN (often CSS reset / font-load timing — designer teammate reviews in 3.5).
-- Baseline screenshot missing for cited specimen → **BLOCKING** (designer should have emitted baseline at Phase 7 captain confirm — feedback to design).
+- Baseline screenshot missing for cited specimen → **BLOCKING** (designer should have emitted baseline at Phase 7 captain confirm — route_to: design).
 
 **Skip when**:
 - Entity `affects_ui: false` (skipped by trigger).
@@ -215,6 +215,39 @@ ui-verify backend (e2e-pipeline plugin) drives a real browser via `agent-browser
 - `ui-verify` skill not installed → emit WARN `ui-verify unavailable` in `verify.md`; do NOT silently skip — captain must see the gap.
 
 **Why not fold into Step 3.5**: 3.5 owns semantic review (D1-D6 captain decisions, designer hot context). 3.6 owns mechanical assertion (computed-style equality, pixel diff). Different failure modes, different tools, different reviewers — folding loses the distinction and lets LLM rationalize past rendered-value mismatches that are categorically not a judgment call.
+
+### Step 3.6.5 — Design Feedback Router
+
+Run this router for every BLOCKING or WARN finding from `#### Design Parity`,
+`#### Mechanical UI Parity`, and `## Intent Match Findings` before issuing a
+feedback request. The route is part of the finding record:
+
+```markdown
+| Severity | Finding | Evidence | route_to | route_reason |
+|---|---|---|---|---|
+| BLOCKING/WARN/NIT | <specific mismatch> | <file:line, command, or artifact> | design/execute | <why> |
+```
+
+Routing table:
+
+| Finding class | Route |
+|---|---|
+| semantic design gap, information architecture mismatch, unclear affordance, missing state model, contradictory captain decision, incomplete `design_constraints[]`, missing baseline artifact, impossible-to-judge design intent | `route_to: design` |
+| implementation drift from clear design intent, runtime behavior mismatch, computed token mismatch caused by changed code, DOM/a11y role mismatch, API/schema implementation not matching typed design output | `route_to: execute` |
+| ambiguous ownership after reading design + execute evidence | `route_to: design` first, because execute cannot be judged fairly until intent is complete |
+
+Feedback actions:
+- `route_to: design` → SendMessage to `designer@pitch-XX` with the finding,
+  evidence, and requested correction to `design.md` / design artifacts /
+  handoff constraints. Do not ask executer to guess design intent.
+- `route_to: execute` → feedback to executer with the exact violated
+  constraint and evidence.
+- Mixed findings split by route; do not collapse the batch to execute merely
+  because at least one implementation bug exists.
+
+This router is the verify-stage counterpart to ship-design's visible UI handoff:
+review/verify can repair missing or ambiguous design intent instead of forcing
+the execute worker to absorb design-stage omissions.
 
 ### Step 3.7 — Intent-match verifier (schema-domain ad-hoc hook)
 
