@@ -120,6 +120,10 @@ is_local_note() {
   printf '%s\n' "$1" | grep -qiE 'remember|note|observation|decision|preference|evidence|capture|keep'
 }
 
+has_existing_coverage_signal() {
+  printf '%s\n' "$1" | grep -qiE 'already covers|covered by|existing|duplicate|same as'
+}
+
 escape_text() {
   printf '%s\n' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
@@ -134,10 +138,12 @@ while IFS= read -r raw_line || [ -n "$raw_line" ]; do
     continue
   fi
 
-  existing_slug="$(match_existing_entity "$text")"
-  if [ -n "$existing_slug" ]; then
-    printf 'EXISTING_ENTITY line=%s reason=existing-entity-match slug=%s text="%s"\n' "$LINE_NO" "$existing_slug" "$(escape_text "$text")"
-    continue
+  if ! is_local_note "$text" || has_existing_coverage_signal "$text"; then
+    existing_slug="$(match_existing_entity "$text")"
+    if [ -n "$existing_slug" ]; then
+      printf 'EXISTING_ENTITY line=%s reason=existing-entity-match slug=%s text="%s"\n' "$LINE_NO" "$existing_slug" "$(escape_text "$text")"
+      continue
+    fi
   fi
 
   follow_up=0

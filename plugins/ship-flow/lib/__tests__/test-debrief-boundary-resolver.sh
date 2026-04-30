@@ -8,6 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
+REPO_ROOT="$(cd -- "${PLUGIN_ROOT}/../.." &> /dev/null && pwd)"
 RESOLVER="${PLUGIN_ROOT}/bin/debrief-boundary-resolver.sh"
 FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/debrief-boundary-resolver"
 
@@ -101,6 +102,13 @@ RC=0
 "${RESOLVER}" "$WORKFLOW_COPY" "${FIXTURE_ROOT}/drafts/ambiguous-session.md" > "${TMP_DIR}/ambiguous.out" 2>&1 || RC=$?
 assert_exit "ambiguous fixture exits 1" 1 "$RC"
 assert_contains "ambiguous output requests captain input" '^AMBIGUOUS line=1 reason=captain-input-required candidates=FOLLOW_UP_ENTITY,SPACEDOCK_ISSUE text="Need to fix Spacedock follow-up routing later\."' "${TMP_DIR}/ambiguous.out"
+
+RC=0
+"${RESOLVER}" "${REPO_ROOT}/docs/ship-flow" "$DRAFT_COPY" > "${TMP_DIR}/real-workflow.out" 2>&1 || RC=$?
+assert_exit "real workflow mixed fixture exits 0" 0 "$RC"
+assert_contains "real workflow local note does not false-match existing entity" '^DEBRIEF_ONLY line=1 reason=local-note text="Remember that ship-flow execute evidence should include exact command names\."' "${TMP_DIR}/real-workflow.out"
+assert_contains "real workflow explicit coverage still matches existing entity" '^EXISTING_ENTITY line=3 reason=existing-entity-match slug=114\.1-workflow-doctor-sync-dry-run text="Workflow doctor dry-run already covers read-only sync drift checks\."' "${TMP_DIR}/real-workflow.out"
+assert_not_contains "real workflow avoids broad stage-wiring false positive" '^EXISTING_ENTITY line=1 reason=existing-entity-match slug=099-ship-flow-stage-wiring' "${TMP_DIR}/real-workflow.out"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
