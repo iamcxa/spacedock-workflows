@@ -62,7 +62,7 @@ Skip if no file:line citations (common for S-size).
 ### Step 1.6 — Import Design DCs from Hand-off (G10, 2026-04-29)
 
 **Trigger** (G14, 2026-04-29 disambiguation): entity body MUST contain `### Hand-off to Plan` block. Two paths:
-- Block has `design-skipped: true` → design intentionally bypassed (shape Phase 8 stub for `affects_ui: false` route); log `## Plan Imported Design DCs: design-skipped (no UI surface)` and proceed.
+- Block has `design-skipped: true` → design intentionally bypassed only when the entity is non-UI (`affects_ui: false`) OR the handoff also carries `captain-approved-design-bypass: true` with a rationale. For `affects_ui: true` without that explicit bypass, **BLOCKER** (status: blocked, reason: `ui design handoff skipped`) and bounce to design/FO. Otherwise log `## Plan Imported Design DCs: design-skipped (no UI surface or captain-approved bypass)` and proceed.
 - Block has design-emitted fields (`design_constraints[]` / `render_fidelity_targets[]`) → run mechanical mapping below.
 - Block ABSENT entirely → **BLOCKER** (status: blocked, reason: `hand-off-to-plan absent — neither design-skipped stub nor design output found`). Either shape Phase 8 missed the stub emit OR design errored without writing hand-off. Do not silently treat as "no UI" — that's the ambiguity G14 fixes.
 

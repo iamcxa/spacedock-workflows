@@ -307,6 +307,7 @@ creates typed intent for later comparison.
 ### Phase 8 — Emit design.md (entity body)
 
 1. Write `<entity-folder>/design.md` per `entity-body-schema.yaml → stages.design`:
+   - `## Design Output / ### Visible UI Design Output` — for every `affects_ui: true` UI lane, include captain-visible layout, zones, states, affordance, and interaction decisions. Category A-D may scale the artifact bundle down, but may not produce an invisible or purely machine-readable handoff.
    - `## Design Output / ### Captain Decisions` — list all `D{N}|Captain decision` entries with file:line contradiction cite. (Captain-readable narrative; rationale source for plan/verify cross-references via `D{N}`.)
    - `## Design Output / ### Artifact Bundle Manifest` — table (Path / Type / Purpose) of all emitted files.
    - `## Design Report` — status / stage_cost / iterations / contradictions_resolved / captain_decisions / reviewer_verdict.
@@ -350,7 +351,8 @@ Verdict: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**. Each verdict
 
 ## Invariants + red flags (STOP if violated)
 
-- Category != 0 → halt and report deferral (v1 scope).
+- Category A-D design stage routes must proceed through the dispatch manifest; do not reintroduce a category-only deferral or halt.
+- `affects_ui: true` with `design-skipped: true` is invalid unless the entity handoff carries `captain-approved-design-bypass: true` with a one-line rationale.
 - Contradiction-detect emits zero pairs → re-scan or PROMPT_CAPTAIN.
 - Captain Q-loop skipped → fabricated-PASS; BLOCK.
 - Captain confirm gate skipped → fabricated-PASS; BLOCK.
@@ -378,7 +380,26 @@ Emit `### Hand-off to Plan` (structured fields per `entity-body-schema.yaml → 
 - `artifact_paths[]` — paths to committed design artifacts (`tokens.css`, specimens, composite mockup).
 - `render_fidelity_targets[]` — each item: `{selector, css_property, expected_value, rationale_decision: D{N}}` — feeds ship-verify Step 3.6 ui-verify YAML; `rationale_decision: D{N}` MUST cross-reference Phase 8.
 
+For `affects_ui: true`, the handoff MUST include non-empty `design_constraints[]`
+and `render_fidelity_targets[]` plus a captain-visible
+`### Visible UI Design Output` section in `design.md`. Category D may use a
+single composite mockup or prose-plus-selector target instead of a full
+`design/` artifact bundle, but it still emits a visible UI design decision and
+machine-readable verification target.
+
 **Design-skipped path** (G14): when design stage is skipped (`!affects_ui` route from shape), the entity body MUST still contain `### Hand-off to Plan` with single field `design-skipped: true`. Emitted by ship-shape Phase 8 hand-off when `affects_ui: false`. Plan Step 1.6 reads this marker to bypass design-DC import explicitly (vs absence of the block, which is ambiguous).
+
+If `affects_ui: true`, `design-skipped: true` is invalid by default. The only
+valid bypass is an explicit captain marker:
+
+```yaml
+design-skipped: true
+captain-approved-design-bypass: true
+bypass_rationale: "..."
+```
+
+Without that marker, return BLOCKER to the first officer/planner with reason
+`ui design handoff skipped`; do not let plan infer "no UI surface."
 
 **Why D{N} backref enforced per item**: plan Step 1.6 imports each constraint as a DC and carries `rationale_decision: D{N}`; without source-side enforcement, design can emit constraints that have no captain-decision anchor, breaking audit trail. `validate-d-references.sh` (lib) catches missing/dangling D{N} refs at design Phase 9 emit-time.
 <!-- /section:hand_off_to_plan -->

@@ -47,6 +47,9 @@ check "pre-acked-stubs frontmatter key mentioned" \
 check "Stub Flags table mentioned in Plan Report" \
   "grep -qE 'Stub Flag|stub.*flag' \"$SKILL_FILE\""
 
+check "UI design-skipped handoff is blocked unless captain bypassed" \
+  "grep -q 'affects_ui: true' \"$SKILL_FILE\" && grep -q 'captain-approved-design-bypass' \"$SKILL_FILE\" && grep -q 'ui design handoff skipped' \"$SKILL_FILE\""
+
 # --- T6.2: INVARIANTS.md Principle 4 extension ---
 check "INVARIANTS.md mentions stub-ack as boolean predicate" \
   "grep -qiE 'stub.ack|pre-acked-stubs|stub.*boolean|stub.*captain.ack' \"$INVARIANTS_FILE\""
