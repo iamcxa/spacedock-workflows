@@ -9,6 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
 DOCTOR="${PLUGIN_ROOT}/bin/workflow-doctor.sh"
+TEMPLATE="${PLUGIN_ROOT}/workflow-template.yaml"
 FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/workflow-doctor"
 
 PASS=0
@@ -96,26 +97,43 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 echo "=== test-workflow-doctor.sh ==="
 echo ""
 
-echo "Block 1: healthy current workflow is non-blocking and read-only"
+echo "Block 1: shipped template starts adopters on current workflow semantics"
+if grep -qE '^id-style:[[:space:]]*slug[[:space:]]*$' "$TEMPLATE"; then
+  record_pass "workflow-template.yaml declares id-style slug"
+else
+  record_fail "workflow-template.yaml declares id-style slug"
+fi
+if awk '
+  /^[[:space:]]*-[[:space:]]*name:[[:space:]]*design[[:space:]]*$/ { in_design = 1; next }
+  in_design && /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ { exit }
+  in_design && /^[[:space:]]*skip-when:[[:space:]]*"!affects_ui && !domain"[[:space:]]*$/ { found = 1; exit }
+  END { exit !found }
+' "$TEMPLATE"; then
+  record_pass "workflow-template.yaml declares domain-aware design skip-when"
+else
+  record_fail "workflow-template.yaml declares domain-aware design skip-when"
+fi
+
+echo ""
+echo "Block 2: healthy current workflow is non-blocking and read-only"
 HEALTHY_BEFORE="$(hash_dir "${FIXTURE_ROOT}/healthy-current")"
 run_doctor "healthy-current" "${TMP_DIR}/healthy.out" "${TMP_DIR}/healthy.exit"
 assert_exit "healthy current exits 0" 0 "${TMP_DIR}/healthy.exit"
 assert_not_contains "healthy current emits no BLOCKER findings" '^BLOCKER ' "${TMP_DIR}/healthy.out"
-assert_contains "healthy current emits grep-friendly RECOMMENDED classification" '^RECOMMENDED ' "${TMP_DIR}/healthy.out"
+assert_not_contains "healthy current does not report stale shipped-template drift" '^RECOMMENDED workflow-template\.yaml' "${TMP_DIR}/healthy.out"
 assert_read_only "healthy current fixture remains unchanged" "healthy-current" "$HEALTHY_BEFORE"
 
 echo ""
-echo "Block 2: stale pre-113 workflow reports blockers and exits non-zero"
+echo "Block 3: stale pre-113 workflow reports blockers and exits non-zero"
 STALE_BEFORE="$(hash_dir "${FIXTURE_ROOT}/stale-pre-113")"
 run_doctor "stale-pre-113" "${TMP_DIR}/stale.out" "${TMP_DIR}/stale.exit"
 assert_exit "stale pre-113 exits 1" 1 "${TMP_DIR}/stale.exit"
 assert_contains "stale pre-113 reports BLOCKER id-style" '^BLOCKER id-style' "${TMP_DIR}/stale.out"
 assert_contains "stale pre-113 reports BLOCKER design.skip-when" '^BLOCKER design\.skip-when' "${TMP_DIR}/stale.out"
-assert_contains "stale pre-113 still emits RECOMMENDED drift detail" '^RECOMMENDED ' "${TMP_DIR}/stale.out"
 assert_read_only "stale pre-113 fixture remains unchanged" "stale-pre-113" "$STALE_BEFORE"
 
 echo ""
-echo "Block 3: project-local README content is preserved as non-blocking"
+echo "Block 4: project-local README content is preserved as non-blocking"
 LOCAL_BEFORE="$(hash_dir "${FIXTURE_ROOT}/project-local-readme")"
 run_doctor "project-local-readme" "${TMP_DIR}/project-local.out" "${TMP_DIR}/project-local.exit"
 assert_exit "project-local README exits 0" 0 "${TMP_DIR}/project-local.exit"
@@ -124,7 +142,7 @@ assert_not_contains "project-local README emits no BLOCKER findings" '^BLOCKER '
 assert_read_only "project-local README fixture remains unchanged" "project-local-readme" "$LOCAL_BEFORE"
 
 echo ""
-echo "Block 4: write modes are intentionally unavailable"
+echo "Block 5: write modes are intentionally unavailable"
 WRITE_BEFORE="$(hash_dir "${FIXTURE_ROOT}/healthy-current")"
 "${DOCTOR}" --fix "${FIXTURE_ROOT}/healthy-current" > "${TMP_DIR}/fix.out" 2>&1 && FIX_RC=0 || FIX_RC=$?
 printf '%s\n' "$FIX_RC" > "${TMP_DIR}/fix.exit"

@@ -4,6 +4,7 @@
 name: ship-flow
 description: "Ship-focused pipeline. SHAPE once with captain, then agents autonomously plan → execute → verify → ship."
 plugin: ship-flow
+id-style: slug
 
 entity:
   type: feature
@@ -29,6 +30,15 @@ stages:
     skill: ship-flow:ship-shape
     model: opus
     description: "Captain-facing. FO invokes skill directly (not via ensign) for interactive Musk audit. Reads PRODUCT.md + ROADMAP.md, size triage (S/M/L), scoring gate. Only human gate in the pipeline."
+
+  - name: design
+    worktree: true
+    gate: true
+    manual: conditional
+    skip-when: "!affects_ui && !domain"
+    skill: ship-flow:ship-design
+    model: opus
+    description: "Conditional design stage. Runs for UI work or domain-routed non-UI work; skips only when neither affects_ui nor domain is present."
 
   - name: plan
     skill: ship-flow:ship-plan
