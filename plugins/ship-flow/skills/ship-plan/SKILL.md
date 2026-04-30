@@ -165,6 +165,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
   - task `files_modified` / `**Files:**` globs
   - `framework_detected`, `theme_indirection`, and `design_canonical_dir` from `ship-flow:ship-runtime-detect`
   - density-classified skill set already loaded for `answers_density: high`
+  - domain registry routing from `registry-resolve.sh --domain=<domain>` or `--classify <spec>`: preserve `required_skills` and merge `skill_hints.plan` into plan-stage task `skills_needed`
 
   Use concrete file-glob mapping, then trim to the smallest relevant list:
 
@@ -172,9 +173,16 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
   |---|---|
   | `*.tsx`, `*.jsx`, `components/**`, `app/**`, `ui/**` | `frontend-design`, `react-best-practices`, `test` |
   | `*.css`, `tokens.css`, `design-system.md`, `design/**` | `frontend-design`, `web-design-guidelines`, `accessibility` |
+  | `apps/supabase/migrations/**`, `domains/**/src/schema/**` | `project-db`, `test` |
+  | `domains/**/src/domain/**/{types,decider,view,saga}.ts`, `apps/deno-api/src/middlewares/fmodel-middleware.ts` | `fmodel`, `test` |
   | `*.test.*`, `*.spec.*`, `__tests__/**` | `test`, `tdd` or `test-driven-development` |
   | `*.sh`, `bin/**`, `lib/**/*.sh` | `test`, `best-practices` |
   | `*.md`, `SKILL.md`, `docs/**` | `write-docs` when prose is user-facing; omit for stage artifacts |
+
+  Domain-derived skills are additive, not adopter-specific defaults. `project-db`
+  and `fmodel` are generic skill names only when those skills exist in the
+  adopter project or local Codex environment; otherwise keep the registry
+  output visible in `## Context Manifest` and surface missing skills early.
 
   Non-trivial plan guard: if a plan has ≥2 implementation tasks touching different file classes, require ≥2 distinct `skills_needed` lists. If every task receives the same list, treat it as boilerplate and revise before emitting plan.md.
 - TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `**TDD:** skip — <reason>`.
@@ -240,6 +248,8 @@ Dispatch cross-review to `executer` teammate (pipeline path) or fresh sonnet (no
 7. **Skill Coverage** (`skill-coverage`, #108.2) — every implementation task has non-empty `skills_needed` and the skills match its `files_modified` / `**Files:**` file globs. Emit exactly one grep-testable summary line when clean: `skill-coverage: PASS`. Emit one line per failing task when not clean: `skill-coverage: FAIL — task <id>: <reason>`. Failure reasons include empty `skills_needed`, boilerplate repeated lists across heterogeneous implementation tasks, or file-glob/skill mismatch. Use these required matches:
    - `*.tsx`, `*.jsx`, `components/**`, `app/**`, `ui/**` → `react`, `frontend-design`, or `react-best-practices`
    - `*.css`, `tokens.css`, `design-system.md`, `design/**` → `frontend-design`, `web-design-guidelines`, or `accessibility`
+   - `apps/supabase/migrations/**`, `domains/**/src/schema/**` → `project-db`
+   - `domains/**/src/domain/**/{types,decider,view,saga}.ts`, `apps/deno-api/src/middlewares/fmodel-middleware.ts` → `fmodel`
    - `*.test.*`, `*.spec.*`, `__tests__/**` → `test`, `tdd`, or `test-driven-development`
    - `*.sh`, `bin/**`, `lib/**/*.sh` → `test` or `best-practices`
    - Docs-only stage-artifact tasks may use `skills_needed: []` only with `TDD: skip — docs-only/stage-artifact`; user-facing prose docs should use `write-docs`.

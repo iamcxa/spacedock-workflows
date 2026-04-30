@@ -512,7 +512,7 @@ stages:
                 **Done:** {runnable verification command}
                 **Model:** {haiku | sonnet}
               task_fields:
-                - { name: skills_needed, type: list, items: string, description: "Per-task skill names to load before dispatch. Derived by ship-plan from files_modified globs, framework_detected, and density skill set. Backward-compatible: absent means ship-execute falls back to density/default skill load." }
+                - { name: skills_needed, type: list, items: string, description: "Per-task skill names to load before dispatch. Derived by ship-plan from files_modified globs, framework_detected, density skill set, and domain registry required_skills / skill_hints. Backward-compatible: absent means ship-execute falls back to density/default skill load." }
     report:
       section: "## Plan Report"
       section_tag: plan-report

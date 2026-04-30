@@ -236,7 +236,7 @@ The "max 2 consecutive captain-smoke rounds without PROMPT_CAPTAIN" cap (per shi
 
 | Extension factor | Stage | Namespacing | When required |
 |---|---|---|---|
-| `skill-coverage` | ship-plan (#108.2) | Appended as 7th factor; emits `skill-coverage: PASS` or `skill-coverage: FAIL — task <id>: <reason>` | Every implementation task must have non-empty `skills_needed`, and file globs must match skills (`*.tsx` → `react` / `frontend-design`, `*.css` → `frontend-design` / `web-design-guidelines`, `*.test.*` → `test` / `tdd` / `test-driven-development`, shell/lib scripts → `test` / `best-practices`) |
+| `skill-coverage` | ship-plan (#108.2) | Appended as 7th factor; emits `skill-coverage: PASS` or `skill-coverage: FAIL — task <id>: <reason>` | Every implementation task must have non-empty `skills_needed`, and file globs must match skills (`*.tsx` → `react` / `frontend-design`, `*.css` → `frontend-design` / `web-design-guidelines`, DB/schema files → `project-db`, fmodel/domain model files → `fmodel`, `*.test.*` → `test` / `tdd` / `test-driven-development`, shell/lib scripts → `test` / `best-practices`) |
 | `Render Fidelity` | ship-review (T6.4) | Appended as 7th factor | When `affects_ui: true` AND `render_fidelity_status` present in hand-off to review |
 
 All stages use the same reviewer fallback pattern (Q1 from Wave 2 captain answers): cross-teammate counterpart → fresh sonnet default → fresh opus when `appetite: big-batch`. Verdict set: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**.

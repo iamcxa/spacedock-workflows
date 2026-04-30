@@ -43,6 +43,10 @@ check "tsx/jsx files require react or frontend-design" \
   "grep -qE '\\*\\.tsx|\\*\\.jsx' '${PLAN_SKILL}' && grep -qE 'react|frontend-design' '${PLAN_SKILL}'"
 check "css/design files require frontend-design or web-design-guidelines" \
   "grep -qE '\\*\\.css|tokens\\.css|design/' '${PLAN_SKILL}' && grep -qE 'frontend-design|web-design-guidelines' '${PLAN_SKILL}'"
+check "database/schema files require project-db" \
+  "grep -qE 'apps/supabase/migrations/\\*\\*|domains/\\*\\*/src/schema/\\*\\*' '${PLAN_SKILL}' && grep -q 'project-db' '${PLAN_SKILL}'"
+check "fmodel domain files require fmodel" \
+  "grep -qE 'domains/\\*\\*/src/domain/\\*\\*/\\{types,decider,view,saga\\}\\.ts|fmodel-middleware\\.ts' '${PLAN_SKILL}' && grep -q 'fmodel' '${PLAN_SKILL}'"
 check "test files require test/tdd/test-driven-development" \
   "grep -qE '\\*\\.test\\.\\*|\\*\\.spec\\.\\*|__tests__' '${PLAN_SKILL}' && grep -qE 'test-driven-development|tdd|test' '${PLAN_SKILL}'"
 check "shell/lib scripts require test or best-practices" \

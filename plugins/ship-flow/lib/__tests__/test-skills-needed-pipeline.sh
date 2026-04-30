@@ -44,6 +44,12 @@ check "ship-plan requires at least two distinct skills_needed lists on non-trivi
   "grep -qE 'two distinct|≥2 distinct|>=2 distinct' '${PLAN_SKILL}'"
 check "ship-plan maps common file globs to skills" \
   "grep -qE '\\*\\.tsx|tsx' '${PLAN_SKILL}' && grep -qE '\\*\\.css|css' '${PLAN_SKILL}' && grep -qE 'test-driven-development|test' '${PLAN_SKILL}'"
+check "ship-plan derives project-db from generic database/schema file signals" \
+  "grep -q 'apps/supabase/migrations/\\*\\*' '${PLAN_SKILL}' && grep -q 'domains/\\*\\*/src/schema/\\*\\*' '${PLAN_SKILL}' && grep -q 'project-db' '${PLAN_SKILL}'"
+check "ship-plan derives fmodel from generic domain model file signals" \
+  "grep -q 'domains/\\*\\*/src/domain/\\*\\*/{types,decider,view,saga}.ts' '${PLAN_SKILL}' && grep -q 'apps/deno-api/src/middlewares/fmodel-middleware.ts' '${PLAN_SKILL}' && grep -q 'fmodel' '${PLAN_SKILL}'"
+check "ship-plan incorporates registry required_skills and plan skill_hints" \
+  "grep -q 'required_skills' '${PLAN_SKILL}' && grep -q 'skill_hints.plan' '${PLAN_SKILL}'"
 
 echo "Block 3: execute consumes skills_needed in troop prompts"
 check "ship-execute reads tasks skills_needed from plan" \
