@@ -1,0 +1,7 @@
+# Saved status --boot orphan/worktree summary fixture for the read-only
+# cleanup planner. Fields are intentionally key=value for stable shell tests.
+ORPHAN entity=114.1-workflow-doctor-sync-dry-run status=ship worktree=.worktrees/ship-114.1-workflow-doctor-sync-dry-run branch=ship-114.1-workflow-doctor-sync-dry-run local=present branch_state=merged pr_state=MERGED active=no
+ORPHAN entity=114.0-old-planner status=ship worktree=.worktrees/ship-114.0-old-planner branch=ship-114.0-old-planner local=missing branch_state=merged pr_state=MERGED active=no
+ORPHAN entity=114.3-stale-worktree-cleanup-planner status=execute worktree=.worktrees/ship-114.3-stale-worktree-cleanup-planner branch=ship-114.3-stale-worktree-cleanup-planner local=present branch_state=merged pr_state=none active=yes
+ORPHAN entity=113.3-schema-designer-specialist status=review worktree=.worktrees/ship-113.3-schema-designer-specialist branch=ship-113.3-schema-designer-specialist local=present branch_state=merged pr_state=OPEN active=no
+ORPHAN entity=112.9-local-only-branch status=ship worktree=.worktrees/ship-112.9-local-only-branch branch=ship-112.9-local-only-branch local=present branch_state=unmerged pr_state=none active=no
