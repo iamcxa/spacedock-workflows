@@ -54,7 +54,7 @@ fi
 
 # Format detection: structured (YAML-ish keys at column 0/2) vs prose (markdown bullets)
 # Heuristic: structured has lines like '    type: token-binding'; prose has '  1. some prose'
-STRUCTURED_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]+(type|assertion|rationale_decision|selector|css_property|expected_value):' || true)
+STRUCTURED_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]+(type|assertion|rationale_decision|selector|css_property|expected_value|route|reference_artifact|capture|threshold):' || true)
 PROSE_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*[0-9]+\.[[:space:]]' || true)
 
 FAIL=0
@@ -94,7 +94,7 @@ if [ -n "$DC_BLOCK" ]; then
 fi
 
 # Validate render_fidelity_targets[] structured fields
-RFT_BLOCK=$(echo "$HANDOFF" | awk '/render_fidelity_targets:/,/storyboard_frames:|^### |^---/' | head -80)
+RFT_BLOCK=$(echo "$HANDOFF" | awk '/render_fidelity_targets:/,/whole_page_visual_targets:|storyboard_frames:|^### |^---/' | head -80)
 if [ -n "$RFT_BLOCK" ]; then
   SELECTOR_COUNT=$(echo "$RFT_BLOCK" | grep -cE '^[[:space:]]*-?[[:space:]]*selector:' || true)
   PROPERTY_COUNT=$(echo "$RFT_BLOCK" | grep -cE '^[[:space:]]+css_property:' || true)
@@ -108,6 +108,26 @@ if [ -n "$RFT_BLOCK" ]; then
     fi
     if [ "$RFT_RATIONALE_COUNT" -lt "$SELECTOR_COUNT" ]; then
       echo "FAIL handoff-schema: render_fidelity_targets[] $SELECTOR_COUNT items but only $RFT_RATIONALE_COUNT rationale_decision backrefs (G12 violation)" >&2
+      FAIL=1
+    fi
+  fi
+fi
+
+# Validate whole_page_visual_targets[] structured fields when present.
+WP_BLOCK=$(echo "$HANDOFF" | awk '/whole_page_visual_targets:/,/storyboard_frames:|^### |^---/' | head -80)
+if [ -n "$WP_BLOCK" ]; then
+  ROUTE_COUNT=$(echo "$WP_BLOCK" | grep -cE '^[[:space:]]*-?[[:space:]]*route:' || true)
+  REF_COUNT=$(echo "$WP_BLOCK" | grep -cE '^[[:space:]]+reference_artifact:' || true)
+  CAPTURE_COUNT=$(echo "$WP_BLOCK" | grep -cE '^[[:space:]]+capture:[[:space:]]*(full-page screenshot|viewport screenshot)' || true)
+  WP_RATIONALE_COUNT=$(echo "$WP_BLOCK" | grep -cE '^[[:space:]]+rationale_decision:[[:space:]]*D[0-9]+' || true)
+
+  if [ "$ROUTE_COUNT" -gt 0 ]; then
+    if [ "$REF_COUNT" -lt "$ROUTE_COUNT" ] || [ "$CAPTURE_COUNT" -lt "$ROUTE_COUNT" ]; then
+      echo "FAIL handoff-schema: whole_page_visual_targets[] missing required field per item — routes=$ROUTE_COUNT, reference_artifact=$REF_COUNT, capture=$CAPTURE_COUNT" >&2
+      FAIL=1
+    fi
+    if [ "$WP_RATIONALE_COUNT" -lt "$ROUTE_COUNT" ]; then
+      echo "FAIL handoff-schema: whole_page_visual_targets[] $ROUTE_COUNT items but only $WP_RATIONALE_COUNT rationale_decision backrefs (G12 violation)" >&2
       FAIL=1
     fi
   fi

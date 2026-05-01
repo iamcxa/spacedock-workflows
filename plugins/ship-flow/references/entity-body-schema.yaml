@@ -456,6 +456,29 @@ stages:
                 description: "G12 (2026-04-29): cross-reference Phase 8 Captain Decision."
           required_when: "design-skipped == false"
           description: "G12 structured (2026-04-29). Feeds plan Step 1.6 ui-typed DC + ship-verify Step 3.6 ui-verify spec. Each target = one computed-style assertion."
+        - name: whole_page_visual_targets
+          type: list
+          items:
+            type: object
+            schema:
+              route:
+                type: string
+                description: "Runtime route or URL path to capture for full-page visual parity."
+              reference_artifact:
+                type: string
+                description: "Repo-relative HTML mockup or reference image used as the whole-page design target."
+              capture:
+                type: enum
+                values: [full-page screenshot, viewport screenshot]
+                description: "Capture mode. Use full-page screenshot unless the UI is a fixed-size embedded widget."
+              threshold:
+                type: string
+                description: "Acceptable visual delta policy, e.g. 'warn>1%, block composition mismatch'."
+              rationale_decision:
+                type: string
+                pattern: "^D[0-9]+$"
+                description: "G12-style cross-reference to Phase 8 Captain Decision."
+          description: "Route-level visual parity target. Complements render_fidelity_targets[] fragment checks; prevents fragment-level ui-verify from masking whole-page composition drift."
         - { name: storyboard_frames, type: list, description: "6-frame user-flow narrative from Phase 1.5 storyboard skill — each frame has actor + action/state + expectation. Verifier uses frames as render-fidelity contract; any unsatisfied frame BLOCKS at review stage." }
 
   plan:

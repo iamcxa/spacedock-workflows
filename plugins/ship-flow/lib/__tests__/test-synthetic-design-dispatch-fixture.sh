@@ -86,6 +86,10 @@ check "design evidence includes Category A UI chain and Schema Design Output" \
   "grep -q 'Category A' '${DESIGN_FILE}' && grep -q 'design-brief' '${DESIGN_FILE}' && grep -q '^## Schema Design Output$' '${DESIGN_FILE}'"
 check "design evidence carries adopter routing and folder guidance receipts" \
   "grep -q 'skills_needed: refine-expert,refine-gotchas,antd-expert,react-patterns,tailwind-expert' '${DESIGN_FILE}' && grep -q 'folder_guidance_files: apps/refine-app/CLAUDE.md' '${DESIGN_FILE}' && grep -q 'Context Read Receipt' '${DESIGN_FILE}'"
+check "design evidence records whole-page parity target beyond fragment ui-verify checks" \
+  "grep -q 'whole_page_visual_targets:' '${DESIGN_FILE}' && grep -q 'reference_artifact: plugins/example/design/crm-workspace.html' '${DESIGN_FILE}' && grep -q 'capture: full-page screenshot' '${DESIGN_FILE}'"
+check "design evidence records risk-gated readiness review before plan" \
+  "grep -q '^## Design Readiness Review$' '${DESIGN_FILE}' && grep -q 'risk_trigger: multi-domain' '${DESIGN_FILE}' && grep -q 'reviewers: ui, schema' '${DESIGN_FILE}' && grep -q 'verdict: PASS' '${DESIGN_FILE}'"
 check "design receipt checker passes complete design artifact" \
   "cd '${FIXTURE_DIR}' && '${RECEIPT_SCRIPT}' --config='${SKILL_ROUTING_CONFIG}' --files='apps/refine-app/src/pages/crm/leads/list.tsx' --artifact='${DESIGN_FILE}'"
 check "design receipt checker blocks missing receipt artifact" \
@@ -103,6 +107,8 @@ check "plan records design routing propagation PASS" \
   "grep -q 'design-routing-propagation: PASS' '${PLAN_FILE}'"
 check "plan records skill-coverage PASS" \
   "grep -q 'skill-coverage: PASS' '${PLAN_FILE}'"
+check "plan preserves whole-page visual parity as a verify DC" \
+  "grep -q 'whole-page visual parity DC' '${PLAN_FILE}' && grep -q 'plugins/example/design/crm-workspace.html' '${PLAN_FILE}'"
 
 echo "Block 5: stage-contract handoff reaches execute and verify"
 check "execute consumes design-routed guidance receipt" \
@@ -111,6 +117,8 @@ check "execute receipt checker passes Refine task artifact" \
   "cd '${FIXTURE_DIR}' && '${RECEIPT_SCRIPT}' --config='${SKILL_ROUTING_CONFIG}' --files='apps/refine-app/src/pages/crm/leads/list.tsx' --artifact='${EXECUTE_FILE}'"
 check "verify records shape-to-design-to-plan-to-execute receipt gates" \
   "grep -q 'shape-to-design: PASS' '${VERIFY_FILE}' && grep -q 'design-to-plan: PASS' '${VERIFY_FILE}' && grep -q 'plan-to-execute: PASS' '${VERIFY_FILE}' && grep -q 'execute receipt: PASS' '${VERIFY_FILE}'"
+check "verify records whole-page visual parity in addition to ui-verify fragments" \
+  "grep -q 'whole-page visual parity: PASS' '${VERIFY_FILE}' && grep -q 'fragment ui-verify: PASS' '${VERIFY_FILE}'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

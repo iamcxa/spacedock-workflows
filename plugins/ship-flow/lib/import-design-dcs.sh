@@ -148,7 +148,7 @@ echo "|---|---|---|---|---|"
 
 echo "$HANDOFF" | awk '
   /render_fidelity_targets:/ { in_rft=1; next }
-  /storyboard_frames:|artifact_paths:|^---|^### / { in_rft=0 }
+  /whole_page_visual_targets:|storyboard_frames:|artifact_paths:|^---|^### / { in_rft=0 }
   in_rft && /^[[:space:]]*-[[:space:]]*selector:/ {
     if (selector != "") print "| " (++n) " | `" selector "` | " prop " | " expected " | " rd " |"
     selector=""; prop=""; expected=""; rd=""
@@ -161,10 +161,33 @@ echo "$HANDOFF" | awk '
 '
 
 echo ""
-echo "**Wave assignment**: each constraint anchored to the task wave touching the affected component;"
-echo "render-fidelity targets default to W0 for token-level checks, task wave for component-level."
 echo ""
-echo "**Verify backend**: ship-verify Step 3.6 dispatches \`Skill: ui-verify\` with the render_fidelity_targets[]"
-echo "section above as input YAML — no manual transcription required."
+echo "### Imported whole_page_visual_targets"
+echo ""
+echo "| # | Route | Reference Artifact | Capture | Threshold | Rationale (D{N}) |"
+echo "|---|---|---|---|---|---|"
+
+echo "$HANDOFF" | awk '
+  /whole_page_visual_targets:/ { in_wp=1; next }
+  /storyboard_frames:|artifact_paths:|^---|^### / { in_wp=0 }
+  in_wp && /^[[:space:]]*-[[:space:]]*route:/ {
+    if (route != "") print "| " (++n) " | `" route "` | " ref " | " capture " | " threshold " | " rd " |"
+    route=""; ref=""; capture=""; threshold=""; rd=""
+    sub(/^[[:space:]]*-[[:space:]]*route:[[:space:]]*/, ""); route=$0
+  }
+  in_wp && /^[[:space:]]+reference_artifact:/ { sub(/^[[:space:]]+reference_artifact:[[:space:]]*/, ""); ref=$0 }
+  in_wp && /^[[:space:]]+capture:/ { sub(/^[[:space:]]+capture:[[:space:]]*/, ""); capture=$0 }
+  in_wp && /^[[:space:]]+threshold:/ { sub(/^[[:space:]]+threshold:[[:space:]]*/, ""); threshold=$0 }
+  in_wp && /^[[:space:]]+rationale_decision:/ { sub(/^[[:space:]]+rationale_decision:[[:space:]]*/, ""); rd=$0 }
+  END { if (route != "") print "| " (++n) " | `" route "` | " ref " | " capture " | " threshold " | " rd " |" }
+'
+
+echo ""
+echo "**Wave assignment**: each constraint anchored to the task wave touching the affected component;"
+echo "render-fidelity targets default to W0 for token-level checks, task wave for component-level;"
+echo "whole-page visual targets default to the integration wave or affected route wave."
+echo ""
+echo "**Verify backend**: ship-verify Step 3.6 dispatches \`Skill: ship-flow:ui-verify\` with the render_fidelity_targets[]"
+echo "section above as input YAML; ship-verify Step 3.6.1 captures full-page screenshots for whole_page_visual_targets[] — no manual transcription required."
 echo ""
 echo "<!-- /section:plan-imported-design-dcs -->"

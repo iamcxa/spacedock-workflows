@@ -41,8 +41,8 @@ check "mandatory for UI-type entities stated" \
 check "preflight dev server gate (BLOCKER if fails)" \
   "grep -qE 'Preflight gate.*BLOCKER|dev server.*BLOCKER|worktree-dev-server' \"$SKILL_FILE\""
 
-check "e2e-pipeline:ui-verify invocation mentioned" \
-  "grep -q 'e2e-pipeline:ui-verify' \"$SKILL_FILE\""
+check "ship-flow:ui-verify invocation mentioned" \
+  "grep -q 'ship-flow:ui-verify' \"$SKILL_FILE\""
 
 check "### Render Fidelity subsection emission in verify.md" \
   "grep -q '### Render Fidelity' \"$SKILL_FILE\""

@@ -144,14 +144,14 @@ dc6b_stage_count_8_fail() {
 if dc6b_stage_count_8_fail 2>/dev/null; then echo "OK DC-6b stage=8 fails (cap 7)"
 else echo "FAIL DC-6b stage=8 fails (cap 7)"; FAIL=1; fi
 
-# DC-6c: 3 utility skills (all known) alongside 6 stage → pass (utility uncapped)
+# DC-6c: known utility skills alongside 6 stage → pass (utility uncapped)
 dc6c_utility_uncapped_pass() {
   local d; d="$(create_mock_plugin_dir)" || return 1
   for sk in ship-shape ship ship-plan ship-execute ship-verify ship-review; do
     mkdir -p "$d/plugins/ship-flow/skills/$sk"
     echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
   done
-  for sk in add-todos ship-onboard ship-runtime-detect; do
+  for sk in add-todos ship-onboard ship-runtime-detect domain-registry ui-verify; do
     mkdir -p "$d/plugins/ship-flow/skills/$sk"
     echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
   done
@@ -160,7 +160,7 @@ dc6c_utility_uncapped_pass() {
   rm -rf "$d"
   [ "$rc" = "0" ]
 }
-if dc6c_utility_uncapped_pass 2>/dev/null; then echo "OK DC-6c utility skills uncapped (6 stage + 3 utility = pass)"
+if dc6c_utility_uncapped_pass 2>/dev/null; then echo "OK DC-6c utility skills uncapped (6 stage + utility skills = pass)"
 else echo "FAIL DC-6c utility skills uncapped"; FAIL=1; fi
 
 # DC-6d: orphan skill (not in either allowlist) → fail

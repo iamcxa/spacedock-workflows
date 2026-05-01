@@ -30,6 +30,12 @@ design-dispatch-manifest:
         - plugins/example/design/tokens.css
         - plugins/example/design/components/crm-lead-table.html
         - plugins/example/design/crm-workspace.html
+      whole_page_visual_targets:
+        - route: /crm/leads
+          reference_artifact: plugins/example/design/crm-workspace.html
+          capture: full-page screenshot
+          threshold: "warn>1%, block composition mismatch"
+          rationale_decision: D1
     - lane: domain
       role: domain-designer
       domain: schema
@@ -64,6 +70,28 @@ workspace pattern.
 - Preserve dense CRM table scanning.
 - Include a lead detail panel specimen.
 - Verify token reuse through CSS custom properties.
+
+whole_page_visual_targets:
+- route: /crm/leads
+  reference_artifact: plugins/example/design/crm-workspace.html
+  capture: full-page screenshot
+  threshold: "warn>1%, block composition mismatch"
+  rationale_decision: D1
+
+## Design Readiness Review
+
+risk_trigger: multi-domain
+reviewers: ui, schema
+verdict: PASS
+findings:
+- reviewer: ui
+  severity: PASS
+  route_to: plan
+  evidence: plugins/example/design/crm-workspace.html
+- reviewer: schema
+  severity: PASS
+  route_to: plan
+  evidence: "## Schema Design Output"
 
 ## Schema Design Output
 

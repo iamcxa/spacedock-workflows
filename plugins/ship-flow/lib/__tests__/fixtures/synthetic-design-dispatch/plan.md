@@ -22,3 +22,4 @@
 
 skill-coverage: PASS
 design-routing-propagation: PASS
+whole-page visual parity DC: PASS — verify captures /crm/leads as a full-page screenshot and compares against plugins/example/design/crm-workspace.html.

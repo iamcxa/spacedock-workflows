@@ -53,6 +53,10 @@ check "affects_ui true requires visible UI design output" \
   "grep -q 'affects_ui: true' '${DESIGN_SKILL}' && grep -q 'Visible UI Design Output' '${DESIGN_SKILL}' && grep -q 'design_constraints\\[\\]' '${DESIGN_SKILL}' && grep -q 'render_fidelity_targets\\[\\]' '${DESIGN_SKILL}'"
 check "UI design-skipped requires explicit captain-approved bypass" \
   "grep -q 'captain-approved-design-bypass' '${DESIGN_SKILL}' && grep -q 'design-skipped: true.*invalid' '${DESIGN_SKILL}'"
+check "ship-design requires whole-page visual targets in addition to ui-verify fragments" \
+  "grep -q 'whole_page_visual_targets\\[\\]' '${DESIGN_SKILL}' && grep -q 'full-page screenshot' '${DESIGN_SKILL}' && grep -q 'fragment-level ui-verify' '${DESIGN_SKILL}'"
+check "ship-design has risk-gated design readiness review mod, not a standard stage" \
+  "grep -q 'Design Readiness Review' '${DESIGN_SKILL}' && grep -q 'risk-gated' '${DESIGN_SKILL}' && grep -q 'not a standard stage' '${DESIGN_SKILL}' && grep -q 'multi-domain' '${DESIGN_SKILL}' && grep -q 'low-model' '${DESIGN_SKILL}'"
 
 echo "Block 3: UI skill mapping"
 check "Category A uses full design-flow skill chain" \

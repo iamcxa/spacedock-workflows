@@ -1,6 +1,6 @@
 ---
 name: ship-verify
-description: "Use when verifying execute output before ship — standalone via `/verify <entity-id>` or pipeline-dispatched by `/ship`. Agent-autonomous ROI gate: scoped quality checks on touched surfaces, spot-check critical DCs against a LIVE worktree dev server (artifact-only is rejected), auto-fix NITs inline. Output: `docs/<wf>/<id>-<slug>/verify.md`. Layer A delegation: worktree-dev-server (project-level skill) for runtime preflight; e2e-pipeline:e2e-test/walkthrough/ui-verify for agent-browser UI-DC verification; pr-review-toolkit personas for haiku review."
+description: "Use when verifying execute output before ship — standalone via `/verify <entity-id>` or pipeline-dispatched by `/ship`. Agent-autonomous ROI gate: scoped quality checks on touched surfaces, spot-check critical DCs against a LIVE worktree dev server (artifact-only is rejected), auto-fix NITs inline. Output: `docs/<wf>/<id>-<slug>/verify.md`. Layer A delegation: worktree-dev-server (project-level skill) for runtime preflight; e2e-pipeline:e2e-test/walkthrough plus ship-flow:ui-verify for agent-browser UI-DC verification; pr-review-toolkit personas for haiku review."
 user-invocable: true
 argument-hint: "<entity-id> [--fast | --full]"
 ---
@@ -24,7 +24,7 @@ Run before any verify work. Stop and SendMessage(FO) if any check fails.
 
 ## Layer A delegation (Principle 6 Rule B)
 
-`e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, and `e2e-pipeline:ui-verify` own agent-browser UI-DC verification (flow execution, walkthrough recording, computed-style regression). `pr-review-toolkit:code-reviewer` / `silent-failure-hunter` / `trailofbits:*` / `comment-analyzer` / `code-simplifier` / `pr-test-analyzer` / `type-design-analyzer` own haiku reviewer personas. **Do NOT re-teach.** Ship-verify wraps with Layer B augmentation:
+`e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, and `ship-flow:ui-verify` own agent-browser UI-DC verification (flow execution, walkthrough recording, computed-style regression). `pr-review-toolkit:code-reviewer` / `silent-failure-hunter` / `trailofbits:*` / `comment-analyzer` / `code-simplifier` / `pr-test-analyzer` / `type-design-analyzer` own haiku reviewer personas. **Do NOT re-teach.** Ship-verify wraps with Layer B augmentation:
 
 - ROI-aware scoped quality gate (touched-surfaces-only when changed-LOC stays under threshold).
 - Classified findings (BLOCKING / WARNING / NIT) + auto-fix NITs inline.
@@ -181,7 +181,7 @@ SendMessage(to: "designer@pitch-XX",
 
 ---
 
-## Step 3.6 — ui-verify mechanical check (forced when affects_ui)
+## Step 3.6 — fragment-level ui-verify mechanical check (forced when affects_ui)
 
 **Why this is separate from Step 3.5**: Step 3.5 dispatches designer teammate (LLM) to read source diff against design artifacts. LLM reading CSS/JSX source has weak intuition for **rendered computed style** — cascade specificity, Tailwind v4 `@theme` indirection, flex-shrink, margin-collapse all resolve at render time, not parse time. `var(--primary)` in source and hardcoded `#3b82f6` in source can both look correct to LLM yet produce different rendered values. Step 3.6 closes the LLM-vs-rendered gap by invoking the `ui-verify` skill (headless browser computed-style probe).
 
@@ -198,11 +198,11 @@ SendMessage(to: "designer@pitch-XX",
 
 2. Invoke ui-verify against the generated spec:
    ```
-   Skill: ui-verify
+   Skill: ship-flow:ui-verify
      YAML: .claude/e2e/ui-verify/<entity-slug>.yaml
    ```
 
-ui-verify backend (e2e-pipeline plugin) drives a real browser via `agent-browser`, runs `getComputedStyle()` per check, and emits PASS/FAIL with a report. Pixel-diff baseline (when present at `plugins/<app>/design/baseline/<component>.png`) is checked separately by ui-verify's screenshot mode (see ui-verify SKILL.md `--no-screenshot` flag).
+ship-flow:ui-verify drives a real browser via `agent-browser`, runs `getComputedStyle()` per check, and emits PASS/FAIL with a report. Pixel-diff baseline (when present at `plugins/<app>/design/baseline/<component>.png`) is checked separately by whole-page visual parity Step 3.6.1; fragment-level ui-verify remains selector/value evidence.
 
 **ui-verify findings integration**:
 - Append to `### Review Findings` in `verify.md` under subsection `#### Mechanical UI Parity`.
@@ -216,6 +216,42 @@ ui-verify backend (e2e-pipeline plugin) drives a real browser via `agent-browser
 - `ui-verify` skill not installed → emit WARN `ui-verify unavailable` in `verify.md`; do NOT silently skip — captain must see the gap.
 
 **Why not fold into Step 3.5**: 3.5 owns semantic review (D1-D6 captain decisions, designer hot context). 3.6 owns mechanical assertion (computed-style equality, pixel diff). Different failure modes, different tools, different reviewers — folding loses the distinction and lets LLM rationalize past rendered-value mismatches that are categorically not a judgment call.
+
+### Step 3.6.1 — Whole-page visual parity
+
+Fragment-level ui-verify is not a whole-screen approval. A page can satisfy
+selector/token assertions while still diverging from the composed design because
+layout rhythm, density, hierarchy, whitespace, or surrounding shell changed.
+
+**Trigger**: entity `affects_ui: true` AND `### Hand-off to Plan` contains
+`whole_page_visual_targets[]` with ≥1 item. If design emits
+`render_fidelity_targets[]` but omits `whole_page_visual_targets[]`, record WARN
+`whole-page visual parity unavailable — design handoff only provided fragments`
+and route_to `design` unless captain explicitly marked the UI as component-only.
+
+**Dispatch**:
+
+1. Start or reuse the live worktree dev server from Step 4.0.
+2. For each target, open `route`, capture a full-page screenshot, and compare it
+   to `reference_artifact`:
+   - If `reference_artifact` is an HTML mockup, open/capture it at the same
+     viewport before comparing.
+   - If `reference_artifact` is an image, compare directly.
+   - If no automated screenshot diff primitive is available, run
+     `e2e-pipeline:e2e-walkthrough` or `agent-browser` screenshot capture and
+     dispatch designer/verifier visual review with both images attached.
+3. Record `threshold` from the target. Default threshold is WARN above 1%
+   meaningful visual delta and BLOCK when the primary composition does not
+   match the design intent, even if fragment-level ui-verify passed.
+
+**Findings integration**:
+- Append to `### Review Findings` under `#### Whole-page Visual Parity`.
+- `fragment ui-verify: PASS` and `whole-page visual parity: FAIL` is a real
+  BLOCKING mismatch. Route to `execute` if implementation drifted; route to
+  `design` if the design reference was incomplete or stale.
+- Verify report must include the runtime screenshot path and the reference
+  artifact path. Captain visual smoke remains final acceptance, not the first
+  whole-page check.
 
 ### Step 3.6.5 — Design Feedback Router
 
@@ -359,7 +395,7 @@ Automated pre-check runs BEFORE captain manual visual smoke. Captain's eyeball i
 
 | Primitive | When | Input |
 |---|---|---|
-| `e2e-pipeline:ui-verify` | Static CSS / tokens / computed-style regression — fixed selectors × expected values | `.claude/e2e/ui-verify/<slug>.yaml` |
+| `ship-flow:ui-verify` | Static CSS / tokens / computed-style regression — fixed selectors × expected values | `.claude/e2e/ui-verify/<slug>.yaml` |
 | `e2e-pipeline:e2e-test` | Dynamic behavior / DOM assertion / navigation / step-based flow | `.claude/e2e/flows/<slug>.yaml` |
 | `e2e-pipeline:e2e-walkthrough` | No declarative artifact; exploratory screenshot + optional video of affected pages | affected route list |
 | `agent-browser` CLI (break-glass) | skill wrapper unavailable / mapping missing / skill invocation errors | inline JS via `eval` on live dev server |
@@ -381,7 +417,7 @@ Record verdicts under `### UAT → visual:` subsection, including which primitiv
 **Preflight gate** (BLOCKER if fails): Dev server MUST be live (`worktree-dev-server` check). If not live → escalate per Step 4.0. No escape.
 
 **Process**:
-1. Invoke `e2e-pipeline:ui-verify` against live worktree dev server for each UI-type DC. Capture `getComputedStyle` results for key selectors.
+1. Invoke `ship-flow:ui-verify` against live worktree dev server for each UI-type DC. Capture `getComputedStyle` results for key selectors.
 2. If `## Design Output` present in entity body (design stage ran): compare rendered token values against `plugins/<app>/design/tokens.css` — must match. Flag any `D{N}|Captain decision` token that renders as hardcoded value (not CSS var reference).
 3. Emit `### Render Fidelity` subsection in `verify.md` with:
    - `render_fidelity_status: pass|fail|not-applicable`
@@ -566,7 +602,7 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - Section/map helpers: `plugins/ship-flow/lib/extract-section.sh`, `extract-map.sh`, `patch-map.sh`.
 - Runtime detect: `ship-flow:ship-runtime-detect`.
 - Layer A — haiku reviewers: `pr-review-toolkit:code-reviewer`, `pr-review-toolkit:silent-failure-hunter`, `trailofbits:*`, `pr-review-toolkit:{pr-test-analyzer,type-design-analyzer,comment-analyzer,code-simplifier}`.
-- Layer A — agent-browser: `e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, `e2e-pipeline:ui-verify`.
+- Layer A — agent-browser: `e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, `ship-flow:ui-verify`.
 - Layer A — runtime preflight: project's documented dev-server boot helper (conventionally `Skill: "worktree-dev-server"` — project-level skill in adopting repos; not a ship-flow plugin skill). Required by Step 4.0.
 - Layer A — inline review: `superpowers:verification-before-completion` (compatible mental model).
 - Upstream: `ship-flow:ship-shape` (team spawn), `ship-flow:ship` (pipeline entry).

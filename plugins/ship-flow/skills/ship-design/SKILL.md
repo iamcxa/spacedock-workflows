@@ -123,6 +123,9 @@ design-dispatch-manifest:
   integration:
     mode: single-designer|parallel
     owner: ship-design
+  visual_verification:
+    fragment_level: render_fidelity_targets[]
+    whole_page: whole_page_visual_targets[]
 ```
 
 Dispatch rules:
@@ -164,6 +167,46 @@ Dispatch rules:
 - Do not duplicate Codex root session instructions. Root `AGENTS.md` and
   `CLAUDE.md` remain runtime/session context; ship-design only enforces
   non-root folder guidance reported by `resolve-skill-routing.sh`.
+
+### Whole-page visual parity targets
+
+Fragment-level ui-verify checks are necessary but not sufficient. They catch
+precise token, selector, and computed-style failures, but they can still pass
+when the final screen composition diverges from the design reference. For every
+`affects_ui: true` lane, ship-design must emit both:
+
+- `render_fidelity_targets[]` — fragment-level ui-verify assertions for
+  selectors, tokens, and computed styles.
+- `whole_page_visual_targets[]` — full-page screenshot parity targets for the
+  primary affected route or surface.
+
+Each `whole_page_visual_targets[]` item names `{route, reference_artifact,
+capture, threshold, rationale_decision}`. `reference_artifact` should point to
+the composed mockup or reference screenshot, such as
+`plugins/<app>/design/<surface>.html` or a committed reference image. `capture`
+must say `full-page screenshot` unless the UI is an embedded fixed-size widget.
+These targets feed plan-stage verify DCs and ship-verify whole-page visual
+parity. Do not claim visual parity from fragment-level ui-verify alone.
+
+### Design Readiness Review
+
+Design Readiness Review is a risk-gated mod inside the design stage, not a
+standard stage. Run it after designer lanes merge and before hand-off to plan
+when any trigger applies:
+
+- `multi-domain` work, including UI + schema/API/domain changes.
+- DB migration, destructive schema change, public API or ts-rest contract.
+- fmodel/DDD/saga routing, RBAC, tenancy, or projection rebuild decisions.
+- High-risk UI fidelity where the whole-page composition is a core outcome.
+- Recent debrief warning matches the current domain or captain explicitly asks.
+
+The mod dispatches low-model specialist reviewers derived from domain registry
+and adopter file-signal routing. Each reviewer loads the relevant domain
+knowledge module plus required skills and returns `PASS`, `WARN`, or `BLOCK`
+with route_to `design` or `plan`. Typical reviewers are `ui`, `schema`, `api`,
+`fmodel`, `refine`, `expo`, or `supabase`; do not hardcode a project-specific
+set. If no risk trigger applies, write `Design Readiness Review: skipped —
+no risk trigger` in `Design Report`. Any `BLOCK` must be resolved before plan.
 
 ---
 
@@ -359,6 +402,28 @@ creates typed intent for later comparison.
 
 **Single-source-of-truth rule** (G8 dedup, 2026-04-29): `### Hand-off to Plan` (Phase 9 hand-off block) is the **only** structured contract plan stage reads. Do NOT duplicate `design_constraints` / `render_fidelity_targets` here in `## Design Output`. Phase 8 holds captain-readable narrative + audit trail (Decisions, Manifest, Report); Phase 9 holds machine-readable contract (constraints, render-fidelity targets, artifact paths, open decisions). Plan Step 1.6 reads Phase 9 hand-off; cross-references back to Phase 8 Captain Decisions via `D{N}` markers when rationale needed.
 
+### Phase 8.5 — Risk-gated Design Readiness Review
+
+Evaluate the Design Readiness Review triggers above. When triggered, dispatch
+the smallest useful low-model expert team from the registry/routing output,
+collect findings, and record a `## Design Readiness Review` section in
+`design.md`:
+
+```yaml
+risk_trigger: multi-domain|migration|api-contract|fmodel|high-risk-ui|recent-debrief|captain-explicit
+reviewers: ui, schema
+verdict: PASS|WARN|BLOCK
+findings:
+  - reviewer: schema
+    severity: PASS|WARN|BLOCK
+    route_to: design|plan
+    evidence: "<file:line, design artifact, or contract>"
+```
+
+This is a mod, not a standard stage: it never adds a new workflow status and it
+must be skipped for trivial/docs-only/single-lane work unless explicitly
+requested. It exists to stop bad design contracts before plan decomposes them.
+
 ### Phase 9 — Cross-review gate
 
 Dispatch cross-review as a **separate agent** via `Skill: design-review` (#106 T5.2). This is an adversarial review — a fresh agent with no context from the design session evaluates the artifacts independently.
@@ -424,13 +489,16 @@ Emit `### Hand-off to Plan` (structured fields per `entity-body-schema.yaml → 
 - `open_decisions[]` — any design decisions still pending captain input (ideally empty; non-empty → plan Step 1.6 BLOCKER).
 - `artifact_paths[]` — paths to committed design artifacts (`tokens.css`, specimens, composite mockup).
 - `render_fidelity_targets[]` — each item: `{selector, css_property, expected_value, rationale_decision: D{N}}` — feeds ship-verify Step 3.6 ui-verify YAML; `rationale_decision: D{N}` MUST cross-reference Phase 8.
+- `whole_page_visual_targets[]` — each item: `{route, reference_artifact, capture, threshold, rationale_decision: D{N}}` — feeds plan visual-parity DCs and ship-verify whole-page screenshot comparison. Use this for whole-screen composition, spacing hierarchy, and whether the implemented page still resembles the design reference after fragments pass.
 
 For `affects_ui: true`, the handoff MUST include non-empty `design_constraints[]`
-and `render_fidelity_targets[]` plus a captain-visible
+and `render_fidelity_targets[]`, plus `whole_page_visual_targets[]` for the
+primary affected route, plus a captain-visible
 `### Visible UI Design Output` section in `design.md`. Category D may use a
 single composite mockup or prose-plus-selector target instead of a full
 `design/` artifact bundle, but it still emits a visible UI design decision and
-machine-readable verification target.
+machine-readable verification target. For non-UI domain-only design,
+`whole_page_visual_targets[]` may be omitted.
 
 **Design-skipped path** (G14): when design stage is skipped (`!affects_ui` route from shape), the entity body MUST still contain `### Hand-off to Plan` with single field `design-skipped: true`. Emitted by ship-shape Phase 8 hand-off when `affects_ui: false`. Plan Step 1.6 reads this marker to bypass design-DC import explicitly (vs absence of the block, which is ambiguous).
 

@@ -63,7 +63,7 @@ Skip if no file:line citations (common for S-size).
 
 **Trigger** (G14, 2026-04-29 disambiguation): entity body MUST contain `### Hand-off to Plan` block. Two paths:
 - Block has `design-skipped: true` → design intentionally bypassed only when the entity is non-UI (`affects_ui: false`) OR the handoff also carries `captain-approved-design-bypass: true` with a rationale. For `affects_ui: true` without that explicit bypass, **BLOCKER** (status: blocked, reason: `ui design handoff skipped`) and bounce to design/FO. Otherwise log `## Plan Imported Design DCs: design-skipped (no UI surface or captain-approved bypass)` and proceed.
-- Block has design-emitted fields (`design_constraints[]` / `render_fidelity_targets[]`) → run mechanical mapping below.
+- Block has design-emitted fields (`design_constraints[]` / `render_fidelity_targets[]` / `whole_page_visual_targets[]`) → run mechanical mapping below.
 - Block ABSENT entirely → **BLOCKER** (status: blocked, reason: `hand-off-to-plan absent — neither design-skipped stub nor design output found`). Either shape Phase 8 missed the stub emit OR design errored without writing hand-off. Do not silently treat as "no UI" — that's the ambiguity G14 fixes.
 
 **Read** via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> hand_off_to_plan` (handles folder + flat layouts).
@@ -88,6 +88,7 @@ If importer fails or imported row count is lower than source `design_constraints
 |---|---|---|
 | `design_constraints[]` (UI or domain contract types) | `ui`, `e2e`, `contract`, or `api/schema` typed DC per constraint; UI constraints use `ui-verify`, domain constraints use contract/router/schema tests | task wave touching the affected component |
 | `render_fidelity_targets[]` (computed-style / structural assertions) | `ui`-typed DC, `verified_by: ui-verify` (calls computed-style assertion) | W0 (token-level) or task wave (component-level) |
+| `whole_page_visual_targets[]` (route-level composition parity) | `ui`/`e2e` typed whole-page visual parity DC; verifier captures full-page screenshot and compares against `reference_artifact` | integration wave or affected route wave |
 | `artifact_paths[]` | reference in plan `## Design Source` block; checksum on read | — |
 | `open_decisions[]` non-empty | **BLOCKER** (status: blocked, reason: design has open decisions) — bounce to design via SendMessage(designer@pitch-XX) | — |
 
@@ -220,7 +221,7 @@ Every DC MUST have a runnable verify procedure. "Manual check" = plan failure.
 Note: `ui` type uses `-sfN` (Next.js 16 Turbopack SSR chunks — MEMORY #073). Backward-compatible.
 
 **Declarative e2e artifact requirement (UI-type DCs)**: when ≥1 DC has type `ui` or `e2e`, plan's task list MUST include authoring the declarative YAML so ship-verify Step 4.4 can run automated pre-smoke:
-- **Static CSS / design tokens / computed-style regression** → `.claude/e2e/ui-verify/<entity-slug>.yaml` (schema: `e2e-pipeline:ui-verify`). Wraps `getComputedStyle(selector)[prop]` equality checks against tokens.
+- **Static CSS / design tokens / computed-style regression** → `.claude/e2e/ui-verify/<entity-slug>.yaml` (schema: ship-flow:ui-verify). Wraps `getComputedStyle(selector)[prop]` equality checks against tokens.
 - **Dynamic DOM / navigation / event / interaction** → `.claude/e2e/flows/<entity-slug>.yaml` (schema: `e2e-pipeline:e2e-flow`). Step-based browser flow with assert primitives.
 - Both require `.claude/e2e/mappings/<mapping>.yaml` (auth + base_url + test_accounts). If missing → plan's first UI task is mapping bootstrap.
 - Plan-stage DC: YAML file exists at canonical path AND imports valid mapping. Consumer: ship-verify Step 4.4 auto-runs matching skill.

@@ -11,6 +11,11 @@
 - design receipt: PASS
 - execute receipt: PASS
 
+## Visual Parity
+
+- fragment ui-verify: PASS — token and selector checks matched the design handoff.
+- whole-page visual parity: PASS — runtime /crm/leads full-page screenshot matched plugins/example/design/crm-workspace.html within threshold.
+
 ## Verify Report
 
 verdict: PASS

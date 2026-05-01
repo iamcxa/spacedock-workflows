@@ -41,7 +41,7 @@ Three layers, each catching a different failure mode:
 **Split counting** (updated 2026-04-23 via entity #085 Wave 5b, commit `d51620e4`): stage-skills and utility-skills are counted SEPARATELY. Stage-skills have a hard cap ≤ 7; utility-skills are uncapped. Current inventory under the split rule:
 
 - **Stage-skills (≤7 cap)**: `ship-shape`, `ship`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review` — 6 total (under cap).
-- **Utility-skills (uncapped)**: `add-todos`, `ship-onboard`, `ship-runtime-detect` — 3 total.
+- **Utility-skills (uncapped)**: `add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify` — 5 total.
 
 The pre-2026-04-23 "temp cap = 10" rule is superseded: `check-invariants.sh --check skill-count` now runs split-counted assertions. Rationale: stage-skills define the workflow's shape and must stay cognitively manageable; utility-skills are on-demand helpers that don't add pipeline surface area.
 
@@ -219,7 +219,7 @@ The "max 2 consecutive captain-smoke rounds without PROMPT_CAPTAIN" cap (per shi
 | ship | — | pure orchestration (5-stage dispatch) | N/A — no logic to delegate |
 | ship-plan | `superpowers:writing-plans` | TDD order, wave safety, placeholder-free prose, task atomicity | No — Layer B wraps with scope anchoring + runtime detection + plan-checker |
 | ship-execute | `superpowers:subagent-driven-development` | task = subagent, status protocol, review loop | No — Layer B wraps with wave graph + escalation ladder + pathspec-lock + Mode B re-entry |
-| ship-verify | `worktree-dev-server` (project skill) + `e2e-pipeline:e2e-test` / `e2e-pipeline:e2e-walkthrough` / `ui-verify` | runtime preflight (dev server up gate) + agent-browser E2E verification for UI-typed DCs | No — Layer B wraps with ROI-aware scoped gate + spot-check UAT + runtime mandate (post-2026-04-26 carlove SEC-10/15 retro: no artifact-only PASS) |
+| ship-verify | `worktree-dev-server` (project skill) + `e2e-pipeline:e2e-test` / `e2e-pipeline:e2e-walkthrough` / `ship-flow:ui-verify` | runtime preflight (dev server up gate) + agent-browser E2E verification for UI-typed DCs | No — Layer B wraps with ROI-aware scoped gate + spot-check UAT + runtime mandate (post-2026-04-26 carlove SEC-10/15 retro: no artifact-only PASS) |
 | ship-review | `pr-review-toolkit:review-pr` (optional for big-batch) | multi-persona PR review (code-reviewer / silent-failure-hunter / security-reviewer) | No — Layer B wraps with ARCHITECTURE.md / ROADMAP / PRODUCT canonical doc sync |
 
 **Cross-review gate base 6-factor rubric** (base 5 + `Reverse-audit` per #106 T1.3; adapted per stage — see each stage SKILL.md for full text):

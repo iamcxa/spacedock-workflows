@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # generate-ui-verify-spec.sh — translate entity's render_fidelity_targets[] to
-# ui-verify YAML spec (e2e-pipeline plugin).
+# ui-verify YAML spec (ship-flow:ui-verify).
 #
-# Background: PR #44 ship-verify Step 3.6 dispatches `Skill: ui-verify` with
+# Background: PR #44 ship-verify Step 3.6 dispatches `Skill: ship-flow:ui-verify` with
 # render_fidelity_targets as input. ui-verify expects its own YAML schema
 # (.claude/e2e/ui-verify/<slug>.yaml). This script bridges the formats.
 #
