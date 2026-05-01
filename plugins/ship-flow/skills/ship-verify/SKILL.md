@@ -286,6 +286,47 @@ This router is the verify-stage counterpart to ship-design's visible UI handoff:
 review/verify can repair missing or ambiguous design intent instead of forcing
 the execute worker to absorb design-stage omissions.
 
+### Step 3.6.6 — Captain UAT Feedback Router
+
+Run this router when the captain performs manual UAT during the verify stage and
+reports a finding before verify is passed. This is **verify-stage captain UAT
+feedback**, not post-ship captain smoke. It stays inside the current stage loop.
+
+Record all incoming captain findings in `verify.md` under
+`## Captain UAT Feedback` before acting:
+
+```markdown
+## Captain UAT Feedback
+
+| Severity | Finding | Evidence | route_to | owner | action |
+|---|---|---|---|---|---|
+| BLOCKING/WARNING/NIT | <captain finding> | <screenshot, route, command, or quote> | execute/design/plan/follow-up | <owner> | <SendMessage or todo> |
+```
+
+Routing table:
+
+| Finding class | route_to | owner |
+|---|---|---|
+| implementation or runtime behavior violates clear plan/design/DC | `route_to: execute` | `executer@pitch-XX` |
+| semantic UX, information architecture, visual hierarchy, state model, affordance, or design contract is incomplete/contradictory | `route_to: design` | `designer@pitch-XX` |
+| task split, acceptance criteria, or verification spec omitted required work | `route_to: plan` | `planner@pitch-XX` |
+| pre-existing bug or genuinely new request outside this entity | `route_to: follow-up` | `/add-todos` or `/shape` |
+
+Owners: `executer@pitch-XX`, `designer@pitch-XX`, and `planner@pitch-XX`
+receive routed feedback for execute/design/plan ownership respectively.
+
+For `BLOCKING` or `WARNING`, the FO MUST NOT inline-fix the issue. SendMessage
+to the owning teammate with the captain finding, evidence, affected route/files,
+and required artifact update. If the named teammate is unavailable, use the
+documented Principle 6 Rule A fallback fresh worker with the same owner role and
+captured context; do not silently self-assign the patch.
+
+Inline fix is allowed only for `NIT` findings that are mechanical, <=5 LOC, and
+have no semantic, UX, logic, data, routing, or contract judgment. NIT inline
+exception: NIT, mechanical, <=5 LOC, no semantic judgment. All other
+captain UAT feedback remains routed feedback, even when the FO knows the likely
+fix.
+
 ### Step 3.7 — Intent-match verifier (schema-domain ad-hoc hook)
 
 **Trigger**: run when any of these are true:

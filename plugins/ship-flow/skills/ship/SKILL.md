@@ -178,6 +178,28 @@ After `review.md` cross-review PROCEED:
 
 **Merge decision is captain's.** `/ship` does NOT auto-merge. Captain may comment on PR or run `gh pr merge` manually.
 
+## Step 6.5 — Verify-stage captain UAT feedback loop
+
+If the captain performs manual UAT while the entity is still in verify, treat it
+as **verify-stage captain UAT feedback**, not post-ship captain smoke. Read
+`ship-verify → Captain UAT Feedback Router`; the finding stays inside the
+current verify loop.
+
+Routing:
+- `route_to: execute` → SendMessage to `executer@pitch-XX`.
+- `route_to: design` → SendMessage to `designer@pitch-XX`.
+- `route_to: plan` → SendMessage to `planner@pitch-XX`.
+- `route_to: follow-up` → file via `/add-todos` or `/shape`; do not bundle.
+
+SendMessage to executer/designer/planner is mandatory for routed verify-stage
+captain feedback; FO MUST NOT patch inline except for mechanical NITs.
+
+The FO MUST NOT patch inline for BLOCKING, WARNING, semantic UX, logic, routing,
+data, or contract findings. Inline repair is limited to verify-stage mechanical
+NITs that satisfy the `ship-verify` auto-fix criteria. After owner feedback is
+resolved, re-run verify and update `verify.md → ## Captain UAT Feedback` with
+the route and outcome.
+
 ## Step 7 — Captain-smoke feedback loop (post-ship-final)
 
 After `ship.md` lands and captain starts browser smoke-testing the shipped feature:
