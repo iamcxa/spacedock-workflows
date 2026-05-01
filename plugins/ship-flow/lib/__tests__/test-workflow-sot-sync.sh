@@ -8,6 +8,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../../.." &> /dev/null && pwd)"
 DOGFOOD_README="${REPO_ROOT}/docs/ship-flow/README.md"
 TEMPLATE="${REPO_ROOT}/plugins/ship-flow/workflow-template.yaml"
 PLUGIN_README="${REPO_ROOT}/plugins/ship-flow/README.md"
+SOT_SYNC="${REPO_ROOT}/plugins/ship-flow/lib/sync-workflow-sot.sh"
 
 PASS=0
 FAIL=0
@@ -44,11 +45,20 @@ check "dogfood README frontmatter allows routed verify feedback" \
 check "dogfood README documents verify-stage captain UAT routing" \
   "grep -q 'Captain UAT Feedback' '${DOGFOOD_README}' && grep -q 'route_to: design' '${DOGFOOD_README}' && grep -q 'must not inline-fix' '${DOGFOOD_README}'"
 
+check "dogfood README documents design routing frontmatter fields and designer teammate" \
+  "grep -q '| \`affects_ui\` | boolean |' '${DOGFOOD_README}' && grep -q '| \`domain\` | string |' '${DOGFOOD_README}' && grep -q '| \`design_required\` | boolean |' '${DOGFOOD_README}' && grep -q '\`designer\` (opus)' '${DOGFOOD_README}'"
+
+check "dogfood README status command discovers binary with guard" \
+  "grep -q 'STATUS_BIN=' '${DOGFOOD_README}' && grep -q 'spacedock status binary not found' '${DOGFOOD_README}' && grep -q 'The examples below assume \`STATUS_BIN\` is set' '${DOGFOOD_README}'"
+
 check "workflow template uses design-bearing skip semantics" \
   "grep -q 'skip-when: \"!affects_ui && !domain && !design_required\"' '${TEMPLATE}' && grep -q 'Design is mandatory for UI, matched-domain, or contract-bearing work' '${TEMPLATE}'"
 
 check "plugin README agrees with dogfood design-bearing semantics" \
   "grep -q 'skip-when: !affects_ui && !domain && !design_required' '${PLUGIN_README}' && grep -q 'schema/API/domain/architecture contract impact' '${PLUGIN_README}'"
+
+check "sync helper check mode passes on live repo" \
+  "'${SOT_SYNC}' --check"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
