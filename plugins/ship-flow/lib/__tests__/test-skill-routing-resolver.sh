@@ -5,8 +5,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 RESOLVER_SCRIPT="${SCRIPT_DIR}/../resolve-skill-routing.sh"
+RECEIPT_SCRIPT="${SCRIPT_DIR}/../check-guidance-receipt.sh"
 FIXTURE_CONFIG="${SCRIPT_DIR}/fixtures/skill-routing-resolver/skill-routing.yaml"
 EXPANSION_FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/skill-routing-resolver/repo-with-matching-files"
+MISSING_RECEIPT="${SCRIPT_DIR}/fixtures/skill-routing-resolver/execute-missing-guidance.md"
+GOOD_RECEIPT="${SCRIPT_DIR}/fixtures/skill-routing-resolver/execute-with-guidance.md"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
 
 PASS=0
@@ -64,13 +67,15 @@ echo ""
 echo "Block 1: resolver CLI contract"
 check "resolve-skill-routing.sh exists and is executable" \
   "[ -x '${RESOLVER_SCRIPT}' ]"
+check "check-guidance-receipt.sh exists and is executable" \
+  "[ -x '${RECEIPT_SCRIPT}' ]"
 check_stdout "--help prints resolver name" \
   "resolve-skill-routing" \
   "\"${RESOLVER_SCRIPT}\" --help"
 
 echo "Block 2: file signals resolve to minimal deduped skills"
 check_stdout "Refine task resolves project UI skills" \
-  "skills_needed=refine-expert,antd-expert,react-patterns,tailwind-expert" \
+  "skills_needed=refine-expert,refine-gotchas,antd-expert,react-patterns,tailwind-expert" \
   "\"${RESOLVER_SCRIPT}\" --config=\"${FIXTURE_CONFIG}\" --files='apps/refine-app/src/pages/customer-profile/list.tsx'"
 check_stdout "Expo task resolves mobile skills" \
   "skills_needed=expo-rnr-nativewind,expo-accessibility,react-patterns" \
@@ -88,10 +93,19 @@ check_stdout "Edge function task stays separate from migration skills" \
   "skills_needed=project-supabase-edge-functions,deno-test" \
   "\"${RESOLVER_SCRIPT}\" --config=\"${FIXTURE_CONFIG}\" --files='apps/supabase/functions/customer/index.ts'"
 check_stdout "Mixed task merges and dedupes skills in config order" \
-  "skills_needed=refine-expert,antd-expert,react-patterns,tailwind-expert,expo-rnr-nativewind,expo-accessibility" \
+  "skills_needed=refine-expert,refine-gotchas,antd-expert,react-patterns,tailwind-expert,expo-rnr-nativewind,expo-accessibility" \
   "\"${RESOLVER_SCRIPT}\" --config=\"${FIXTURE_CONFIG}\" --files='apps/refine-app/src/a.tsx,apps/expo-app/components/a.tsx'"
 check_stdout "Signals are not shell-expanded when matching files exist in cwd" \
-  "skills_needed=refine-expert,antd-expert,react-patterns,tailwind-expert" \
+  "skills_needed=refine-expert,refine-gotchas,antd-expert,react-patterns,tailwind-expert" \
+  "cd '${EXPANSION_FIXTURE_ROOT}' && '${RESOLVER_SCRIPT}' --config='../skill-routing.yaml' --files='apps/refine-app/src/pages/customer-profile/list.tsx'"
+check_stdout "Resolver emits non-root folder guidance files for matched task files" \
+  "folder_guidance_files=apps/refine-app/CLAUDE.md" \
+  "cd '${EXPANSION_FIXTURE_ROOT}' && '${RESOLVER_SCRIPT}' --config='../skill-routing.yaml' --files='apps/refine-app/src/pages/customer-profile/list.tsx'"
+check_stdout "Resolver does not duplicate Codex root AGENTS.md session guidance" \
+  "^codex_context_boundary=root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files" \
+  "cd '${EXPANSION_FIXTURE_ROOT}' && '${RESOLVER_SCRIPT}' --config='../skill-routing.yaml' --files='apps/refine-app/src/pages/customer-profile/list.tsx'"
+check_stdout "Resolver derives required skills from folder guidance" \
+  "folder_guidance_skills=refine-expert,antd-expert,react-query-v5,project-auth,api-guide,refine-gotchas" \
   "cd '${EXPANSION_FIXTURE_ROOT}' && '${RESOLVER_SCRIPT}' --config='../skill-routing.yaml' --files='apps/refine-app/src/pages/customer-profile/list.tsx'"
 
 echo "Block 3: no-match and missing-config behavior is explicit"
@@ -105,7 +119,14 @@ check_exit "Missing config exits 11" \
   11 \
   "\"${RESOLVER_SCRIPT}\" --config=\"${SCRIPT_DIR}/fixtures/skill-routing-resolver/missing.yaml\" --files='apps/refine-app/src/a.tsx'"
 
-echo "Block 4: planner docs reference resolver"
+echo "Block 4: guidance receipt checker enforces execute/PR-feedback read receipts"
+check_exit "Missing folder guidance skill in artifact exits 12" \
+  12 \
+  "cd '${EXPANSION_FIXTURE_ROOT}' && '${RECEIPT_SCRIPT}' --config='../skill-routing.yaml' --files='apps/refine-app/src/pages/customer-profile/list.tsx' --artifact='${MISSING_RECEIPT}'"
+check "Complete guidance receipt passes" \
+  "cd '${EXPANSION_FIXTURE_ROOT}' && '${RECEIPT_SCRIPT}' --config='../skill-routing.yaml' --files='apps/refine-app/src/pages/customer-profile/list.tsx' --artifact='${GOOD_RECEIPT}'"
+
+echo "Block 5: planner docs reference resolver"
 check "ship-plan tells planner to call resolve-skill-routing.sh" \
   "grep -q 'resolve-skill-routing\\.sh' '${PLUGIN_ROOT}/skills/ship-plan/SKILL.md'"
 check "skills-needed pipeline test covers adopter routing resolver" \

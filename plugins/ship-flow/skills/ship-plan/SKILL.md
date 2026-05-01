@@ -168,7 +168,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
   - `framework_detected`, `theme_indirection`, and `design_canonical_dir` from `ship-flow:ship-runtime-detect`
   - density-classified skill set already loaded for `answers_density: high`
   - domain registry routing from `registry-resolve.sh --domain=<domain>` or `--classify <spec>`: preserve `required_skills` and merge `skill_hints.plan` into plan-stage task `skills_needed`
-  - adopter file-signal routing from `.claude/ship-flow/skill-routing.yaml` when present. For each implementation task, run `bash plugins/ship-flow/lib/resolve-skill-routing.sh --files=<task-files> --config=.claude/ship-flow/skill-routing.yaml` and merge the emitted `skills_needed=` list. If the config is absent on a non-trivial multi-surface pitch, run `bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` and surface the draft in `## Context Manifest` before finalizing `skills_needed`.
+  - adopter file-signal routing from `.claude/ship-flow/skill-routing.yaml` when present. For each implementation task, run `bash plugins/ship-flow/lib/resolve-skill-routing.sh --files=<task-files> --config=.claude/ship-flow/skill-routing.yaml` and merge the emitted `skills_needed=` list. Also record `folder_guidance_files=` and `folder_guidance_skills=` in `## Context Manifest → Folder guidance`, and merge guidance skills into task `skills_needed` when they are not already present. If the config is absent on a non-trivial multi-surface pitch, run `bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` and surface the draft in `## Context Manifest` before finalizing `skills_needed`.
 
   Use concrete file-glob mapping, then trim to the smallest relevant list:
 
@@ -184,9 +184,11 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
 
   Adopter `.claude/ship-flow/skill-routing.yaml` entries override the generic
   table only for matching file signals. Example: `apps/refine-app/src/**` may
-  add `refine-expert`, `antd-expert`, `react-patterns`, and `tailwind-expert`;
+  add `refine-expert`, `refine-gotchas`, `antd-expert`, `react-patterns`, and `tailwind-expert`;
   `apps/expo-app/**` may add `expo-rnr-nativewind` and `expo-accessibility`;
   `packages/api-contract/src/**/*.schemas.ts` may add `ts-rest` and `api-guide`.
+
+  **Codex overlap boundary**: do not duplicate root session instructions. `resolve-skill-routing.sh` emits `codex_context_boundary=root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files`; this means root `AGENTS.md`/`CLAUDE.md` remain runtime/session context, while ship-flow records only non-root folder guidance such as `apps/refine-app/CLAUDE.md`. This guard exists because Codex may already load root `AGENTS.md`, but it does not guarantee every task worker or PR-feedback re-entry re-reads adopter app-folder guidance.
 
   Domain-derived skills are additive, not adopter-specific defaults. `project-db`
   and `fmodel` are generic skill names only when those skills exist in the
@@ -239,7 +241,7 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 8. **Stale-line-anchor** — every `file:line` citation re-read; content-matches / line-shifted / contradicted (BLOCKER) / phantom path (BLOCKER). Catches #1 cause of execute BLOCKED returns.
 9. **Design reference compliance** — skip if no `## Design Reference` section; else cross-check visual attrs (fill/stroke/colors/dimensions) against cited spec files. Flag deviations.
 10. **Stub-captain-ack scan** (T6.2, #106): grep every task body for keywords `stub|fake|placeholder|v1.*only|wired only for`. For each match: check entity frontmatter `pre-acked-stubs: true` OR check that the Plan Report has a `## Stub Flag` entry for this task with explicit captain rationale. If neither present → `BLOCK: stub task without captain ack` (literal string required for test DC). Populate `## Plan Report → Stub Flags` table with all stub tasks found. Cross-review PROCEED blocked until all stubs either pre-acked or cleared.
-11. **Context Manifest completeness** (entity 110, 2026-04-29): `## Context Manifest` section present and all 6 fields non-empty: `Skills loaded`, `INVARIANTS sections read`, `Architecture docs consulted`, `Domains touched`, `Lens dispatched`, `Lens findings integrated`. Lens dispatched field must reflect actual Step 1.7 trigger matching results (not copy-pasted from a prior entity). C8 check: `bash plugins/ship-flow/bin/check-invariants.sh --check context-manifest-emitted`.
+11. **Context Manifest completeness** (entity 110, 2026-04-29): `## Context Manifest` section present and all 7 fields non-empty: `Skills loaded`, `INVARIANTS sections read`, `Architecture docs consulted`, `Domains touched`, `Lens dispatched`, `Lens findings integrated`, `Folder guidance`. Lens dispatched field must reflect actual Step 1.7 trigger matching results (not copy-pasted from a prior entity). `Folder guidance` must cite every non-root `folder_guidance_files=` entry from `resolve-skill-routing.sh`, list `folder_guidance_skills=`, and include the literal `codex_context_boundary` line so reviewers can see this is not duplicating Codex root instruction loading. C8 check: `bash plugins/ship-flow/bin/check-invariants.sh --check context-manifest-emitted`.
 12. **skills_needed non-boilerplate** (#108.1): for plans with ≥2 implementation tasks touching different file classes, grep the task blocks and confirm there are ≥2 distinct `skills_needed` lists. Empty lists or one repeated list across heterogeneous tasks are BLOCKERs.
 
 ### Step 5 — Cross-review gate (Principle 6 Rule C)
@@ -295,6 +297,7 @@ Plan.md sections: `## Research Summary` (findings + open questions if contradict
 - **Domains touched**: [domain names from trigger registry that matched, or "none"]
 - **Lens dispatched**: [list: domain (verdict summary) or "none (no trigger match)" or "skipped (trivial escape hatch)"]
 - **Lens findings integrated**: [N integrated, M deferred-with-rationale, K ignored — must be 0 ignored unless all flags are deferred]
+- **Folder guidance**: [for each task group: `files=<paths>` → `folder_guidance_files=<non-root AGENTS.md/CLAUDE.md>`; `folder_guidance_skills=<skills>`; `codex_context_boundary=root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files`]
 ```
 
 C8 enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check context-manifest-emitted` — fails if section absent in any non-blocked plan.md created after 2026-04-29.

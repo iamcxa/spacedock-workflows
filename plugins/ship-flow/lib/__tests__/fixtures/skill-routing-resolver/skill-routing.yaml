@@ -5,7 +5,7 @@ boundary: domain registry required_skills stay in domains.yaml; file-signal skil
 routing:
   - name: refine-web
     signals: [apps/refine-app/src/**]
-    skills: [refine-expert, antd-expert, react-patterns, tailwind-expert]
+    skills: [refine-expert, refine-gotchas, antd-expert, react-patterns, tailwind-expert]
   - name: expo-mobile
     signals: [apps/expo-app/**]
     skills: [expo-rnr-nativewind, expo-accessibility, react-patterns]

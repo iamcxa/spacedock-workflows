@@ -52,12 +52,16 @@ check "ship-plan incorporates registry required_skills and plan skill_hints" \
   "grep -q 'required_skills' '${PLAN_SKILL}' && grep -q 'skill_hints.plan' '${PLAN_SKILL}'"
 check "ship-plan invokes adopter skill-routing resolver for project file signals" \
   "grep -q 'resolve-skill-routing.sh' '${PLAN_SKILL}' && grep -q '.claude/ship-flow/skill-routing.yaml' '${PLAN_SKILL}'"
+check "ship-plan records folder guidance without duplicating Codex root instructions" \
+  "grep -q 'folder_guidance_files' '${PLAN_SKILL}' && grep -q 'codex_context_boundary' '${PLAN_SKILL}'"
 
 echo "Block 3: execute consumes skills_needed in troop prompts"
 check "ship-execute reads tasks skills_needed from plan" \
   "grep -q 'skills_needed' '${EXECUTE_SKILL}'"
 check "ship-execute dispatch prompt includes Skills required block" \
   "grep -q '### Skills required' '${EXECUTE_SKILL}'"
+check "ship-execute requires Context Read Receipt for folder guidance" \
+  "grep -q 'Context Read Receipt' '${EXECUTE_SKILL}' && grep -q 'check-guidance-receipt.sh' '${EXECUTE_SKILL}'"
 check "ship-execute falls back explicitly when skills_needed is missing" \
   "grep -qE 'missing.*skills_needed|skills_needed.*missing|fallback.*density' '${EXECUTE_SKILL}'"
 

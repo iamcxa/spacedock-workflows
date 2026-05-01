@@ -120,6 +120,7 @@ Cost: ~$0.05/haiku. Default M/L = $0.10.
 2. **Plan consistency** — cross-check `git diff --stat` vs `plan.md → files_modified`. Unplanned change OR missed task = finding.
 3. **Constraint check** — `PRODUCT.md → ## Constraints` respected?
 4. **CLAUDE.md walk** — for each changed file, walk dirname to repo root collecting `CLAUDE.md`; check each rule against the diff. Severity: "must/never/always" → BLOCKING; "prefer/should/consider" → WARNING. Dedup + cache during walk.
+5. **Folder guidance receipt gate** — for each execute-touched file group, run `bash plugins/ship-flow/lib/check-guidance-receipt.sh --config=.claude/ship-flow/skill-routing.yaml --files=<changed-files> --artifact=<entity-folder>/execute.md`. Exit 12 is BLOCKING: execute did not prove it read non-root app-folder `AGENTS.md`/`CLAUDE.md` or did not load routed/folder skills. Do not treat root `AGENTS.md`/`CLAUDE.md` absence as failure; the resolver's `codex_context_boundary` deliberately avoids duplicating Codex session behavior.
 
 **Spot-check haiku citations — 100%, not a sample** (MEMORY #078 precedent):
 - Read exact file at cited line ±2 lines.

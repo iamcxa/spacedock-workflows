@@ -55,8 +55,8 @@ check_stdout "output records source as discovered" \
   "\"${DISCOVERY_SCRIPT}\" --root=\"${FIXTURE_ROOT}\""
 
 echo "Block 2: carlove-like stack surfaces route to adopter project skills"
-check_stdout "Refine web files route to refine/antd/react/tailwind skills" \
-  "skills: \\[refine-expert, antd-expert, react-patterns, tailwind-expert\\]" \
+check_stdout "Refine web files route to refine/gotchas/antd/react/tailwind skills" \
+  "skills: \\[refine-expert, refine-gotchas, antd-expert, react-patterns, tailwind-expert\\]" \
   "\"${DISCOVERY_SCRIPT}\" --root=\"${FIXTURE_ROOT}\""
 check_stdout "Expo mobile files route to expo/nativewind/accessibility skills" \
   "skills: \\[expo-rnr-nativewind, expo-accessibility, react-patterns\\]" \

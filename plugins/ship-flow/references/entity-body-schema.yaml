@@ -514,7 +514,7 @@ stages:
                 **Done:** {runnable verification command}
                 **Model:** {haiku | sonnet}
               task_fields:
-                - { name: skills_needed, type: list, items: string, description: "Per-task skill names to load before dispatch. Derived by ship-plan from files_modified globs, framework_detected, density skill set, and domain registry required_skills / skill_hints. Backward-compatible: absent means ship-execute falls back to density/default skill load." }
+                - { name: skills_needed, type: list, items: string, description: "Per-task skill names to load before dispatch. Derived by ship-plan from files_modified globs, framework_detected, density skill set, domain registry required_skills / skill_hints, adopter skill-routing.yaml, and non-root folder guidance skills." }
     report:
       section: "## Plan Report"
       section_tag: plan-report
@@ -539,6 +539,7 @@ stages:
         - { name: critical_assumptions, type: list, description: "Assumptions to re-verify at execute boot" }
         - { name: architecture_context, type: string, description: "Canonical doc touches required (INVARIANTS, README, schema)" }
         - { name: stub_flags, type: list, description: "Tasks flagged as v1-stub requiring captain-ack before cross-review PROCEED" }
+        - { name: folder_guidance, type: list, description: "Per task: non-root AGENTS.md/CLAUDE.md files and folder_guidance_skills resolved from touched files. Root AGENTS.md/CLAUDE.md are excluded as Codex session context via codex_context_boundary." }
 
   # ===== EXECUTE =====
   execute:
@@ -603,6 +604,7 @@ stages:
         - { name: dc_status, type: list, description: "Execute-side DC results (PASS/FAIL per DC)" }
         - { name: deviations, type: list, description: "Any plan deviations with rationale" }
         - { name: render_fidelity_evidence, type: string, description: "Dev server URL or screenshot path for UI-type entities" }
+        - { name: context_read_receipts, type: list, description: "Per-task proof that execute workers read required folder_guidance files and loaded routed/folder skills." }
 
   # ===== VERIFY =====
   # 2026-04-19 D1 measurement consolidation: 3 sections (Output, Report, UAT) merged into one ## Verify

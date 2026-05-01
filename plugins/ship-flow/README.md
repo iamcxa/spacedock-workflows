@@ -16,6 +16,7 @@ I (claude 4.7) have 1M context + prompt cache. I don't need procedural teaching 
 - **Auditability for other agents + humans** — each stage's `.md` artifact + entity body + cross-review gate verdict = reconstructable decision history. Captain (or another agent) can audit my work without reading code.
 - **Canonical doc invariants** — ARCHITECTURE / PRODUCT / README / ROADMAP stay consistent with shipped work via atomic patch-map.sh CAS + named-teammate-dispatched updates at ship-review. Without this, canonical docs silently drift from implementation.
 - **Principle enforcement** — CI grep checks (Principle 1-8) catch harness regressions (preamble regrowth, skill count bloat, stale line-anchors, artifact verbosity, etc.) before they decay the flow.
+- **Adopter-local guidance enforcement** — ship-flow records non-root app-folder `AGENTS.md` / `CLAUDE.md` files and their project skills from touched files. This deliberately does not duplicate Codex root `AGENTS.md` session behavior; it covers the part Codex does not guarantee across planner, fresh execute workers, and PR-feedback re-entry.
 
 The flow does NOT teach me how to think. It keeps me honest across boundaries where I can't see the whole.
 

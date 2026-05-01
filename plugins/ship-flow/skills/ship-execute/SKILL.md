@@ -42,6 +42,7 @@ Run before any execute work. Stop and SendMessage(FO) if any check fails.
 - Serial commits per wave with pathspec-lock (parallel-session contamination defense).
 - PR-feedback re-entry mode (Mode B).
 - Architecture snippet injection into troop prompts.
+- Folder guidance receipt enforcement for non-root app-folder `AGENTS.md`/`CLAUDE.md` and project skills resolved from touched files.
 
 ---
 
@@ -80,6 +81,16 @@ Parse `skills_needed` from each task block. Accepted forms:
 
 If `skills_needed` is missing on a legacy plan, fallback to the existing density-aware skill load / default stage skill set and log `skills_needed missing — fallback to density/default skill load` in `## Issues Found`. Do not block legacy plans solely for absence.
 
+For every task with non-empty touched files, re-run adopter routing before dispatch:
+
+```bash
+bash plugins/ship-flow/lib/resolve-skill-routing.sh \
+  --config=.claude/ship-flow/skill-routing.yaml \
+  --files=<task-files>
+```
+
+Merge `skills_needed=` and `folder_guidance_skills=` into the task's skill list for dispatch, preserving the plan list first. Record `folder_guidance_files=`, `folder_guidance_skills=`, and the resolver's `codex_context_boundary` in `## Issues Found` or the task row when they add context not already visible in plan. Missing `.claude/ship-flow/skill-routing.yaml` on a legacy plan is a WARNING; for new non-trivial adopter plans, bounce to plan because planner should have emitted `Folder guidance`.
+
 Group by wave (0, 1, 2, ...). Wave dependency sanity: for each task in wave N, every `read_first` path either exists in worktree OR is in `files_modified` of a task in wave <N. Violation → `## Execution Log status: blocked, reason: wave dependency violation` and return. **Never silently reorder waves** — plan stage owns topology.
 
 **Blocker**: plan missing or malformed → `status: blocked` and return.
@@ -112,6 +123,7 @@ Invoke `Skill: superpowers:subagent-driven-development` for dispatch philosophy.
 - Project / entity context.
 - `### Architecture context` block with `$ARCH_SNIPPET` when non-empty.
 - `### Skills required` block with this task's `skills_needed` list. Ask the troop to load/use only those skills first; if the list is empty because the task is docs-only/stage-artifact, say `none — docs-only/stage-artifact`.
+- `### Folder guidance required` block with every `folder_guidance_files` path and parsed `folder_guidance_skills`. Ask the troop to read those files and return a `Context Read Receipt` listing the guidance files, loaded skills, and applied constraints. The receipt is required because PR-feedback re-entry and fresh workers do not reliably inherit app-folder guidance from Codex's root session context.
 - Status protocol reminder (DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED).
 - Tiered quality check spec (T1 always, T2 if frontend touched).
 - `Do NOT commit — return changed_files and status.` (orchestrator owns commits).
@@ -144,6 +156,17 @@ T2 failures count toward retries. Note `-sfN` for Next.js 16 Turbopack SSR (MEMO
 - **DONE_WITH_CONCERNS** → correctness/scope concerns → re-dispatch with clarification; observation concerns → log in `## Issues Found`, proceed as DONE.
 - **NEEDS_CONTEXT** → gather missing info + re-dispatch (same model) with extra context. Cap 2 rounds; round 3 → reclassify as BLOCKED.
 - **BLOCKED** → benign-drift pre-check first; else escalation ladder.
+
+Before accepting DONE or DONE_WITH_CONCERNS for any task with folder guidance, validate the task return or execute draft:
+
+```bash
+bash plugins/ship-flow/lib/check-guidance-receipt.sh \
+  --config=.claude/ship-flow/skill-routing.yaml \
+  --files=<task-files> \
+  --artifact=<task-return-or-execute-draft>
+```
+
+Exit 12 is BLOCKING feedback to the same worker: missing `Context Read Receipt`, missing app-folder guidance file citation, or missing routed/folder skill such as `refine-gotchas`. This is intentionally narrower than Codex built-in behavior: root `AGENTS.md`/`CLAUDE.md` are excluded by `codex_context_boundary`; only file-scoped adopter guidance is enforced here.
 
 ### Step 3.1 — Benign-drift pre-check (before escalation)
 
@@ -312,6 +335,7 @@ git commit -m "done + archive: #<NNN> <slug> (verdict=PASSED, inline-on-main)" -
 - `deviations`: any plan deviations with rationale (e.g., "T1.3 split into 2 commits because FM#4 amendment required separate pathspec")
 - `render_fidelity_evidence`: for UI-type entities, dev server URL or screenshot path proving rendered output matches design canonical; "N/A" for non-UI entities
 - `skills_needed_used`: per-task list copied from plan, or fallback note if missing on a legacy plan
+- `context_read_receipts`: per-task list of folder guidance files read, routed skills loaded, folder guidance skills loaded, and applied constraints. If no non-root folder guidance matched, write `none — resolver reported no folder_guidance_files`.
 <!-- /section:hand_off_to_verify -->
 
 ---

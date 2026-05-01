@@ -88,7 +88,7 @@ if has_path "apps/refine-app/*" || has_dependency '"@refinedev/'; then
   emit_route \
     "refine-web" \
     "apps/refine-app/src/**" \
-    "refine-expert, antd-expert, react-patterns, tailwind-expert" \
+    "refine-expert, refine-gotchas, antd-expert, react-patterns, tailwind-expert" \
     "Refine/Ant Design office web surface."
 fi
 

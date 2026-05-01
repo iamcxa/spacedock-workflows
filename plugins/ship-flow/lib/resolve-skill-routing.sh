@@ -17,6 +17,9 @@ Output:
   status=ok|no_match
   matched_routes=<route1>,<route2>,...
   skills_needed=<skill1>,<skill2>,...
+  folder_guidance_files=<non-root AGENTS.md/CLAUDE.md files>
+  folder_guidance_skills=<skills parsed from folder guidance>
+  codex_context_boundary=root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files
 
 Exit codes:
   0  ok/no_match
@@ -144,6 +147,10 @@ MATCHED_ROUTES=""
 SKILLS_CSV=""
 SEEN_ITEMS=""
 OUT_CSV=""
+GUIDANCE_FILES_CSV=""
+GUIDANCE_FILE_SEEN=""
+GUIDANCE_SKILLS_CSV=""
+GUIDANCE_SKILL_SEEN=""
 
 current_name=""
 current_signals=""
@@ -186,6 +193,82 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$CONFIG"
 flush_route
 
+add_guidance_file() {
+  local file="$1"
+  [ -n "$file" ] || return 0
+  if ! printf '%s\n' "$GUIDANCE_FILE_SEEN" | grep -qx "$file"; then
+    GUIDANCE_FILE_SEEN="${GUIDANCE_FILE_SEEN}${file}
+"
+    if [ -n "$GUIDANCE_FILES_CSV" ]; then
+      GUIDANCE_FILES_CSV="${GUIDANCE_FILES_CSV},${file}"
+    else
+      GUIDANCE_FILES_CSV="$file"
+    fi
+  fi
+}
+
+add_guidance_skill() {
+  local skill="$1"
+  skill="$(printf '%s' "$skill" | sed 's/^ *//; s/ *$//')"
+  [ -n "$skill" ] || return 0
+  if ! printf '%s\n' "$GUIDANCE_SKILL_SEEN" | grep -qx "$skill"; then
+    GUIDANCE_SKILL_SEEN="${GUIDANCE_SKILL_SEEN}${skill}
+"
+    if [ -n "$GUIDANCE_SKILLS_CSV" ]; then
+      GUIDANCE_SKILLS_CSV="${GUIDANCE_SKILLS_CSV},${skill}"
+    else
+      GUIDANCE_SKILLS_CSV="$skill"
+    fi
+  fi
+}
+
+extract_guidance_skills() {
+  local guidance_file="$1"
+  local line
+  local skill
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      *Skills*|*Skill:*)
+        while IFS= read -r skill; do
+          add_guidance_skill "$skill"
+        done <<< "$(printf '%s\n' "$line" | grep -Eo '`[A-Za-z0-9_.:-]+`' | tr -d '`')"
+        while IFS= read -r skill; do
+          add_guidance_skill "$skill"
+        done <<< "$(printf '%s\n' "$line" | sed -n 's/.*Skill:[[:space:]]*"\([^"]*\)".*/\1/p')"
+        ;;
+    esac
+  done < "$guidance_file"
+}
+
+discover_folder_guidance() {
+  local files_csv="$1"
+  local file
+  local dir
+  local candidate
+  local guidance_name
+
+  while IFS= read -r file; do
+    file="$(printf '%s' "$file" | sed 's/^ *//; s/ *$//')"
+    [ -n "$file" ] || continue
+    dir="$(dirname "$file")"
+    while [ "$dir" != "." ] && [ "$dir" != "/" ] && [ -n "$dir" ]; do
+      for guidance_name in AGENTS.md CLAUDE.md; do
+        candidate="${dir}/${guidance_name}"
+        if [ -f "$candidate" ]; then
+          add_guidance_file "$candidate"
+          extract_guidance_skills "$candidate"
+        fi
+      done
+      next_dir="$(dirname "$dir")"
+      [ "$next_dir" = "$dir" ] && break
+      dir="$next_dir"
+    done
+  done <<< "$(printf '%s' "$files_csv" | tr ',' '\n')"
+}
+
+discover_folder_guidance "$FILES"
+
 if [ -n "$MATCHED_ROUTES" ]; then
   echo "status=ok"
 else
@@ -193,3 +276,6 @@ else
 fi
 echo "matched_routes=$MATCHED_ROUTES"
 echo "skills_needed=$SKILLS_CSV"
+echo "folder_guidance_files=$GUIDANCE_FILES_CSV"
+echo "folder_guidance_skills=$GUIDANCE_SKILLS_CSV"
+echo "codex_context_boundary=root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files"
