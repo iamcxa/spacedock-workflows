@@ -533,12 +533,14 @@ stages:
                 **Files:** {create/modify with exact paths}
                 **Read first:** {files to read before starting}
                 **Skills needed:** {skills_needed: ["skill-a", "skill-b"] — string array, per-task, derived from files_modified}
+                **TDD:** {tdd_contract: red_command, expected_red_failure, green_command, refactor_check OR TDD: skip -- <reason>}
                 **Parallel:** {parallel_group, depends_on[], owned_paths[], integration_owner}
                 **Steps:** {numbered, with code blocks}
                 **Done:** {runnable verification command}
                 **Model:** {haiku | sonnet}
               task_fields:
                 - { name: skills_needed, type: list, items: string, description: "Per-task skill names to load before dispatch. Derived by ship-plan from files_modified globs, framework_detected, density skill set, domain registry required_skills / skill_hints, adopter skill-routing.yaml, and non-root folder guidance skills." }
+                - { name: tdd_contract, type: object, description: "Required for non-exempt code tasks. Contains red_command, expected_red_failure, green_command, and refactor_check. Docs/config/migration/pure-refactor tasks may use TDD: skip -- <reason>." }
                 - { name: parallel_group, type: string, description: "Required on every task. Use 'serial' when the task cannot run with peers. Tasks in the same non-serial group may run in parallel only when depends_on is satisfied and owned_paths are disjoint." }
                 - { name: depends_on, type: list, items: string, description: "Task IDs that must finish before this task can start. Execute never starts a task until every dependency is committed." }
                 - { name: owned_paths, type: list, items: string, description: "Exclusive file/path globs this task may write. Parallel tasks must not overlap owned_paths." }
@@ -595,6 +597,10 @@ stages:
               type: table
               columns: ["Task", "Parallel Group", "Depends On", "Owned Paths", "Integration Owner", "Dispatch Mode"]
               description: "Executer-owned manifest derived from plan_parallelization_manifest. Dispatch Mode is parallel only when dependencies are satisfied and owned paths are disjoint."
+            - name: tdd_evidence
+              type: table
+              columns: ["Task", "RED Command", "Expected RED Failure", "GREEN Command", "REFACTOR Check", "Result"]
+              description: "Per-task RED-before-GREEN evidence consumed by verify. Required for non-exempt code tasks."
             - { name: escalations, type: list, condition: "If any BLOCKED→escalated" }
             - { name: frontend_smoke, type: enum, values: [PASS, FAIL, N/A] }
             - { name: scope_observations, type: list, condition: "If benign-drift auto-proceeds" }
@@ -638,6 +644,7 @@ stages:
       fields:
         - { name: commit_list, type: list, description: "All commits landed (SHA + task ID + summary)" }
         - { name: dc_status, type: list, description: "Execute-side DC results (PASS/FAIL per DC)" }
+        - { name: tdd_evidence_summary, type: list, description: "Per-task summary of RED-before-GREEN evidence or TDD: skip -- <reason> exemptions." }
         - { name: deviations, type: list, description: "Any plan deviations with rationale" }
         - { name: render_fidelity_evidence, type: string, description: "Dev server URL or screenshot path for UI-type entities" }
         - { name: context_read_receipts, type: list, description: "Per-task proof that execute workers read required folder_guidance files and loaded routed/folder skills." }
@@ -688,6 +695,11 @@ stages:
               type: table
               columns: ["Severity", "File:Line", "Description", "Source"]
               severity_values: [BLOCKING, WARNING, NIT]
+            - name: tdd_evidence_audit
+              type: table
+              columns: ["Task", "RED Evidence", "GREEN Evidence", "REFACTOR Check", "Severity", "route_to"]
+              severity_values: [BLOCKING, WARNING, NIT]
+              description: "Verify-stage audit of execute tdd_evidence. Missing or invalid RED-before-GREEN evidence routes to execute."
             - { name: verdict, type: string, description: "SHIP IT | NEEDS_FIX | escalated" }
         knowledge_captures:
           section: "### Knowledge Captures"

@@ -94,7 +94,19 @@ Run checks 1-4 (tests / lint / typecheck / build) on surfaces with `N > 0`. Chec
 
 **Any check FAIL → feedback to execute.** Do NOT proceed to review. Max 2 feedback rounds, then PROMPT_CAPTAIN.
 
-### Step 2.1 — Per-error diff-aware attribution (ROI critical)
+### Step 2.1 — TDD Evidence Audit
+
+Invoke `ship-flow:test-driven-development` as the audit contract. `superpowers:test-driven-development` may improve local discipline when available, but verify must not assume adopters have it installed.
+
+For every plan task that is not marked `TDD: skip -- <valid reason>`:
+1. Read the task `tdd_contract` from `plan.md`.
+2. Read execute evidence for `RED command`, `Expected RED failure`, `GREEN command`, and `REFACTOR check` / `refactor_check`.
+3. Confirm RED-before-GREEN ordering: the RED command ran before production edits were accepted, failed for the expected reason, then GREEN passed after implementation.
+4. If RED evidence is absent, RED passed immediately, or GREEN exists without matching RED, emit a `BLOCKING` finding with `route_to: execute` and required fix: rerun/rework the task with valid RED-before-GREEN evidence or bounce to plan if the contract was underspecified.
+
+Record results inside existing `### Review Findings` in `verify.md` under subsection `#### TDD Evidence Audit`, using the schema-backed severity vocabulary `BLOCKING`, `WARNING`, or `NIT`. Use columns `Task`, `RED evidence`, `GREEN evidence`, `REFACTOR check`, `Severity`, and `route_to`.
+
+### Step 2.2 — Per-error diff-aware attribution (ROI critical)
 
 **Trigger**: any check output contains `file:line` references.
 

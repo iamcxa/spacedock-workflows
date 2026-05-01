@@ -77,7 +77,17 @@ Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.
 Parse `skills_needed` from each task block. Accepted forms:
 - `**Skills needed:** {skills_needed: ["test", "tdd"]}`
 - `skills_needed: ["test", "tdd"]`
-- `skills_needed: []` only for docs-only/stage-artifact tasks with explicit `TDD: skip` reason.
+- `skills_needed: []` only for docs-only/stage-artifact tasks with explicit `TDD: skip -- <reason>`.
+
+TDD exemptions must use the canonical grep-friendly marker `TDD: skip -- <reason>`. Valid exemption classes are docs-only/stage-artifact tasks, pure configuration, migrations validated by existing migration tooling, and pure refactors with existing coverage. Any other task is non-exempt unless plan explicitly records a captain-approved reason.
+
+Parse each task's `tdd_contract` from structured YAML or prose fields:
+- `red_command` / `RED command`
+- `expected_red_failure` / `Expected RED failure`
+- `green_command` / `GREEN command`
+- `refactor_check` / `REFACTOR check`
+
+For every task without a valid `TDD: skip -- <reason>` exemption, enforce RED-before-GREEN before implementation: run the RED command before production edits, confirm the expected RED failure, then implement the minimal change, run the GREEN command, and only refactor after GREEN while re-running the refactor check. Record command text, exit/pass/fail snippets, and whether the RED failure matched expectation in `execute.md`. If the task lacks `tdd_contract` on a new non-trivial entity, bounce to plan; for a legacy plan, proceed only with a WARNING and a focused test command you can justify.
 
 If `skills_needed` is missing on a legacy plan, fallback to the existing density-aware skill load / default stage skill set and log `skills_needed missing — fallback to density/default skill load` in `## Issues Found`. Do not block legacy plans solely for absence.
 
@@ -114,6 +124,7 @@ Invoke `Skill: superpowers:subagent-driven-development` for dispatch philosophy.
 **Layer B wrap** (ship-execute owns):
 
 - **Runtime detection** — invoke `ship-flow:ship-runtime-detect` before any quality check to populate `{commands.test/build/typecheck/lint/dev}`.
+- **TDD evidence** — invoke `ship-flow:test-driven-development` when available and apply its fallback contract regardless. Every non-exempt task must emit RED-before-GREEN evidence from `tdd_contract`; missing expected RED failure is BLOCKING feedback to the worker or a bounce to plan if the contract itself is absent.
 - **Dispatch discipline** — default path: every task gets dispatched via Agent tool per plan's `model:`. "Agent tool not available" is a false claim in ensign context unless probe (`Agent(subagent_type: general-purpose, model: haiku, prompt: "return OK")`) returns runtime error. Inline exception requires ALL THREE: pure file-string replace + verbatim spec + single file <20 LOC; plus recorded verbatim probe error.
 - **Parallelism within wave** — derive an `execute-dispatch-manifest` from plan's `plan-parallelization-manifest` / task metadata. Tasks with satisfied `depends_on` and no `owned_paths` overlap → dispatch in parallel (multiple Agent calls in one tool-call block). Overlap, missing `owned_paths`, missing `integration_owner`, or `parallel_group: serial` → sequential within wave. Never start wave N+1 until wave N fully committed. The executer is the single integrator and writes the final execute artifact.
 - **Self-drive (anti-idle)** — no idle between tasks. After DONE + commit + review, immediately proceed. Entire execute stage = single continuous run.

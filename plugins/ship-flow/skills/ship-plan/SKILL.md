@@ -30,7 +30,7 @@ Run before any plan work. Stop and SendMessage(FO) if any check fails.
 
 ## Layer A delegation (Principle 6 Rule B)
 
-`superpowers:writing-plans` owns plan authoring discipline (TDD order, wave safety, placeholder-free prose, task atomicity). **Do NOT re-teach.** Ship-plan wraps with Layer B augmentation:
+`superpowers:writing-plans` owns plan authoring discipline (TDD order, wave safety, placeholder-free prose, task atomicity) when available. `ship-flow:test-driven-development` owns the ship-flow TDD contract and fallback artifact rules when adopter/runtime environments do not have superpowers installed. Ship-plan wraps both with Layer B augmentation:
 
 - Shape Up scope anchoring (every task maps to a Done Criterion / Scope In bullet).
 - Size-adaptive research team (produce + review subagents, sized S/M/L).
@@ -160,9 +160,9 @@ Update entity frontmatter `size:` if changed.
 
 Every task maps to a spec `Scope In` bullet (if shape ran) OR a `Done Criteria` item. Produce task×mapping table. Unmapped task → drop or flag in `## Plan Report`. Do NOT silently expand scope.
 
-### Step 3 — Write plan (delegate to superpowers:writing-plans)
+### Step 3 — Write plan (delegate to superpowers:writing-plans + ship-flow TDD fallback)
 
-Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD task order, wave safety, placeholder scan, task atomicity, verification commands per task Done. **Do NOT re-teach.**
+Invoke `Skill: superpowers:writing-plans` for plan authoring when available. It handles TDD task order, wave safety, placeholder scan, task atomicity, verification commands per task Done. Then invoke `Skill: ship-flow:test-driven-development` for the ship-flow-owned TDD contract. If superpowers are unavailable in an adopter/runtime, do not block solely on that absence; `ship-flow:test-driven-development` is the fallback source of truth.
 
 **Layer B wrap** (ship-plan owns these on top of Layer A output):
 - Runtime detection — invoke `ship-flow:ship-runtime-detect` before tasks get written; propagate `{commands.test/build/typecheck/lint/dev}` into every task's Done field.
@@ -199,7 +199,8 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
   output visible in `## Context Manifest` and surface missing skills early.
 
   Non-trivial plan guard: if a plan has ≥2 implementation tasks touching different file classes, require ≥2 distinct `skills_needed` lists. If every task receives the same list, treat it as boilerplate and revise before emitting plan.md.
-- TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `**TDD:** skip — <reason>`.
+- TDD contract: every non-exempt implementation task MUST include `tdd_contract` with `red_command`, `expected_red_failure`, `green_command`, and `refactor_check`. In prose task blocks, include the same data as `RED command`, `Expected RED failure`, `GREEN command`, and `REFACTOR check`. Execute consumes this contract for RED-before-GREEN evidence; verify audits it before PASS.
+- TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `TDD: skip -- <reason>`.
 - Wave rules: wave 0 = test infra; wave N+1 depends only on ≤N outputs; no `files_modified` overlap within a wave; no cycle.
 - **Parallel metadata contract**: every implementation task MUST include `parallel_group`, `depends_on`, `owned_paths`, and `integration_owner`. Use `parallel_group: serial` when the task cannot run with peers. `owned_paths` is the write boundary execute uses to prove disjointness; `depends_on` is `T{N}` task-ID topology; `integration_owner` is the named teammate that folds the worker output into the stage artifact (normally `executer@pitch-XX`).
 - Emit `plan-parallelization-manifest` in `### Hand-off to Execute`: one row per task with `task_id` (`T{N}`), `parallel_group`, `depends_on`, `owned_paths`, and `integration_owner`. `task_id` is the canonical task identifier used throughout the plan, and every `depends_on` entry MUST reference these same `T{N}` task IDs. This is contract metadata, not an execution command. Execute derives `execute-dispatch-manifest` from it and may only parallelize tasks whose dependencies are satisfied and whose `owned_paths` do not overlap.
@@ -245,7 +246,7 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 
 1. **Requirement coverage** — every DC maps to ≥1 task.
 2. **Task completeness** — every task has paths / verify command / model hint / wave.
-   - For #108.1+, every implementation task must include `skills_needed: [...]`; docs-only stage-artifact tasks may use `skills_needed: []` only with `TDD: skip — docs-only/stage-artifact`.
+   - For #108.1+, every implementation task must include `skills_needed: [...]`; docs-only stage-artifact tasks may use `skills_needed: []` only with `TDD: skip -- docs-only/stage-artifact`.
 3. **Dependency correctness** — wave graph safe (no cycles / no same-wave `files_modified` overlap / no read_first pulling same-wave outputs).
 4. **Zero-placeholder scan** — grep `TBD | add appropriate | similar to Task N | as needed | fill in | \.\.\.` → fix inline.
 5. **Type/signature consistency** — cross-task function/type signatures match.
@@ -276,7 +277,7 @@ Dispatch cross-review to `executer` teammate (pipeline path) or fresh sonnet (no
    - `domains/**/src/domain/**/{types,decider,view,saga}.ts`, `apps/deno-api/src/middlewares/fmodel-middleware.ts` → `fmodel`
    - `*.test.*`, `*.spec.*`, `__tests__/**` → `test`, `tdd`, or `test-driven-development`
    - `*.sh`, `bin/**`, `lib/**/*.sh` → `test` or `best-practices`
-   - Docs-only stage-artifact tasks may use `skills_needed: []` only with `TDD: skip — docs-only/stage-artifact`; user-facing prose docs should use `write-docs`.
+   - Docs-only stage-artifact tasks may use `skills_needed: []` only with `TDD: skip -- docs-only/stage-artifact`; user-facing prose docs should use `write-docs`.
 
 UI extension: **Render Fidelity + captain-ack audit trail** (T6.4, #106) — for UI entities: does plan have ≥1 structural-parity DC per component in design canonical? AND are all stub tasks captain-acked (either `pre-acked-stubs: true` in frontmatter or explicit `## Plan Report → Stub Flags` entries)? This remains the render-fidelity named extension documented in INVARIANTS and is not the ship-plan `skill-coverage` line.
 
