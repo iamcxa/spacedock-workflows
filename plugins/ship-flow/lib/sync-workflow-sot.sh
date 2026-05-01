@@ -116,14 +116,22 @@ read_template_stage_property() {
 
 DESIGN_SKIP_WHEN="$(read_stage_property "$SOT" design skip-when)"
 VERIFY_FEEDBACK_TO="$(read_stage_property "$SOT" verify feedback-to)"
+SHAPE_PARALLELISM="$(read_stage_property "$SOT" shape parallelism)"
+DESIGN_PARALLELISM="$(read_stage_property "$SOT" design parallelism)"
+PLAN_PARALLELISM="$(read_stage_property "$SOT" plan parallelism)"
+EXECUTE_PARALLELISM="$(read_stage_property "$SOT" execute parallelism)"
+VERIFY_PARALLELISM="$(read_stage_property "$SOT" verify parallelism)"
 
-if [ -z "$DESIGN_SKIP_WHEN" ] || [ -z "$VERIFY_FEEDBACK_TO" ]; then
-  echo "ERROR SOT missing design.skip-when or verify.feedback-to" >&2
+if [ -z "$DESIGN_SKIP_WHEN" ] || [ -z "$VERIFY_FEEDBACK_TO" ] ||
+  [ -z "$SHAPE_PARALLELISM" ] || [ -z "$DESIGN_PARALLELISM" ] ||
+  [ -z "$PLAN_PARALLELISM" ] || [ -z "$EXECUTE_PARALLELISM" ] ||
+  [ -z "$VERIFY_PARALLELISM" ]; then
+  echo "ERROR SOT missing required derived fields: design.skip-when, verify.feedback-to, and shape/design/plan/execute/verify.parallelism are required" >&2
   exit 2
 fi
 
 EXPECTED_TEMPLATE_DESCRIPTION="Design is mandatory for UI, matched-domain, or contract-bearing work. Skips only for trivial mechanical work with no affects_ui, no matched domain, and no design_required signal."
-EXPECTED_VERIFY_DESCRIPTION="Agent gate. FO dispatches review agents, integrates findings, runs quality gate + UAT. Verify-stage captain UAT feedback routes to execute/design/plan/follow-up by finding class; FO does not inline-fix BLOCKING/WARNING findings."
+EXPECTED_VERIFY_DESCRIPTION="Agent gate. FO dispatches review agents, integrates findings, runs quality gate + UAT. Stage feedback returns to execute; any multi-destination routing by finding class is handled inside verify.md via route_to:. FO does not inline-fix BLOCKING/WARNING findings."
 EXPECTED_PLUGIN_DESIGN_LINE="- New stage \`design\` inserted between \`shape\` and \`plan\`. Conditional but mandatory for design-bearing work (\`manual: conditional\`, \`skip-when: ${DESIGN_SKIP_WHEN}\`). It runs for UI work, matched-domain work, and schema/API/domain/architecture contract impact; it skips only for trivial mechanical work with no design-bearing decision. Dispatched by \`/ship\` to \`designer\` teammate (opus). Output: \`design.md\` + narrow artifact bundle required by the selected \`design-dispatch-manifest\`."
 
 DRIFT=0
@@ -138,16 +146,31 @@ check_state() {
   local template_verify_feedback
   local template_design_description
   local template_verify_description
+  local template_shape_parallelism
+  local template_design_parallelism
+  local template_plan_parallelism
+  local template_execute_parallelism
+  local template_verify_parallelism
 
   template_design_skip="$(read_template_stage_property "$TEMPLATE" design skip-when)"
   template_verify_feedback="$(read_template_stage_property "$TEMPLATE" verify feedback-to)"
   template_design_description="$(read_template_stage_property "$TEMPLATE" design description)"
   template_verify_description="$(read_template_stage_property "$TEMPLATE" verify description)"
+  template_shape_parallelism="$(read_template_stage_property "$TEMPLATE" shape parallelism)"
+  template_design_parallelism="$(read_template_stage_property "$TEMPLATE" design parallelism)"
+  template_plan_parallelism="$(read_template_stage_property "$TEMPLATE" plan parallelism)"
+  template_execute_parallelism="$(read_template_stage_property "$TEMPLATE" execute parallelism)"
+  template_verify_parallelism="$(read_template_stage_property "$TEMPLATE" verify parallelism)"
 
   [ "$template_design_skip" = "$DESIGN_SKIP_WHEN" ] || record_drift "template.design.skip-when" "$DESIGN_SKIP_WHEN" "$template_design_skip"
   [ "$template_verify_feedback" = "$VERIFY_FEEDBACK_TO" ] || record_drift "template.verify.feedback-to" "$VERIFY_FEEDBACK_TO" "$template_verify_feedback"
   [ "$template_design_description" = "$EXPECTED_TEMPLATE_DESCRIPTION" ] || record_drift "template.design.description" "$EXPECTED_TEMPLATE_DESCRIPTION" "$template_design_description"
   [ "$template_verify_description" = "$EXPECTED_VERIFY_DESCRIPTION" ] || record_drift "template.verify.description" "$EXPECTED_VERIFY_DESCRIPTION" "$template_verify_description"
+  [ "$template_shape_parallelism" = "$SHAPE_PARALLELISM" ] || record_drift "template.shape.parallelism" "$SHAPE_PARALLELISM" "$template_shape_parallelism"
+  [ "$template_design_parallelism" = "$DESIGN_PARALLELISM" ] || record_drift "template.design.parallelism" "$DESIGN_PARALLELISM" "$template_design_parallelism"
+  [ "$template_plan_parallelism" = "$PLAN_PARALLELISM" ] || record_drift "template.plan.parallelism" "$PLAN_PARALLELISM" "$template_plan_parallelism"
+  [ "$template_execute_parallelism" = "$EXECUTE_PARALLELISM" ] || record_drift "template.execute.parallelism" "$EXECUTE_PARALLELISM" "$template_execute_parallelism"
+  [ "$template_verify_parallelism" = "$VERIFY_PARALLELISM" ] || record_drift "template.verify.parallelism" "$VERIFY_PARALLELISM" "$template_verify_parallelism"
 
   if ! grep -Fqx -- "$EXPECTED_PLUGIN_DESIGN_LINE" "$PLUGIN_README"; then
     record_drift "plugin-readme.design-stage-summary" "$EXPECTED_PLUGIN_DESIGN_LINE" "missing-or-stale"
@@ -156,14 +179,36 @@ check_state() {
 
 write_template() {
   local tmp
+  local tmp_inserted
   tmp="$(mktemp)"
+  tmp_inserted="$(mktemp)"
   awk \
     -v design_skip="$DESIGN_SKIP_WHEN" \
     -v verify_feedback="$VERIFY_FEEDBACK_TO" \
+    -v shape_parallelism="$SHAPE_PARALLELISM" \
+    -v design_parallelism="$DESIGN_PARALLELISM" \
+    -v plan_parallelism="$PLAN_PARALLELISM" \
+    -v execute_parallelism="$EXECUTE_PARALLELISM" \
+    -v verify_parallelism="$VERIFY_PARALLELISM" \
     -v design_description="$EXPECTED_TEMPLATE_DESCRIPTION" \
     -v verify_description="$EXPECTED_VERIFY_DESCRIPTION" '
+    /^[[:space:]]*-[[:space:]]*name:[[:space:]]*shape[[:space:]]*$/ {
+      stage = "shape"
+      print
+      next
+    }
     /^[[:space:]]*-[[:space:]]*name:[[:space:]]*design[[:space:]]*$/ {
       stage = "design"
+      print
+      next
+    }
+    /^[[:space:]]*-[[:space:]]*name:[[:space:]]*plan[[:space:]]*$/ {
+      stage = "plan"
+      print
+      next
+    }
+    /^[[:space:]]*-[[:space:]]*name:[[:space:]]*execute[[:space:]]*$/ {
+      stage = "execute"
       print
       next
     }
@@ -181,6 +226,26 @@ write_template() {
       print "    skip-when: \"" design_skip "\""
       next
     }
+    stage == "shape" && /^[[:space:]]*parallelism:[[:space:]]*/ {
+      print "    parallelism: " shape_parallelism
+      next
+    }
+    stage == "design" && /^[[:space:]]*parallelism:[[:space:]]*/ {
+      print "    parallelism: " design_parallelism
+      next
+    }
+    stage == "plan" && /^[[:space:]]*parallelism:[[:space:]]*/ {
+      print "    parallelism: " plan_parallelism
+      next
+    }
+    stage == "execute" && /^[[:space:]]*parallelism:[[:space:]]*/ {
+      print "    parallelism: " execute_parallelism
+      next
+    }
+    stage == "verify" && /^[[:space:]]*parallelism:[[:space:]]*/ {
+      print "    parallelism: " verify_parallelism
+      next
+    }
     stage == "design" && /^[[:space:]]*description:[[:space:]]*/ {
       print "    description: \"" design_description "\""
       next
@@ -195,7 +260,53 @@ write_template() {
     }
     { print }
   ' "$TEMPLATE" > "$tmp"
-  mv "$tmp" "$TEMPLATE"
+  awk \
+    -v shape_parallelism="$SHAPE_PARALLELISM" \
+    -v design_parallelism="$DESIGN_PARALLELISM" \
+    -v plan_parallelism="$PLAN_PARALLELISM" \
+    -v execute_parallelism="$EXECUTE_PARALLELISM" \
+    -v verify_parallelism="$VERIFY_PARALLELISM" '
+    function expected_for(stage_name) {
+      if (stage_name == "shape") return shape_parallelism
+      if (stage_name == "design") return design_parallelism
+      if (stage_name == "plan") return plan_parallelism
+      if (stage_name == "execute") return execute_parallelism
+      if (stage_name == "verify") return verify_parallelism
+      return ""
+    }
+    function flush_stage() {
+      if (stage == "") return
+      print stage_header
+      if (!saw_parallelism) print "    parallelism: " expected_for(stage)
+      for (i = 1; i <= block_count; i++) print block[i]
+      stage = ""
+      block_count = 0
+      delete block
+      saw_parallelism = 0
+    }
+    /^[[:space:]]*-[[:space:]]*name:[[:space:]]*(shape|design|plan|execute|verify)[[:space:]]*$/ {
+      flush_stage()
+      stage_header = $0
+      stage = $0
+      sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", stage)
+      sub(/[[:space:]]*$/, "", stage)
+      next
+    }
+    /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ {
+      flush_stage()
+      print
+      next
+    }
+    stage != "" {
+      if ($0 ~ /^[[:space:]]*parallelism:[[:space:]]*/) saw_parallelism = 1
+      block[++block_count] = $0
+      next
+    }
+    { print }
+    END { flush_stage() }
+  ' "$tmp" > "$tmp_inserted"
+  mv "$tmp_inserted" "$TEMPLATE"
+  rm -f "$tmp"
 }
 
 write_plugin_readme() {

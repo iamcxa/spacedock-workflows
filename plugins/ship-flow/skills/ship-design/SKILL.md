@@ -116,9 +116,14 @@ design-dispatch-manifest:
     - lane: domain
       role: domain-designer
       domain: schema
+      panel_lane: domain-expert
       required_skills: []
       knowledge_module_path: ""
       designer_section_anchor: ""
+      review_contract:
+        worktree: "<absolute worktree path>"
+        base_head: "<base>..<head>"
+        mode: read-only findings-only
       outputs: []
   integration:
     mode: single-designer|parallel
@@ -138,6 +143,16 @@ Dispatch rules:
 - Multi-domain or Category A + domain work defaults to `parallel`. Collapse to
   `single-designer` only when one lane is trivial and the reason is recorded in
   the manifest.
+- Domain expert panel lanes are allowed when domain registry or adopter file
+  signals identify risk. They are read-only and findings-only: pass the correct
+  worktree, base/head range, domain lens, required skills/knowledge modules, and
+  "do not edit files" instruction. Discard outputs from the wrong worktree,
+  wrong base/head, or without `file:line` citations.
+- domain risk must be explicit in design output. For each domain-expert lane,
+  write the risk questions that plan/verify must preserve, such as state
+  filters, entity filters, archive/reactivate behavior, URL hydration, cache
+  invalidation, seed validation, identity mapping, or framework-specific UI
+  component contracts discovered from the loaded skills.
 - UI lanes must consume adopter file-signal routing before dispatch. For every
   UI candidate file from shape handoff, spec `Files modified`, exploration
   cites, or obvious UI surface path, run:
@@ -244,6 +259,8 @@ hardcode a project-specific reviewer set. If no risk trigger applies, write
      `codex_context_boundary` in the manifest.
    - `domain:` set → add `domain` lane with registry `required_skills`,
      `skill_hints.*`, `knowledge_module_path`, and `designer_section_anchor`.
+     Mark high-risk domain lanes as `panel_lane: domain-expert` and require
+     read-only findings that become constraints for plan.
    - both lanes present → `integration.mode: parallel`.
    - one low-risk lane present → `integration.mode: single-designer`.
 6. Dispatch the manifest lanes. UI lane follows Phase 1-9. Domain lane follows

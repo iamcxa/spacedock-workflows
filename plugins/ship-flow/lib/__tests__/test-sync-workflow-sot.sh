@@ -65,11 +65,24 @@ cp "${REPO_ROOT}/plugins/ship-flow/workflow-template.yaml" "$TEMPLATE"
 cp "${REPO_ROOT}/plugins/ship-flow/README.md" "$PLUGIN_README"
 
 perl -0pi -e 's/skip-when: "![^"]+"/skip-when: "!affects_ui && !domain"/' "$TEMPLATE"
-perl -0pi -e 's/feedback-to: "execute\|design\|plan\|follow-up"/feedback-to: execute/' "$TEMPLATE"
+perl -0pi -e 's/feedback-to: "execute"/feedback-to: plan/' "$TEMPLATE"
+perl -0pi -e 's/parallelism: lanes/parallelism: serial/' "$TEMPLATE"
+perl -0pi -e 's/parallelism: dag/parallelism: serial/' "$TEMPLATE"
+perl -0pi -e 's/parallelism: checks/parallelism: serial/' "$TEMPLATE"
 perl -0pi -e 's/skip-when: !affects_ui && !domain && !design_required/skip-when: !affects_ui && !domain/' "$PLUGIN_README"
 
 assert_failure_output "check mode reports template drift without writing" "DRIFT template.design.skip-when" \
   "$SYNC" --check --sot "$SOT" --template "$TEMPLATE" --plugin-readme "$PLUGIN_README"
+
+assert_failure_output "check mode reports parallelism drift without writing" "DRIFT template.execute.parallelism" \
+  "$SYNC" --check --sot "$SOT" --template "$TEMPLATE" --plugin-readme "$PLUGIN_README"
+
+BROKEN_SOT="${TMP_DIR}/README-missing-parallelism.md"
+cp "$SOT" "$BROKEN_SOT"
+perl -0pi -e 's/^\s+parallelism: dag\n//m' "$BROKEN_SOT"
+
+assert_failure_output "check mode rejects missing required parallelism fields" "ERROR SOT missing required derived fields" \
+  "$SYNC" --check --sot "$BROKEN_SOT" --template "$TEMPLATE" --plugin-readme "$PLUGIN_README"
 
 if grep -q 'skip-when: "!affects_ui && !domain"$' "$TEMPLATE"; then
   record_pass "check mode leaves template unchanged"
@@ -82,6 +95,23 @@ assert_success "write mode updates derived files from dogfood SOT" \
 
 assert_success "check mode passes after write mode" \
   "$SYNC" --check --sot "$SOT" --template "$TEMPLATE" --plugin-readme "$PLUGIN_README"
+
+MISSING_TEMPLATE="${TMP_DIR}/workflow-template-missing-parallelism.yaml"
+cp "${REPO_ROOT}/plugins/ship-flow/workflow-template.yaml" "$MISSING_TEMPLATE"
+perl -0pi -e 's/^\s+parallelism: (probes|lanes|draft-lanes|dag|checks)\n//mg' "$MISSING_TEMPLATE"
+
+assert_success "write mode inserts missing parallelism keys from dogfood SOT" \
+  "$SYNC" --write --sot "$SOT" --template "$MISSING_TEMPLATE" --plugin-readme "$PLUGIN_README"
+
+if grep -q 'parallelism: probes' "$MISSING_TEMPLATE" &&
+  grep -q 'parallelism: lanes' "$MISSING_TEMPLATE" &&
+  grep -q 'parallelism: draft-lanes' "$MISSING_TEMPLATE" &&
+  grep -q 'parallelism: dag' "$MISSING_TEMPLATE" &&
+  grep -q 'parallelism: checks' "$MISSING_TEMPLATE"; then
+  record_pass "write mode restored all missing parallelism keys"
+else
+  record_fail "write mode restored all missing parallelism keys"
+fi
 
 assert_success "live repo SOT-derived files are in sync" \
   "$SYNC" --check

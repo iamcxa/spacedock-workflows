@@ -533,11 +533,16 @@ stages:
                 **Files:** {create/modify with exact paths}
                 **Read first:** {files to read before starting}
                 **Skills needed:** {skills_needed: ["skill-a", "skill-b"] — string array, per-task, derived from files_modified}
+                **Parallel:** {parallel_group, depends_on[], owned_paths[], integration_owner}
                 **Steps:** {numbered, with code blocks}
                 **Done:** {runnable verification command}
                 **Model:** {haiku | sonnet}
               task_fields:
                 - { name: skills_needed, type: list, items: string, description: "Per-task skill names to load before dispatch. Derived by ship-plan from files_modified globs, framework_detected, density skill set, domain registry required_skills / skill_hints, adopter skill-routing.yaml, and non-root folder guidance skills." }
+                - { name: parallel_group, type: string, description: "Required on every task. Use 'serial' when the task cannot run with peers. Tasks in the same non-serial group may run in parallel only when depends_on is satisfied and owned_paths are disjoint." }
+                - { name: depends_on, type: list, items: string, description: "Task IDs that must finish before this task can start. Execute never starts a task until every dependency is committed." }
+                - { name: owned_paths, type: list, items: string, description: "Exclusive file/path globs this task may write. Parallel tasks must not overlap owned_paths." }
+                - { name: integration_owner, type: string, description: "Named teammate responsible for folding this task's output into the stage artifact; usually executer@pitch-XX for execute tasks." }
     report:
       section: "## Plan Report"
       section_tag: plan-report
@@ -559,6 +564,10 @@ stages:
       description: "Explicit hand-off from plan to execute stage. Consumed by execute stage Boot Self-Check."
       fields:
         - { name: wave_order, type: string, description: "Wave dispatch order (W0 → W1 → W2a/b/c → W3 → W4)" }
+        - name: plan_parallelization_manifest
+          type: table
+          description: "Planner-owned manifest listing parallel_group, depends_on, owned_paths, and integration_owner for every task. Source for execute-dispatch-manifest."
+          columns: ["Task ID", "Parallel Group", "Depends On", "Owned Paths", "Integration Owner"]
         - { name: critical_assumptions, type: list, description: "Assumptions to re-verify at execute boot" }
         - { name: architecture_context, type: string, description: "Canonical doc touches required (INVARIANTS, README, schema)" }
         - { name: stub_flags, type: list, description: "Tasks flagged as v1-stub requiring captain-ack before cross-review PROCEED" }
@@ -582,6 +591,10 @@ stages:
             - name: tasks
               type: table
               columns: ["Task", "Wave", "Model", "Status", "Files Changed", "Retries", "Review", "Commit", "Est. Cost"]
+            - name: execute-dispatch-manifest
+              type: table
+              columns: ["Task", "Parallel Group", "Depends On", "Owned Paths", "Integration Owner", "Dispatch Mode"]
+              description: "Executer-owned manifest derived from plan_parallelization_manifest. Dispatch Mode is parallel only when dependencies are satisfied and owned paths are disjoint."
             - { name: escalations, type: list, condition: "If any BLOCKED→escalated" }
             - { name: frontend_smoke, type: enum, values: [PASS, FAIL, N/A] }
             - { name: scope_observations, type: list, condition: "If benign-drift auto-proceeds" }
@@ -724,6 +737,15 @@ stages:
             - { name: design_decisions_honored, type: list, format: "D{N}: {decision} → {rendered-outcome} (pass|fail)" }
             - { name: screenshot_paths, type: list, description: "≥1 screenshot for primary affected route" }
             - { name: fake_button_detected, type: boolean, description: "True if <div onClick> detected instead of <button>" }
+        verify_check_manifest:
+          section: "### Verify Check Manifest"
+          section_tag: verify-check-manifest
+          layer: implementation
+          description: "Verifier-owned manifest of parallel checks. The verifier remains the single integrator for the final verdict."
+          fields:
+            - name: checks
+              type: table
+              columns: ["Check", "Input", "Owner", "Can Run Parallel", "Evidence Required"]
     legacy_sections:
       description: "Pre-2026-04-19 layout used 3 separate H2 sections. Readers (ship-review, ship-execute pr-feedback mode) accept both layouts."
       sections:

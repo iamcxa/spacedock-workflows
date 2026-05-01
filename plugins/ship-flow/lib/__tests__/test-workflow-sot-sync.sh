@@ -39,17 +39,20 @@ check "dogfood README frontmatter uses design-bearing skip semantics" \
 check "dogfood README includes design.md in pipeline artifacts" \
   "grep -q 'design.md' '${DOGFOOD_README}' && grep -q 'Design Intent' '${DOGFOOD_README}'"
 
-check "dogfood README frontmatter allows routed verify feedback" \
-  "grep -q 'feedback-to: \"execute|design|plan|follow-up\"' '${DOGFOOD_README}'"
+check "dogfood README keeps verify feedback-to compatible with FO single-stage routing" \
+  "grep -q 'feedback-to: \"execute\"' '${DOGFOOD_README}' && ! grep -q 'feedback-to: \"execute|design|plan|follow-up\"' '${DOGFOOD_README}'"
 
 check "dogfood README documents verify-stage captain UAT routing" \
-  "grep -q 'Captain UAT Feedback' '${DOGFOOD_README}' && grep -q 'route_to: design' '${DOGFOOD_README}' && grep -q 'must not inline-fix' '${DOGFOOD_README}'"
+  "grep -q 'Captain UAT Feedback Router' '${DOGFOOD_README}' && grep -q 'frontmatter \`feedback-to\` remains \`execute\`' '${DOGFOOD_README}' && grep -q 'route_to: design' '${DOGFOOD_README}' && grep -q 'must not inline-fix' '${DOGFOOD_README}'"
 
 check "dogfood README documents design routing frontmatter fields and designer teammate" \
   "grep -q '| \`affects_ui\` | boolean |' '${DOGFOOD_README}' && grep -q '| \`domain\` | string |' '${DOGFOOD_README}' && grep -q '| \`design_required\` | boolean |' '${DOGFOOD_README}' && grep -q '\`designer\` (opus)' '${DOGFOOD_README}'"
 
 check "dogfood README status command discovers binary with guard" \
   "grep -q 'STATUS_BIN=' '${DOGFOOD_README}' && grep -q 'spacedock status binary not found' '${DOGFOOD_README}' && grep -q 'The examples below assume \`STATUS_BIN\` is set' '${DOGFOOD_README}'"
+
+check "dogfood README capture command discovers installed plugin binary with guard" \
+  "grep -q 'SHIP_CAPTURE_BIN=' '${DOGFOOD_README}' && grep -q 'ship-flow ship-capture.sh not found' '${DOGFOOD_README}' && ! grep -q 'bash plugins/ship-flow/bin/ship-capture.sh' '${DOGFOOD_README}'"
 
 check "workflow template uses design-bearing skip semantics" \
   "grep -q 'skip-when: \"!affects_ui && !domain && !design_required\"' '${TEMPLATE}' && grep -q 'Design is mandatory for UI, matched-domain, or contract-bearing work' '${TEMPLATE}'"

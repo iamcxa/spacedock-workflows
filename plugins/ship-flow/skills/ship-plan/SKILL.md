@@ -201,6 +201,16 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring. It handles TDD tas
   Non-trivial plan guard: if a plan has ≥2 implementation tasks touching different file classes, require ≥2 distinct `skills_needed` lists. If every task receives the same list, treat it as boilerplate and revise before emitting plan.md.
 - TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `**TDD:** skip — <reason>`.
 - Wave rules: wave 0 = test infra; wave N+1 depends only on ≤N outputs; no `files_modified` overlap within a wave; no cycle.
+- **Parallel metadata contract**: every implementation task MUST include `parallel_group`, `depends_on`, `owned_paths`, and `integration_owner`. Use `parallel_group: serial` when the task cannot run with peers. `owned_paths` is the write boundary execute uses to prove disjointness; `depends_on` is `T{N}` task-ID topology; `integration_owner` is the named teammate that folds the worker output into the stage artifact (normally `executer@pitch-XX`).
+- Emit `plan-parallelization-manifest` in `### Hand-off to Execute`: one row per task with `task_id` (`T{N}`), `parallel_group`, `depends_on`, `owned_paths`, and `integration_owner`. `task_id` is the canonical task identifier used throughout the plan, and every `depends_on` entry MUST reference these same `T{N}` task IDs. This is contract metadata, not an execution command. Execute derives `execute-dispatch-manifest` from it and may only parallelize tasks whose dependencies are satisfied and whose `owned_paths` do not overlap.
+- If design emitted domain expert panel constraints, convert them into a domain-specific acceptance checklist before task writing. Each checklist item must name the domain lens, required skill/knowledge module, affected path family, and the verification command or reviewer prompt verify will reuse.
+- Convert skills_needed into reviewer questions, not just labels. For each
+  task skill that represents a domain lens (`project-db`, `project-seed`,
+  `fmodel`, `refine-expert`, `refine-gotchas`, API/router skills, Expo/mobile
+  skills, etc.), add 1-3 concrete checks to the domain-specific acceptance
+  checklist. Example shape: "refine-gotchas: verify list/detail cache
+  invalidates after mutation; URL/drawer state hydrates on back/forward/shared
+  link; ProCRUD/list hooks follow existing app pattern."
 - **T0.X auto-indirection-sweep** (T6.1, #106): when `theme_indirection` from ship-runtime-detect Step R5 is non-empty (e.g. `tailwind-v4`), auto-emit a Wave 0 task in the plan: `T0.X: Audit @theme inline indirection layer — verify design tokens align with CSS custom properties, no hardcoded hex values in component files`. REFUSE to emit a plan without this task when `theme_indirection != ""`. Enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check indirection-sweep-emitted` (fixture-based).
 - **Lens FLAG integration** (entity 110, 2026-04-29): after Step 1.7 lens verdicts are collected, plan worker MUST for each FLAG verdict: (a) add a DC covering the flagged concern, or (b) write an entry in `## Lens Findings: deferred` with explicit rationale. Gate refuses advance if any FLAG exists without Option A or Option B. Silence is NOT acceptable — the deferred section exists precisely to make punts explicit and captain-visible.
 

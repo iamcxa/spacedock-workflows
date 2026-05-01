@@ -69,6 +69,18 @@ Capture **execute base SHA** from first task's parent commit in `execute.md`. Do
 
 **Rule**: run quality checks ONLY on runtime surfaces execute wrote commits to. Full-project checks on untouched surfaces are baseline noise (MEMORY #10 generalized). Invoke `ship-flow:ship-runtime-detect` to populate `{commands.test/build/typecheck/lint}`.
 
+Before dispatching parallel checks, emit `verify-check-manifest` with rows for tests, lint/typecheck/build, `ship-flow:ui-verify`, low-model domain reviewers, domain/schema review, and static/security reviewers when applicable. Each row records input, owner, whether it can run in parallel, and required evidence. The verifier is the single integrator: parallel checks may gather evidence concurrently, but only the verifier classifies findings and writes the final verdict.
+
+Domain expert panel checks are read-only and findings-only. For each matched domain or adopter file-signal lane, dispatch a low-model reviewer with the correct worktree path, base/head diff range, touched files, domain lens, and required skills/knowledge modules. The prompt MUST say "do not edit files" and require `file:line` citations. Discard outputs from the wrong worktree, wrong base/head, or uncited claims before classification.
+
+Every low-model domain reviewer must self-check repo path, branch, base/head, and changed files before reviewing. If any value does not match the verifier's
+manifest, the reviewer returns `INVALID_CONTEXT` and the verifier drops the
+result. For valid reviewers, write a domain-lens matrix in `verify.md` with
+columns `Lens`, `Reviewer`, `Finding`, `Severity`, `Evidence`, and
+`Disposition`. Use severity values Critical/Important/Minor; Critical and
+Important findings must be fixed before verify PASS, while Minor findings may
+defer only with an explicit reason and follow-up route.
+
 **Per-surface commit count**:
 ```bash
 for SURFACE in $SURFACES; do

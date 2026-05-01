@@ -115,8 +115,10 @@ Invoke `Skill: superpowers:subagent-driven-development` for dispatch philosophy.
 
 - **Runtime detection** — invoke `ship-flow:ship-runtime-detect` before any quality check to populate `{commands.test/build/typecheck/lint/dev}`.
 - **Dispatch discipline** — default path: every task gets dispatched via Agent tool per plan's `model:`. "Agent tool not available" is a false claim in ensign context unless probe (`Agent(subagent_type: general-purpose, model: haiku, prompt: "return OK")`) returns runtime error. Inline exception requires ALL THREE: pure file-string replace + verbatim spec + single file <20 LOC; plus recorded verbatim probe error.
-- **Parallelism within wave** — tasks with no `files_modified` overlap → dispatch in parallel (multiple Agent calls in one tool-call block). Overlap or `serial: true` → sequential within wave. Never start wave N+1 until wave N fully committed.
+- **Parallelism within wave** — derive an `execute-dispatch-manifest` from plan's `plan-parallelization-manifest` / task metadata. Tasks with satisfied `depends_on` and no `owned_paths` overlap → dispatch in parallel (multiple Agent calls in one tool-call block). Overlap, missing `owned_paths`, missing `integration_owner`, or `parallel_group: serial` → sequential within wave. Never start wave N+1 until wave N fully committed. The executer is the single integrator and writes the final execute artifact.
 - **Self-drive (anti-idle)** — no idle between tasks. After DONE + commit + review, immediately proceed. Entire execute stage = single continuous run.
+
+Before dispatching a wave, write `execute-dispatch-manifest` into `execute.md` draft or the stage working notes with columns: `Task`, `Parallel Group`, `Depends On`, `Owned Paths`, `Integration Owner`, `Dispatch Mode`. A `parallel` dispatch mode is allowed only when dependencies are satisfied and `owned_paths` are disjoint. If the plan lacks this metadata on a new non-trivial entity, bounce to plan; for legacy plans, proceed serially and record the fallback.
 
 **Dispatch prompt anatomy** (ship-execute fills in, Layer A teaches why):
 - Task text from plan (verbatim).

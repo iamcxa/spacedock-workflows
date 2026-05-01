@@ -27,6 +27,7 @@ stages:
     worktree: false
     gate: true
     manual: true
+    parallelism: probes
     skill: ship-flow:ship-shape
     model: opus
     description: "Captain-facing. FO invokes skill directly (not via ensign) for interactive Musk audit. Reads PRODUCT.md + ROADMAP.md, size triage (S/M/L), scoring gate. Only human gate in the pipeline."
@@ -35,17 +36,20 @@ stages:
     worktree: true
     gate: true
     manual: conditional
+    parallelism: lanes
     skip-when: "!affects_ui && !domain && !design_required"
     skill: ship-flow:ship-design
     model: opus
     description: "Design is mandatory for UI, matched-domain, or contract-bearing work. Skips only for trivial mechanical work with no affects_ui, no matched domain, and no design_required signal."
 
   - name: plan
+    parallelism: draft-lanes
     skill: ship-flow:ship-plan
     model: sonnet
     description: "Agent-autonomous. Size-adaptive research + plan writing + self-review loop. Max 3 iterations."
 
   - name: execute
+    parallelism: dag
     skill: ship-flow:ship-execute
     model: sonnet
     description: "Agent-autonomous. Wave-parallel dispatch with per-task model hints, implementer→reviewer loop, BLOCKED escalation ladder."
@@ -53,11 +57,12 @@ stages:
   - name: verify
     gate: true
     worktree: false
+    parallelism: checks
     skill: ship-flow:ship-verify
     model: sonnet
     dispatch: debate-driven
-    feedback-to: "execute|design|plan|follow-up"
-    description: "Agent gate. FO dispatches review agents, integrates findings, runs quality gate + UAT. Verify-stage captain UAT feedback routes to execute/design/plan/follow-up by finding class; FO does not inline-fix BLOCKING/WARNING findings."
+    feedback-to: "execute"
+    description: "Agent gate. FO dispatches review agents, integrates findings, runs quality gate + UAT. Stage feedback returns to execute; any multi-destination routing by finding class is handled inside verify.md via route_to:. FO does not inline-fix BLOCKING/WARNING findings."
 
   - name: ship
     worktree: false
