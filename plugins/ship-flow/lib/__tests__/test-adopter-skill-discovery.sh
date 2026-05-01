@@ -41,6 +41,22 @@ check_stdout() {
   fi
 }
 
+check_stdout_not() {
+  local desc="$1"
+  local pattern="$2"
+  local cmd="$3"
+  local stdout_out
+  stdout_out=$(eval "$cmd" 2>/dev/null || true)
+  if echo "$stdout_out" | grep -qE "$pattern"; then
+    echo "  FAIL: $desc (stdout unexpectedly contained '$pattern')"
+    FAIL=$((FAIL + 1))
+    ERRORS+=("$desc")
+  else
+    echo "  PASS: $desc"
+    PASS=$((PASS + 1))
+  fi
+}
+
 echo "=== test-adopter-skill-discovery.sh ==="
 echo ""
 
@@ -73,6 +89,20 @@ check_stdout "ts-rest contract/router files route to ts-rest and api-guide" \
 check_stdout "Supabase edge functions route separately from plain migrations" \
   "skills: \\[project-supabase-edge-functions, deno-test\\]" \
   "\"${DISCOVERY_SCRIPT}\" --root=\"${FIXTURE_ROOT}\""
+
+echo "Block 2.5: discovery ignores historical worktrees and archives"
+IGNORED_ONLY_ROOT="${SCRIPT_DIR}/fixtures/adopter-skill-discovery/ignored-only"
+check_stdout_not "ignored worktree/archive paths do not create Refine routes" \
+  "name: refine-web" \
+  "\"${DISCOVERY_SCRIPT}\" --root=\"${IGNORED_ONLY_ROOT}\""
+check_stdout_not "ignored worktree/archive paths do not create Expo routes" \
+  "name: expo-mobile" \
+  "\"${DISCOVERY_SCRIPT}\" --root=\"${IGNORED_ONLY_ROOT}\""
+check_stdout_not "ignored worktree/archive paths do not create Supabase routes" \
+  "name: supabase-schema" \
+  "\"${DISCOVERY_SCRIPT}\" --root=\"${IGNORED_ONLY_ROOT}\""
+check "discovery helper explicitly prunes heavy generated/history directories" \
+  "grep -q '.claude/worktrees' '${DISCOVERY_SCRIPT}' && grep -q '.worktrees' '${DISCOVERY_SCRIPT}' && grep -q 'docs/ship-flow/_archive' '${DISCOVERY_SCRIPT}'"
 
 echo "Block 3: output is suitable for adopter config"
 check_stdout "output names the target adopter config path" \

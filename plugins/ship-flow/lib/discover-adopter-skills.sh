@@ -45,17 +45,33 @@ done
 
 has_path() {
   local pattern="$1"
-  find "$ROOT" -path "$ROOT/$pattern" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | head -1 | grep -q .
+  find_pruned -path "$ROOT/$pattern" -print -quit | grep -q .
 }
 
 has_file_name() {
   local name="$1"
-  find "$ROOT" -name "$name" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | head -1 | grep -q .
+  find_pruned -name "$name" -print -quit | grep -q .
 }
 
 has_dependency() {
   local pattern="$1"
-  grep -R -qE "$pattern" "$ROOT"/package.json "$ROOT"/*/package.json "$ROOT"/*/*/package.json 2>/dev/null
+  find_pruned -name package.json -type f -exec sh -c 'grep -qE "$1" "$2"' sh "$pattern" {} \; -print -quit | grep -q .
+}
+
+find_pruned() {
+  find "$ROOT" \
+    \( \
+      -path "$ROOT/.git" -o \
+      -path "$ROOT/node_modules" -o \
+      -path "$ROOT/.claude/worktrees" -o \
+      -path "$ROOT/.worktrees" -o \
+      -path "$ROOT/worktrees" -o \
+      -path "$ROOT/docs/ship-flow/_archive" -o \
+      -path "$ROOT/dist" -o \
+      -path "$ROOT/build" -o \
+      -path "$ROOT/.next" -o \
+      -path "$ROOT/.turbo" \
+    \) -prune -o "$@" 2>/dev/null
 }
 
 emit_header() {

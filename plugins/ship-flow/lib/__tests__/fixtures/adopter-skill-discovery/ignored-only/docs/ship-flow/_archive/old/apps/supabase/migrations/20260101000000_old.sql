@@ -1,0 +1,1 @@
+-- Archived workflow fixture. Discovery must ignore this path.
