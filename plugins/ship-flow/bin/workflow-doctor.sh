@@ -93,9 +93,9 @@ fi
 
 DESIGN_SKIP_WHEN="$(read_design_skip_when)"
 if [ -z "$DESIGN_SKIP_WHEN" ]; then
-  emit_blocker "design.skip-when: missing design stage skip-when; expected domain-aware expression such as !affects_ui && !domain"
-elif ! printf '%s\n' "$DESIGN_SKIP_WHEN" | grep -q '!domain'; then
-  emit_blocker "design.skip-when: expected domain-aware routing such as !affects_ui && !domain, found ${DESIGN_SKIP_WHEN}"
+  emit_blocker "design.skip-when: missing design stage skip-when; expected design-bearing expression such as !affects_ui && !domain && !design_required"
+elif ! printf '%s\n' "$DESIGN_SKIP_WHEN" | grep -q '!domain' || ! printf '%s\n' "$DESIGN_SKIP_WHEN" | grep -q '!design_required'; then
+  emit_blocker "design.skip-when: expected design-bearing routing such as !affects_ui && !domain && !design_required, found ${DESIGN_SKIP_WHEN}"
 fi
 
 if [ -f "$TEMPLATE_FILE" ]; then
@@ -106,8 +106,8 @@ if [ -f "$TEMPLATE_FILE" ]; then
     in_design && /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ { exit }
     in_design && /^[[:space:]]*skip-when:[[:space:]]*/ { print; found = 1; exit }
     END { exit !found }
-  ' "$TEMPLATE_FILE" | grep -q '!domain'; then
-    emit_recommended "workflow-template.yaml: design.skip-when is not domain-aware; safe template sync recommended for future adopters"
+  ' "$TEMPLATE_FILE" | grep -q '!domain.*!design_required'; then
+    emit_recommended "workflow-template.yaml: design.skip-when is not design-bearing aware; safe template sync recommended for future adopters"
   fi
 else
   emit_recommended "workflow-template.yaml: not found; cannot compare installed template drift"

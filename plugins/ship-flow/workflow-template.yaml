@@ -2,7 +2,7 @@
 ## Discovered by spacedock:workflow-adopt to bootstrap via commission.
 
 name: ship-flow
-description: "Ship-focused pipeline. SHAPE once with captain, then agents autonomously plan → execute → verify → ship."
+description: "Ship-focused pipeline. SHAPE once with captain, then agents run design for UI/domain/contract-bearing work before plan → execute → verify → ship."
 plugin: ship-flow
 id-style: slug
 
@@ -35,10 +35,10 @@ stages:
     worktree: true
     gate: true
     manual: conditional
-    skip-when: "!affects_ui && !domain"
+    skip-when: "!affects_ui && !domain && !design_required"
     skill: ship-flow:ship-design
     model: opus
-    description: "Conditional design stage. Runs for UI work or domain-routed non-UI work; skips only when neither affects_ui nor domain is present."
+    description: "Design is mandatory for UI, matched-domain, or contract-bearing work. Skips only for trivial mechanical work with no affects_ui, no matched domain, and no design_required signal."
 
   - name: plan
     skill: ship-flow:ship-plan
@@ -56,8 +56,8 @@ stages:
     skill: ship-flow:ship-verify
     model: sonnet
     dispatch: debate-driven
-    feedback-to: execute
-    description: "Agent gate. FO dispatches haiku review agents (code-reviewer, silent-failure-hunter) then sonnet verify ensign integrates: spot-checks citations, classifies findings, runs 5-check quality gate + done criteria UAT. PASS → ship. FAIL → feedback to execute."
+    feedback-to: "execute|design|plan|follow-up"
+    description: "Agent gate. FO dispatches review agents, integrates findings, runs quality gate + UAT. Verify-stage captain UAT feedback routes to execute/design/plan/follow-up by finding class; FO does not inline-fix BLOCKING/WARNING findings."
 
   - name: ship
     worktree: false

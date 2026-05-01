@@ -23,7 +23,7 @@ stages:
       worktree: true
       gate: true
       manual: conditional
-      skip-when: "!affects_ui && !domain"
+      skip-when: "!affects_ui && !domain && !design_required"
       skill: ship-flow:ship-design
       model: opus
     - name: plan
