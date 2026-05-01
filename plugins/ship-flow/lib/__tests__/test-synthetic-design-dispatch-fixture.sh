@@ -5,12 +5,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 REGISTRY_SCRIPT="${SCRIPT_DIR}/../registry-resolve.sh"
+RECEIPT_SCRIPT="${SCRIPT_DIR}/../check-guidance-receipt.sh"
 FIXTURE_DIR="${SCRIPT_DIR}/fixtures/synthetic-design-dispatch"
 ADOPTER_CONFIG="${FIXTURE_DIR}/.claude/ship-flow/domains.yaml"
+SKILL_ROUTING_CONFIG="${FIXTURE_DIR}/.claude/ship-flow/skill-routing.yaml"
 SPEC_FILE="${FIXTURE_DIR}/spec.md"
 SHAPE_FILE="${FIXTURE_DIR}/shape.md"
 DESIGN_FILE="${FIXTURE_DIR}/design.md"
+MISSING_DESIGN_FILE="${FIXTURE_DIR}/design-missing-receipt.md"
+NO_GUIDANCE_DESIGN_FILE="${FIXTURE_DIR}/design-no-folder-guidance.md"
 PLAN_FILE="${FIXTURE_DIR}/plan.md"
+EXECUTE_FILE="${FIXTURE_DIR}/execute.md"
+VERIFY_FILE="${FIXTURE_DIR}/verify.md"
 
 PASS=0
 FAIL=0
@@ -50,7 +56,7 @@ echo ""
 
 echo "Block 1: fixture stays local and CRM-shaped"
 check "synthetic UI+domain fixture files exist" \
-  "[ -f '${ADOPTER_CONFIG}' ] && [ -f '${SPEC_FILE}' ] && [ -f '${SHAPE_FILE}' ] && [ -f '${DESIGN_FILE}' ] && [ -f '${PLAN_FILE}' ]"
+  "[ -f '${ADOPTER_CONFIG}' ] && [ -f '${SKILL_ROUTING_CONFIG}' ] && [ -f '${SPEC_FILE}' ] && [ -f '${SHAPE_FILE}' ] && [ -f '${DESIGN_FILE}' ] && [ -f '${PLAN_FILE}' ] && [ -f '${EXECUTE_FILE}' ] && [ -f '${VERIFY_FILE}' ]"
 check "fixture does not reference the real carlove checkout" \
   "! grep -R '/Users/kent/Project/carlove' '${FIXTURE_DIR}'"
 check "fixture includes UI, schema, and fmodel-like file paths" \
@@ -78,12 +84,33 @@ check "design manifest uses parallel integration for UI+domain" \
   "grep -q 'mode: parallel' '${DESIGN_FILE}' && grep -q 'owner: ship-design' '${DESIGN_FILE}'"
 check "design evidence includes Category A UI chain and Schema Design Output" \
   "grep -q 'Category A' '${DESIGN_FILE}' && grep -q 'design-brief' '${DESIGN_FILE}' && grep -q '^## Schema Design Output$' '${DESIGN_FILE}'"
+check "design evidence carries adopter routing and folder guidance receipts" \
+  "grep -q 'skills_needed: refine-expert,refine-gotchas,antd-expert,react-patterns,tailwind-expert' '${DESIGN_FILE}' && grep -q 'folder_guidance_files: apps/refine-app/CLAUDE.md' '${DESIGN_FILE}' && grep -q 'Context Read Receipt' '${DESIGN_FILE}'"
+check "design receipt checker passes complete design artifact" \
+  "cd '${FIXTURE_DIR}' && '${RECEIPT_SCRIPT}' --config='${SKILL_ROUTING_CONFIG}' --files='apps/refine-app/src/pages/crm/leads/list.tsx' --artifact='${DESIGN_FILE}'"
+check "design receipt checker blocks missing receipt artifact" \
+  "cd '${FIXTURE_DIR}' && ! '${RECEIPT_SCRIPT}' --config='${SKILL_ROUTING_CONFIG}' --files='apps/refine-app/src/pages/crm/leads/list.tsx' --artifact='${MISSING_DESIGN_FILE}'"
+check_stdout "resolver emits no folder guidance when no non-root CLAUDE/AGENTS exists" \
+  '^folder_guidance_files=$' \
+  "cd '${FIXTURE_DIR}' && '${SCRIPT_DIR}/../resolve-skill-routing.sh' --config='${SKILL_ROUTING_CONFIG}' --files='apps/plain-web/src/pages/home.tsx'"
+check "design receipt checker allows no-guidance design artifact" \
+  "cd '${FIXTURE_DIR}' && '${RECEIPT_SCRIPT}' --config='${SKILL_ROUTING_CONFIG}' --files='apps/plain-web/src/pages/home.tsx' --artifact='${NO_GUIDANCE_DESIGN_FILE}'"
 
 echo "Block 4: plan preserves downstream skills"
 check "plan includes UI skills and domain skills in task-level skills_needed" \
-  "grep -q 'frontend-design' '${PLAN_FILE}' && grep -q 'project-db' '${PLAN_FILE}' && grep -q 'fmodel' '${PLAN_FILE}'"
+  "grep -q 'frontend-design' '${PLAN_FILE}' && grep -q 'refine-gotchas' '${PLAN_FILE}' && grep -q 'apps/refine-app/CLAUDE.md' '${PLAN_FILE}' && grep -q 'project-db' '${PLAN_FILE}' && grep -q 'fmodel' '${PLAN_FILE}'"
+check "plan records design routing propagation PASS" \
+  "grep -q 'design-routing-propagation: PASS' '${PLAN_FILE}'"
 check "plan records skill-coverage PASS" \
   "grep -q 'skill-coverage: PASS' '${PLAN_FILE}'"
+
+echo "Block 5: stage-contract handoff reaches execute and verify"
+check "execute consumes design-routed guidance receipt" \
+  "grep -q 'design-routing-consumed: PASS' '${EXECUTE_FILE}' && grep -q 'apps/refine-app/CLAUDE.md' '${EXECUTE_FILE}' && grep -q 'refine-gotchas' '${EXECUTE_FILE}'"
+check "execute receipt checker passes Refine task artifact" \
+  "cd '${FIXTURE_DIR}' && '${RECEIPT_SCRIPT}' --config='${SKILL_ROUTING_CONFIG}' --files='apps/refine-app/src/pages/crm/leads/list.tsx' --artifact='${EXECUTE_FILE}'"
+check "verify records shape-to-design-to-plan-to-execute receipt gates" \
+  "grep -q 'shape-to-design: PASS' '${VERIFY_FILE}' && grep -q 'design-to-plan: PASS' '${VERIFY_FILE}' && grep -q 'plan-to-execute: PASS' '${VERIFY_FILE}' && grep -q 'execute receipt: PASS' '${VERIFY_FILE}'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

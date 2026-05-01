@@ -1,0 +1,13 @@
+schema_version: "1.0"
+target_path: .claude/ship-flow/skill-routing.yaml
+source: synthetic
+boundary: domain registry required_skills stay in domains.yaml; file-signal skills live here
+routing:
+  - name: refine-web
+    signals: [apps/refine-app/src/**]
+    skills: [refine-expert, refine-gotchas, antd-expert, react-patterns, tailwind-expert]
+    notes: "Synthetic Refine surface."
+  - name: plain-web
+    signals: [apps/plain-web/src/**]
+    skills: [frontend-design, react-patterns]
+    notes: "Synthetic web surface without folder guidance."

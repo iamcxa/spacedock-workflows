@@ -106,6 +106,12 @@ design-dispatch-manifest:
       role: ui-designer
       category: Category A|Category B|Category C|Category D|Category 0
       required_skills: []
+      adopter_routing:
+        files: []
+        skills_needed: []
+        folder_guidance_files: []
+        folder_guidance_skills: []
+        codex_context_boundary: "root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files"
       outputs: []
     - lane: domain
       role: domain-designer
@@ -129,6 +135,35 @@ Dispatch rules:
 - Multi-domain or Category A + domain work defaults to `parallel`. Collapse to
   `single-designer` only when one lane is trivial and the reason is recorded in
   the manifest.
+- UI lanes must consume adopter file-signal routing before dispatch. For every
+  UI candidate file from shape handoff, spec `Files modified`, exploration
+  cites, or obvious UI surface path, run:
+  ```bash
+  bash plugins/ship-flow/lib/resolve-skill-routing.sh \
+    --config=.claude/ship-flow/skill-routing.yaml \
+    --files=<comma-separated-ui-candidate-files>
+  ```
+  Merge `skills_needed=` into the UI lane `required_skills`, preserving the
+  Category skill chain first and de-duping in order. Record
+  `folder_guidance_files=`, `folder_guidance_skills=`, and
+  `codex_context_boundary` under `adopter_routing`.
+- If `.claude/ship-flow/skill-routing.yaml` is absent on an adopter project,
+  write `adopter_routing.status: missing-config` and bounce to shape/onboard
+  for non-trivial UI work. Tiny one-file UI work may continue only with the
+  missing-routing warning recorded in `Design Report`.
+- The `ui-designer` dispatch prompt must include a `### Folder guidance
+  required` block with every `folder_guidance_files` path emitted by the
+  resolver. The designer must read those files and return a `Context Read
+  Receipt` listing guidance files, routed skills, folder guidance skills, and
+  applied constraints. If the resolver emits no `folder_guidance_files`, write
+  `none — resolver reported no folder_guidance_files`; do not invent or require
+  a CLAUDE.md/AGENTS.md path. Example only: if an adopter's resolver output
+  includes `folder_guidance_files=apps/refine-app/CLAUDE.md`, include that path
+  plus routed/folder skills such as `refine-expert`, `refine-gotchas`,
+  `antd-expert`, `react-patterns`, and `tailwind-expert`.
+- Do not duplicate Codex root session instructions. Root `AGENTS.md` and
+  `CLAUDE.md` remain runtime/session context; ship-design only enforces
+  non-root folder guidance reported by `resolve-skill-routing.sh`.
 
 ---
 
@@ -150,6 +185,10 @@ Dispatch rules:
 4. Read entity spec.md. Determine category per classifier table.
 5. Build `design-dispatch-manifest`:
    - `affects_ui: true` → add `ui` lane with the selected Category.
+   - for the `ui` lane, resolve adopter file-signal routing with
+     `resolve-skill-routing.sh` before dispatch; include `skills_needed`,
+     `folder_guidance_files`, `folder_guidance_skills`, and
+     `codex_context_boundary` in the manifest.
    - `domain:` set → add `domain` lane with registry `required_skills`,
      `skill_hints.*`, `knowledge_module_path`, and `designer_section_anchor`.
    - both lanes present → `integration.mode: parallel`.
@@ -157,6 +196,12 @@ Dispatch rules:
 6. Dispatch the manifest lanes. UI lane follows Phase 1-9. Domain lane follows
    Phase 0.5 and specialist subsection. Integration pass merges lane outputs
    before `## Constraints for Plan Stage`.
+7. Before accepting UI lane output, require the `Context Read Receipt`. Missing
+   app-folder guidance citation when `folder_guidance_files` is non-empty, or
+   missing routed/folder skill such as `refine-gotchas` when emitted by the
+   resolver, is BLOCKING feedback to the `ui-designer`; do not defer this
+   correction to plan or execute. If `folder_guidance_files` is empty, do not
+   block on guidance-file absence.
 
 ### Phase 0.5 — Specialist dispatch (domain path only)
 

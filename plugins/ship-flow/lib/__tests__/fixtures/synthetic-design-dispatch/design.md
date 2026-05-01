@@ -13,6 +13,18 @@ design-dispatch-manifest:
         - brief-to-tasks
         - frontend-design
         - design-review
+        - refine-expert
+        - refine-gotchas
+        - antd-expert
+        - react-patterns
+        - tailwind-expert
+      adopter_routing:
+        files:
+          - apps/refine-app/src/pages/crm/leads/list.tsx
+        skills_needed: refine-expert,refine-gotchas,antd-expert,react-patterns,tailwind-expert
+        folder_guidance_files: apps/refine-app/CLAUDE.md
+        folder_guidance_skills: refine-expert,antd-expert,react-query-v5,project-auth,api-guide,refine-gotchas
+        codex_context_boundary: root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files
       outputs:
         - plugins/example/design/design-system.md
         - plugins/example/design/tokens.css
@@ -39,6 +51,13 @@ design-dispatch-manifest:
 The UI lane uses `design-brief`, `information-architecture`, `design-tokens`,
 `brief-to-tasks`, `frontend-design`, and `design-review` to establish a new CRM
 workspace pattern.
+
+### Context Read Receipt
+
+- guidance files: apps/refine-app/CLAUDE.md
+- routed skills: refine-expert, refine-gotchas, antd-expert, react-patterns, tailwind-expert
+- folder guidance skills: refine-expert, antd-expert, react-query-v5, project-auth, api-guide, refine-gotchas
+- applied constraints: use Refine/AntD patterns, keep ProCRUD as the unified CRUD surface, and define data access through Refine hooks before plan slicing.
 
 ### Hand-off constraints for Plan
 

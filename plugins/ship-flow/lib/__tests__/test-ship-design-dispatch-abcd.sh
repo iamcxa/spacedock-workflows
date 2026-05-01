@@ -59,6 +59,14 @@ check "Category A uses full design-flow skill chain" \
   "grep -q 'design-brief' '${DESIGN_SKILL}' && grep -q 'information-architecture' '${DESIGN_SKILL}' && grep -q 'design-tokens' '${DESIGN_SKILL}' && grep -q 'brief-to-tasks' '${DESIGN_SKILL}' && grep -q 'frontend-design' '${DESIGN_SKILL}'"
 check "Category B/C/D map to narrower frontend-design/design-review usage" \
   "grep -q 'Category B' '${DESIGN_SKILL}' && grep -q 'Category C' '${DESIGN_SKILL}' && grep -q 'Category D' '${DESIGN_SKILL}' && grep -q 'design-review' '${DESIGN_SKILL}'"
+check "ship-design consumes adopter file-signal routing before UI designer dispatch" \
+  "grep -q 'resolve-skill-routing.sh' '${DESIGN_SKILL}' && grep -q '.claude/ship-flow/skill-routing.yaml' '${DESIGN_SKILL}' && grep -q 'folder_guidance_files' '${DESIGN_SKILL}'"
+check "ship-design requires design-time Context Read Receipt" \
+  "grep -q 'Context Read Receipt' '${DESIGN_SKILL}' && grep -q 'refine-gotchas' '${DESIGN_SKILL}' && grep -q 'apps/refine-app/CLAUDE.md' '${DESIGN_SKILL}'"
+check "ship-design treats concrete folder guidance paths as resolver output, not fixed rules" \
+  "grep -q 'Example only: if an adopter' '${DESIGN_SKILL}' && grep -q 'do not invent or require' '${DESIGN_SKILL}' && grep -q 'none .* resolver reported no folder_guidance_files' '${DESIGN_SKILL}'"
+check "ship-design does not hardcode apps/refine-app/CLAUDE.md outside example-only text" \
+  "awk 'BEGIN{prev=\"\"} /apps\\/refine-app\\/CLAUDE.md/{count++; if (prev !~ /Example only: if an adopter/) bad=1} {prev=\$0} END{exit !((count == 1) && !bad)}' '${DESIGN_SKILL}'"
 
 echo "Block 4: upstream docs and spawn prompts"
 check "ship-shape designer spawn routes Category 0/A/B/C/D and domain triggers" \
