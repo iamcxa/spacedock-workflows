@@ -24,7 +24,7 @@ Run before any verify work. Stop and SendMessage(FO) if any check fails.
 
 ## Layer A delegation (Principle 6 Rule B)
 
-`e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, and `ship-flow:ui-verify` own agent-browser UI-DC verification (flow execution, walkthrough recording, computed-style regression). `pr-review-toolkit:code-reviewer` / `silent-failure-hunter` / `trailofbits:*` / `comment-analyzer` / `code-simplifier` / `pr-test-analyzer` / `type-design-analyzer` own haiku reviewer personas. **Do NOT re-teach.** Ship-verify wraps with Layer B augmentation:
+`e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, and `ship-flow:ui-verify` own agent-browser UI-DC verification (flow execution, walkthrough recording, computed-style regression). `pr-review-toolkit:code-reviewer` / `pr-review-toolkit:silent-failure-hunter` / `trailofbits:*` / `comment-analyzer` / `code-simplifier` / `pr-test-analyzer` / `type-design-analyzer` own haiku reviewer personas when installed. **Do NOT re-teach.** If pr-review-toolkit is unavailable, fallback to `ship-flow:verify-reviewer-panel` for the general external reviewer, silent-failure-reviewer, and domain-expert-reviewer lenses. Ship-verify wraps with Layer B augmentation:
 
 - ROI-aware scoped quality gate (touched-surfaces-only when changed-LOC stays under threshold).
 - Classified findings (BLOCKING / WARNING / NIT) + auto-fix NITs inline.
@@ -69,7 +69,11 @@ Capture **execute base SHA** from first task's parent commit in `execute.md`. Do
 
 **Rule**: run quality checks ONLY on runtime surfaces execute wrote commits to. Full-project checks on untouched surfaces are baseline noise (MEMORY #10 generalized). Invoke `ship-flow:ship-runtime-detect` to populate `{commands.test/build/typecheck/lint}`.
 
-Before dispatching parallel checks, emit `verify-check-manifest` with rows for tests, lint/typecheck/build, `ship-flow:ui-verify`, low-model domain reviewers, domain/schema review, and static/security reviewers when applicable. Each row records input, owner, whether it can run in parallel, and required evidence. The verifier is the single integrator: parallel checks may gather evidence concurrently, but only the verifier classifies findings and writes the final verdict.
+Before dispatching parallel checks, emit `verify-check-manifest` with rows for tests, lint/typecheck/build, `ship-flow:ui-verify`, `ship-flow:verify-reviewer-panel` review lenses, low-model domain reviewers, domain/schema review, and static/security reviewers when applicable. Each row records input, owner, whether it can run in parallel, and required evidence. The verifier is the single integrator: parallel checks may gather evidence concurrently, but only the verifier classifies findings and writes the final verdict.
+
+The general external reviewer baseline always runs for source diffs. It reviews the execute diff as a non-author against `plan.md`, `design.md`, execute hand-off, and changed files. Use `pr-review-toolkit:code-reviewer` when installed; otherwise use `ship-flow:verify-reviewer-panel` lens `general-external-reviewer`.
+
+The silent failure reviewer baseline always runs alongside the general external reviewer for source diffs. Use `pr-review-toolkit:silent-failure-hunter` when installed; otherwise use `ship-flow:verify-reviewer-panel` lens `silent-failure-reviewer`.
 
 Domain expert panel checks are read-only and findings-only. For each matched domain or adopter file-signal lane, dispatch a low-model reviewer with the correct worktree path, base/head diff range, touched files, domain lens, and required skills/knowledge modules. The prompt MUST say "do not edit files" and require `file:line` citations. Discard outputs from the wrong worktree, wrong base/head, or uncited claims before classification.
 
@@ -98,7 +102,7 @@ Run checks 1-4 (tests / lint / typecheck / build) on surfaces with `N > 0`. Chec
 
 Invoke `ship-flow:test-driven-development` as the audit contract. `superpowers:test-driven-development` may improve local discipline when available, but verify must not assume adopters have it installed.
 
-For every plan task that is not marked `TDD: skip -- <valid reason>`:
+For every plan task that is not marked `TDD: skip -- <reason>`:
 1. Read the task `tdd_contract` from `plan.md`.
 2. Read execute evidence for `RED command`, `Expected RED failure`, `GREEN command`, and `REFACTOR check` / `refactor_check`.
 3. Confirm RED-before-GREEN ordering: the RED command ran before production edits were accepted, failed for the expected reason, then GREEN passed after implementation.
@@ -124,7 +128,7 @@ Surface-level scoping says "execute didn't touch surface X → failures are pre-
 
 ## Step 3 — Review (haiku reviewer matrix + spot-check)
 
-**Reviewer matrix (Principle 3)**: default 2 haiku for source-file diffs; skip entirely for non-source-only diffs.
+**Reviewer matrix (Principle 3)**: default 2 reviewer lenses for source-file diffs; skip haiku dispatch entirely for non-source-only diffs.
 
 ```bash
 DIFF_FILES=$(git diff {execute_base}..HEAD --name-only)
@@ -134,7 +138,7 @@ SOURCE_FILES=$(echo "$DIFF_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py|rb|go|r
 | Diff content | Haiku dispatches | Notes |
 |---|---|---|
 | Non-source only (docs / SKILL.md / config) | **0** — sonnet inline review on diff | 2026-04 D1: haiku hallucinate 50-100% on prompt-text diffs |
-| S/M/L with source | `pr-review-toolkit:code-reviewer` + `pr-review-toolkit:silent-failure-hunter` | Default pair |
+| S/M/L with source | `pr-review-toolkit:code-reviewer` + `pr-review-toolkit:silent-failure-hunter`; fallback `ship-flow:verify-reviewer-panel` lenses `general-external-reviewer` + `silent-failure-reviewer` | Default pair |
 | Opt-in via `haiku-opt-in: <name>` | `trailofbits:{insecure-defaults \| sharp-edges \| variant-analysis}`, `pr-review-toolkit:{pr-test-analyzer \| type-design-analyzer \| comment-analyzer \| code-simplifier}` | Explicit tag only |
 
 Cost: ~$0.05/haiku. Default M/L = $0.10.

@@ -62,7 +62,7 @@ check "verify TDD audit step is ordered before per-error attribution" \
   "grep -q '### Step 2.1 — TDD Evidence Audit' '${VERIFY_SKILL}' && grep -q '### Step 2.2 — Per-error diff-aware attribution' '${VERIFY_SKILL}'"
 
 check "TDD skip marker is grep-friendly and consistent across stage docs" \
-  "grep -q 'TDD: skip -- <reason>' '${PLAN_SKILL}' && grep -q 'TDD: skip -- <valid reason>' '${VERIFY_SKILL}' && grep -q 'TDD: skip -- <reason>' '${EXECUTE_SKILL}' && ! grep -q 'TDD.*skip —' '${PLAN_SKILL}'"
+  "grep -q 'TDD: skip -- <reason>' '${PLAN_SKILL}' && grep -q 'TDD: skip -- <reason>' '${VERIFY_SKILL}' && grep -q 'TDD: skip -- <reason>' '${EXECUTE_SKILL}' && ! grep -q 'TDD.*skip —' '${PLAN_SKILL}'"
 
 check "execute mirrors the TDD exemption list" \
   "grep -q 'docs-only/stage-artifact' '${EXECUTE_SKILL}' && grep -q 'pure configuration' '${EXECUTE_SKILL}' && grep -q 'migrations validated by existing migration tooling' '${EXECUTE_SKILL}' && grep -q 'pure refactors with existing coverage' '${EXECUTE_SKILL}'"

@@ -540,7 +540,7 @@ stages:
                 **Model:** {haiku | sonnet}
               task_fields:
                 - { name: skills_needed, type: list, items: string, description: "Per-task skill names to load before dispatch. Derived by ship-plan from files_modified globs, framework_detected, density skill set, domain registry required_skills / skill_hints, adopter skill-routing.yaml, and non-root folder guidance skills." }
-                - { name: tdd_contract, type: object, description: "Required for non-exempt code tasks. Contains red_command, expected_red_failure, green_command, and refactor_check. Docs/config/migration/pure-refactor tasks may use TDD: skip -- <reason>." }
+                - { name: tdd_contract, type: object, description: "Required for non-exempt code tasks. Contains red_command, expected_red_failure, green_command, and refactor_check; exempt tasks omit tdd_contract and include the TDD: skip -- <reason> marker in task prose." }
                 - { name: parallel_group, type: string, description: "Required on every task. Use 'serial' when the task cannot run with peers. Tasks in the same non-serial group may run in parallel only when depends_on is satisfied and owned_paths are disjoint." }
                 - { name: depends_on, type: list, items: string, description: "Task IDs that must finish before this task can start. Execute never starts a task until every dependency is committed." }
                 - { name: owned_paths, type: list, items: string, description: "Exclusive file/path globs this task may write. Parallel tasks must not overlap owned_paths." }
@@ -758,6 +758,17 @@ stages:
             - name: checks
               type: table
               columns: ["Check", "Input", "Owner", "Can Run Parallel", "Evidence Required"]
+            - name: review_lenses
+              type: table
+              description: "Reviewer panel lenses dispatched by ship-verify. General and silent-failure lenses are baseline for source diffs; domain lenses are derived from domain registry, skills_needed, adopter file signals, and touched files."
+              columns: ["Lens", "Source", "Required Skills", "Input Bundle", "Fallback"]
+              allowed_lenses: ["general-external-reviewer", "silent-failure-reviewer", "domain-expert-reviewer"]
+            - name: reviewer_output_matrix
+              type: table
+              description: "Schema-backed output from pr-review-toolkit or ship-flow:verify-reviewer-panel."
+              columns: ["Lens", "Verdict", "Finding", "file_line", "route_to", "Evidence"]
+              column_formats:
+                file_line: "<path:line>"
     legacy_sections:
       description: "Pre-2026-04-19 layout used 3 separate H2 sections. Readers (ship-review, ship-execute pr-feedback mode) accept both layouts."
       sections:
