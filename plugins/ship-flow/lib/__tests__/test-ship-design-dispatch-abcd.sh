@@ -57,6 +57,8 @@ check "ship-design requires whole-page visual targets in addition to ui-verify f
   "grep -q 'whole_page_visual_targets\\[\\]' '${DESIGN_SKILL}' && grep -q 'full-page screenshot' '${DESIGN_SKILL}' && grep -q 'fragment-level ui-verify' '${DESIGN_SKILL}'"
 check "ship-design has risk-gated design readiness review mod, not a standard stage" \
   "grep -q 'Design Readiness Review' '${DESIGN_SKILL}' && grep -q 'risk-gated' '${DESIGN_SKILL}' && grep -q 'not a standard stage' '${DESIGN_SKILL}' && grep -q 'multi-domain' '${DESIGN_SKILL}' && grep -q 'low-model' '${DESIGN_SKILL}'"
+check "ship-design runs mechanical readiness checker before design completes" \
+  "grep -q 'check-design-readiness-review.sh' '${DESIGN_SKILL}' && grep -q 'required reviewer' '${DESIGN_SKILL}' && grep -q 'status=warn' '${DESIGN_SKILL}'"
 
 echo "Block 3: UI skill mapping"
 check "Category A uses full design-flow skill chain" \

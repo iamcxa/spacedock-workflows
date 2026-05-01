@@ -200,13 +200,23 @@ when any trigger applies:
 - High-risk UI fidelity where the whole-page composition is a core outcome.
 - Recent debrief warning matches the current domain or captain explicitly asks.
 
-The mod dispatches low-model specialist reviewers derived from domain registry
-and adopter file-signal routing. Each reviewer loads the relevant domain
-knowledge module plus required skills and returns `PASS`, `WARN`, or `BLOCK`
-with route_to `design` or `plan`. Typical reviewers are `ui`, `schema`, `api`,
-`fmodel`, `refine`, `expo`, or `supabase`; do not hardcode a project-specific
-set. If no risk trigger applies, write `Design Readiness Review: skipped —
-no risk trigger` in `Design Report`. Any `BLOCK` must be resolved before plan.
+The mod dispatches low-model specialist reviewers derived mechanically from
+domain registry and adopter file-signal routing. Start with these reviewer
+derivation rules, then cap to the smallest useful team (normally 1-3 reviewers):
+
+- `affects_ui: true` or `whole_page_visual_targets[]` → reviewer `ui`.
+- `domain: schema`, DB migration files, or Supabase schema paths → reviewer
+  `schema`.
+- public API / ts-rest / API contract signals → reviewer `api`.
+- fmodel / DDD / saga signals → reviewer `fmodel`.
+- adopter file-signal routing may add surface reviewers such as `refine`,
+  `expo`, or `supabase` only when the matched route requires that specialist.
+
+Each reviewer loads the relevant domain knowledge module plus required skills
+and returns `PASS`, `WARN`, or `BLOCK` with `route_to: design|plan`. Do not
+hardcode a project-specific reviewer set. If no risk trigger applies, write
+`Design Readiness Review: skipped - no risk trigger` in `Design Report`. Any
+`BLOCK` must be resolved before plan.
 
 ---
 
@@ -410,8 +420,13 @@ collect findings, and record a `## Design Readiness Review` section in
 `design.md`:
 
 ```yaml
-risk_trigger: multi-domain|migration|api-contract|fmodel|high-risk-ui|recent-debrief|captain-explicit
+risk_triggers:
+  - multi-domain|migration|api-contract|fmodel|high-risk-ui|recent-debrief|captain-explicit
 reviewers: ui, schema
+derived_from:
+  - affects_ui:true
+  - domain:schema
+  - whole_page_visual_targets[]
 verdict: PASS|WARN|BLOCK
 findings:
   - reviewer: schema
@@ -423,6 +438,18 @@ findings:
 This is a mod, not a standard stage: it never adds a new workflow status and it
 must be skipped for trivial/docs-only/single-lane work unless explicitly
 requested. It exists to stop bad design contracts before plan decomposes them.
+
+Before marking design complete, run:
+
+```bash
+bash plugins/ship-flow/lib/check-design-readiness-review.sh <entity-folder>/design.md
+```
+
+The checker derives required reviewers from the design artifact and blocks when
+a triggered review is missing, when a required reviewer is absent, or when the
+verdict is `BLOCK`. When the checker prints `status=warn`, the design may
+proceed, but the warning must remain visible in `Design Report` and downstream
+plan notes.
 
 ### Phase 9 — Cross-review gate
 

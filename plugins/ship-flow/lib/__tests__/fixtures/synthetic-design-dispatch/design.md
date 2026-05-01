@@ -80,8 +80,15 @@ whole_page_visual_targets:
 
 ## Design Readiness Review
 
-risk_trigger: multi-domain
-reviewers: ui, schema
+risk_triggers:
+- multi-domain
+- high-risk-ui
+reviewers: ui, schema, fmodel
+derived_from:
+- affects_ui:true
+- domain:schema
+- whole_page_visual_targets[]
+- domains/**/src/domain/**
 verdict: PASS
 findings:
 - reviewer: ui
@@ -92,6 +99,10 @@ findings:
   severity: PASS
   route_to: plan
   evidence: "## Schema Design Output"
+- reviewer: fmodel
+  severity: PASS
+  route_to: plan
+  evidence: "design-dispatch-manifest domain paths"
 
 ## Schema Design Output
 

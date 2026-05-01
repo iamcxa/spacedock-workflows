@@ -89,7 +89,9 @@ check "design evidence carries adopter routing and folder guidance receipts" \
 check "design evidence records whole-page parity target beyond fragment ui-verify checks" \
   "grep -q 'whole_page_visual_targets:' '${DESIGN_FILE}' && grep -q 'reference_artifact: plugins/example/design/crm-workspace.html' '${DESIGN_FILE}' && grep -q 'capture: full-page screenshot' '${DESIGN_FILE}'"
 check "design evidence records risk-gated readiness review before plan" \
-  "grep -q '^## Design Readiness Review$' '${DESIGN_FILE}' && grep -q 'risk_trigger: multi-domain' '${DESIGN_FILE}' && grep -q 'reviewers: ui, schema' '${DESIGN_FILE}' && grep -q 'verdict: PASS' '${DESIGN_FILE}'"
+  "grep -q '^## Design Readiness Review$' '${DESIGN_FILE}' && grep -q 'risk_triggers:' '${DESIGN_FILE}' && grep -q 'multi-domain' '${DESIGN_FILE}' && grep -q 'derived_from:' '${DESIGN_FILE}' && grep -q 'reviewers: ui, schema, fmodel' '${DESIGN_FILE}' && grep -q 'verdict: PASS' '${DESIGN_FILE}'"
+check "design readiness checker passes synthetic dispatch artifact" \
+  "'${SCRIPT_DIR}/../check-design-readiness-review.sh' '${DESIGN_FILE}'"
 check "design receipt checker passes complete design artifact" \
   "cd '${FIXTURE_DIR}' && '${RECEIPT_SCRIPT}' --config='${SKILL_ROUTING_CONFIG}' --files='apps/refine-app/src/pages/crm/leads/list.tsx' --artifact='${DESIGN_FILE}'"
 check "design receipt checker blocks missing receipt artifact" \

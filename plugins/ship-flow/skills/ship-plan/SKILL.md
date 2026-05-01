@@ -75,11 +75,13 @@ bash plugins/ship-flow/lib/import-design-dcs.sh <entity-folder> >> <entity-folde
 The script reads structured `### Hand-off to Plan`, emits `## Plan Imported Design DCs` table directly. Falls back to MIGRATE-FIRST notice when entity is in legacy prose format. **Do NOT manually transcribe** — that's the LLM-drift mode this script eliminates.
 
 Pre-import validation (run in this order):
+- `bash plugins/ship-flow/lib/check-design-readiness-review.sh <entity-folder>/design.md` — risk-gated design readiness check. If it reports `status=blocked`, stop before planning. If it reports `status=warn`, continue only after preserving the warning in `## Plan Report`.
 - `bash plugins/ship-flow/lib/validate-handoff-schema.sh <entity-folder>` — structural check
 - `bash plugins/ship-flow/lib/validate-d-references.sh <entity-folder>` — D{N} backref consistency
 - `bash plugins/ship-flow/lib/import-design-dcs.sh <entity-folder>` — count-preserving import; if it reports `imported design_constraints count mismatch`, BLOCK instead of hand-copying missing rows.
 
-If either validator fails → BLOCKER (status: blocked, reason: hand-off schema invalid; details from script stderr).
+If the readiness checker blocks → BLOCKER (status: blocked, reason from checker stdout; bounce to design/FO).
+If either hand-off validator fails → BLOCKER (status: blocked, reason: hand-off schema invalid; details from script stderr).
 If importer fails or imported row count is lower than source `design_constraints[]`, write `## Plan Report status: blocked, reason: design DC import mismatch` and bounce to design/stage tooling. Do not proceed with a partial `## Plan Imported Design DCs` table.
 
 **Mechanical mapping** (each item becomes a DC anchored to a wave):
