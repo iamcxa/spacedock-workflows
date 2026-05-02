@@ -20,6 +20,7 @@ Every reviewer lens receives the same immutable input bundle:
 - changed files
 - entity id and entity folder
 - plan/design/execute hand-off snippets relevant to the lens
+- plan task `reviewer_questions` and `domain_acceptance_checklist` rows when present
 - required skills and knowledge modules for the lens, when derived from domain registry, `skills_needed`, adopter file signals, or touched files
 
 Reviewers are **read-only** and findings-only. The prompt must say: do not edit files, do not stage files, do not commit, and do not rewrite the plan.
@@ -73,6 +74,31 @@ Examples:
 
 Domain reviewers must load the required skills or knowledge modules named by the verifier bundle, then review only through that lens.
 
+When the input bundle includes `reviewer_questions` or
+`domain_acceptance_checklist`, use those concrete prompts instead of the canned
+questions above. Preserve these fields in the reviewer output so the verifier
+can audit the plan-to-verify handoff:
+
+```yaml
+reviewer_question: <question from plan>
+affected_path_family: <path family from plan>
+required_skills: <skills required by plan/checklist>
+evidence_required: <command/snippet/artifact required by plan>
+```
+
+Concrete prompts augment domain-expert-reviewer lenses; they do not replace the
+baseline reviewer lenses. The general-external-reviewer and silent-failure-reviewer still run their baseline questions even when the input bundle includes reviewer_questions or domain_acceptance_checklist rows.
+
+For each domain_acceptance_checklist row, emit one reviewer_output_matrix item
+that preserves the row's concrete lens, reviewer question, affected path family,
+required skills, and evidence requirement. Example: a `project-db` row scoped to
+`apps/supabase/migrations/**` stays `lens: project-db`; it does not collapse into
+the generic `domain-expert-reviewer` label.
+
+Concrete lens names such as `project-db`, `fmodel`, `refine-gotchas`, and
+`api-design` are valid domain-expert lenses. Treat them as
+`domain-expert-reviewer` kind with the concrete lens preserved in `lens`.
+
 ## Output Matrix
 
 Return YAML or a markdown table that can be pasted under `### Review Findings`:
@@ -80,10 +106,14 @@ Return YAML or a markdown table that can be pasted under `### Review Findings`:
 ```yaml
 reviewer_output_matrix:
   - lens: general-external-reviewer
+    reviewer_question: <question from plan, if any>
+    affected_path_family: <path family from plan, if any>
+    required_skills: <skills required by plan/checklist, if any>
     verdict: PASS|BLOCKING|WARNING|NIT
     finding: <short finding>
     file_line: <path:line>
     route_to: execute|plan|design|follow-up|none
+    evidence_required: <command/snippet/artifact required by plan, if any>
     evidence: <command/snippet/reference>
 ```
 

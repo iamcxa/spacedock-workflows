@@ -533,6 +533,7 @@ stages:
                 **Files:** {create/modify with exact paths}
                 **Read first:** {files to read before starting}
                 **Skills needed:** {skills_needed: ["skill-a", "skill-b"] — string array, per-task, derived from files_modified}
+                **Reviewer questions:** {reviewer_questions: [{lens, question, affected_path_family, evidence_required}] — Derived from skills_needed domain lens / framework skill routing}
                 **TDD:** {tdd_contract: red_command, expected_red_failure, green_command, refactor_check OR TDD: skip -- <reason>}
                 **Parallel:** {parallel_group, depends_on[], owned_paths[], integration_owner}
                 **Steps:** {numbered, with code blocks}
@@ -540,6 +541,7 @@ stages:
                 **Model:** {haiku | sonnet}
               task_fields:
                 - { name: skills_needed, type: list, items: string, description: "Per-task skill names to load before dispatch. Derived by ship-plan from files_modified globs, framework_detected, density skill set, domain registry required_skills / skill_hints, adopter skill-routing.yaml, and non-root folder guidance skills." }
+                - { name: reviewer_questions, type: list, items: object, description: "Derived from skills_needed domain lens / framework skill routing. Each item contains lens, question, affected_path_family, and evidence_required; consumed by verify to populate review_lenses." }
                 - { name: tdd_contract, type: object, description: "Required for non-exempt code tasks. Contains red_command, expected_red_failure, green_command, and refactor_check; exempt tasks omit tdd_contract and include the TDD: skip -- <reason> marker in task prose." }
                 - { name: parallel_group, type: string, description: "Required on every task. Use 'serial' when the task cannot run with peers. Tasks in the same non-serial group may run in parallel only when depends_on is satisfied and owned_paths are disjoint." }
                 - { name: depends_on, type: list, items: string, description: "Task IDs that must finish before this task can start. Execute never starts a task until every dependency is committed." }
@@ -570,6 +572,11 @@ stages:
           type: table
           description: "Planner-owned manifest listing parallel_group, depends_on, owned_paths, and integration_owner for every task. Source for execute-dispatch-manifest."
           columns: ["Task ID", "Parallel Group", "Depends On", "Owned Paths", "Integration Owner"]
+        - name: domain_acceptance_checklist
+          type: table
+          description: "Planner-owned checklist derived from reviewer_questions, skills_needed, and design domain constraints. Source for verify reviewer panel domain lenses."
+          columns: ["Task ID", "Verify Lens", "Reviewer Question", "Affected Path Family", "Required Skills", "Evidence Required"]
+          example_row: ["T2", "project-db", "Does the migration preserve rollback/generated-type expectations for the changed schema?", "apps/supabase/migrations/**", "project-db,test", "migration diff plus generated typecheck command"]
         - { name: critical_assumptions, type: list, description: "Assumptions to re-verify at execute boot" }
         - { name: architecture_context, type: string, description: "Canonical doc touches required (INVARIANTS, README, schema)" }
         - { name: stub_flags, type: list, description: "Tasks flagged as v1-stub requiring captain-ack before cross-review PROCEED" }
@@ -658,6 +665,8 @@ stages:
     reads:
       - "## Execute Output (all subsections)"
       - "## Plan Output → Verification Spec"
+      - "## Plan Output → task reviewer_questions"
+      - "### Hand-off to Execute → domain_acceptance_checklist"
       - "## Sharp Output → Done Criteria"
       - "PRODUCT.md ## Constraints"
     output:
@@ -760,13 +769,15 @@ stages:
               columns: ["Check", "Input", "Owner", "Can Run Parallel", "Evidence Required"]
             - name: review_lenses
               type: table
-              description: "Reviewer panel lenses dispatched by ship-verify. General and silent-failure lenses are baseline for source diffs; domain lenses are derived from domain registry, skills_needed, adopter file signals, and touched files."
-              columns: ["Lens", "Source", "Required Skills", "Input Bundle", "Fallback"]
-              allowed_lenses: ["general-external-reviewer", "silent-failure-reviewer", "domain-expert-reviewer"]
+              description: "Reviewer panel lenses dispatched by ship-verify. General and silent-failure lenses are baseline for source diffs; concrete domain lenses are derived from domain registry, skills_needed, adopter file signals, and touched files."
+              columns: ["Lens", "Source", "Reviewer Question", "Affected Path Family", "Required Skills", "Input Bundle", "Evidence Required", "Fallback"]
+              allowed_lens_kinds: ["general-external-reviewer", "silent-failure-reviewer", "domain-expert-reviewer", "concrete_lens"]
+              concrete_lens_examples: ["project-db", "project-seed", "fmodel", "refine-gotchas", "refine-expert", "api-design", "expo"]
+              example_row: ["project-db", "domain_acceptance_checklist", "Does the migration preserve rollback/generated-type expectations for the changed schema?", "apps/supabase/migrations/**", "project-db,test", "base..HEAD changed files plus plan/design/execute handoffs", "migration diff plus generated typecheck command", "ship-flow:verify-reviewer-panel domain-expert-reviewer"]
             - name: reviewer_output_matrix
               type: table
               description: "Schema-backed output from pr-review-toolkit or ship-flow:verify-reviewer-panel."
-              columns: ["Lens", "Verdict", "Finding", "file_line", "route_to", "Evidence"]
+              columns: ["Lens", "Reviewer Question", "Affected Path Family", "Required Skills", "Verdict", "Finding", "file_line", "route_to", "Evidence Required", "Evidence"]
               column_formats:
                 file_line: "<path:line>"
     legacy_sections:
