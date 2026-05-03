@@ -121,6 +121,9 @@ run_doctor "healthy-current" "${TMP_DIR}/healthy.out" "${TMP_DIR}/healthy.exit"
 assert_exit "healthy current exits 0" 0 "${TMP_DIR}/healthy.exit"
 assert_not_contains "healthy current emits no BLOCKER findings" '^BLOCKER ' "${TMP_DIR}/healthy.out"
 assert_not_contains "healthy current does not report stale shipped-template drift" '^RECOMMENDED workflow-template\.yaml' "${TMP_DIR}/healthy.out"
+assert_contains "healthy current reports missing parallelism contract as sync recommendation" '^RECOMMENDED README\.parallelism-contract' "${TMP_DIR}/healthy.out"
+assert_contains "healthy current reports missing reviewer panel handoff as sync recommendation" '^RECOMMENDED README\.verify-reviewer-panel' "${TMP_DIR}/healthy.out"
+assert_contains "healthy current reports missing manifest artifacts as sync recommendation" '^RECOMMENDED README\.manifest-artifacts' "${TMP_DIR}/healthy.out"
 assert_read_only "healthy current fixture remains unchanged" "healthy-current" "$HEALTHY_BEFORE"
 
 echo ""
@@ -142,7 +145,17 @@ assert_not_contains "project-local README emits no BLOCKER findings" '^BLOCKER '
 assert_read_only "project-local README fixture remains unchanged" "project-local-readme" "$LOCAL_BEFORE"
 
 echo ""
-echo "Block 5: write modes are intentionally unavailable"
+echo "Block 5: synced README does not emit SOT drift recommendations"
+SYNCED_BEFORE="$(hash_dir "${FIXTURE_ROOT}/synced-current")"
+run_doctor "synced-current" "${TMP_DIR}/synced.out" "${TMP_DIR}/synced.exit"
+assert_exit "synced current exits 0" 0 "${TMP_DIR}/synced.exit"
+assert_not_contains "synced current emits no README parallelism recommendation" '^RECOMMENDED README\.parallelism-contract' "${TMP_DIR}/synced.out"
+assert_not_contains "synced current emits no README reviewer panel recommendation" '^RECOMMENDED README\.verify-reviewer-panel' "${TMP_DIR}/synced.out"
+assert_not_contains "synced current emits no README manifest recommendation" '^RECOMMENDED README\.manifest-artifacts' "${TMP_DIR}/synced.out"
+assert_read_only "synced current fixture remains unchanged" "synced-current" "$SYNCED_BEFORE"
+
+echo ""
+echo "Block 6: write modes are intentionally unavailable"
 WRITE_BEFORE="$(hash_dir "${FIXTURE_ROOT}/healthy-current")"
 "${DOCTOR}" --fix "${FIXTURE_ROOT}/healthy-current" > "${TMP_DIR}/fix.out" 2>&1 && FIX_RC=0 || FIX_RC=$?
 printf '%s\n' "$FIX_RC" > "${TMP_DIR}/fix.exit"

@@ -117,6 +117,25 @@ if grep -qE '^## Local Operating Notes$|project-specific|repository-specific' "$
   emit_project_local "README: project-local body content detected; preserve during sync"
 fi
 
+if ! grep -q '### Parallelism Contract' "$README_FILE" ||
+  ! grep -q 'stage-internal parallelism' "$README_FILE" ||
+  ! grep -q 'single integrator' "$README_FILE"; then
+  emit_recommended "README.parallelism-contract: missing stage-internal parallelism SOT; sync Parallelism Contract while preserving project-local prose"
+fi
+
+if ! grep -q 'verify reviewer panel lane' "$README_FILE" ||
+  ! grep -q 'reviewer_questions' "$README_FILE" ||
+  ! grep -q 'domain_acceptance_checklist' "$README_FILE"; then
+  emit_recommended "README.verify-reviewer-panel: missing plan-to-verify reviewer handoff SOT; sync reviewer panel lane while preserving adopter routing"
+fi
+
+if ! grep -q 'design-dispatch-manifest' "$README_FILE" ||
+  ! grep -q 'plan-parallelization-manifest' "$README_FILE" ||
+  ! grep -q 'execute-dispatch-manifest' "$README_FILE" ||
+  ! grep -q 'verify-check-manifest' "$README_FILE"; then
+  emit_recommended "README.manifest-artifacts: missing stage manifest artifact names; sync folder layout/stage output descriptions"
+fi
+
 if [ "$BLOCKERS" -gt 0 ]; then
   exit 1
 fi
