@@ -9,6 +9,30 @@ argument-hint: "<entity-id | slug | concrete-requirement>"
 
 You run the SHIP pipeline entry. Produce 5 per-stage .md artifacts + final PR per Principle 6 3-layer architecture, dispatching to named teammates via SendMessage where the team was spawned at `/shape`.
 
+## First-Officer Bootstrap
+
+Before doing pipeline work: before classifying the `/ship` argument, before resolving an entity, and before
+dispatching any stage, load `spacedock:first-officer` and follow its startup
+procedure. The First Officer is the orchestration authority for workflow
+discovery, `status --boot`, `status --resolve`, gate handling, feedback routing,
+worktrees, merge hooks, and worker lifecycle.
+
+This bridge applies in both runtimes:
+- Claude Code (`CLAUDECODE` env var is set): load `spacedock:first-officer`,
+  then follow its Claude Code runtime adapter while running this ship-flow
+  pipeline.
+- Codex (`CODEX_HOME` env var is set): load `spacedock:first-officer`, then
+  follow its Codex runtime adapter while running this ship-flow pipeline.
+
+`ship-flow:ship` remains the pipeline-specific entrypoint, but it must operate
+under the First Officer contract. Do not bypass first-officer startup, status
+resolution, gate policy, or feedback routing because the input looks like a
+simple entity id.
+
+If requirements are vague, route through first-officer-managed workflow state to
+`ship-flow:ship-shape`; do not bypass first-officer by inventing a plan or
+executing inline.
+
 **Layer A delegation**: none — `/ship` is pure orchestration. Stage skills (ship-plan / ship-execute / ship-verify / ship-review) own their Layer A delegations.
 
 **Pipeline artifacts** (`<entity-folder>` = `docs/<wf>/<id>-<slug>/`):
