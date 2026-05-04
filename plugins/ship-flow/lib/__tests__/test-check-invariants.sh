@@ -230,6 +230,30 @@ EOF
 if dc8_section_tag_coverage 2>/dev/null; then echo "OK DC-8 section-tag coverage fails on unwrapped H2"
 else echo "FAIL DC-8 section-tag coverage fails on unwrapped H2"; FAIL=1; fi
 
+dc8_folder_index_section_tag_coverage() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/docs/ship-flow/999-folder"
+  cat > "$d/docs/ship-flow/999-folder/index.md" <<'EOF'
+---
+id: "999"
+title: folder index entity
+---
+
+<!-- section:sharp-output -->
+## Sharp Output
+Wrapped content.
+<!-- /section:sharp-output -->
+
+## Unwrapped Folder H2
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check section-tag-coverage >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if dc8_folder_index_section_tag_coverage 2>/dev/null; then echo "OK DC-8c folder index section-tag coverage fails on unwrapped H2"
+else echo "FAIL DC-8c folder index section-tag coverage fails on unwrapped H2"; FAIL=1; fi
+
 # ========== DC-8b: Stage Report whitelist — spacedock-protocol H2 + nested H3 NOT flagged ==========
 # Post-#078 CI-fail harvest (2026-04-22): spacedock ensign-shared-core:46-51 instructs ensigns to
 # append untagged "## Stage Report: {stage}" + "### Summary" at entity-file end. Ship-flow's
@@ -419,6 +443,25 @@ EOF
     echo "FAIL DC-10c false warning on non-pitch entity"; FAIL=1
   else
     echo "OK DC-10c non-pitch entity ignored"
+  fi
+  fixdir="$(mktemp -d)"
+  mkdir -p "$fixdir/docs/fake-workflow/pitch-folder"
+  cat > "$fixdir/docs/fake-workflow/pitch-folder/index.md" <<'EOF'
+---
+id: "pitch-folder"
+title: "Folder pitch with no critical assumption"
+status: sharp
+pattern: pitch
+stated_assumptions: []
+---
+body
+EOF
+  warn_out="$(bash "$CHECK_SCRIPT" --test-fixture "$fixdir" --check pitch-assumptions 2>&1 1>/dev/null)"
+  rm -rf "$fixdir"
+  if echo "$warn_out" | grep -q 'pitch-folder/index.md'; then
+    echo "OK DC-10d warning fired on folder index pitch"
+  else
+    echo "FAIL DC-10d warning not fired on folder index pitch"; FAIL=1
   fi
   return 0
 }
@@ -748,6 +791,28 @@ EOF
 }
 if structural_parity_fail 2>/dev/null; then echo "OK structural-parity-dc: no parity signal → fail"
 else echo "FAIL structural-parity-dc: no parity signal → fail"; FAIL=1; fi
+
+structural_parity_folder_index_fail() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  mkdir -p "$d/docs/ship-flow/998-ui-folder"
+  cat > "$d/docs/ship-flow/998-ui-folder/index.md" <<'EOF'
+---
+id: "998"
+type: ui
+title: "UI folder entity without coverage"
+---
+
+## Design Reference
+
+DC-1: renders correctly.
+EOF
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check structural-parity-dc >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if structural_parity_folder_index_fail 2>/dev/null; then echo "OK structural-parity-dc: folder index no parity signal → fail"
+else echo "FAIL structural-parity-dc: folder index no parity signal → fail"; FAIL=1; fi
 
 # Grandfather: pre-#048 allowlisted entities skip even without parity signal
 structural_parity_grandfather() {

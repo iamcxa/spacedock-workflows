@@ -27,8 +27,8 @@ TARGET="${1:-}"
 [ -z "$TARGET" ] && { echo "ERROR: usage: $0 <entity-folder|entity-file>" >&2; exit 2; }
 
 if [ -d "$TARGET" ]; then
-  ENTITY_FILE="${TARGET%/}/README.md"
-  [ -f "$ENTITY_FILE" ] || ENTITY_FILE="${TARGET%/}/design.md"
+  ENTITY_FILE="${TARGET%/}/design.md"
+  [ -f "$ENTITY_FILE" ] || ENTITY_FILE="${TARGET%/}/index.md"
 elif [ -f "$TARGET" ]; then
   ENTITY_FILE="$TARGET"
 else

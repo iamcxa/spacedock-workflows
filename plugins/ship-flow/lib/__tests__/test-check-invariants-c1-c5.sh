@@ -142,10 +142,13 @@ echo "=== C4 plan-imported-design-dcs-emitted ==="
 
 f=$(mk_fixture)
 mkdir -p "$f/docs/ship-flow/993-ui/"
-cat > "$f/docs/ship-flow/993-ui/README.md" <<'EOF'
+cat > "$f/docs/ship-flow/993-ui/index.md" <<'EOF'
 ---
 affects_ui: true
 ---
+EOF
+cat > "$f/docs/ship-flow/993-ui/design.md" <<'EOF'
+## Design Output
 
 ### Hand-off to Plan
 design_constraints:
@@ -169,10 +172,13 @@ rm -rf "$f"
 # design-skipped short-circuit
 f=$(mk_fixture)
 mkdir -p "$f/docs/ship-flow/992-cli/"
-cat > "$f/docs/ship-flow/992-cli/README.md" <<'EOF'
+cat > "$f/docs/ship-flow/992-cli/index.md" <<'EOF'
 ---
 affects_ui: true
 ---
+EOF
+cat > "$f/docs/ship-flow/992-cli/design.md" <<'EOF'
+## Design Output
 
 ### Hand-off to Plan
 - design-skipped: true
@@ -190,10 +196,13 @@ echo "=== C5 verify-mechanical-ui-parity-emitted ==="
 
 f=$(mk_fixture)
 mkdir -p "$f/docs/ship-flow/991-render/"
-cat > "$f/docs/ship-flow/991-render/README.md" <<'EOF'
+cat > "$f/docs/ship-flow/991-render/index.md" <<'EOF'
 ---
 affects_ui: true
 ---
+EOF
+cat > "$f/docs/ship-flow/991-render/design.md" <<'EOF'
+## Design Output
 
 ### Hand-off to Plan
 render_fidelity_targets:

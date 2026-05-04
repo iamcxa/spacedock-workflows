@@ -58,8 +58,8 @@ Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Then:
 
 | Input form | Detection | Action |
 |---|---|---|
-| Entity id (e.g. `085`) | `docs/<wf>/<id>-*.md` OR `docs/<wf>/<id>-*/README.md` | entity path |
-| Slug | `docs/<wf>/*-<slug>.md` OR `docs/<wf>/*-<slug>/README.md` | entity path |
+| Entity id (e.g. `085`) | `docs/<workflow>/<id>-*.md` OR `docs/<workflow>/<id>-*/index.md` | entity path |
+| Slug | `docs/<workflow>/*-<slug>.md` OR `docs/<workflow>/*-<slug>/index.md` | entity path |
 | Concrete requirement | has file paths / reproducible bug / typed acceptance | sharp-claim + entity path |
 | Vague directive | none of above | inverse-escape EXIT |
 

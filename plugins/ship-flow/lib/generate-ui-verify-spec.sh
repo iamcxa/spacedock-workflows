@@ -32,8 +32,8 @@ AUTH="${3:-}"
 [ -z "$MAPPING" ] && { echo "ERROR: <mapping-name> required (filename without .yaml in .claude/e2e/mappings/)" >&2; exit 2; }
 
 if [ -d "$ENTITY_DIR" ]; then
-  ENTITY_FILE="${ENTITY_DIR%/}/README.md"
-  [ -f "$ENTITY_FILE" ] || ENTITY_FILE="${ENTITY_DIR%/}/design.md"
+  ENTITY_FILE="${ENTITY_DIR%/}/design.md"
+  [ -f "$ENTITY_FILE" ] || ENTITY_FILE="${ENTITY_DIR%/}/index.md"
 elif [ -f "$ENTITY_DIR" ]; then
   ENTITY_FILE="$ENTITY_DIR"
 else

@@ -56,6 +56,11 @@ export ROOT
 
 FAIL=0
 
+_entity_is_terminal() {
+  local f="$1"
+  grep -qE '^(status:[[:space:]]*(done|ship|shipped)|completed:|shipped:|verdict:[[:space:]]*PASSED)' "$f" 2>/dev/null
+}
+
 # ---- Check functions (stubs in T3; bodies filled in T6/T7/T8) ----
 
 check_skill_count() {
@@ -135,16 +140,22 @@ check_section_tag_coverage() {
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0
-  local f bn has_tags
-  for f in "$docs_dir"/*.md; do
+  local f bn label has_tags
+  for f in "$docs_dir"/*.md "$docs_dir"/*/index.md; do
     [ -f "$f" ] || continue
     bn="$(basename "$f")"
+    label="$bn"
+    [ "$bn" = "index.md" ] && label="$(basename "$(dirname "$f")")/index.md"
     [ "$bn" = "README.md" ] && continue
     case "$f" in *_archive*) continue ;; esac
+    if _entity_is_terminal "$f"; then
+      echo "SKIP [Principle 5a]: $label — terminal historical entity; section-tag coverage checked on active entities" >&2
+      continue
+    fi
     # Grandfather: skip entities with zero section tags (pre-049 baseline).
     has_tags=$(grep -c '^<!-- section:[a-z]' "$f" 2>/dev/null) || has_tags=0
     if [ "$has_tags" = "0" ]; then
-      echo "WARN [Principle 5a]: $bn — pre-049 baseline (no section tags; grandfather skip). Add tags on next edit." >&2
+      echo "WARN [Principle 5a]: $label — pre-049 baseline (no section tags; grandfather skip). Add tags on next edit." >&2
       continue
     fi
     # awk semantics:
@@ -514,20 +525,27 @@ check_structural_parity_dc() {
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0
-  local f bn slug
-  for f in "$docs_dir"/*.md; do
+  local f bn slug label
+  for f in "$docs_dir"/*.md "$docs_dir"/*/index.md; do
     [ -f "$f" ] || continue
     bn="$(basename "$f")"
+    label="$bn"
+    [ "$bn" = "index.md" ] && label="$(basename "$(dirname "$f")")/index.md"
     [ "$bn" = "README.md" ] && continue
     case "$f" in *_archive*|*_debriefs*|*_mods*) continue ;; esac
+    _entity_is_terminal "$f" && continue
     # Check grandfather allowlist by basename without .md
-    slug="${bn%.md}"
+    if [ "$bn" = "index.md" ]; then
+      slug="$(basename "$(dirname "$f")")"
+    else
+      slug="${bn%.md}"
+    fi
     local grandfathered=0
     for gf in "${GRANDFATHER_STRUCTURAL_PARITY[@]}"; do
       [ "$slug" = "$gf" ] && grandfathered=1 && break
     done
     if [ "$grandfathered" = "1" ]; then
-      echo "SKIP [structural-parity-dc]: $bn — grandfathered pre-#048 (no structural-parity DC required)" >&2
+      echo "SKIP [structural-parity-dc]: $label — grandfathered pre-#048 (no structural-parity DC required)" >&2
       continue
     fi
     # Trigger condition: type: ui in frontmatter OR ## Design Reference in body
@@ -542,7 +560,7 @@ check_structural_parity_dc() {
     local has_parity
     has_parity=$({ grep -ciE "structural|parity|column count|pill-stage--|prop-type|DOM structure" "$f" 2>/dev/null || true; } | tr -d ' ')
     if [ "${has_parity:-0}" = "0" ]; then
-      echo "ERROR [structural-parity-dc]: $bn is ui-type/has Design Reference but no structural-parity DC signal (add column-count/class-presence/prop-type check). See INVARIANTS.md §UI-entity grep-DCs" >&2
+      echo "ERROR [structural-parity-dc]: $label is ui-type/has Design Reference but no structural-parity DC signal (add column-count/class-presence/prop-type check). See INVARIANTS.md §UI-entity grep-DCs" >&2
       fail=1
     fi
   done
@@ -560,7 +578,7 @@ check_pitch_assumptions() {
   fi
   local entity
   # Iterate all workflow-entity .md files under $ROOT/docs/*/*.md, skipping known non-entities
-  for entity in "$ROOT"/docs/*/*.md; do
+  for entity in "$ROOT"/docs/*/*.md "$ROOT"/docs/*/*/index.md; do
     [ -f "$entity" ] || continue
     local bn
     bn="$(basename "$entity")"
@@ -570,6 +588,7 @@ check_pitch_assumptions() {
     case "$entity" in
       */_archive/*|*/_debriefs/*|*/_mods/*) continue ;;
     esac
+    _entity_is_terminal "$entity" && continue
     # Extract frontmatter (first --- block)
     local fm
     fm="$(mktemp)"
@@ -692,12 +711,19 @@ check_reverse_audit_prompts() {
 
 # ---- C1-C5: 2026-04-29 tooling bundle (PR #43 + #44 mechanical enforcement) ----
 
-# Helper: locate the entity index file (folder layout: <dir>/README.md; flat: <dir>.md)
+# Helper: locate the entity index file (folder layout: <dir>/index.md; flat: <dir>.md)
 _entity_index_for_dir() {
   local d="$1"
-  if [ -f "${d%/}/README.md" ]; then echo "${d%/}/README.md"
+  if [ -f "${d%/}/index.md" ]; then echo "${d%/}/index.md"
   elif [ -f "${d%/}.md" ]; then echo "${d%/}.md"
   else echo ""
+  fi
+}
+
+_handoff_source_for_dir() {
+  local d="$1"
+  if [ -f "${d%/}/design.md" ]; then echo "${d%/}/design.md"
+  else _entity_index_for_dir "$d"
   fi
 }
 
@@ -720,9 +746,10 @@ check_pre_mortem_emitted() {
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0 f
-  for f in "$docs_dir"/*.md "$docs_dir"/*/README.md; do
+  for f in "$docs_dir"/*.md "$docs_dir"/*/index.md; do
     [ -f "$f" ] || continue
     grep -qE '^pattern:[[:space:]]*pitch' "$f" || continue
+    _entity_is_terminal "$f" && continue
     _directive_non_trivial "$f" || continue
     if ! grep -qE '^pre_mortem:' "$f"; then
       echo "FAIL C1 pre-mortem-emitted: '$(basename "$(dirname "$f")")' (or $(basename "$f")) missing pre_mortem field. See ship-shape/SKILL.md ### Pre-mortem (mandatory on non-trivial pitch)." >&2
@@ -738,9 +765,10 @@ check_pol_probe_invoked() {
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0 f
-  for f in "$docs_dir"/*.md "$docs_dir"/*/spec.md "$docs_dir"/*/README.md; do
+  for f in "$docs_dir"/*.md "$docs_dir"/*/spec.md "$docs_dir"/*/index.md; do
     [ -f "$f" ] || continue
     grep -qE '^appetite:[[:space:]]*(medium-batch|big-batch)' "$f" || continue
+    _entity_is_terminal "$f" && continue
     if ! grep -qE 'pol-probe-advisor' "$f"; then
       echo "FAIL C2 pol-probe-invoked: '$(basename "$f")' (medium/big-batch) missing pol-probe-advisor invocation. See ship-shape/SKILL.md PM-Skill Framing — pol-probe-advisor MANDATORY for medium-batch | big-batch (pitch-103 critical-assumption misfilter precedent)." >&2
       fail=1
@@ -770,15 +798,17 @@ check_plan_imported_design_dcs_emitted() {
   # C4 — PR #44 G10: when affects_ui=true + hand-off non-skipped, plan.md must have ## Plan Imported Design DCs.
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
-  local fail=0 d plan readme
+  local fail=0 d plan entity handoff
   for d in "$docs_dir"/*/; do
     plan="${d}plan.md"
     [ -f "$plan" ] || continue
-    readme=$(_entity_index_for_dir "$d")
-    [ -n "$readme" ] || continue
-    grep -qE '^affects_ui:[[:space:]]*true' "$readme" || continue
-    grep -qE '^### Hand-off to Plan' "$readme" || continue
-    grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' "$readme" && continue
+    entity=$(_entity_index_for_dir "$d")
+    [ -n "$entity" ] || continue
+    handoff=$(_handoff_source_for_dir "$d")
+    [ -n "$handoff" ] || continue
+    grep -qE '^affects_ui:[[:space:]]*true' "$entity" || continue
+    grep -qE '^### Hand-off to Plan' "$handoff" || continue
+    grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' "$handoff" && continue
     if ! grep -qE '^## Plan Imported Design DCs' "$plan"; then
       echo "FAIL C4 plan-imported-design-dcs-emitted: '$(basename "$d")plan.md' missing '## Plan Imported Design DCs' (affects_ui=true + design hand-off non-skipped). See ship-plan/SKILL.md ### Step 1.6." >&2
       fail=1
@@ -792,15 +822,17 @@ check_verify_mechanical_ui_parity_emitted() {
   # C5 — PR #44 Step 3.6: when affects_ui=true + render_fidelity_targets non-empty, verify.md must have #### Mechanical UI Parity.
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
-  local fail=0 d verify readme
+  local fail=0 d verify entity handoff
   for d in "$docs_dir"/*/; do
     verify="${d}verify.md"
     [ -f "$verify" ] || continue
-    readme=$(_entity_index_for_dir "$d")
-    [ -n "$readme" ] || continue
-    grep -qE '^affects_ui:[[:space:]]*true' "$readme" || continue
-    grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' "$readme" && continue
-    grep -qE 'render_fidelity_targets:|^[[:space:]]*-[[:space:]]+selector:' "$readme" || continue
+    entity=$(_entity_index_for_dir "$d")
+    [ -n "$entity" ] || continue
+    handoff=$(_handoff_source_for_dir "$d")
+    [ -n "$handoff" ] || continue
+    grep -qE '^affects_ui:[[:space:]]*true' "$entity" || continue
+    grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' "$handoff" && continue
+    grep -qE 'render_fidelity_targets:|^[[:space:]]*-[[:space:]]+selector:' "$handoff" || continue
     if ! grep -qE '^#### Mechanical UI Parity' "$verify"; then
       echo "FAIL C5 verify-mechanical-ui-parity-emitted: '$(basename "$d")verify.md' missing '#### Mechanical UI Parity' (affects_ui=true + render_fidelity_targets present). See ship-verify/SKILL.md ## Step 3.6." >&2
       fail=1

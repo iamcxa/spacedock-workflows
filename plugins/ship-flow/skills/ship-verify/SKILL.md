@@ -46,7 +46,7 @@ Run before any verify work. Stop and SendMessage(FO) if any check fails.
 
 ## Step 1 — Resolve entity + team + TaskCreate
 
-Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Read entity file (flat `.md` or folder `README.md` + prior `.md` stages). Record stage-start ISO timestamp.
+Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Read entity file (flat `.md` or folder `index.md` + prior `.md` stages). Record stage-start ISO timestamp.
 
 **Read** (tag-based via `bash plugins/ship-flow/lib/extract-section.sh <entity> <tag>`):
 - `spec.md` (or entity `## Sharp Output`) → `### Done Criteria`, `### Size Assessment`

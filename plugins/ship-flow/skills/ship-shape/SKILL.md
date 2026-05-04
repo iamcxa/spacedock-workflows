@@ -50,7 +50,7 @@ Main agent runs inline. Use TaskCreate to mark phases on main-agent path (skip i
 |---|---|---|
 | Free text | no tid/entity match | use as directive |
 | Todo tid | matches `docs/<wf>/todos/<tid>.md` | read todo body; note tid |
-| Entity id | matches `docs/<wf>/<id>-<slug>.md` OR `docs/<wf>/<id>-<slug>/README.md` | read entity; use title + body |
+| Entity id | matches `docs/<wf>/<id>-<slug>.md` OR `docs/<wf>/<id>-<slug>/index.md` | read entity; use title + body |
 
 Record stage-start ISO timestamp. Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Run escape-hatch check now.
 
@@ -338,7 +338,7 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
    ```bash
    bash plugins/ship-flow/lib/shape-confirm.sh --proposal="$PROPOSAL_JSON" --layout=folder --workflow-dir="$WORKFLOW_DIR"
    ```
-   `--layout=folder` (default for new pitches) writes `docs/<wf>/<id>-<slug>/README.md` + `spec.md`. **Wave 5 dependency of entity #085**: the `--layout=folder` flag lands in Wave 5; until then flat layout is operational fallback.
+   `--layout=folder` (default for new pitches) writes `docs/<wf>/<id>-<slug>/index.md` + `spec.md`.
 
 3. **Report**: 1 pitch (folder) + N shaped-children + M rabbit-hole todos + ROADMAP.md rows, ONE commit SHA.
 
