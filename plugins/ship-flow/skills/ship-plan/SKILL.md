@@ -56,7 +56,7 @@ If `parent:` frontmatter set: read parent `## Cross-Entity Contracts`. Extract `
 
 ### Step 1.1 — Canonical context planning
 
-Build a `canonical_doc_actions` table before writing implementation tasks:
+Build `### Canonical Doc Actions` before writing implementation tasks:
 
 | Doc | When to mark update | When to mark skip |
 |---|---|---|
@@ -64,11 +64,14 @@ Build a `canonical_doc_actions` table before writing implementation tasks:
 | `PRODUCT.md` | Spec/design changes durable capability, user story, constraint, "Who It Serves", or "Why It Exists" | Internal-only change; include `skip_rationale` |
 | `ARCHITECTURE.md` | Spec/design/tasks touch schema/API/domain/data-flow/storage/runtime/component boundary or architecture-impact exists | No architecture contract touched; include `skip_rationale` |
 
+Emit the schema-backed table with columns `Doc | Action | Source | Rationale`.
 For every planned task, add a `canonical_doc_actions` row or reference to the
 shared table. The row must include `doc`, `action: update|skip`, `source`
-(`spec`, `design`, `plan`, or `touched-files`), and `skip_rationale` when
-`action: skip`. This does not patch canonical docs; it makes review/verify able
-to detect drift before ship-review performs atomic writes.
+(`spec`, `design`, `plan`, or `touched-files`), and `rationale` /
+`skip_rationale` when `action: skip`. Also mirror the table into
+`### Hand-off to Execute → canonical_doc_actions_summary`. This does not patch
+canonical docs; it makes review/verify able to detect drift before ship-review
+performs atomic writes.
 
 ### Step 1.5 — Assumption re-validation
 

@@ -95,6 +95,24 @@ SendMessage to `planner` teammate with a structured prompt. Planner already has 
 - ROADMAP.md: {ROADMAP_COMMIT short-SHA} — status flipped (or "skipped — no parent roadmap-phase")
 ```
 
+Then draft `### Canonical Doc Actions Consumed` in review.md. Include one row
+per plan `canonical_doc_actions` entry:
+
+| Doc | Action Source | Plan Action | Review Outcome | Commit Or Skip Rationale |
+|---|---|---|---|---|
+| ARCHITECTURE.md | plan | update | updated | {commit SHA or section summary} |
+
+Before review passes, run the executable read-only gate:
+
+```bash
+bash plugins/ship-flow/bin/canonical-doc-sync-checker.sh <entity-folder>
+```
+
+Any `BLOCKER canonical_doc_actions:` output blocks review. Fix by patching the
+missing canonical doc outcome or by correcting the plan action / skip rationale;
+do not ignore a plan-discovered update because the original shape impact block
+was absent.
+
 ### Step 2.5 — Umbrella closeout check
 
 Read `docs/ship-flow/_mods/canonical-doc-sync.md → Hook: umbrella-closeout`.

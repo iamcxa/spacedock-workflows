@@ -377,6 +377,15 @@ stages:
               type: table
               columns: ["Path", "Type", "Purpose"]
               description: "design-system.md / tokens.css / specimens / composite mockup"
+        canonical_context:
+          section: "### Canonical Context"
+          section_tag: design-canonical-context
+          layer: design
+          fields:
+            - name: canonical_context
+              type: table
+              columns: ["Doc", "Sections Read", "Update Intent", "Skip Rationale"]
+              description: "Schema-backed record of PRODUCT.md / ARCHITECTURE.md sections read during design. sections_read names the exact headings or anchors. skip_rationale is required when no canonical update is expected."
         # G8 dedup (2026-04-29, PR #44): plan_constraints subsection retired.
         # Single-source-of-truth = stages.design.hand_off_to_plan.design_constraints[].
         # Rationale: dual-write let captain edits diverge between the two blocks,
@@ -520,6 +529,22 @@ stages:
                 - "Every DC from ## Done Criteria must have a row"
                 - "Verify Procedure must be a runnable command (no 'manual check')"
                 - "Type must match the DC's type"
+        canonical_doc_actions:
+          section: "### Canonical Doc Actions"
+          section_tag: canonical-doc-actions
+          layer: implementation
+          description: "Planner-owned update/skip contract for ROADMAP.md, PRODUCT.md, and ARCHITECTURE.md. Consumed by verify and review so plan/touched-file discoveries cannot disappear before the canonical write gate."
+          fields:
+            - name: canonical_doc_actions
+              type: table
+              columns: ["Doc", "Action", "Source", "Rationale"]
+              allowed_docs: ["ROADMAP.md", "PRODUCT.md", "ARCHITECTURE.md"]
+              allowed_actions: ["update", "skip"]
+              allowed_sources: ["spec", "design", "plan", "touched-files"]
+              rules:
+                - "Every doc must have exactly one action row unless explicitly not present in repo, with rationale."
+                - "Action=skip requires a concrete rationale."
+                - "Action=update must be consumed by ship-review and represented in ## Canonical Docs Update."
         plan:
           section: "### Plan"
           section_tag: plan
@@ -577,6 +602,10 @@ stages:
           description: "Planner-owned checklist derived from reviewer_questions, skills_needed, and design domain constraints. Source for verify reviewer panel domain lenses."
           columns: ["Task ID", "Verify Lens", "Reviewer Question", "Affected Path Family", "Required Skills", "Evidence Required"]
           example_row: ["T2", "project-db", "Does the migration preserve rollback/generated-type expectations for the changed schema?", "apps/supabase/migrations/**", "project-db,test", "migration diff plus generated typecheck command"]
+        - name: canonical_doc_actions_summary
+          type: table
+          description: "Consumed by verify and review. Mirrors ## Plan Output → ### Canonical Doc Actions so later stages can audit update/skip outcomes without re-inferring intent."
+          columns: ["Doc", "Action", "Source", "Rationale"]
         - { name: critical_assumptions, type: list, description: "Assumptions to re-verify at execute boot" }
         - { name: architecture_context, type: string, description: "Canonical doc touches required (INVARIANTS, README, schema)" }
         - { name: stub_flags, type: list, description: "Tasks flagged as v1-stub requiring captain-ack before cross-review PROCEED" }
@@ -709,6 +738,11 @@ stages:
               columns: ["Task", "RED Evidence", "GREEN Evidence", "REFACTOR Check", "Severity", "route_to"]
               severity_values: [BLOCKING, WARNING, NIT]
               description: "Verify-stage audit of execute tdd_evidence. Missing or invalid RED-before-GREEN evidence routes to execute."
+            - name: canonical_drift_audit
+              type: table
+              columns: ["Doc", "Plan Action", "Changed Files Signal", "Finding", "Severity", "route_to"]
+              severity_values: [BLOCKING, WARNING, NIT]
+              description: "Canonical Drift Audit. Verify-stage audit that canonical_doc_actions still match execute diff and canonical docs. Missing update intent or stale architecture/product/roadmap contract routes to plan, review, design, or execute via route_to."
             - { name: verdict, type: string, description: "SHIP IT | NEEDS_FIX | escalated" }
         knowledge_captures:
           section: "### Knowledge Captures"
@@ -960,6 +994,19 @@ stages:
           fields:
             - { name: patch_citations, type: list, format: "- {section} patched via ship-review (commit: {sha})" }
             - { name: patch_committed, type: boolean }
+        canonical_doc_actions_consumed:
+          section: "### Canonical Doc Actions Consumed"
+          section_tag: review-canonical-doc-actions-consumed
+          layer: implementation
+          description: "Review-stage matrix proving plan canonical_doc_actions reached the canonical write gate."
+          fields:
+            - name: action_matrix
+              type: table
+              columns: ["Doc", "Action Source", "Plan Action", "Review Outcome", "Commit Or Skip Rationale"]
+              rules:
+                - "Every plan canonical_doc_actions row appears exactly once."
+                - "Plan Action=update must map to a commit/outcome in ## Canonical Docs Update."
+                - "Plan Action=skip must carry the skip rationale into Review Outcome."
         d2_knowledge_candidates:
           section: "### D2 Knowledge Candidates"
           section_tag: review-d2-knowledge-candidates

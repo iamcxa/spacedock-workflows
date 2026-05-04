@@ -25,6 +25,7 @@ esac
 
 ENTITY_DIR="$1"
 ENTITY_FILE="${ENTITY_DIR}/index.md"
+PLAN_FILE="${ENTITY_DIR}/plan.md"
 REVIEW_FILE="${ENTITY_DIR}/review.md"
 SHIP_FILE="${ENTITY_DIR}/ship.md"
 BLOCKERS=0
@@ -91,6 +92,23 @@ awk '
 line_for_doc() {
   local doc="$1"
   grep -Ei '(^[[:space:]]*[-*][[:space:]]*`?'"${doc}"'`?[[:space:]]*:)|(^[[:space:]]*\|[[:space:]]*`?'"${doc}"'`?[[:space:]]*\|)' "$SECTION_FILE" | head -n 1 || true
+}
+
+review_line_for_doc() {
+  local doc="$1"
+  local section="$2"
+  grep -Ei '^[[:space:]]*\|[[:space:]]*`?'"${doc}"'`?[[:space:]]*\|' "$section" | head -n 1 || true
+}
+
+table_field() {
+  local row="$1"
+  local index="$2"
+  trim_field "$(printf '%s\n' "$row" | awk -F'|' -v field_no="$index" '{print $field_no}')"
+}
+
+is_skipped_outcome() {
+  local line="$1"
+  printf '%s\n' "$line" | grep -Eiq '(^|[[:space:]:|—])skipped([[:space:]:|—.]|$)'
 }
 
 is_weak_skip_rationale() {
@@ -160,10 +178,149 @@ check_umbrella_closeout() {
   fi
 }
 
+trim_field() {
+  printf '%s\n' "$1" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^`//; s/`$//'
+}
+
+check_plan_canonical_doc_actions() {
+  if [ ! -f "$PLAN_FILE" ]; then
+    return
+  fi
+
+  local section="${TMP_DIR}/plan-canonical-doc-actions.md"
+  local consumed_section="${TMP_DIR}/review-canonical-doc-actions-consumed.md"
+  awk '
+    /^###[[:space:]]+Canonical Doc Actions[[:space:]]*$/ {
+      in_section = 1
+      next
+    }
+    in_section && /^###[[:space:]]+/ {
+      in_section = 0
+    }
+    in_section {
+      print
+    }
+  ' "$PLAN_FILE" > "$section"
+
+  if [ ! -s "$section" ]; then
+    emit_blocker "canonical_doc_actions: missing ### Canonical Doc Actions in ${PLAN_FILE}"
+    return
+  fi
+
+  awk '
+    /^###[[:space:]]+Canonical Doc Actions Consumed[[:space:]]*$/ {
+      in_section = 1
+      next
+    }
+    in_section && /^###[[:space:]]+/ {
+      in_section = 0
+    }
+    in_section {
+      print
+    }
+  ' "$ARTIFACT_FILE" > "$consumed_section"
+
+  if [ ! -s "$consumed_section" ]; then
+    emit_blocker "canonical_doc_actions: missing ### Canonical Doc Actions Consumed in ${ARTIFACT_FILE}"
+  fi
+
+  for required_doc in ARCHITECTURE.md PRODUCT.md ROADMAP.md; do
+    local count
+    count="$(awk -F'|' -v doc="$required_doc" '
+      function trim(s) {
+        gsub(/^[[:space:]`]+|[[:space:]`]+$/, "", s)
+        return s
+      }
+      /^\|/ {
+        value = trim($2)
+        if (value == doc) count++
+      }
+      END { print count + 0 }
+    ' "$section")"
+
+    if [ "$count" -eq 0 ]; then
+      emit_blocker "canonical_doc_actions: ${required_doc} missing plan action row"
+    elif [ "$count" -gt 1 ]; then
+      emit_blocker "canonical_doc_actions: ${required_doc} duplicate plan action rows"
+    fi
+  done
+
+  while IFS= read -r row; do
+    case "$row" in
+      "|"*) ;;
+      *) continue ;;
+    esac
+
+    local doc action source rationale line
+    doc="$(table_field "$row" 2)"
+    action="$(table_field "$row" 3 | tr '[:upper:]' '[:lower:]')"
+    source="$(table_field "$row" 4)"
+    rationale="$(table_field "$row" 5)"
+
+    case "$doc" in
+      Doc|---|"") continue ;;
+      ARCHITECTURE.md|PRODUCT.md|ROADMAP.md) ;;
+      *)
+        emit_blocker "canonical_doc_actions: invalid doc ${doc}"
+        continue
+        ;;
+    esac
+
+    case "$source" in
+      spec|design|plan|touched-files) ;;
+      *) emit_blocker "canonical_doc_actions: ${doc} invalid source ${source}" ;;
+    esac
+
+    local consumed_line
+    consumed_line="$(review_line_for_doc "$doc" "$consumed_section")"
+    if [ -z "$consumed_line" ]; then
+      emit_blocker "canonical_doc_actions: ${doc} missing review consumption row"
+    else
+      local consumed_source consumed_action consumed_outcome
+      consumed_source="$(table_field "$consumed_line" 3)"
+      consumed_action="$(table_field "$consumed_line" 4 | tr '[:upper:]' '[:lower:]')"
+      consumed_outcome="$(table_field "$consumed_line" 5 | tr '[:upper:]' '[:lower:]')"
+
+      if [ "$consumed_source" != "$source" ]; then
+        emit_blocker "canonical_doc_actions: ${doc} review consumption source ${consumed_source} does not match plan source ${source}"
+      fi
+      if [ "$consumed_action" != "$action" ]; then
+        emit_blocker "canonical_doc_actions: ${doc} review consumption plan action ${consumed_action} does not match ${action}"
+      fi
+    fi
+
+    case "$action" in
+      update)
+        line="$(line_for_doc "$doc")"
+        if [ -z "$line" ] || is_skipped_outcome "$line"; then
+          emit_blocker "canonical_doc_actions: ${doc} update from ${source} missing review outcome"
+        elif [ -n "$consumed_line" ] && [ "$consumed_outcome" != "updated" ]; then
+          emit_blocker "canonical_doc_actions: ${doc} update from ${source} not marked updated in review consumption"
+        else
+          emit_pass "canonical_doc_actions: ${doc} update from ${source} consumed"
+        fi
+        ;;
+      skip)
+        if is_weak_skip_rationale "$rationale"; then
+          emit_blocker "canonical_doc_actions: ${doc} skip from ${source} missing concrete rationale"
+        elif [ -n "$consumed_line" ] && [ "$consumed_outcome" != "skipped" ]; then
+          emit_blocker "canonical_doc_actions: ${doc} skip from ${source} not carried into review outcome"
+        else
+          emit_pass "canonical_doc_actions: ${doc} skip from ${source} consumed"
+        fi
+        ;;
+      *)
+        emit_blocker "canonical_doc_actions: ${doc} invalid action ${action}"
+        ;;
+    esac
+  done < "$section"
+}
+
 check_doc "ARCHITECTURE.md"
 check_doc "PRODUCT.md"
 check_doc "ROADMAP.md"
 check_umbrella_closeout
+check_plan_canonical_doc_actions
 
 if [ "$BLOCKERS" -gt 0 ]; then
   exit 1
