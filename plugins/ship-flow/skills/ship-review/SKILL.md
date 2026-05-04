@@ -67,7 +67,7 @@ SendMessage to `planner` teammate with a structured prompt. Planner already has 
 
 **Dispatch prompt template**:
 
-> Draft canonical doc patches for pitch `<id>-<slug>`. Read entity children's `architecture-impact`, `product-impact`, `readme-impact` blocks + parent `roadmap-phase` + verify verdict. Aggregate per target_section. Apply patches atomically:
+> Draft canonical doc patches for pitch `<id>-<slug>`. Read entity children's `architecture-impact`, `product-impact`, `readme-impact` blocks + plan `canonical_doc_actions` rows + parent `roadmap-phase` + verify verdict. Aggregate per target_section. Treat `canonical_doc_actions` as the plan/verify handoff for actions discovered after shape: `source: plan` and `source: touched-files` rows can require canonical updates even when the original impact block was absent; `action: skip` rows require a `skip_rationale`. Apply patches atomically:
 >
 > - **ARCHITECTURE.md** — per aggregated `architecture-impact` section: `bash plugins/ship-flow/lib/patch-map.sh --if-hash=<sha> --section=<target_section> --commit-as="docs(architecture): #<id> — <summary>" ARCHITECTURE.md`. Then append Decisions index row for #<id> via same primitive.
 > - **PRODUCT.md** — per aggregated `product-impact` section: `bash plugins/ship-flow/lib/patch-map.sh --if-hash=<sha> --section=<target_section> --commit-as="docs(product): #<id> — <summary>" PRODUCT.md`. Covers user stories, constraints, capabilities.

@@ -18,13 +18,14 @@ Run before any plan work. Stop and SendMessage(FO) if any check fails.
 1. **Entity status**: read entity frontmatter `status:` — must be `sharp` or `design` (post-design stage). If `draft` → shape first; if `plan` → plan already exists, check for re-entry signal.
 2. **Hand-off present**: entity body contains `### Hand-off to Plan` block (from ship-shape or ship-design). If absent → SendMessage(FO): "Missing Hand-off to Plan in `<entity-path>` — cannot proceed without design intent."
 3. **Team context**: verify `planner` teammate is active (this agent). Note `executer` teammate name for Step 6 SendMessage.
-4. **PRODUCT.md readable**: `plugins/<app>/PRODUCT.md` exists and is readable. If absent → SendMessage(FO): "PRODUCT.md missing — constraints source unavailable."
+4. **PRODUCT.md readable**: repo-root `PRODUCT.md` exists and is readable. If absent → SendMessage(FO): "PRODUCT.md missing — constraints source unavailable."
 5. **Framework detection** (if `affects_ui: true`): Run ship-runtime-detect Step R5 to confirm `framework_detected` + `theme_indirection` for plan's verification spec.
 6. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
+7. **Canonical context planning**: read `PRODUCT.md`, `ROADMAP.md`, and relevant `ARCHITECTURE.md` sections when spec/design/affected files indicate product, roadmap, API, schema, domain, storage, runtime, or architecture contract impact.
 
 ## Entity body contract (schema-as-prose)
 
-- Reads: `spec.md` (`## Sharp Output` / `## Shape Output` — problem, done criteria, size, scope, assumptions, children DAG), parent entity `## Cross-Entity Contracts` if `parent:` set, `PRODUCT.md` constraints.
+- Reads: `spec.md` (`## Sharp Output` / `## Shape Output` — problem, done criteria, size, scope, assumptions, children DAG), `design.md` when present, parent entity `## Cross-Entity Contracts` if `parent:` set, `PRODUCT.md` constraints, `ROADMAP.md` status, and relevant `ARCHITECTURE.md` sections.
 - Writes: `<entity-folder>/plan.md` sections — `## Research Summary`, `## Size Re-evaluation`, `## Verification Spec`, `## Plan` (TDD tasks with waves), `## Plan Report` (status/cost/iterations/verdict).
 - Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.plan`.
 
@@ -52,6 +53,22 @@ Record stage-start ISO timestamp. Extract via `bash plugins/ship-flow/lib/extrac
 If `parent:` frontmatter set: read parent `## Cross-Entity Contracts`. Extract `Contracts to implement`, `Inherited decisions` (ADR overrides), `Slice scope`. These override any conflicting research finding.
 
 **Blocker**: spec missing problem or done criteria → write `## Plan Report status: blocked, reason: missing spec` and return.
+
+### Step 1.1 — Canonical context planning
+
+Build a `canonical_doc_actions` table before writing implementation tasks:
+
+| Doc | When to mark update | When to mark skip |
+|---|---|---|
+| `ROADMAP.md` | Entity is represented in Now/Next, creates/consumes deferred todos, or umbrella closeout may apply | Entity is intentionally not roadmap-listed; include `skip_rationale` |
+| `PRODUCT.md` | Spec/design changes durable capability, user story, constraint, "Who It Serves", or "Why It Exists" | Internal-only change; include `skip_rationale` |
+| `ARCHITECTURE.md` | Spec/design/tasks touch schema/API/domain/data-flow/storage/runtime/component boundary or architecture-impact exists | No architecture contract touched; include `skip_rationale` |
+
+For every planned task, add a `canonical_doc_actions` row or reference to the
+shared table. The row must include `doc`, `action: update|skip`, `source`
+(`spec`, `design`, `plan`, or `touched-files`), and `skip_rationale` when
+`action: skip`. This does not patch canonical docs; it makes review/verify able
+to detect drift before ship-review performs atomic writes.
 
 ### Step 1.5 — Assumption re-validation
 

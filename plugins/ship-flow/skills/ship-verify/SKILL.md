@@ -53,6 +53,9 @@ Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Read 
 - `plan.md` → `### Plan` (`files_modified`), `### Verification Spec` (DC procedures)
 - `execute.md` → `### Execution Log` (commit SHAs, base SHA), `### Issues Found`, `## Execute UAT`
 - `PRODUCT.md` → `## Constraints` (if exists)
+- `ARCHITECTURE.md` → relevant sections when plan `canonical_doc_actions`,
+  touched files, or design/spec impact indicate schema/API/domain/data-flow,
+  storage, runtime, or component-boundary change
 
 Capture **execute base SHA** from first task's parent commit in `execute.md`. Do NOT recompute from `main..HEAD` (MEMORY #25 — parallel-session churn produces reverse-subtraction artifacts).
 
@@ -147,8 +150,18 @@ Cost: ~$0.05/haiku. Default M/L = $0.10.
 1. **Stale references** — for every symbol removed, grep remaining refs outside the diff.
 2. **Plan consistency** — cross-check `git diff --stat` vs `plan.md → files_modified`. Unplanned change OR missed task = finding.
 3. **Constraint check** — `PRODUCT.md → ## Constraints` respected?
-4. **CLAUDE.md walk** — for each changed file, walk dirname to repo root collecting `CLAUDE.md`; check each rule against the diff. Severity: "must/never/always" → BLOCKING; "prefer/should/consider" → WARNING. Dedup + cache during walk.
-5. **Folder guidance receipt gate** — for each execute-touched file group, run `bash plugins/ship-flow/lib/check-guidance-receipt.sh --config=.claude/ship-flow/skill-routing.yaml --files=<changed-files> --artifact=<entity-folder>/execute.md`. Exit 12 is BLOCKING: execute did not prove it read non-root app-folder `AGENTS.md`/`CLAUDE.md` or did not load routed/folder skills. Do not treat root `AGENTS.md`/`CLAUDE.md` absence as failure; the resolver's `codex_context_boundary` deliberately avoids duplicating Codex session behavior.
+4. **Canonical drift check** — read plan `canonical_doc_actions` and changed
+   files. If source changes touch schema/API/domain/data-flow/storage/runtime or
+   component-boundary files, compare the diff against relevant
+   `ARCHITECTURE.md` sections and the plan's action rows. Missing
+   `canonical_doc_actions`, stale architecture contract, or an `action: skip`
+   without `skip_rationale` is a WARNING with `route_to: review` when the code
+   is otherwise correct, or BLOCKING with `route_to: plan` when the verification
+   criteria are underspecified. If product constraints are violated, route to
+   execute or design depending on whether implementation or design intent is at
+   fault.
+5. **CLAUDE.md walk** — for each changed file, walk dirname to repo root collecting `CLAUDE.md`; check each rule against the diff. Severity: "must/never/always" → BLOCKING; "prefer/should/consider" → WARNING. Dedup + cache during walk.
+6. **Folder guidance receipt gate** — for each execute-touched file group, run `bash plugins/ship-flow/lib/check-guidance-receipt.sh --config=.claude/ship-flow/skill-routing.yaml --files=<changed-files> --artifact=<entity-folder>/execute.md`. Exit 12 is BLOCKING: execute did not prove it read non-root app-folder `AGENTS.md`/`CLAUDE.md` or did not load routed/folder skills. Do not treat root `AGENTS.md`/`CLAUDE.md` absence as failure; the resolver's `codex_context_boundary` deliberately avoids duplicating Codex session behavior.
 
 **Spot-check haiku citations — 100%, not a sample** (MEMORY #078 precedent):
 - Read exact file at cited line ±2 lines.

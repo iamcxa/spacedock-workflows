@@ -1,6 +1,6 @@
 ---
 name: ship-design
-description: "Use when shape detects a UI or domain pitch needs design intent before plan — UI files affected (*.tsx, *.css, *.html), visual ambiguity, no design reference exists, or registered domain frontmatter is present. Agent-autonomous: 5-category classifier (Category 0 distill / A net-new system / B component breakout / C variation / D one-off) plus design-dispatch-manifest routing for ui-designer and domain-designer workers. Output: `<entity-folder>/design.md` + optional `plugins/<app>/design/*` artifact bundle. Layer A delegation: storyboard, design-flow, frontend-design, design-review; fallback superpowers:brainstorming when design plugins absent."
+description: "Use when shape detects a UI, domain, or contract-bearing pitch needs design intent before plan — affects_ui, registered domain, design_required, UI files (*.tsx, *.css, *.html), visual ambiguity, or no design reference exists. Agent-autonomous: 5-category classifier plus design-dispatch-manifest routing for ui-designer and domain-designer workers. Output: `<entity-folder>/design.md` + optional `plugins/<app>/design/*` artifact bundle."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---
@@ -17,12 +17,18 @@ Design intent capture stage for UI pitches. Runs between shape and plan when tri
 
 Run before any design work. Stop and SendMessage(FO) if any check fails.
 
-1. **Trigger valid**: entity has `affects_ui: true` OR `domain:` frontmatter registered in registry OR `--design` flag OR files match `*.tsx|*.css|*.html`. If `skip-when: "!affects_ui && !domain"` matches and no explicit/file trigger is present → skip design stage, SendMessage(planner): "Design trigger absent per `skip-when: \"!affects_ui && !domain\"` — routing directly to plan."
+1. **Trigger valid**: entity has `affects_ui: true` OR `domain:` frontmatter registered in registry OR `design_required: true` OR `--design` flag OR files match `*.tsx|*.css|*.html`. If `skip-when: "!affects_ui && !domain && !design_required"` matches and no explicit/file trigger is present → skip design stage, SendMessage(planner): "Design trigger absent per `skip-when: \"!affects_ui && !domain && !design_required\"` — routing directly to plan."
 2. **Entity status**: read entity frontmatter `status:` — must be `sharp`. If `design` → design already ran (check for re-entry signal).
 3. **Hand-off to Design present**: entity body contains `### Hand-off to Design` block (from ship-shape Phase 8). If absent → SendMessage(FO): "Missing Hand-off to Design — shape stage did not complete handoff."
 4. **Exploration file**: `## Sharp Output → Problem` cites a file:line. Read that file before Phase 1 — if missing → SendMessage(FO): "Exploration file not found: `<path>` — cannot distill design without source."
 5. **design-flow available**: check if plugin installed. If not → note fallback to `superpowers:brainstorming` in Design Report; proceed.
 6. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
+7. **Canonical context preflight**: for contract-bearing design work, read
+   repo-root `PRODUCT.md` constraints and relevant `ARCHITECTURE.md` sections
+   before dispatching designers. Contract-bearing means any schema/API/domain,
+   data-flow, storage, runtime, component-boundary, or architecture-impact
+   signal. If either doc is missing, record the missing source in design.md
+   rather than inventing constraints.
 
 ## Layer A delegation (Principle 6 Rule B)
 
@@ -37,10 +43,13 @@ Fallback: if `design-flow` is unavailable (plugin not installed), fall back to `
 Design stage fires when ANY of:
 - `affects_ui: true` in entity frontmatter (UI trigger path; set by shape stage when pitch touches frontend)
 - `domain:` frontmatter set in entity, registered in registry (specialist trigger path; set by ship-shape Phase 8.5 via `registry-resolve.sh --classify`; `domain:` set_at shape)
+- `design_required: true` in entity frontmatter (contract-bearing trigger path for
+  schema/API/domain/architecture work that is not otherwise UI or registered
+  domain)
 - `Files modified` or `architecture-impact` cites path matching glob `*.tsx | *.css | *.html`
 - Captain explicit `--design` flag on `/shape` invocation
 
-Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain"` in `docs/ship-flow/README.md` stages.states.
+Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain && !design_required"` in `docs/ship-flow/README.md` stages.states.
 
 ---
 
@@ -63,11 +72,18 @@ Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain"` in `docs/
 **Reads from**:
 - `## Sharp Output → Problem` — exploration file cite (path:line), stated contradictions
 - `## Sharp Output → Done Criteria` — UI-typed DCs that design must inform
+- `PRODUCT.md` — product constraints and capability promises that constrain
+  design decisions
+- `ARCHITECTURE.md` — relevant architecture/domain/API/schema sections for
+  contract-bearing design work
 
 **Writes to** (`entity-body-schema.yaml → stages.design`):
 - `## Design Output / ### Captain Decisions` — `D{N}|Captain decision` tagged per contradiction
 - `## Design Output / ### Artifact Bundle Manifest` — table of emitted files
 - `## Design Output / ### Constraints for Plan Stage` — token / interaction constraints plan must honor
+- `## Design Output / ### Canonical Context` — `canonical_context` rows naming
+  the `PRODUCT.md` / `ARCHITECTURE.md` sections read, update intent, and skip
+  rationale when no canonical doc change is required
 - `## Design Report` — status / cost / iterations / captain_decisions count / reviewer_verdict
 
 **Emits artifact bundle** at `plugins/<app>/design/`:

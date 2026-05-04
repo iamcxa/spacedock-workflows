@@ -30,7 +30,7 @@ stages:
     parallelism: probes
     skill: ship-flow:ship-shape
     model: opus
-    description: "Captain-facing. FO invokes skill directly (not via ensign) for interactive Musk audit. Reads PRODUCT.md + ROADMAP.md, size triage (S/M/L), scoring gate. Only human gate in the pipeline."
+    description: "Captain-facing. FO invokes skill directly (not via ensign) for interactive Musk audit. Reads PRODUCT.md + ROADMAP.md + ARCHITECTURE.md, size triage (S/M/L), scoring gate, and canonical update intent. Only human gate in the pipeline."
 
   - name: design
     worktree: true
@@ -68,7 +68,7 @@ stages:
     worktree: false
     skill: ship-flow:ship-review
     model: sonnet
-    description: "Agent-autonomous. PR creation, ROADMAP.md + PRODUCT.md updates, token cost summary. Advances to done."
+    description: "Agent-autonomous. PR creation, ROADMAP.md + PRODUCT.md + ARCHITECTURE.md updates, token cost summary. Advances to done."
 
   - name: done
     terminal: true
