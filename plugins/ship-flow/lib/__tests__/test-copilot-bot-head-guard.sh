@@ -36,8 +36,11 @@ check "pr-merge mod requires human-authored re-author or explicit workflow appro
 check "pr-merge mod verifies current head checks after Copilot commits" \
   "grep -q 'gh run list --branch {branch} --commit {sha}' '${PR_MERGE_MOD}' && grep -q 'gh pr checks' '${PR_MERGE_MOD}' && grep -q 'current head' '${PR_MERGE_MOD}'"
 
-check "pr-merge mod failure handling matches comment-first Copilot request path" \
-  "grep -q 'If the Copilot comment request fails' '${PR_MERGE_MOD}' && grep -q 'Reviewer-id fallback applies only' '${PR_MERGE_MOD}' && ! grep -q 'Do NOT retry beyond the documented fallback ids' '${PR_MERGE_MOD}'"
+check "pr-merge mod requests Copilot review through the GitHub reviewer-request surface" \
+  "grep -q 'gh pr edit {pr} --add-reviewer @copilot' '${PR_MERGE_MOD}' && grep -q 'official GitHub CLI wrapper' '${PR_MERGE_MOD}' && grep -q 'reviewer-request API' '${PR_MERGE_MOD}'"
+
+check "pr-merge mod does not use comment-first Copilot review request" \
+  "grep -q 'not a PR comment' '${PR_MERGE_MOD}' && ! grep -q 'prefer a PR comment request' '${PR_MERGE_MOD}' && ! grep -q 'If the Copilot comment request fails' '${PR_MERGE_MOD}' && ! grep -q 'copilot-pull-request-reviewer' '${PR_MERGE_MOD}'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
