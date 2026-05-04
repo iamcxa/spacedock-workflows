@@ -1,13 +1,13 @@
 ---
 name: ship-design
-description: "Use when shape detects a UI, domain, or contract-bearing pitch needs design intent before plan — affects_ui, registered domain, design_required, UI files (*.tsx, *.css, *.html), visual ambiguity, or no design reference exists. Agent-autonomous: 5-category classifier plus design-dispatch-manifest routing for ui-designer and domain-designer workers. Output: `<entity-folder>/design.md` + optional `plugins/<app>/design/*` artifact bundle."
+description: "Use when shape detects a UI, domain, or contract/interface-bearing pitch needs design intent before plan — affects_ui, registered domain, design_required, contract_decision_required, UI files (*.tsx, *.css, *.html), visual ambiguity, or no design reference exists. Agent-autonomous: 5-category classifier plus design-dispatch-manifest routing for ui-designer, domain-designer, and contract/interface-designer workers. Output: `<entity-folder>/design.md` + optional `plugins/<app>/design/*` artifact bundle."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---
 
 # ship-design
 
-Design intent capture stage for UI pitches. Runs between shape and plan when trigger fires. Named designer agent produces design artifacts captain can review before plan stage — preventing the 3-cross-review fix loop + captain dogfood failure that pitch-103 required (18 files / 3641 LOC Mega 1.5 spike from misaligned design intent).
+Design intent capture stage for UI, domain, and contract/interface pitches. Runs between shape and plan when trigger fires. Named designer agent produces design artifacts or contract decisions captain can review before plan stage — preventing the 3-cross-review fix loop + captain dogfood failure that pitch-103 required (18 files / 3641 LOC Mega 1.5 spike from misaligned design intent).
 
 **Stage-skill count**: adding ship-design makes **7/7** (ship-shape / ship / ship-plan / ship-execute / ship-verify / ship-review / ship-design = hard cap per Principle 2). No further stage-skills can be added without first folding or extracting an existing one.
 
@@ -17,7 +17,7 @@ Design intent capture stage for UI pitches. Runs between shape and plan when tri
 
 Run before any design work. Stop and SendMessage(FO) if any check fails.
 
-1. **Trigger valid**: entity has `affects_ui: true` OR `domain:` frontmatter registered in registry OR `design_required: true` OR `--design` flag OR files match `*.tsx|*.css|*.html`. If `skip-when: "!affects_ui && !domain && !design_required"` matches and no explicit/file trigger is present → skip design stage, SendMessage(planner): "Design trigger absent per `skip-when: \"!affects_ui && !domain && !design_required\"` — routing directly to plan."
+1. **Trigger valid**: entity has `affects_ui: true` OR `domain:` frontmatter registered in registry OR `design_required: true` OR `contract_decision_required: true` OR `--design` flag OR files match `*.tsx|*.css|*.html`. If `skip-when: "!affects_ui && !domain && !design_required && !contract_decision_required"` matches and no explicit/file trigger is present → skip design stage, SendMessage(planner): "Design trigger absent per `skip-when: \"!affects_ui && !domain && !design_required && !contract_decision_required\"` — routing directly to plan."
 2. **Entity status**: read entity frontmatter `status:` — must be `sharp`. If `design` → design already ran (check for re-entry signal).
 3. **Hand-off to Design present**: entity body contains `### Hand-off to Design` block (from ship-shape Phase 8). If absent → SendMessage(FO): "Missing Hand-off to Design — shape stage did not complete handoff."
 4. **Exploration file**: `## Sharp Output → Problem` cites a file:line. Read that file before Phase 1 — if missing → SendMessage(FO): "Exploration file not found: `<path>` — cannot distill design without source."
@@ -46,10 +46,14 @@ Design stage fires when ANY of:
 - `design_required: true` in entity frontmatter (contract-bearing trigger path for
   schema/API/domain/architecture work that is not otherwise UI or registered
   domain)
+- `contract_decision_required: true` in entity frontmatter because shape emitted
+  `open_contract_decisions[]` for unresolved non-UI contract/interface choices
+  such as selector grammar, API vocabulary, tool protocol, DSL syntax, schema or
+  message format
 - `Files modified` or `architecture-impact` cites path matching glob `*.tsx | *.css | *.html`
 - Captain explicit `--design` flag on `/shape` invocation
 
-Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain && !design_required"` in `docs/ship-flow/README.md` stages.states.
+Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain && !design_required && !contract_decision_required"` in `docs/ship-flow/README.md` stages.states.
 
 ---
 
@@ -141,6 +145,12 @@ design-dispatch-manifest:
         base_head: "<base>..<head>"
         mode: read-only findings-only
       outputs: []
+    - lane: contract-interface
+      role: contract/interface-designer
+      trigger: open_contract_decisions
+      decisions: []
+      examples: ["selector grammar", "API vocabulary", "tool protocol", "DSL syntax", "schema/message format"]
+      outputs: ["captain_decisions", "design_constraints", "open_decisions[] if unresolved"]
   integration:
     mode: single-designer|parallel
     owner: ship-design
@@ -154,6 +164,11 @@ Dispatch rules:
   `ui-designer`.
 - Domain-only work may use `single-designer` mode with one `domain-designer`
   routed through the registry specialist.
+- Contract/interface-only work may use `single-designer` mode with one
+  `contract/interface-designer`. It must present a trade-off table for each
+  `open_contract_decisions[]` item and capture a `D{N}|Captain decision`
+  before plan. Examples include selector grammar, API vocabulary, tool protocol,
+  DSL syntax, schema/message format, and mapper→native boundary contracts.
 - UI + domain work uses `parallel` designer dispatch: dispatch `ui-designer` and `domain-designer` concurrently, then run an integration pass in ship-design
   that merges outputs into one `design.md` handoff.
 - Multi-domain or Category A + domain work defaults to `parallel`. Collapse to
@@ -277,11 +292,13 @@ hardcode a project-specific reviewer set. If no risk trigger applies, write
      `skill_hints.*`, `knowledge_module_path`, and `designer_section_anchor`.
      Mark high-risk domain lanes as `panel_lane: domain-expert` and require
      read-only findings that become constraints for plan.
-   - both lanes present → `integration.mode: parallel`.
+   - `contract_decision_required: true` or `open_contract_decisions[]` non-empty → add `contract-interface` lane. The lane reads each open contract decision, produces a trade-off table, and converts the captain-selected option into `### Captain Decisions` plus `design_constraints[]`. If the captain does not decide, carry it to `open_decisions[]` so plan blocks.
+   - multiple lanes present → `integration.mode: parallel`.
    - one low-risk lane present → `integration.mode: single-designer`.
 6. Dispatch the manifest lanes. UI lane follows Phase 1-9. Domain lane follows
-   Phase 0.5 and specialist subsection. Integration pass merges lane outputs
-   before `## Constraints for Plan Stage`.
+   Phase 0.5 and specialist subsection. Contract/interface lane follows the
+   trade-off/captain-decision path above. Integration pass merges lane outputs
+   before `### Hand-off to Plan`.
 7. Before accepting UI lane output, require the `Context Read Receipt`. Missing
    app-folder guidance citation when `folder_guidance_files` is non-empty, or
    missing routed/folder skill such as `refine-gotchas` when emitted by the
@@ -542,7 +559,7 @@ Verdict: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**. Each verdict
 <!-- section:hand_off_to_plan -->
 ## Phase 9 (Hand-off): Emit Hand-off to Plan
 
-Read the incoming `### Hand-off to Design` block from the entity body (written by ship-shape Phase 8). Verify all `open_design_questions` are resolved via `captain_decisions` before emitting.
+Read the incoming `### Hand-off to Design` block from the entity body (written by ship-shape Phase 8). Verify all `open_design_questions` and `open_contract_decisions` are resolved via `captain_decisions` before emitting. If a selector grammar/API vocabulary/protocol/schema choice remains undecided, put it in `open_decisions[]` and BLOCK plan rather than letting planner choose.
 
 Emit `### Hand-off to Plan` (structured fields per `entity-body-schema.yaml → stages.design.hand_off_to_plan`):
 - `design_constraints[]` — each item: `{type, assertion, rationale_decision: D{N}, source_artifact}` — `type` enum mandatory. UI design uses `token-binding | layout | interaction`; domain specialist design uses `contract | schema-contract | filter-contract | api-contract | data-contract | domain-contract`. `rationale_decision: D{N}` MUST cross-reference a `**D{N}|Captain decision**` in Phase 8 Captain Decisions (validated by `validate-d-references.sh`).
@@ -560,10 +577,11 @@ single composite mockup or prose-plus-selector target instead of a full
 machine-readable verification target. For non-UI domain-only design,
 `whole_page_visual_targets[]` may be omitted.
 
-**Design-skipped path** (G14): when design stage is skipped (`!affects_ui` route from shape), the entity body MUST still contain `### Hand-off to Plan` with single field `design-skipped: true`. Emitted by ship-shape Phase 8 hand-off when `affects_ui: false`. Plan Step 1.6 reads this marker to bypass design-DC import explicitly (vs absence of the block, which is ambiguous).
+**Design-skipped path** (G14): when design stage is skipped (`!affects_ui && !domain && !design_required && !contract_decision_required` route from shape), the entity body MUST still contain `### Hand-off to Plan` with single field `design-skipped: true`. Emitted by ship-shape Phase 8 hand-off only when `affects_ui: false`, `domain:` is unset, `design_required: false`, `contract_decision_required: false`, and `open_contract_decisions[]` is empty. Plan Step 1.6 reads this marker to bypass design-DC import explicitly (vs absence of the block, which is ambiguous).
 
-If `affects_ui: true`, `design-skipped: true` is invalid by default. The only
-valid bypass is an explicit captain marker:
+If `affects_ui: true`, `domain:` is set, `design_required: true`, or
+`contract_decision_required: true`, `design-skipped: true` is invalid by
+default. The only valid bypass is an explicit captain marker:
 
 ```yaml
 design-skipped: true

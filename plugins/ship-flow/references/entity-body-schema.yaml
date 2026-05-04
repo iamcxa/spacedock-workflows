@@ -65,6 +65,17 @@ frontmatter:
         designer_section_anchor lookup). Empty/unset = no domain match (UI-only
         or no-trigger path). See plugins/ship-flow/registry/defaults.yaml +
         adopter override at .claude/ship-flow/domains.yaml.
+    contract_decision_required:
+      type: bool
+      optional: true
+      set_at: shape
+      default: false
+      description: |
+        True when shape detects a non-UI contract/interface decision that is not
+        captain-decided yet. Examples: selector grammar, API vocabulary, tool
+        protocol, DSL syntax, schema/message format, or mapper/native boundary
+        vocabulary. Drives design-stage conditional skip-when alongside
+        affects_ui, domain, and design_required.
     entity_type: { type: enum, values: [entity, epic], default: entity, description: "entity = normal pipeline entity; epic = decomposed into children, FO skips (status: epic bypasses stage_by_name dispatch)" }
     children: { type: list, items: string, example: '["child-slug-1", "child-slug-2"]', description: "Child entity slugs — set by ship-shape epic mode when decomposing. Epic entity status is frozen at 'epic'; children flow through the pipeline independently." }
     plugin: { type: string, pattern: "^[a-z][a-z0-9-]*$", description: "Kebab-case plugin slug — scopes entity to a plugin in a monorepo (e.g., 'ship-flow', 'spacebridge'). When set, resolve_map_path uses plugins/{plugin}/ prefix for canonical doc paths. Optional: omit for repo-root-scoped entities (backward compat)." }
@@ -346,6 +357,7 @@ stages:
         - { name: framework_detected, type: string, description: "Output from ship-runtime-detect Step R5 (framework + theme_indirection)" }
         - { name: design_canonical_dir, type: string, description: "Path to design system canonical dir (e.g., plugins/<app>/design/)" }
         - { name: open_design_questions, type: list, description: "Design decisions still unresolved — must be resolved in design stage" }
+        - { name: open_contract_decisions, type: list, description: "Non-UI contract/interface decisions still unresolved (selector grammar, API vocabulary, protocol, DSL/schema/message format). Non-empty means contract_decision_required=true and design stage must resolve or carry to open_decisions[]." }
         - { name: pm_framing_output, type: string, description: "Reference to problem-framing-canvas / press-release artifacts if run in shape stage" }
 
   # ===== PLAN =====
@@ -412,7 +424,7 @@ stages:
         - name: design-skipped
           type: boolean
           default: false
-          description: "G14 (2026-04-29): set true by ship-shape Phase 8 when affects_ui=false — design intentionally bypassed, plan Step 1.6 short-circuits. When false (or absent), design-emitted fields below are required."
+          description: "G14 (2026-04-29): set true by ship-shape Phase 8 only when affects_ui=false, domain is unset, design_required=false, contract_decision_required=false, and open_contract_decisions is empty — design intentionally bypassed, plan Step 1.6 short-circuits. When false (or absent), design-emitted fields below are required."
           required: true
           mutually_exclusive_with: "design_constraints, render_fidelity_targets (when design-skipped=true, these MUST be empty/omitted)"
         - name: design_constraints

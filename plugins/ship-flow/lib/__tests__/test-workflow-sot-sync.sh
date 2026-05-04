@@ -34,7 +34,7 @@ check "dogfood README states design is mandatory for design-bearing work" \
   "grep -q 'Design is mandatory for UI work, matched-domain work, or any change with schema/API/domain/architecture contract impact' '${DOGFOOD_README}'"
 
 check "dogfood README frontmatter uses design-bearing skip semantics" \
-  "grep -q 'skip-when: \"!affects_ui && !domain && !design_required\"' '${DOGFOOD_README}'"
+  "grep -q 'skip-when: \"!affects_ui && !domain && !design_required && !contract_decision_required\"' '${DOGFOOD_README}'"
 
 check "dogfood README includes design.md in pipeline artifacts" \
   "grep -q 'design.md' '${DOGFOOD_README}' && grep -q 'Design Intent' '${DOGFOOD_README}'"
@@ -46,7 +46,7 @@ check "dogfood README documents verify-stage captain UAT routing" \
   "grep -q 'Captain UAT Feedback Router' '${DOGFOOD_README}' && grep -q 'frontmatter \`feedback-to\` remains \`execute\`' '${DOGFOOD_README}' && grep -q 'route_to: design' '${DOGFOOD_README}' && grep -q 'must not inline-fix' '${DOGFOOD_README}'"
 
 check "dogfood README documents design routing frontmatter fields and designer teammate" \
-  "grep -q '| \`affects_ui\` | boolean |' '${DOGFOOD_README}' && grep -q '| \`domain\` | string |' '${DOGFOOD_README}' && grep -q '| \`design_required\` | boolean |' '${DOGFOOD_README}' && grep -q '\`designer\` (opus)' '${DOGFOOD_README}'"
+  "grep -q '| \`affects_ui\` | boolean |' '${DOGFOOD_README}' && grep -q '| \`domain\` | string |' '${DOGFOOD_README}' && grep -q '| \`design_required\` | boolean |' '${DOGFOOD_README}' && grep -q '| \`contract_decision_required\` | boolean |' '${DOGFOOD_README}' && grep -q '\`designer\` (opus)' '${DOGFOOD_README}'"
 
 check "dogfood README status command discovers binary with guard" \
   "grep -q 'STATUS_BIN=' '${DOGFOOD_README}' && grep -q 'spacedock status binary not found' '${DOGFOOD_README}' && grep -q 'The examples below assume \`STATUS_BIN\` is set' '${DOGFOOD_README}'"
@@ -55,10 +55,10 @@ check "dogfood README capture command discovers installed plugin binary with gua
   "grep -q 'SHIP_CAPTURE_BIN=' '${DOGFOOD_README}' && grep -q 'ship-flow ship-capture.sh not found' '${DOGFOOD_README}' && ! grep -q 'bash plugins/ship-flow/bin/ship-capture.sh' '${DOGFOOD_README}'"
 
 check "workflow template uses design-bearing skip semantics" \
-  "grep -q 'skip-when: \"!affects_ui && !domain && !design_required\"' '${TEMPLATE}' && grep -q 'Design is mandatory for UI, matched-domain, or contract-bearing work' '${TEMPLATE}'"
+  "grep -q 'skip-when: \"!affects_ui && !domain && !design_required && !contract_decision_required\"' '${TEMPLATE}' && grep -q 'Design is mandatory for UI, matched-domain, contract-bearing, or unresolved contract/interface decision work' '${TEMPLATE}'"
 
 check "plugin README agrees with dogfood design-bearing semantics" \
-  "grep -q 'skip-when: !affects_ui && !domain && !design_required' '${PLUGIN_README}' && grep -q 'schema/API/domain/architecture contract impact' '${PLUGIN_README}'"
+  "grep -q 'skip-when: !affects_ui && !domain && !design_required && !contract_decision_required' '${PLUGIN_README}' && grep -q 'schema/API/domain/architecture contract impact' '${PLUGIN_README}'"
 
 check "sync helper check mode passes on live repo" \
   "'${SOT_SYNC}' --check"

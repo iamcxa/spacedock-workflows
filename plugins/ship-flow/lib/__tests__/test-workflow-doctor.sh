@@ -106,7 +106,7 @@ fi
 if awk '
   /^[[:space:]]*-[[:space:]]*name:[[:space:]]*design[[:space:]]*$/ { in_design = 1; next }
   in_design && /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ { exit }
-  in_design && /^[[:space:]]*skip-when:[[:space:]]*"!affects_ui && !domain && !design_required"[[:space:]]*$/ { found = 1; exit }
+  in_design && /^[[:space:]]*skip-when:[[:space:]]*"!affects_ui && !domain && !design_required && !contract_decision_required"[[:space:]]*$/ { found = 1; exit }
   END { exit !found }
 ' "$TEMPLATE"; then
   record_pass "workflow-template.yaml declares design-bearing skip-when"

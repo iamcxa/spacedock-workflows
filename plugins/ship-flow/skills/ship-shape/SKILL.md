@@ -360,14 +360,14 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
 
 ## Named-teammate spawn (Principle 6 Rule A)
 
-On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size). **When pitch trigger fires `affects_ui:true OR domain: OR design_required:true OR file globs *.tsx|*.css|*.html OR explicit --design flag`, also spawn `designer` (opus) — gates the conditional `design` stage between shape and plan.**
+On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse hot context. **Default**: `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size). **When pitch trigger fires `affects_ui:true OR domain: OR design_required:true OR contract_decision_required:true OR file globs *.tsx|*.css|*.html OR explicit --design flag`, also spawn `designer` (opus) — gates the conditional `design` stage between shape and plan.**
 
 ```
 # Default spawn (all pitches) — every named teammate is a spacedock:ensign unit (canonical worker primitive):
 TeamCreate(team_name: "pitch-<id>", members: ["planner", "executer", "verifier"])
 Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "planner", model: "opus", task: "Planner for pitch-<id>. Read docs/<wf>/<id>-<slug>/spec.md.")
 Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "executer", model: "sonnet", task: "Executer for pitch-<id>. Atomic commits, DC-first.")
-# Conditional spawn — when design-trigger fires (affects_ui:true OR domain: OR design_required:true OR *.tsx|*.css|*.html glob OR --design flag):
+# Conditional spawn — when design-trigger fires (affects_ui:true OR domain: OR design_required:true OR contract_decision_required:true OR *.tsx|*.css|*.html glob OR --design flag):
 Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "designer", model: "opus", task: "Designer for pitch-<id>. Read spec.md; route Category 0/A/B/C/D and registered domain lanes; emit design.md plus the narrow artifact bundle required by the selected design-dispatch-manifest.")
 SendMessage(to: "planner", body: "Proceed to /plan for pitch-<id>. Read spec.md; output plan.md.")
 ```
@@ -376,10 +376,11 @@ SendMessage(to: "planner", body: "Proceed to /plan for pitch-<id>. Read spec.md;
 - `affects_ui:true` field set in entity frontmatter (sharp-stage-set; default false), OR
 - `domain:` field set in entity frontmatter (sharp-stage-set via registry-classify; default unset), OR
 - `design_required:true` field set in entity frontmatter for schema/API/domain/architecture contract impact, OR
+- `contract_decision_required:true` field set in entity frontmatter because `open_contract_decisions[]` is non-empty, OR
 - any `Files modified` or `architecture-impact` block citing path matching glob `*.tsx | *.css | *.html`, OR
 - captain explicit `--design` flag on `/shape` invocation.
 
-When ANY trigger fires, FO advances entity to `design` stage (skill: `ship-flow:ship-design`); otherwise auto-skip to `plan` per `skip-when: "!affects_ui && !domain && !design_required"` README.md state declaration. Run `## Phase 8.5 — Domain Registry Validation` before evaluating this condition so non-UI domains are not skipped because `domain:` was never recorded.
+When ANY trigger fires, FO advances entity to `design` stage (skill: `ship-flow:ship-design`); otherwise auto-skip to `plan` per `skip-when: "!affects_ui && !domain && !design_required && !contract_decision_required"` README.md state declaration. Run `## Phase 8.5 — Domain Registry Validation` before evaluating this condition so non-UI domains are not skipped because `domain:` was never recorded.
 
 Stage continuation — SendMessage to named teammate (~10× faster than fresh dispatch). **Fresh-subagent reserved for Rule A exceptions**: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages.
 
@@ -424,13 +425,16 @@ Emit `### Hand-off to Design`:
 - `ui_surfaces`: list visible UI surfaces inferred from spec (tabs, sidebars, buttons, forms)
 - `framework_detected`: run `Skill: ship-flow:ship-runtime-detect` Step R5 → record `framework=X theme_indirection=Y design_canonical_dir=Z`
 - `open_design_questions`: unresolved design decisions from spec Scope In (e.g., color tokens, layout choice)
+- `open_contract_decisions[]`: unresolved non-UI contract/interface choices from spec or issue text. Emit this whenever there are 2+ viable semantics and planner must not choose silently. Examples: selector grammar (`find role <r> --name "<v>"` vs CSS attributes vs `{role,name}` object), API vocabulary, tool protocol, DSL syntax, schema/message format, mapper→native boundary contract.
 - `pm_framing_output`: reference to problem-framing-canvas or press-release artifact path if run in shape
 
-If `affects_ui: false` in entity frontmatter → omit `ui_surfaces` and `framework_detected`; set `open_design_questions: []`.
+If `open_contract_decisions[]` is non-empty, set `contract_decision_required: true` in entity frontmatter and advance to design even when `affects_ui: false` and no domain registry exists. The design stage owns the trade-off table and captain decision; plan must not self-select the canonical grammar/protocol/schema/API vocabulary.
 
-**Design-skipped passthrough** (G14 amended by 113.1): skip only when `affects_ui: false` AND `domain:` unset AND `design_required: false`. If any is set, emit standard `### Hand-off to Design` and advance to design stage.
+If `affects_ui: false` in entity frontmatter → omit `ui_surfaces` and `framework_detected`; set `open_design_questions: []` unless the entity has non-UI contract/interface ambiguity, in which case emit `open_contract_decisions[]`.
 
-When `affects_ui: false` AND `domain:` is unset AND `design_required: false` → omit `ui_surfaces` and `framework_detected`; set `open_design_questions: []`; emit stub `### Hand-off to Plan` with `design-skipped: true` (single field). Rationale: plan Step 1.6 reads `### Hand-off to Plan` to decide whether to import design DCs. Absence of the block is ambiguous (design halted? design errored? affects_ui=false?). Explicit `design-skipped: true` lets plan distinguish "design intentionally bypassed" from "block missing — error". Validated by `check-invariants.sh --check plan-imported-design-dcs-emitted`.
+**Design-skipped passthrough** (G14 amended by contract-design gate): skip only when `affects_ui: false` AND `domain:` unset AND `design_required: false` AND `contract_decision_required: false`. If any is set, emit standard `### Hand-off to Design` and advance to design stage.
+
+When `affects_ui: false` AND `domain:` is unset AND `design_required: false` AND `contract_decision_required: false` → omit `ui_surfaces` and `framework_detected`; set `open_design_questions: []`; set `open_contract_decisions: []`; emit stub `### Hand-off to Plan` with `design-skipped: true` (single field). Rationale: plan Step 1.6 reads `### Hand-off to Plan` to decide whether to import design DCs. Absence of the block is ambiguous (design halted? design errored? affects_ui=false?). Explicit `design-skipped: true` lets plan distinguish "design intentionally bypassed" from "block missing — error". Validated by `check-invariants.sh --check plan-imported-design-dcs-emitted`.
 
 ## Phase 8.5 — Domain Registry Validation
 

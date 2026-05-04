@@ -130,7 +130,7 @@ if [ -z "$DESIGN_SKIP_WHEN" ] || [ -z "$VERIFY_FEEDBACK_TO" ] ||
   exit 2
 fi
 
-EXPECTED_TEMPLATE_DESCRIPTION="Design is mandatory for UI, matched-domain, or contract-bearing work. Skips only for trivial mechanical work with no affects_ui, no matched domain, and no design_required signal."
+EXPECTED_TEMPLATE_DESCRIPTION="Design is mandatory for UI, matched-domain, contract-bearing, or unresolved contract/interface decision work. Skips only for trivial mechanical work with no affects_ui, no matched domain, no design_required signal, and no contract_decision_required signal."
 EXPECTED_VERIFY_DESCRIPTION="Agent gate. FO dispatches review agents, integrates findings, runs quality gate + UAT. Stage feedback returns to execute; any multi-destination routing by finding class is handled inside verify.md via route_to:. FO does not inline-fix BLOCKING/WARNING findings."
 EXPECTED_PLUGIN_DESIGN_LINE="- New stage \`design\` inserted between \`shape\` and \`plan\`. Conditional but mandatory for design-bearing work (\`manual: conditional\`, \`skip-when: ${DESIGN_SKIP_WHEN}\`). It runs for UI work, matched-domain work, and schema/API/domain/architecture contract impact; it skips only for trivial mechanical work with no design-bearing decision. Dispatched by \`/ship\` to \`designer\` teammate (opus). Output: \`design.md\` + narrow artifact bundle required by the selected \`design-dispatch-manifest\`."
 

@@ -37,10 +37,10 @@ stages:
     gate: true
     manual: conditional
     parallelism: lanes
-    skip-when: "!affects_ui && !domain && !design_required"
+    skip-when: "!affects_ui && !domain && !design_required && !contract_decision_required"
     skill: ship-flow:ship-design
     model: opus
-    description: "Design is mandatory for UI, matched-domain, or contract-bearing work. Skips only for trivial mechanical work with no affects_ui, no matched domain, and no design_required signal."
+    description: "Design is mandatory for UI, matched-domain, contract-bearing, or unresolved contract/interface decision work. Skips only for trivial mechanical work with no affects_ui, no matched domain, no design_required signal, and no contract_decision_required signal."
 
   - name: plan
     parallelism: draft-lanes
