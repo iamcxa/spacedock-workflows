@@ -11,6 +11,19 @@ You are running the ADD-TODOS skill. Your job is to classify and file one or mor
 
 **Core contract:** minimal friction. No shaping, no questions. Parse → classify → file → commit. Report slugs filed.
 
+## Stage-wide capture rule
+
+Use this skill for every out-of-scope finding discovered during
+plan/design/execute/verify/review/ship when the issue is worth preserving but
+does not directly belong to the active entity's acceptance criteria or fix loop.
+This includes pre-existing bugs, genuinely new feature requests, research
+rabbit holes, workflow friction, and follow-up candidates discovered by workers,
+reviewers, verifiers, external reviewers, or captain UAT.
+
+Rejected alternatives are not todos. Keep rejected alternatives in the stage
+artifact with the reason they were rejected; only capture follow-up candidates
+that may become future work.
+
 ## Decision: todo vs sharp entity directly
 
 This skill captures TODOS — items deferred to later. If the item warrants immediate sharp-entity creation (claiming `--next-id` and writing spec.md), use `/ship-flow:ship-shape <directive>` instead. Decision rule:

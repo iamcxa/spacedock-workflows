@@ -177,7 +177,19 @@ else:
 
 After `review.md` cross-review PROCEED:
 
-1. **Compose `ship.md`** inside entity folder. Content: PR URL, deploy reference (if deployed), merge status, customer-visible summary (1-2 sentences drawn from spec.md + execute.md). Single atomic commit via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
+1. **Compose `ship.md`** inside entity folder. Content: PR URL, deploy reference (if deployed), merge status, customer-visible summary (1-2 sentences drawn from spec.md + execute.md), and `## Todo Closeout Digest`. Single atomic commit via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
+
+   `## Todo Closeout Digest` MUST summarize:
+   - todos captured during this ship, with todo slug and source stage;
+   - deferred follow-ups explicitly left in ROADMAP later;
+   - rejected alternatives that were recorded but not captured as todos;
+   - todos promoted into shaped entities during this run.
+
+   After the digest is written, ask the captain how to handle newly captured
+   todos: sync to task management (for example Linear) through an adapter/mod,
+   shape the next todo now, or leave in ROADMAP later. This is a routing prompt,
+   not a hard dependency on an external tool. Do not hardcode Linear into
+   ship-flow core; task-management sync belongs in a project adapter/mod.
 
    **After `ship.md` lands, advance sibling `index.md` frontmatter atomically:**
 
