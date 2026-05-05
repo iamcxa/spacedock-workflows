@@ -336,7 +336,7 @@ Per DC-8: `design-skipped: true` (not `design-skipped: false` with empty constra
    - exit 11 (M2 `knowledge_module_missing`) → same as M1 path: emit HALT block, SendMessage(FO), **STOP**.
    - exit 20 / 21 (M4 parse_error / M5 invalid_trigger_config) → fail loud per INVARIANTS Principle 9; SendMessage(FO): "registry config error exit $?; blocking design stage". **STOP**.
 3. **If `domain:` is unset AND `affects_ui: true`**: proceed to UI category-classifier (Category 0/A/B/C/D logic at Phase 0 step 4).
-4. Resolve the shape artifact (`shape.md`, with legacy `shape.md` fallback alias) and determine category per classifier table.
+4. Resolve the shape artifact (`shape.md`, with legacy `spec.md` fallback alias) and determine category per classifier table.
 5. Build `design-dispatch-manifest`:
    - `affects_ui: true` → add `ui` lane with the selected Category.
    - for the `ui` lane, resolve adopter file-signal routing with

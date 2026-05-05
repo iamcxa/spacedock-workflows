@@ -65,7 +65,7 @@ Why this matters: opus 4.7 with hot context ramps to work in ~5 min vs ~5K token
 
 ### 4. Auditable per-stage `.md` artifacts
 
-Each stage writes its output to `<entity-folder>/{stage}.md` via `lib/write-stage-artifact.sh` (Layer C primitive — atomic commit with explicit pathspec, optional CAS via `--if-hash`). An auditor reads across `shape.md / plan.md / execute.md / verify.md / review.md / ship.md` + entity body to reconstruct decision history. Legacy `shape.md` remains a compatibility alias for older shape artifacts.
+Each stage writes its output to `<entity-folder>/{stage}.md` via `lib/write-stage-artifact.sh` (Layer C primitive — atomic commit with explicit pathspec, optional CAS via `--if-hash`). An auditor reads across `shape.md / plan.md / execute.md / verify.md / review.md / ship.md` + entity body to reconstruct decision history. Legacy `spec.md` remains a compatibility alias for older shape artifacts.
 
 Entity folder layout (default for new pitches in 2.0):
 
@@ -325,7 +325,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
   - `/shape "<directive>"` — framing gate; captain reviews once, then autonomy takes over.
   - `/ship <entity-id|requirement>` — dispatches plan → execute → verify → review → ship-final.
   - `/verify <entity-id>` — standalone fast-feedback outside the pipeline loop.
-- Per-stage `.md` artifacts land in the entity folder (`docs/<wf>/<id>-<slug>/{shape,plan,execute,verify,review,ship}.md`). Work is resumable after session reset; audit trails self-contain. Legacy `shape.md` shape artifacts and legacy flat entities (`docs/<wf>/<id>-<slug>.md`) remain supported.
+- Per-stage `.md` artifacts land in the entity folder (`docs/<wf>/<id>-<slug>/{shape,plan,execute,verify,review,ship}.md`). Work is resumable after session reset; audit trails self-contain. Legacy `spec.md` shape artifacts and legacy flat entities (`docs/<wf>/<id>-<slug>.md`) remain supported.
 - Cross-review gate at every stage transition (5-factor rubric: feasibility / executable scope / quality / DC adequacy / canonical sync). Verdict `PROCEED | VETO | PROMPT_CAPTAIN`; VETO loops capped at 2 rounds before escalation.
 - Named-teammate pattern per pitch (Principle 6 Rule A): `planner` (opus) + `executer` (sonnet) + `verifier` (opus/sonnet). Stage transitions use `SendMessage` — ~10× faster than fresh-subagent dispatch via hot-context reuse.
 - Seven principles codified in `INVARIANTS.md` with `bin/check-invariants.sh` grep enforcement — catches harness regressions (preamble regrowth, skill-count bloat, stale line-anchors, Layer A delegation drift, cross-review gate absence, structural-parity DC gaps) at CI-time. (Extended to 8 principles post-0.5.0.)

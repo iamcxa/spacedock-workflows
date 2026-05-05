@@ -365,7 +365,7 @@ On **first** `/shape` of a new pitch, spawn team so `/ship` / `/verify` reuse ho
 ```
 # Default spawn (all pitches) — every named teammate is a spacedock:ensign unit (canonical worker primitive):
 TeamCreate(team_name: "pitch-<id>", members: ["planner", "executer", "verifier"])
-Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "planner", model: "opus", task: "Planner for pitch-<id>. Resolve the shape artifact with plugins/ship-flow/lib/resolve-shape-artifact.sh; read canonical shape.md or legacy shape.md fallback.")
+Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "planner", model: "opus", task: "Planner for pitch-<id>. Resolve the shape artifact with plugins/ship-flow/lib/resolve-shape-artifact.sh; read canonical shape.md or legacy spec.md fallback.")
 Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "executer", model: "sonnet", task: "Executer for pitch-<id>. Atomic commits, DC-first.")
 # Conditional spawn — when design-trigger fires (affects_ui:true OR domain: OR design_required:true OR contract_decision_required:true OR *.tsx|*.css|*.html glob OR --design flag):
 Agent(subagent_type: "spacedock:ensign", team_name: "pitch-<id>", name: "designer", model: "opus", task: "Designer for pitch-<id>. Resolve the shape artifact with plugins/ship-flow/lib/resolve-shape-artifact.sh; route Category 0/A/B/C/D and registered domain lanes; emit design.md plus the narrow artifact bundle required by the selected design-dispatch-manifest.")
