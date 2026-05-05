@@ -224,6 +224,25 @@ assert_contains "consumed action mismatch reports blocker" '^BLOCKER canonical_d
 assert_read_only "consumed action mismatch fixture remains unchanged" "plan-action-consumed-action-mismatch" "$CONSUMED_ACTION_MISMATCH_BEFORE"
 
 echo ""
+echo "Block 16: touched markdown docs are valid when review consumed"
+TOUCHED_MARKDOWN_BEFORE="$(hash_dir "${FIXTURE_ROOT}/plan-action-touched-markdown-consumed")"
+run_checker "plan-action-touched-markdown-consumed" "${TMP_DIR}/touched-markdown.out" "${TMP_DIR}/touched-markdown.exit"
+assert_exit "touched markdown consumed exits 0" 0 "${TMP_DIR}/touched-markdown.exit"
+assert_contains "touched markdown consumes docs workflow README" '^PASS canonical_doc_actions: docs/ship-flow/README\.md update from touched-files consumed' "${TMP_DIR}/touched-markdown.out"
+assert_contains "touched markdown consumes plugin README" '^PASS canonical_doc_actions: plugins/ship-flow/README\.md update from touched-files consumed' "${TMP_DIR}/touched-markdown.out"
+assert_not_contains "touched markdown ignores later plan table rows" 'invalid doc V1 later table row' "${TMP_DIR}/touched-markdown.out"
+assert_not_contains "touched markdown emits no canonical action blockers" '^BLOCKER canonical_doc_actions:' "${TMP_DIR}/touched-markdown.out"
+assert_read_only "touched markdown fixture remains unchanged" "plan-action-touched-markdown-consumed" "$TOUCHED_MARKDOWN_BEFORE"
+
+echo ""
+echo "Block 17: touched non-markdown docs remain invalid"
+TOUCHED_INVALID_BEFORE="$(hash_dir "${FIXTURE_ROOT}/plan-action-touched-invalid-doc")"
+run_checker "plan-action-touched-invalid-doc" "${TMP_DIR}/touched-invalid.out" "${TMP_DIR}/touched-invalid.exit"
+assert_exit "touched invalid doc exits 1" 1 "${TMP_DIR}/touched-invalid.exit"
+assert_contains "touched invalid doc reports blocker" '^BLOCKER canonical_doc_actions: invalid doc docs/ship-flow/README\.txt' "${TMP_DIR}/touched-invalid.out"
+assert_read_only "touched invalid fixture remains unchanged" "plan-action-touched-invalid-doc" "$TOUCHED_INVALID_BEFORE"
+
+echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 
 if [ ${FAIL} -gt 0 ]; then

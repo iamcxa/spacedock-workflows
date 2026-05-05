@@ -182,6 +182,36 @@ trim_field() {
   printf '%s\n' "$1" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^`//; s/`$//'
 }
 
+is_root_canonical_doc() {
+  case "$1" in
+    ARCHITECTURE.md|PRODUCT.md|ROADMAP.md) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_repo_relative_markdown_doc() {
+  case "$1" in
+    ""|/*|../*|*/../*|*/..) return 1 ;;
+    *.md) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_valid_plan_action_doc() {
+  local doc="$1"
+  local source="$2"
+
+  if is_root_canonical_doc "$doc"; then
+    return 0
+  fi
+
+  if [ "$source" = "touched-files" ] && is_repo_relative_markdown_doc "$doc"; then
+    return 0
+  fi
+
+  return 1
+}
+
 check_plan_canonical_doc_actions() {
   if [ ! -f "$PLAN_FILE" ]; then
     return
@@ -194,7 +224,7 @@ check_plan_canonical_doc_actions() {
       in_section = 1
       next
     }
-    in_section && /^###[[:space:]]+/ {
+    in_section && /^##(#)?[[:space:]]+/ {
       in_section = 0
     }
     in_section {
@@ -212,7 +242,7 @@ check_plan_canonical_doc_actions() {
       in_section = 1
       next
     }
-    in_section && /^###[[:space:]]+/ {
+    in_section && /^##(#)?[[:space:]]+/ {
       in_section = 0
     }
     in_section {
@@ -259,17 +289,17 @@ check_plan_canonical_doc_actions() {
 
     case "$doc" in
       Doc|---|"") continue ;;
-      ARCHITECTURE.md|PRODUCT.md|ROADMAP.md) ;;
-      *)
-        emit_blocker "canonical_doc_actions: invalid doc ${doc}"
-        continue
-        ;;
     esac
 
     case "$source" in
       spec|design|plan|touched-files) ;;
       *) emit_blocker "canonical_doc_actions: ${doc} invalid source ${source}" ;;
     esac
+
+    if ! is_valid_plan_action_doc "$doc" "$source"; then
+      emit_blocker "canonical_doc_actions: invalid doc ${doc}"
+      continue
+    fi
 
     local consumed_line
     consumed_line="$(review_line_for_doc "$doc" "$consumed_section")"
@@ -291,10 +321,18 @@ check_plan_canonical_doc_actions() {
 
     case "$action" in
       update)
-        line="$(line_for_doc "$doc")"
-        if [ -z "$line" ] || is_skipped_outcome "$line"; then
-          emit_blocker "canonical_doc_actions: ${doc} update from ${source} missing review outcome"
-        elif [ -n "$consumed_line" ] && [ "$consumed_outcome" != "updated" ]; then
+        if is_root_canonical_doc "$doc"; then
+          line="$(line_for_doc "$doc")"
+          if [ -z "$line" ] || is_skipped_outcome "$line"; then
+            emit_blocker "canonical_doc_actions: ${doc} update from ${source} missing review outcome"
+          elif [ -n "$consumed_line" ] && [ "$consumed_outcome" != "updated" ]; then
+            emit_blocker "canonical_doc_actions: ${doc} update from ${source} not marked updated in review consumption"
+          else
+            emit_pass "canonical_doc_actions: ${doc} update from ${source} consumed"
+          fi
+        elif [ -z "$consumed_line" ]; then
+          :
+        elif [ "$consumed_outcome" != "updated" ]; then
           emit_blocker "canonical_doc_actions: ${doc} update from ${source} not marked updated in review consumption"
         else
           emit_pass "canonical_doc_actions: ${doc} update from ${source} consumed"
