@@ -6,7 +6,7 @@
 #
 # Usage: bash shape-confirm.sh --proposal=<json-file> [--dry-run] [--layout=folder|flat]
 #
-# --layout=folder  writes docs/<wf>/<id>-<slug>/index.md + spec.md (folder layout)
+# --layout=folder  writes docs/<wf>/<id>-<slug>/index.md + shape.md (folder layout)
 #                  Note: index.md (not README.md) per spacedock status --next-id
 #                  discovery convention; see pitch 089.
 # --layout=flat    writes docs/<wf>/<id>-<slug>.md (default, backward compat)
@@ -83,7 +83,7 @@ if [ "$LAYOUT" = "folder" ]; then
   PITCH_FOLDER="${ENTITY_DIR}/${PITCH_ID}-${PITCH_SLUG}"
   # index.md (not README.md) — spacedock status --next-id discovery convention
   PITCH_INDEX="${PITCH_FOLDER}/index.md"
-  PITCH_SPEC="${PITCH_FOLDER}/spec.md"
+  PITCH_SHAPE="${PITCH_FOLDER}/shape.md"
   PITCH_PATH="$PITCH_INDEX"
 else
   PITCH_PATH="${ENTITY_DIR}/${PITCH_ID}-${PITCH_SLUG}.md"
@@ -111,7 +111,7 @@ if [ "$DRY_RUN" = "1" ]; then
   echo "Would write:"
   if [ "$LAYOUT" = "folder" ]; then
     echo "  pitch index:  ${PITCH_INDEX}"
-    echo "  pitch spec:   ${PITCH_SPEC}"
+    echo "  pitch shape:  ${PITCH_SHAPE}"
   else
     echo "  pitch: $PITCH_PATH"
   fi
@@ -142,12 +142,12 @@ $([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] 
 <!-- section:stage-artifact-links -->
 | Stage | File |
 |-------|------|
-| spec | [spec.md](spec.md) |
+| shape | [shape.md](shape.md) |
 <!-- /section:stage-artifact-links -->
 EOF
-  # spec.md — problem / appetite / children / assumptions / rabbit-holes
-  cat > "$PITCH_SPEC" <<EOF
-# ${PITCH_TITLE} — Spec
+  # shape.md — problem / appetite / children / assumptions / rabbit-holes
+  cat > "$PITCH_SHAPE" <<EOF
+# ${PITCH_TITLE} — Shape
 
 ## Problem
 
@@ -184,7 +184,7 @@ done)
 
 (fill in from deleted_from_shape)
 EOF
-  WRITTEN_FILES=("$PITCH_INDEX" "$PITCH_SPEC")
+  WRITTEN_FILES=("$PITCH_INDEX" "$PITCH_SHAPE")
 else
   cat > "$PITCH_PATH" <<EOF
 ---

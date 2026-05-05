@@ -316,14 +316,14 @@ check_rid_placeholder() {
 
 check_stage_artifact_path() {
   # Verify every stage SKILL.md references its declared artifact filename.
-  # Mapping: ship-shape→spec.md, ship-plan→plan.md, ship-execute→execute.md,
+  # Mapping: ship-shape→shape.md, ship-plan→plan.md, ship-execute→execute.md,
   #          ship-verify→verify.md, ship-review→review.md, ship→ship.md
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
   local fail=0
   declare -A ARTIFACT_MAP
   ARTIFACT_MAP=(
-    [ship-shape]=spec.md
+    [ship-shape]=shape.md
     [ship-plan]=plan.md
     [ship-execute]=execute.md
     [ship-verify]=verify.md

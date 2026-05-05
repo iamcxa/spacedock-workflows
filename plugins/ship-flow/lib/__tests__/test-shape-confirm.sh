@@ -248,7 +248,7 @@ popd >/dev/null || exit 1
 rm -rf "$TMP"
 
 echo
-echo "--- DC-33: acceptance_outcome rendered into spec.md (folder layout) ---"
+echo "--- DC-33: acceptance_outcome rendered into shape.md (folder layout) ---"
 TMP="$(setup_fixture)"
 PROP="$TMP/proposal.json"
 sample_proposal > "$PROP"
@@ -256,16 +256,22 @@ pushd "$TMP" >/dev/null || exit 1
 assert_exit 0 \
   "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
   "DC-33a happy path folder layout"
-if grep -q "Captain receives a working shape-confirm" docs/ship-flow/090-test-pitch/spec.md 2>/dev/null; then
-  echo "OK DC-33b acceptance_outcome rendered into spec.md"
+if grep -q "Captain receives a working shape-confirm" docs/ship-flow/090-test-pitch/shape.md 2>/dev/null; then
+  echo "OK DC-33b acceptance_outcome rendered into shape.md"
 else
-  echo "FAIL DC-33b acceptance_outcome missing from spec.md"
+  echo "FAIL DC-33b acceptance_outcome missing from shape.md"
   FAIL=1
 fi
-if grep -q "## Acceptance Outcome" docs/ship-flow/090-test-pitch/spec.md 2>/dev/null; then
-  echo "OK DC-33c spec.md has Acceptance Outcome section heading"
+if grep -q "## Acceptance Outcome" docs/ship-flow/090-test-pitch/shape.md 2>/dev/null; then
+  echo "OK DC-33c shape.md has Acceptance Outcome section heading"
 else
-  echo "FAIL DC-33c spec.md missing Acceptance Outcome heading"
+  echo "FAIL DC-33c shape.md missing Acceptance Outcome heading"
+  FAIL=1
+fi
+if [ ! -f docs/ship-flow/090-test-pitch/spec.md ]; then
+  echo "OK DC-33d canonical writer does not create spec.md"
+else
+  echo "FAIL DC-33d canonical writer still created spec.md"
   FAIL=1
 fi
 popd >/dev/null || exit 1

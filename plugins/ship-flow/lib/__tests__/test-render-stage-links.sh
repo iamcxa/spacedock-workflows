@@ -38,7 +38,7 @@ stage_outputs:
 <!-- section:stage-artifact-links -->
 | Stage | File |
 |-------|------|
-| spec | [spec.md](spec.md) |
+| shape | [shape.md](shape.md) |
 <!-- /section:stage-artifact-links -->
 EOF
   (cd "$dir" && git init -q && git add index.md && \
@@ -87,7 +87,7 @@ H="$(sha256_of index.md)"
 assert_exit 0 \
   "bash '${LIB_DIR}/render-stage-links.sh' --entity=index.md --if-hash='$H' --no-commit" \
   "Case-b exit 0"
-# The old spec row should be replaced by derived rows from frontmatter
+# The old shape row should be replaced by derived rows from frontmatter
 if grep -q "| plan | \[plan.md\](plan.md) |" index.md; then echo "OK Case-b new rows present"
 else echo "FAIL Case-b new rows missing"; FAIL=1; fi
 # verify markers still present (in-place replacement)

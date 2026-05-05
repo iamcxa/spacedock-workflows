@@ -35,7 +35,7 @@ status: sharp
 <!-- section:stage-artifact-links -->
 | Stage | File |
 |-------|------|
-| spec | [spec.md](spec.md) |
+| shape | [shape.md](shape.md) |
 <!-- /section:stage-artifact-links -->
 EOF
   # Create a dummy plan.md artifact
