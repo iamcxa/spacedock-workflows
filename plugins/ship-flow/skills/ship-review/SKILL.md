@@ -25,7 +25,7 @@ Run before any review work. Stop and SendMessage(FO) if any check fails.
 
 ## Entity body contract (schema-as-prose)
 
-- Reads: `verify.md` verdict (PASS required), `execute.md` execution log, `spec.md` problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`, `docs/ship-flow/_mods/canonical-doc-sync.md`.
+- Reads: `verify.md` verdict (PASS required), `execute.md` execution log, resolved shape artifact (`shape.md`; legacy `spec.md` fallback alias) problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`, `docs/ship-flow/_mods/canonical-doc-sync.md`.
 - Writes: `<entity-folder>/review.md` sections — `## PR Draft` (title + body), `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (verdict / stage_cost / timestamps).
 - Side effects: ARCHITECTURE.md / PRODUCT.md / README.md / ROADMAP.md patched (by `planner` dispatch — NOT by this skill directly).
 - Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.review`.
@@ -57,7 +57,7 @@ Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / 
 
 ### Step 1 — Read verify verdict + entity sections
 
-Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS`. From execute.md: execution log (for PR body Changes section). From spec.md (aggregated across children): Problem, User Journey, Done Criteria, Shape Output, Size Assessment, `architecture-impact`, `product-impact`, `readme-impact`. From parent entity (if `parent:` set): `roadmap-phase`.
+Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS`. From execute.md: execution log (for PR body Changes section). From the resolved shape artifact (canonical `shape.md`, legacy `spec.md` fallback alias; aggregated across children): Problem, User Journey, Done Criteria, Shape Output, Size Assessment, `architecture-impact`, `product-impact`, `readme-impact`. From parent entity (if `parent:` set): `roadmap-phase`.
 
 **Pre-check**: verdict != PASS → write `## Review Report status: blocked, reason: verify verdict <actual>, expected passed` and return. Never proceed without PASS.
 
