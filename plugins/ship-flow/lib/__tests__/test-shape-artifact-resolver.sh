@@ -26,6 +26,7 @@ run_case() {
   "$@"
 }
 
+# shellcheck disable=SC2329 # Invoked through run_case's command argument.
 expect_path() {
   local case_name="$1"
   local fixture="$2"
@@ -45,6 +46,7 @@ expect_path() {
   fi
 }
 
+# shellcheck disable=SC2329 # Invoked through run_case's command argument.
 expect_missing() {
   local case_name="$1"
   local fixture="$2"
