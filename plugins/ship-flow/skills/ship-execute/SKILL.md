@@ -1,6 +1,6 @@
 ---
 name: ship-execute
-description: "Use when executing a plan's tasks via wave-parallel dispatch. Agent-autonomous: wave graph traversal with per-task model hints, implementer→reviewer two-stage loop, BLOCKED escalation ladder (haiku→sonnet→opus), PR-feedback re-entry mode. Dispatched by /ship to `executer` teammate (SendMessage). Output: `<entity-folder>/execute.md`. Layer A delegation: superpowers:subagent-driven-development for dispatch philosophy."
+description: "Use when ship-flow needs execute-stage implementation from an approved plan, including wave tasks, blocked work, or PR feedback re-entry."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---

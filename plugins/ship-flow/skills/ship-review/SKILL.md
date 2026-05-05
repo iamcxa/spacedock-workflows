@@ -1,6 +1,6 @@
 ---
 name: ship-review
-description: "Use when verify stage passed and entity is ready for PR creation + canonical documentation sync. Agent-autonomous: 4-doc canonical dispatch (ARCHITECTURE.md / PRODUCT.md / README.md / ROADMAP.md) via `planner` teammate + PR-body drafting + token cost summary. Dispatched by /ship to `planner` teammate (SendMessage). Output: `<entity-folder>/review.md`. Layer A delegation: pr-review-toolkit:review-pr for review agent philosophy."
+description: "Use when verify passed and ship-flow needs review, PR readiness, PR body drafting, or canonical docs sync."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---
