@@ -65,14 +65,14 @@ Why this matters: opus 4.7 with hot context ramps to work in ~5 min vs ~5K token
 
 ### 4. Auditable per-stage `.md` artifacts
 
-Each stage writes its output to `<entity-folder>/{stage}.md` via `lib/write-stage-artifact.sh` (Layer C primitive — atomic commit with explicit pathspec, optional CAS via `--if-hash`). An auditor reads across `spec.md / plan.md / execute.md / verify.md / review.md / ship.md` + entity body to reconstruct decision history.
+Each stage writes its output to `<entity-folder>/{stage}.md` via `lib/write-stage-artifact.sh` (Layer C primitive — atomic commit with explicit pathspec, optional CAS via `--if-hash`). An auditor reads across `shape.md / plan.md / execute.md / verify.md / review.md / ship.md` + entity body to reconstruct decision history. Legacy `spec.md` remains a compatibility alias for older shape artifacts.
 
 Entity folder layout (default for new pitches in 2.0):
 
 ```
 docs/<wf>/<id>-<slug>/
-  README.md    # entity metadata + stage-artifact links
-  spec.md      # ship-shape — problem / appetite / children / DAG / assumptions / deletes / rabbit-holes
+  index.md     # entity metadata + stage-artifact links
+  shape.md     # ship-shape — problem / appetite / children / DAG / assumptions / deletes / rabbit-holes
   design.md    # ship-design — UI design intent, storyboard frames, design tokens (conditional: affects_ui)
   plan.md      # ship-plan — task breakdown / verification spec / DC
   execute.md   # ship-execute — commits / files modified / UAT evidence
@@ -91,7 +91,7 @@ Legacy flat entities (`docs/<wf>/<id>-<slug>.md`) continue to work; no migration
 captain intent (vague / concept / issue)
      │
      ▼
-/shape → docs/<wf>/<id>-<slug>/spec.md + ROADMAP.md initial row
+/shape → docs/<wf>/<id>-<slug>/shape.md + ROADMAP.md initial row
      │  (captain gate: confirm / refine / reject)
      ▼
 /ship <id> dispatches via SendMessage to named teammates:
@@ -170,7 +170,7 @@ The cycle: plugin knowledge flows **down** to projects on adoption/sync, and pro
 
 | Skill | Trigger pattern | Output artifact | Captain in loop? |
 |---|---|---|---|
-| `/shape "<directive>"` | vague / concept / issue / todo-tid / entity-id | `spec.md` (+ ROADMAP.md row) | ✅ confirm / refine / reject |
+| `/shape "<directive>"` | vague / concept / issue / todo-tid / entity-id | `shape.md` (+ ROADMAP.md row) | ✅ confirm / refine / reject |
 | `/shape --discuss "<text>"` | captain opts into Mode B | same, delegates Q-loop to `superpowers:brainstorming` | ✅ via brainstorming Q-loop |
 | `/shape "<skill-auth>"` | keywords `create/build/write/improve a skill` / `SKILL.md` / path `*/skills/*` | same, delegates design to `superpowers:writing-skills` (Mode C auto-detect) | ✅ |
 | `/ship <entity-id>` | sharp entity ready | per-stage `.md` + code commits + PR | ❌ (FO Discipline) |
@@ -282,7 +282,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 **Layer C primitive inventory** (by responsibility):
 | Primitive | Role |
 |---|---|
-| `lib/shape-confirm.sh` | entity folder initializer — writes spec.md + README.md + ROADMAP row atomically |
+| `lib/shape-confirm.sh` | entity folder initializer — writes shape.md + index.md + ROADMAP row atomically |
 | `lib/write-stage-artifact.sh` | per-stage `{stage}.md` writer — wraps content in `<!-- section:<stage>-report -->` + atomic commit |
 | `lib/write-section.sh` | section-tag writer — upserts a named section in an entity file (Principle 5a complement to extract) |
 | `lib/extract-section.sh` | section-tag reader — preferred over direct `Read` on entity files (Principle 5a) |
@@ -325,7 +325,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
   - `/shape "<directive>"` — framing gate; captain reviews once, then autonomy takes over.
   - `/ship <entity-id|requirement>` — dispatches plan → execute → verify → review → ship-final.
   - `/verify <entity-id>` — standalone fast-feedback outside the pipeline loop.
-- Per-stage `.md` artifacts land in the entity folder (`docs/<wf>/<id>-<slug>/{spec,plan,execute,verify,review,ship}.md`). Work is resumable after session reset; audit trails self-contain. Legacy flat entities (`docs/<wf>/<id>-<slug>.md`) remain supported.
+- Per-stage `.md` artifacts land in the entity folder (`docs/<wf>/<id>-<slug>/{shape,plan,execute,verify,review,ship}.md`). Work is resumable after session reset; audit trails self-contain. Legacy `spec.md` shape artifacts and legacy flat entities (`docs/<wf>/<id>-<slug>.md`) remain supported.
 - Cross-review gate at every stage transition (5-factor rubric: feasibility / executable scope / quality / DC adequacy / canonical sync). Verdict `PROCEED | VETO | PROMPT_CAPTAIN`; VETO loops capped at 2 rounds before escalation.
 - Named-teammate pattern per pitch (Principle 6 Rule A): `planner` (opus) + `executer` (sonnet) + `verifier` (opus/sonnet). Stage transitions use `SendMessage` — ~10× faster than fresh-subagent dispatch via hot-context reuse.
 - Seven principles codified in `INVARIANTS.md` with `bin/check-invariants.sh` grep enforcement — catches harness regressions (preamble regrowth, skill-count bloat, stale line-anchors, Layer A delegation drift, cross-review gate absence, structural-parity DC gaps) at CI-time. (Extended to 8 principles post-0.5.0.)
@@ -334,7 +334,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 **Layer C primitives introduced**:
 
 - `lib/write-stage-artifact.sh` — per-stage `.md` atomic writer with explicit pathspec.
-- `lib/shape-confirm.sh --layout=folder` — entity folder initializer (`README.md` + `spec.md` skeleton).
+- `lib/shape-confirm.sh --layout=folder` — entity folder initializer (`index.md` + `shape.md` skeleton).
 - `bin/check-invariants.sh` — Principle 2 split counting (stage ≤ 7 / utility uncapped) + 4 checks at launch (stage-artifact-path, layer-a-delegation, cross-review-gate, structural-parity-dc); extended post-0.5.0 with ask-fallback-coverage, indirection-sweep-emitted.
 
 **Breaking**:

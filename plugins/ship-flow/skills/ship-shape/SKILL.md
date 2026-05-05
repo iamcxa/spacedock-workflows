@@ -7,7 +7,7 @@ argument-hint: "[--discuss] [directive-text | todo-tid | entity-id]"
 
 # Ship-Shape — SHAPE Stage (2.0)
 
-You run SHAPE. Output: `docs/<wf>/<id>-<slug>/spec.md`. Captain has ONE gate per run: confirm / refine / reject.
+You run SHAPE. Output: `docs/<wf>/<id>-<slug>/shape.md`. Captain has ONE gate per run: confirm / refine / reject.
 
 **Shape Up vocabulary** (load-bearing — entity-body schema depends on these names):
 - **Pitch** — parent entity. Fields: `problem`, `appetite`, `children[]`, `rabbit_holes[]`, `deleted_from_shape[]`, `stated_assumptions[]`, `dag_mermaid`.
@@ -246,7 +246,7 @@ Mermaid fence MUST start with `graph` (shape-confirm.sh requires it).
 
 #### ASCII DAG for chat presentation (captain UX)
 
-When presenting the captain gate proposal IN CHAT, render the DAG as an **ASCII art diagram** (boxes + arrows), NOT mermaid. Mermaid renders only in artifacts (spec.md, plan.md), not in the captain's terminal. Captain UX preference (codified 2026-04-29 during pitch-108 shape session): "ASCII for chat, mermaid for files."
+When presenting the captain gate proposal IN CHAT, render the DAG as an **ASCII art diagram** (boxes + arrows), NOT mermaid. Mermaid renders only in artifacts (`shape.md`, plan.md), not in the captain's terminal. Captain UX preference (codified 2026-04-29 during pitch-108 shape session): "ASCII for chat, mermaid for files."
 
 Pattern:
 ```
@@ -276,7 +276,7 @@ For 3+ children with branches, use:
                  └──────────┘
 ```
 
-The artifact (spec.md / plan.md / index.md) ALWAYS uses mermaid — `shape-confirm.sh` parses mermaid and `dag_mermaid` field in proposal JSON requires mermaid syntax. ASCII is a chat-only render.
+The artifact (`shape.md` / plan.md / index.md) ALWAYS uses mermaid — `shape-confirm.sh` parses mermaid and `dag_mermaid` field in proposal JSON requires mermaid syntax. ASCII is a chat-only render.
 
 ### Pre-mortem (mandatory on non-trivial pitch; before cross-review)
 
@@ -338,7 +338,7 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
    ```bash
    bash plugins/ship-flow/lib/shape-confirm.sh --proposal="$PROPOSAL_JSON" --layout=folder --workflow-dir="$WORKFLOW_DIR"
    ```
-   `--layout=folder` (default for new pitches) writes `docs/<wf>/<id>-<slug>/index.md` + `spec.md`.
+   `--layout=folder` (default for new pitches) writes `docs/<wf>/<id>-<slug>/index.md` + `shape.md`.
 
 3. **Report**: 1 pitch (folder) + N shaped-children + M rabbit-hole todos + ROADMAP.md rows, ONE commit SHA.
 

@@ -177,7 +177,7 @@ else:
 
 After `review.md` cross-review PROCEED:
 
-1. **Compose `ship.md`** inside entity folder. Content: PR URL, deploy reference (if deployed), merge status, customer-visible summary (1-2 sentences drawn from spec.md + execute.md), and `## Todo Closeout Digest`. Single atomic commit via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
+1. **Compose `ship.md`** inside entity folder. Content: PR URL, deploy reference (if deployed), merge status, customer-visible summary (1-2 sentences drawn from the resolved shape artifact + execute.md), and `## Todo Closeout Digest`. Single atomic commit via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
 
    `## Todo Closeout Digest` MUST summarize:
    - todos captured during this ship, with todo slug and source stage;

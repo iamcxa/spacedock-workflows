@@ -165,10 +165,10 @@ Title: {entity title}
 
 Body:
 ## Problem
-{from spec.md → Problem}
+{from shape.md → Problem}
 
 ## User Journey
-{from spec.md → User Journey — end-to-end flow}
+{from shape.md → User Journey — end-to-end flow}
 
 ## Done Criteria + Verification
 {Full UAT table from verify.md → UAT section: DC / Type / Assertion / Verify Procedure / Result}
@@ -193,7 +193,7 @@ Cost: ${token_actual} (budget: ${token_budget})
 
 ### Step 5 — Token summary
 
-Read `token_actual` from entity frontmatter (FO-accumulated). Read `token_budget` from spec.md Size Assessment.
+Read `token_actual` from entity frontmatter (FO-accumulated). Read `token_budget` from the resolved shape artifact (`shape.md`, with legacy `spec.md` fallback alias) Size Assessment.
 
 ```markdown
 ## Token Summary
@@ -230,7 +230,7 @@ Dispatch cross-review to `executer` teammate (reviews PR body + canonical-docs d
 4. **DC adequacy** — PR body's DC+Verification table is reproducible (copy-paste the procedure)?
 5. **Canonical sync** — 4-doc audit:
    - **ARCHITECTURE.md**: architecture-impact blocks aggregated cleanly per target_section? No section-tag corruption (patch-map.sh CAS held)?
-   - **PRODUCT.md**: constraints / user stories align with spec.md intent?
+   - **PRODUCT.md**: constraints / user stories align with shape intent?
    - **README.md**: `entry_critical` readme-impact blocks carefully applied (prose-varying needs closer audit)? Install / usage prose reads naturally?
    - **ROADMAP.md**: status flip matches pitch actual verdict? Shipped row carries correct date + PR placeholder?
 6. **Reverse-audit previous stage** — does review's canonical-sync check expose a gap in verify's render-fidelity assessment? Specifically: is `render_fidelity_status` from `### Hand-off to Review` consistent with what the PR diff shows? If `affects_ui: true` and `render_fidelity_status: not-applicable`, flag for captain review.

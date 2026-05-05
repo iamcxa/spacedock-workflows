@@ -26,7 +26,7 @@ that may become future work.
 
 ## Decision: todo vs sharp entity directly
 
-This skill captures TODOS — items deferred to later. If the item warrants immediate sharp-entity creation (claiming `--next-id` and writing spec.md), use `/ship-flow:ship-shape <directive>` instead. Decision rule:
+This skill captures TODOS — items deferred to later. If the item warrants immediate sharp-entity creation (claiming `--next-id` and writing `shape.md`), use `/ship-flow:ship-shape <directive>` instead. Decision rule:
 
 | Condition | Use |
 |-----------|-----|
