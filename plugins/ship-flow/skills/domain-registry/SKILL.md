@@ -1,6 +1,6 @@
 ---
 name: domain-registry
-description: "Read-as-context registry mapping domains to specialist designers + knowledge modules. Consulted by ship-design router (113.1), schema-designer specialist (113.3), and intent-match-verifier (113.4) via lib/registry-resolve.sh. NOT invokable as a Skill tool — read this SKILL.md as orientation; call the lib script for resolution."
+description: "Use when ship-design, schema-designer, or intent-match-verifier needs domain registry routing or knowledge-module lookup context."
 user-invocable: false
 ---
 

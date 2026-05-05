@@ -1,6 +1,6 @@
 ---
 name: ship-shape
-description: "Use when shaping a vague / complex / ambiguous directive into a Shape Up pitch before autonomous pipeline execution. Default Mode A: agent-autonomous proposer (one proposal, captain gates confirm / refine / reject). Mode B: `--discuss` or auto-routed Q-loop via superpowers:brainstorming. Mode C: skill-authoring via superpowers:writing-skills. Output: `docs/<wf>/<id>-<slug>/spec.md` (folder layout default)."
+description: "Use when shaping vague, complex, or ambiguous ship-flow requests into a Shape Up pitch, including `/shape`, discussion, or skill-authoring work."
 user-invocable: true
 argument-hint: "[--discuss] [directive-text | todo-tid | entity-id]"
 ---

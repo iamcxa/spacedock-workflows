@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "Use when running the ship-flow pipeline on an entity-id or concrete requirement — dispatches plan→execute→verify→review→ship stages via SendMessage to named teammates (spawned at /shape) and produces `plan.md` / `execute.md` / `verify.md` / `review.md` / `ship.md` artifacts inside `docs/<wf>/<id>-<slug>/`. Vague or unmatched arguments route back to `/shape`."
+description: "Use when `/ship` should run ship-flow for an entity id or concrete requirement; use shape first for vague or unmatched requests."
 user-invocable: true
 argument-hint: "<entity-id | slug | concrete-requirement>"
 ---

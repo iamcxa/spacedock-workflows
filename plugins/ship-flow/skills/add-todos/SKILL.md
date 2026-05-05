@@ -1,6 +1,6 @@
 ---
 name: add-todos
-description: "Low-friction todo capture for ship-flow. Parses free text (single idea or semicolon/newline/bullet-separated list) into todo files + ROADMAP.later rows in one atomic commit. Use when captain has a quick idea or rabbit hole to file without starting a full shape cycle."
+description: "Use when capturing ship-flow todo ideas, rabbit holes, or quick captain notes without starting a full shape cycle."
 user-invocable: true
 argument-hint: "\"<idea text>\" | \"idea 1; idea 2; idea 3\""
 ---

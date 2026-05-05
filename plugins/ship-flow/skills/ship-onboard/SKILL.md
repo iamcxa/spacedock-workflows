@@ -1,6 +1,6 @@
 ---
 name: ship-onboard
-description: "Use when adopting ship-flow in a new repo, AFTER /spacebridge:workflow-adopt has installed the workflow scaffolding (or the captain has manually created docs/<wf>/). Scans codebase to generate initial PRODUCT.md + ROADMAP.md drafts for captain confirmation. Run once per repo. For fresh-fresh repos with no workflow yet, run /spacebridge:workflow-adopt first."
+description: "Use when adopting ship-flow in a repo after workflow scaffolding exists, or when onboarding needs initial PRODUCT and ROADMAP context."
 user-invocable: true
 argument-hint: ""
 ---
