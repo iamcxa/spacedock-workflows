@@ -408,7 +408,7 @@ mappings in stage SKILL.md prose are forbidden.
 - `grep -rE 'designer_section_anchor.*=|domain.*specialist' plugins/ship-flow/skills/*/SKILL.md` should return zero hits OUTSIDE the `domain-registry` SKILL.md itself.
 - Tier A automated check active as of 113.1 (router consumes registry; grep-check validates ship-design Phase 0 cites `registry-resolve.sh`). Schema specialist path active as of 113.3: plugin defaults resolve `schema` to `ship-design#schema-designer`, and the schema-designer subsection emits typed `## Schema Design Output`. Verify-stage intent-match path active as of 113.4: `ship-verify` consults `registry-resolve.sh`, compares execute evidence/diff against `## Schema Design Output`, and emits `## Intent Match Findings` tagged `route_to: design` when design intent drift belongs back to design. Tier B remains for future non-schema domains until each domain has its own registered specialist.
 
-**Source**: pitch-113 historical parent spec.md + 113.2 first-knowledge-module ship + 113.1 router-extension (ship-design consumer).
+**Source**: pitch-113 historical parent shape.md + 113.2 first-knowledge-module ship + 113.1 router-extension (ship-design consumer).
 
 ---
 
@@ -426,7 +426,7 @@ mappings in stage SKILL.md prose are forbidden.
 
 5. **Mixed entities** (UI-lane AND non-UI-lane signals both true) prefer the UI gate (captain-gated) as the safe-side tie-break per shape artifact A3.
 
-**Cross-references**: D1, D2, D4 captain decisions (historical docs/ship-flow/116-design-gate-captain-fo-split/spec.md §Captain Decisions); `entity-body-schema.yaml → stages.design.hand_off_to_plan`; ship-design SKILL §Lane determination predicate.
+**Cross-references**: D1, D2, D4 captain decisions (historical docs/ship-flow/116-design-gate-captain-fo-split/shape.md §Captain Decisions); `entity-body-schema.yaml → stages.design.hand_off_to_plan`; ship-design SKILL §Lane determination predicate.
 
 **Grep check** (Tier B / design-review): design-review agent must confirm Phase 9 verdict emission uses the lane-type branch (UI vs non-UI rubric) when evaluating a cross-review. Automated: `grep -c "Constraint Coverage" plugins/ship-flow/skills/ship-design/SKILL.md` → ≥1.
 
@@ -448,7 +448,7 @@ mappings in stage SKILL.md prose are forbidden.
 
 5. **`design-skipped: true`** in Hand-off to Plan triggers plan Step 1.6 G14 short-circuit (no design constraints to import). Non-trivial-pass entities emit `design-skipped: false` with non-empty `design_constraints[]`.
 
-**Cross-references**: D5 captain decision (historical docs/ship-flow/116-design-gate-captain-fo-split/spec.md §Captain Decisions); `entity-body-schema.yaml → stages.design.hand_off_to_plan.design-skipped`; ship-design SKILL §Phase 0 (trivial-pass fast-path).
+**Cross-references**: D5 captain decision (historical docs/ship-flow/116-design-gate-captain-fo-split/shape.md §Captain Decisions); `entity-body-schema.yaml → stages.design.hand_off_to_plan.design-skipped`; ship-design SKILL §Phase 0 (trivial-pass fast-path).
 
 **Grep check** (Tier A): `grep -A6 "name: design" docs/ship-flow/README.md | grep -c "skip-when:"` → must equal 0. `grep -B2 -A10 "Phase 0" plugins/ship-flow/skills/ship-design/SKILL.md | grep -cE "(trivial-pass|trivial_pass)"` → ≥1.
 

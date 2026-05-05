@@ -61,7 +61,7 @@ frontmatter:
       default: unset
       description: |
         Domain registry name (e.g., "schema") set by ship-shape Phase 8.5 via
-        plugins/ship-flow/lib/registry-resolve.sh --classify on spec.md. Drives
+        plugins/ship-flow/lib/registry-resolve.sh --classify on shape.md. Drives
         Lane determination predicate non-UI-lane branch and Phase 0.5 specialist dispatch.
         Pitch 116 removed conditional skip-when. Consumed by
         ship-design Phase 0 router for specialist dispatch (per registry's

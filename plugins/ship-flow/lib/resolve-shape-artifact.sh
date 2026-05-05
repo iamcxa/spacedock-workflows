@@ -9,15 +9,15 @@ fi
 
 ENTITY_FOLDER="$1"
 SHAPE_PATH="${ENTITY_FOLDER}/shape.md"
-LEGACY_SPEC_PATH="${ENTITY_FOLDER}/spec.md"
+legacy_spec_path="${ENTITY_FOLDER}/spec.md"
 
 if [ -f "$SHAPE_PATH" ]; then
   printf '%s\n' "$SHAPE_PATH"
   exit 0
 fi
 
-if [ -f "$LEGACY_SPEC_PATH" ]; then
-  printf '%s\n' "$LEGACY_SPEC_PATH"
+if [ -f "$legacy_spec_path" ]; then
+  printf '%s\n' "$legacy_spec_path"
   exit 0
 fi
 

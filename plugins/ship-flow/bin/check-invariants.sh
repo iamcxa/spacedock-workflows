@@ -765,7 +765,7 @@ check_pol_probe_invoked() {
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0 f
-  for f in "$docs_dir"/*.md "$docs_dir"/*/spec.md "$docs_dir"/*/index.md; do
+  for f in "$docs_dir"/*.md "$docs_dir"/*/shape.md "$docs_dir"/*/index.md; do
     [ -f "$f" ] || continue
     grep -qE '^appetite:[[:space:]]*(medium-batch|big-batch)' "$f" || continue
     _entity_is_terminal "$f" && continue
@@ -843,13 +843,13 @@ check_verify_mechanical_ui_parity_emitted() {
 }
 
 check_will_get_triple() {
-  # C6 — entity 109: every Will-get W<n> bullet in spec.md must have a matching
+  # C6 — entity 109: every Will-get W<n> bullet in shape.md must have a matching
   # W<n> dogfood-check line in Layer 2 ### Will-get dogfood checks.
-  # Skip silently if spec.md has no ## Layer 1 header (pre-109 entities).
+  # Skip silently if shape.md has no ## Layer 1 header (pre-109 entities).
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0 f entity wn
-  for f in "$docs_dir"/*/spec.md; do
+  for f in "$docs_dir"/*/shape.md; do
     [ -f "$f" ] || continue
     # Skip silently if no Layer 1 section (pre-109 format)
     grep -qE '^## Layer 1' "$f" || continue
@@ -875,12 +875,12 @@ check_will_get_triple() {
 }
 
 check_no_rubric_token() {
-  # C7 — entity 109: Layer 1 section of spec.md MUST NOT contain rubric/7-factor/score tokens.
-  # Skip silently if spec.md has no ## Layer 1 header (pre-109 entities).
+  # C7 — entity 109: Layer 1 section of shape.md MUST NOT contain rubric/7-factor/score tokens.
+  # Skip silently if shape.md has no ## Layer 1 header (pre-109 entities).
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
   local fail=0 f entity layer1
-  for f in "$docs_dir"/*/spec.md; do
+  for f in "$docs_dir"/*/shape.md; do
     [ -f "$f" ] || continue
     # Skip silently if no Layer 1 section (pre-109 format)
     grep -qE '^## Layer 1' "$f" || continue

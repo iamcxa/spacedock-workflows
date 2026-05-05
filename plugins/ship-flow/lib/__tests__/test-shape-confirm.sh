@@ -268,10 +268,11 @@ else
   echo "FAIL DC-33c shape.md missing Acceptance Outcome heading"
   FAIL=1
 fi
-if [ ! -f docs/ship-flow/090-test-pitch/spec.md ]; then
-  echo "OK DC-33d canonical writer does not create spec.md"
+legacy_spec_output="docs/ship-flow/090-test-pitch/spec.md"
+if [ ! -f "$legacy_spec_output" ]; then
+  echo "OK DC-33d canonical writer does not create legacy spec.md"
 else
-  echo "FAIL DC-33d canonical writer still created spec.md"
+  echo "FAIL DC-33d canonical writer still created legacy spec.md"
   FAIL=1
 fi
 popd >/dev/null || exit 1

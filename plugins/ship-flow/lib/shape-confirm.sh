@@ -67,7 +67,7 @@ PITCH_ANSWERS_DENSITY=$(yq --input-format=json '.pitch.answers_density // ""' "$
 
 # Acceptance Outcome required for pitches (Phase 100)
 if [ -z "$PITCH_ACCEPTANCE_OUTCOME" ] || [ "$PITCH_ACCEPTANCE_OUTCOME" = "null" ]; then
-  echo "Error: pitch.acceptance_outcome is required (user-observable answer to 'what does captain GET?'). See docs/ship-flow/100-shape-acceptance-outcome-gate/spec.md" >&2
+  echo "Error: pitch.acceptance_outcome is required (user-observable answer to 'what does captain GET?'). See docs/ship-flow/100-shape-acceptance-outcome-gate/shape.md" >&2
   exit 10
 fi
 if [ "${#PITCH_ACCEPTANCE_OUTCOME}" -lt 50 ]; then
