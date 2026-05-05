@@ -271,6 +271,60 @@ fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
+echo
+echo "--- DC-34: folder layout cascades to children as index.md ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal.json"
+sample_proposal > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 0 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
+  "DC-34a folder layout happy path"
+if [ -f "docs/ship-flow/090.1-child-a/index.md" ] && [ -f "docs/ship-flow/090.2-child-b/index.md" ]; then
+  echo "OK DC-34b children written as folder index.md"
+else
+  echo "FAIL DC-34b children missing folder index.md"
+  FAIL=1
+fi
+if [ ! -f "docs/ship-flow/090.1-child-a.md" ] && [ ! -f "docs/ship-flow/090.2-child-b.md" ]; then
+  echo "OK DC-34c no flat child files in folder layout"
+else
+  echo "FAIL DC-34c folder layout still wrote flat child files"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-35: existing rabbit-hole todo is never silently overwritten ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal.json"
+sample_proposal > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+cat > docs/ship-flow/todos/rh-test.md <<'EOF'
+---
+tid: rh-test
+captured_at: 2026-01-01T00:00:00Z
+status: pending
+source_pitch: "088"
+---
+
+Original rabbit hole body that must survive.
+EOF
+BEFORE_HASH="$(git hash-object docs/ship-flow/todos/rh-test.md)"
+assert_exit 10 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP'" \
+  "DC-35a existing rabbit-hole todo rejects write"
+AFTER_HASH="$(git hash-object docs/ship-flow/todos/rh-test.md)"
+if [ "$BEFORE_HASH" = "$AFTER_HASH" ]; then
+  echo "OK DC-35b existing rabbit-hole todo content preserved"
+else
+  echo "FAIL DC-35b existing rabbit-hole todo content changed"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
 # ── DC-101.1-6: answers_density emitted in folder layout (pitch-101 Task 2) ──
 echo
 echo "--- DC-101.1-6: answers_density in folder layout ---"
