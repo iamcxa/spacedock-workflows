@@ -9,12 +9,17 @@ RESOLVER="${LIB_DIR}/resolve-shape-artifact.sh"
 FAIL=0
 CASE_FILTER=""
 
-for arg in "$@"; do
-  case "$arg" in
-    --case=*) CASE_FILTER="${arg#--case=}" ;;
-    --case) shift; CASE_FILTER="${1:-}" ;;
-    *) echo "Unknown option: $arg" >&2; exit 2 ;;
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --case=*) CASE_FILTER="${1#--case=}" ;;
+    --case)
+      shift
+      CASE_FILTER="${1:-}"
+      [ -n "$CASE_FILTER" ] || { echo "Missing value for --case" >&2; exit 2; }
+      ;;
+    *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 run_case() {
