@@ -107,7 +107,7 @@ H="$(sha256_of test.md)"
 assert_exit 0 \
   "bash '${LIB_DIR}/register-stage-output.sh' --entity=test.md --stage=sharp --file=stages/shape.md --if-hash='$H' --no-commit" \
   "DC-26a register-stage-output success"
-if grep -qE '^[[:space:]]*sharp:[[:space:]]*stages/spec\.md' test.md; then
+if grep -qE '^[[:space:]]*sharp:[[:space:]]*stages/shape\.md' test.md; then
   echo "OK DC-26b stage_outputs.sharp entry present"
 else echo "FAIL DC-26b stage_outputs.sharp entry missing"; FAIL=1
 fi
