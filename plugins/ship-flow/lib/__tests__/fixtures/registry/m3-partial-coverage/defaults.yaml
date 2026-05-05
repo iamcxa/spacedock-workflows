@@ -1,6 +1,6 @@
 # fixture: m3-partial-coverage/defaults.yaml
 # Tests: M3 path — spec matches 2 domains, only 1 has a specialist (schema has anchor, saga does not)
-# registry-resolve.sh --classify spec.md should exit 0, stdout partial_coverage + missing=saga
+# registry-resolve.sh --classify shape.md should exit 0, stdout partial_coverage + missing=saga
 schema_version: "1.0"
 domains:
   schema:

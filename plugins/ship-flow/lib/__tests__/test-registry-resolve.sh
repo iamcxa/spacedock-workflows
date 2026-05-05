@@ -100,9 +100,9 @@ check_stdout "--list with happy-path config returns 'schema' domain" \
   "\"$REGISTRY_SCRIPT\" --list --config=\"${FIXTURES}/happy-path/defaults.yaml\""
 
 # Assertion 4: --classify happy-path spec returns matched domain 'schema'
-check_stdout "--classify happy-path spec.md returns matched=schema" \
+check_stdout "--classify happy-path shape.md returns matched=schema" \
   "matched=schema" \
-  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/happy-path/spec.md\" --config=\"${FIXTURES}/happy-path/defaults.yaml\""
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/happy-path/shape.md\" --config=\"${FIXTURES}/happy-path/defaults.yaml\""
 
 # Assertion 5: M1 path — exit 10 + stderr specialist_missing
 check_exit "M1: --validate with missing specialist anchor exits 10" \
@@ -125,15 +125,15 @@ check_stderr "M2: stderr contains status=knowledge_module_missing" \
 # Assertion 7: M3 path — exit 0 + stdout partial_coverage + missing=saga
 check_exit "M3: --classify with partial domain coverage exits 0" \
   0 \
-  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/m3-partial-coverage/spec.md\" --config=\"${FIXTURES}/m3-partial-coverage/defaults.yaml\""
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/m3-partial-coverage/shape.md\" --config=\"${FIXTURES}/m3-partial-coverage/defaults.yaml\""
 
 check_stdout "M3: stdout contains partial_coverage" \
   "partial_coverage" \
-  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/m3-partial-coverage/spec.md\" --config=\"${FIXTURES}/m3-partial-coverage/defaults.yaml\""
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/m3-partial-coverage/shape.md\" --config=\"${FIXTURES}/m3-partial-coverage/defaults.yaml\""
 
 check_stdout "M3: stdout contains missing=saga" \
   "missing=.*saga" \
-  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/m3-partial-coverage/spec.md\" --config=\"${FIXTURES}/m3-partial-coverage/defaults.yaml\""
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/m3-partial-coverage/shape.md\" --config=\"${FIXTURES}/m3-partial-coverage/defaults.yaml\""
 
 # Assertion 8: M4 path — exit 20 + stderr parse_error
 check_exit "M4: malformed YAML config exits 20" \
@@ -169,11 +169,11 @@ check_stdout "adopter override: --domain=schema emits plan skill_hints from proj
 
 check_stdout "adopter override: --classify emits required_skills for matched domain" \
   "required_skills=project-db,fmodel" \
-  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/happy-path/spec.md\" --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/happy-path/shape.md\" --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
 
 check_stdout "adopter override: --classify emits stage skill_hints for matched domain" \
   "skill_hints.execute=fmodel" \
-  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/happy-path/spec.md\" --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/happy-path/shape.md\" --config=\"${FIXTURES}/adopter-override/defaults.yaml\" --adopter-config=\"${FIXTURES}/adopter-override/project-domains.yaml\""
 
 # Assertion 12: live plugin defaults now expose the schema-designer specialist (113.3)
 check_exit "live defaults: schema domain validates with specialist anchor present" \

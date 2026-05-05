@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 REGISTRY_SCRIPT="${SCRIPT_DIR}/../registry-resolve.sh"
 FIXTURE_DIR="${SCRIPT_DIR}/fixtures/registry/carlove-adopter"
 ADOPTER_CONFIG="${FIXTURE_DIR}/.claude/ship-flow/domains.yaml"
-SPEC_FILE="${FIXTURE_DIR}/spec.md"
+SPEC_FILE="${FIXTURE_DIR}/shape.md"
 PATH_ONLY_FILE="${FIXTURE_DIR}/table-path-only.txt"
 
 PASS=0
@@ -58,7 +58,7 @@ check_exit "plugin defaults + carlove adopter --validate --domain=schema exits 0
   "\"${REGISTRY_SCRIPT}\" --validate --domain=schema --adopter-config=\"${ADOPTER_CONFIG}\""
 
 echo "Block 2: carlove-shaped schema pitch classifies as schema"
-check_stdout "carlove schema spec classifies to matched=schema" \
+check_stdout "carlove schema shape classifies to matched=schema" \
   "matched=schema" \
   "\"${REGISTRY_SCRIPT}\" --classify \"${SPEC_FILE}\" --adopter-config=\"${ADOPTER_CONFIG}\""
 check_stdout "carlove table path-only fixture classifies to matched=schema via trigger_patterns" \
