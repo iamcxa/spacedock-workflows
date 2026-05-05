@@ -412,6 +412,50 @@ mappings in stage SKILL.md prose are forbidden.
 
 ---
 
+### Principle 10: Design Gate Domain Split
+
+**Rule**: The design→plan gate is captain-gated for UI-lane entities and FO-gated for non-UI-lane entities. Lane type is determined by the boolean predicate in `ship-design` SKILL Trigger section (Lane determination predicate).
+
+1. **UI-lane entities** (`UI-lane == true`: `affects_ui == true` OR files-modified match `*.tsx|*.css|*.html`) are **captain-gated** at the design→plan boundary. Phase 9 PROCEED verdict requires captain acknowledgment before FO may advance the entity to plan.
+
+2. **Non-UI-lane entities** (`non-UI-lane == true`: domain set OR `design_required == true` OR `contract_decision_required == true` per ship-design SKILL Lane determination predicate) are **FO-gated**: a PROCEED verdict at Phase 9 cross-review allows FO to advance directly to plan without captain interaction. Trivial-pass entities (neither UI-lane nor non-UI-lane) are NOT FO-gated — they bypass the gate entirely per Principle 11 "Design Stage Required" trivial-pass fast-path.
+
+3. **PROMPT_CAPTAIN and VETO verdicts** always halt to captain regardless of lane type — they are never auto-resolved by FO. FO surfaces the unresolved decisions / blocking findings to captain before any further action.
+
+4. **FO honors the verdict per Principle 6 Rule C** without further code patch — the PROCEED/PROMPT_CAPTAIN/VETO routing is already covered by Rule C's ABC clause. No additional FO source patch is required to implement this split.
+
+5. **Mixed entities** (UI-lane AND non-UI-lane signals both true) prefer the UI gate (captain-gated) as the safe-side tie-break per spec.md A3.
+
+**Cross-references**: D1, D2, D4 captain decisions (docs/ship-flow/116-design-gate-captain-fo-split/spec.md §Captain Decisions); `entity-body-schema.yaml → stages.design.hand_off_to_plan`; ship-design SKILL §Lane determination predicate.
+
+**Grep check** (Tier B / design-review): design-review agent must confirm Phase 9 verdict emission uses the lane-type branch (UI vs non-UI rubric) when evaluating a cross-review. Automated: `grep -c "Constraint Coverage" plugins/ship-flow/skills/ship-design/SKILL.md` → ≥1.
+
+**Source**: pitch-116 (design-gate-captain-fo-split) D1 captain decision.
+
+---
+
+### Principle 11: Design Stage Required
+
+**Rule**: Every entity passes through the design stage — no entity may skip design entirely at the pipeline level.
+
+1. **Design always runs** — the pipeline `stages.states[name=design]` block in `docs/ship-flow/README.md` has no `skip-when:` clause. The former `skip-when: "!affects_ui && !domain && !design_required && !contract_decision_required"` README clause is removed.
+
+2. **The only bypass is the trivial-pass fast-path** — for pure docs / mechanical refactor entities where ALL of the following hold: no `affects_ui`, no registered `domain`, no `design_required`, no `contract_decision_required`, no `open_contract_decisions[]`. These entities walk the fast-path inside ship-design SKILL Phase 0.
+
+3. **Trivial-pass output**: ship-design emits a minimal `design.md` containing `## Design Report → status: trivial-pass` plus a `### Hand-off to Plan` block with `design-skipped: true`. Phase 9 unconditionally emits PROCEED for trivial-pass entities (no designer dispatch, no Q-loop, no cross-review rubric evaluation).
+
+4. **The trivial-pass path replaces the former README `skip-when:` clause** — design always appears in the pipeline; the trivial-pass fast-path is internal to the design SKILL, not a pipeline-level skip. This preserves uniform 6-stage flow shape across repos.
+
+5. **`design-skipped: true`** in Hand-off to Plan triggers plan Step 1.6 G14 short-circuit (no design constraints to import). Non-trivial-pass entities emit `design-skipped: false` with non-empty `design_constraints[]`.
+
+**Cross-references**: D5 captain decision (docs/ship-flow/116-design-gate-captain-fo-split/spec.md §Captain Decisions); `entity-body-schema.yaml → stages.design.hand_off_to_plan.design-skipped`; ship-design SKILL §Phase 0 (trivial-pass fast-path).
+
+**Grep check** (Tier A): `grep -A6 "name: design" docs/ship-flow/README.md | grep -c "skip-when:"` → must equal 0. `grep -B2 -A10 "Phase 0" plugins/ship-flow/skills/ship-design/SKILL.md | grep -cE "(trivial-pass|trivial_pass)"` → ≥1.
+
+**Source**: pitch-116 (design-gate-captain-fo-split) D5 captain decision.
+
+---
+
 ## Related Files
 
 - `plugins/ship-flow/bin/check-invariants.sh` — CI grep implementation

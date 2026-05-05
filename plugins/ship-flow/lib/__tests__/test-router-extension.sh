@@ -58,8 +58,8 @@ check "ship-design SKILL.md trigger lists domain frontmatter" \
   "grep -qE 'domain:.*frontmatter|domain.*set.*shape|when.*domain.*set|domain.*set_at.*shape' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md'"
 check "ship-design Boot Self-Check trigger lists domain frontmatter registered via registry" \
   "awk '/^## Boot Self-Check$/{in_boot=1; next} in_boot && /^## /{in_boot=0} in_boot && /^1\\. \\*\\*Trigger valid\\*\\*/ {found=1; if (\$0 ~ /domain:/ && \$0 ~ /frontmatter/ && \$0 ~ /registr(y|ered)/) ok=1} END{exit !(found && ok)}' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md'"
-check "ship-design Boot Self-Check skip wording matches design-bearing skip condition" \
-  "awk '/^## Boot Self-Check$/{in_boot=1; next} in_boot && /^## /{in_boot=0} in_boot && /^1\\. \\*\\*Trigger valid\\*\\*/ {found=1; if (\$0 ~ /skip-when: \"!affects_ui && !domain && !design_required && !contract_decision_required\"/) ok=1} END{exit !(found && ok)}' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md'"
+check "ship-design Boot Self-Check states design always runs (no skip-when; trivial-pass via Phase 0)" \
+  "awk '/^## Boot Self-Check$/{in_boot=1; next} in_boot && /^## /{in_boot=0} in_boot && /^1\\. \\*\\*Trigger valid\\*\\*/ {found=1; if (\$0 ~ /always runs/ && \$0 ~ /trivial-pass/) ok=1} END{exit !(found && ok)}' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md'"
 check "ship-design Boot Self-Check no longer has the old domain-blind trigger-only contract" \
   "! awk '/^## Boot Self-Check$/{in_boot=1; next} in_boot && /^## /{in_boot=0} in_boot && /^1\\. \\*\\*Trigger valid\\*\\*/ && /affects_ui: true.*--design.*\\*\\.tsx\\|\\*\\.css\\|\\*\\.html/ && \$0 !~ /domain:/ {found=1} END{exit !found}' '${PLUGIN_ROOT}/skills/ship-design/SKILL.md'"
 

@@ -25,7 +25,6 @@ stages:
       gate: true
       manual: conditional
       parallelism: lanes
-      skip-when: "!affects_ui && !domain && !design_required"
       skill: ship-flow:ship-design
       model: opus
     - name: plan

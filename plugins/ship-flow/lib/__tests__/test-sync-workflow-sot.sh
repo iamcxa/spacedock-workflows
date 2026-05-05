@@ -64,16 +64,13 @@ cp "${REPO_ROOT}/docs/ship-flow/README.md" "$SOT"
 cp "${REPO_ROOT}/plugins/ship-flow/workflow-template.yaml" "$TEMPLATE"
 cp "${REPO_ROOT}/plugins/ship-flow/README.md" "$PLUGIN_README"
 
-perl -0pi -e 's/skip-when: "![^"]+"/skip-when: "!affects_ui && !domain"/' "$TEMPLATE"
 perl -0pi -e 's/feedback-to: "execute"/feedback-to: plan/' "$TEMPLATE"
 perl -0pi -e 's/parallelism: lanes/parallelism: serial/' "$TEMPLATE"
 perl -0pi -e 's/parallelism: dag/parallelism: serial/' "$TEMPLATE"
 perl -0pi -e 's/parallelism: checks/parallelism: serial/' "$TEMPLATE"
-perl -0pi -e 's/skip-when: !affects_ui && !domain && !design_required/skip-when: !affects_ui && !domain/' "$PLUGIN_README"
+# skip-when perl rewrites removed (pitch 116 W3 — template and plugin README no longer have skip-when)
 
-assert_failure_output "check mode reports template drift without writing" "DRIFT template.design.skip-when" \
-  "$SYNC" --check --sot "$SOT" --template "$TEMPLATE" --plugin-readme "$PLUGIN_README"
-
+# template.design.skip-when drift check removed (pitch 116 W3); parallelism drift check still active
 assert_failure_output "check mode reports parallelism drift without writing" "DRIFT template.execute.parallelism" \
   "$SYNC" --check --sot "$SOT" --template "$TEMPLATE" --plugin-readme "$PLUGIN_README"
 
@@ -84,10 +81,10 @@ perl -0pi -e 's/^\s+parallelism: dag\n//m' "$BROKEN_SOT"
 assert_failure_output "check mode rejects missing required parallelism fields" "ERROR SOT missing required derived fields" \
   "$SYNC" --check --sot "$BROKEN_SOT" --template "$TEMPLATE" --plugin-readme "$PLUGIN_README"
 
-if grep -q 'skip-when: "!affects_ui && !domain"$' "$TEMPLATE"; then
-  record_pass "check mode leaves template unchanged"
+if ! grep -q 'skip-when:' "$TEMPLATE"; then
+  record_pass "check mode leaves template unchanged (no skip-when, W3)"
 else
-  record_fail "check mode leaves template unchanged"
+  record_fail "check mode leaves template unchanged (no skip-when, W3)"
 fi
 
 assert_success "write mode updates derived files from dogfood SOT" \

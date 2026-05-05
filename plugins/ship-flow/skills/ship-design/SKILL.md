@@ -17,7 +17,7 @@ Design intent capture stage for UI, domain, and contract/interface pitches. Runs
 
 Run before any design work. Stop and SendMessage(FO) if any check fails.
 
-1. **Trigger valid**: entity has `affects_ui: true` OR `domain:` frontmatter registered in registry OR `design_required: true` OR `contract_decision_required: true` OR `--design` flag OR files match `*.tsx|*.css|*.html`. If `skip-when: "!affects_ui && !domain && !design_required && !contract_decision_required"` matches and no explicit/file trigger is present → skip design stage, SendMessage(planner): "Design trigger absent per `skip-when: \"!affects_ui && !domain && !design_required && !contract_decision_required\"` — routing directly to plan."
+1. **Trigger valid**: entity has `affects_ui: true` OR `domain:` frontmatter registered in registry OR `design_required: true` OR `contract_decision_required: true` OR `--design` flag OR files match `*.tsx|*.css|*.html`. Design always runs — trivial-pass entities (none of these signals present) walk Phase 0 fast-path per D5 (see Phase 0 §Trivial-pass fast-path). There is no pipeline-level skip.
 2. **Entity status**: read entity frontmatter `status:` — must be `sharp`. If `design` → design already ran (check for re-entry signal).
 3. **Hand-off to Design present**: entity body contains `### Hand-off to Design` block (from ship-shape Phase 8). If absent → SendMessage(FO): "Missing Hand-off to Design — shape stage did not complete handoff."
 4. **Exploration file**: `## Sharp Output → Problem` cites a file:line. Read that file before Phase 1 — if missing → SendMessage(FO): "Exploration file not found: `<path>` — cannot distill design without source."
@@ -53,7 +53,27 @@ Design stage fires when ANY of:
 - `Files modified` or `architecture-impact` cites path matching glob `*.tsx | *.css | *.html`
 - Captain explicit `--design` flag on `/shape` invocation
 
-Otherwise: auto-skip to plan per `skip-when: "!affects_ui && !domain && !design_required && !contract_decision_required"` in `docs/ship-flow/README.md` stages.states.
+Otherwise: design always runs — trivial-pass entities walk the fast-path in Phase 0 (see below) instead of being skipped at the pipeline level.
+
+### Lane determination predicate
+
+Boolean predicate for FO and plan stage to determine gate type without runtime-only enum lookups (Principle 4 boolean-gate compliance):
+
+```
+UI-lane := (affects_ui == true) OR (Files-modified glob matches *.tsx|*.css|*.html)
+non-UI-lane := (domain set) OR (design_required == true) OR (contract_decision_required == true)
+trivial-pass := neither UI-lane nor non-UI-lane conditions hold
+Mixed (both UI-lane and non-UI-lane signals true) → prefer UI gate (captain-gated; safe-side per spec.md A3)
+```
+
+- **UI-lane** entities are captain-gated at the design→plan boundary (Phase 9 verdict requires captain ack before FO may advance).
+- **non-UI-lane** entities are FO-gated: a PROCEED verdict allows FO to advance directly to plan without captain interaction.
+- **trivial-pass** entities walk Phase 0 fast-path: emit minimal design.md + unconditional PROCEED; no designer dispatch.
+- **Mixed** entities (both UI-lane AND non-UI-lane signals true) prefer the UI gate (captain-gated) as the safe-side tie-break.
+
+> **Note — domain-set-but-unregistered**: If `domain` is set but not registered in the registry (registry-resolve --validate exit 10 / 11), the entity is still **non-UI-lane** for gate purposes (domain-set is sufficient; registry membership is not a gate-classification concern). Phase 0 step 2 handles registry validation separately — emitting `## Design Output → ### Router HALT` block when M1/M2 fires; the lane classification (FO-gated) does not change.
+
+This is the single canonical reference for FO and plan stage lane classification. Cross-reference: INVARIANTS Principle 10 "Design Gate Domain Split".
 
 ---
 
@@ -269,6 +289,41 @@ hardcode a project-specific reviewer set. If no risk trigger applies, write
 ## Flow
 
 ### Phase 0 — Route
+
+**Trivial-pass fast-path** (check BEFORE any other routing — short-circuits if all conditions hold):
+
+If ALL of the following hold:
+- `affects_ui`: false (or unset)
+- `domain`: unset (or empty string)
+- `design_required`: false (or unset)
+- `contract_decision_required`: false (or unset)
+- `open_contract_decisions[]`: empty or unset
+
+→ **trivial-pass** — do NOT dispatch any designer worker or build `design-dispatch-manifest`:
+1. Emit minimal `design.md`:
+   ```
+   ## Design Report
+   status: trivial-pass
+   ```
+   Plus a `### Hand-off to Plan` block:
+
+   <!-- section:hand-off-to-plan -->
+   ```yaml
+   design-skipped: true
+   design_constraints: []
+   open_decisions: []
+   artifact_paths: []
+   render_fidelity_targets: []
+   whole_page_visual_targets: []
+   ```
+   <!-- /section:hand-off-to-plan -->
+2. Phase 9 emits unconditional PROCEED verdict (no cross-review dispatch needed).
+3. Advance entity status `design → plan`.
+4. SendMessage(planner): "Design trivial-pass for pitch-<id>. design-skipped: true — no constraints to import. Advance directly to plan."
+
+Per DC-8: `design-skipped: true` (not `design-skipped: false` with empty constraints) so plan Step 1.6 G14 semantics short-circuit correctly. Cross-reference: INVARIANTS Principle 11 "Design Stage Required".
+
+---
 
 1. Read entity frontmatter `affects_ui:` and `domain:`. Record both.
 2. **If `domain:` is set**: invoke registry-resolve to confirm specialist availability:
@@ -507,7 +562,9 @@ Dispatch cross-review as a **separate agent** via `Skill: design-review` (#106 T
 
 Fallback chain (Principle 6 Rule A): if `design-review` unavailable → dispatch fresh sonnet subagent with structured review prompt → if subagent also stalls → `executer` teammate inline review.
 
-7-factor rubric adapted for design stage (per INVARIANTS Principle 6 Rule C #106 T1.3 + T6.4):
+7-factor rubric adapted for design stage — **rubric varies by lane type** (per INVARIANTS Principle 6 Rule C #106 T1.3 + T6.4; lane-type from `design-dispatch-manifest`):
+
+**UI-lane rubric** (applies when `UI-lane == true` per Lane determination predicate):
 | Factor | Assert |
 |---|---|
 | Feasibility | captain Q-loop delivered ≥6 decisions for ≥6 contradictions? |
@@ -517,6 +574,23 @@ Fallback chain (Principle 6 Rule A): if `design-review` unavailable → dispatch
 | Canonical sync | design.md (entity) cites design-system.md (canonical) cite-pair? |
 | **Reverse-audit previous stage** | does the design expose a gap in the preceding sharp/shape stage's `### Hand-off to Design` block? Specifically: are all `open_design_questions` resolved in captain_decisions? Does `render_fidelity_targets` include token alignment checks for any Tailwind v4 `theme_indirection` detected? |
 | **Render Fidelity + captain-ack audit trail** | (T6.4) does `render_fidelity_targets` in Hand-off to Plan include ≥1 token alignment check per D{N} decision? Are HTML specimens visual-only (not interactive stubs)? Is tokens.css byte-stable (no renamed properties)? |
+
+**non-UI-lane rubric** (applies when `UI-lane == false` per Lane determination predicate; domain / contract-interface lanes):
+| Factor | Assert |
+|---|---|
+| Feasibility | captain Q-loop delivered decisions for all open_contract_decisions[] entries? |
+| Executable scope | all captain decisions captured as `design_constraints[]` entries? |
+| Quality | canonical section anchors + decision tags present? |
+| DC adequacy | every captain decision has `D{N}\|Captain decision` marker at decision point? |
+| Canonical sync | design.md (entity) cross-references source INVARIANTS / ARCHITECTURE sections? |
+| **Reverse-audit previous stage** | does the design expose a gap in the preceding sharp/shape stage's `### Hand-off to Design` block? Are all `open_contract_decisions` resolved in captain_decisions? |
+| **Constraint Coverage** | every captain decision yields ≥1 `design_constraint[]` entry; every `design_constraint[]` carries `rationale_decision: D{N}` backref; `open_decisions[]` is empty or escalated (D4, entity 116). |
+
+> **Pattern (reusable)**: future non-UI lanes (saga, API contract, fmodel event schema, etc.) follow this same structure — define a named 7th-factor replacement per lane type and add it to the Phase 9 verdict switch. New lane = new named factor + grep DC anchor. Constraint Coverage for domain-contract lanes is the reference implementation.
+
+**Verdict-emission predicate** (applies to both lane types):
+- If `open_decisions[]` is non-empty → emit **PROMPT_CAPTAIN** (overrides any otherwise-PROCEED finding). Coaching note (D3 + Principle 4 boolean-gate): unresolved decisions cannot be auto-resolved by FO; halt entity and surface to captain.
+- Otherwise → verdict per rubric factors above.
 
 **Reverse-audit prompt template** (T3.2 — paste verbatim into reviewer dispatch):
 ```
@@ -556,7 +630,7 @@ Verdict: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**. Each verdict
 - HTML specimen authoring ≤ 30 min/component wall-clock.
 - Total design stage < 60 min wall-clock — exceed → emit partial design.md with `⚠️ INCOMPLETE` markers + Design Report `status: partial`.
 
-<!-- section:hand_off_to_plan -->
+<!-- section:hand-off-to-plan -->
 ## Phase 9 (Hand-off): Emit Hand-off to Plan
 
 Read the incoming `### Hand-off to Design` block from the entity body (written by ship-shape Phase 8). Verify all `open_design_questions` and `open_contract_decisions` are resolved via `captain_decisions` before emitting. If a selector grammar/API vocabulary/protocol/schema choice remains undecided, put it in `open_decisions[]` and BLOCK plan rather than letting planner choose.
@@ -593,7 +667,7 @@ Without that marker, return BLOCKER to the first officer/planner with reason
 `ui design handoff skipped`; do not let plan infer "no UI surface."
 
 **Why D{N} backref enforced per item**: plan Step 1.6 imports each constraint as a DC and carries `rationale_decision: D{N}`; without source-side enforcement, design can emit constraints that have no captain-decision anchor, breaking audit trail. `validate-d-references.sh` (lib) catches missing/dangling D{N} refs at design Phase 9 emit-time.
-<!-- /section:hand_off_to_plan -->
+<!-- /section:hand-off-to-plan -->
 
 ---
 

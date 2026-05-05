@@ -64,8 +64,8 @@ check "ship-plan treats design-skipped valid only when no domain or design_requi
 echo "Block 5: README documents design as intent decision, not just UI"
 check "README says design covers contract/interface design" \
   "grep -q 'contract/interface design' '${README}' && grep -q 'selector grammar' '${README}'"
-check "README skip condition includes contract_decision_required" \
-  "grep -q 'skip-when: \"!affects_ui && !domain && !design_required && !contract_decision_required\"' '${README}'"
+check "README design stage no longer has skip-when (W3 — design always runs per pitch 116)" \
+  "! grep -A6 'name: design' '${README}' | grep -q 'skip-when:'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

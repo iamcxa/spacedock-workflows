@@ -114,7 +114,7 @@ read_template_stage_property() {
   ' "$file"
 }
 
-DESIGN_SKIP_WHEN="$(read_stage_property "$SOT" design skip-when)"
+# DESIGN_SKIP_WHEN no longer derived — pitch 116 W3 removed skip-when entirely (INVARIANTS Principle 11 "Design Stage Required")
 VERIFY_FEEDBACK_TO="$(read_stage_property "$SOT" verify feedback-to)"
 SHAPE_PARALLELISM="$(read_stage_property "$SOT" shape parallelism)"
 DESIGN_PARALLELISM="$(read_stage_property "$SOT" design parallelism)"
@@ -122,17 +122,17 @@ PLAN_PARALLELISM="$(read_stage_property "$SOT" plan parallelism)"
 EXECUTE_PARALLELISM="$(read_stage_property "$SOT" execute parallelism)"
 VERIFY_PARALLELISM="$(read_stage_property "$SOT" verify parallelism)"
 
-if [ -z "$DESIGN_SKIP_WHEN" ] || [ -z "$VERIFY_FEEDBACK_TO" ] ||
+if [ -z "$VERIFY_FEEDBACK_TO" ] ||
   [ -z "$SHAPE_PARALLELISM" ] || [ -z "$DESIGN_PARALLELISM" ] ||
   [ -z "$PLAN_PARALLELISM" ] || [ -z "$EXECUTE_PARALLELISM" ] ||
   [ -z "$VERIFY_PARALLELISM" ]; then
-  echo "ERROR SOT missing required derived fields: design.skip-when, verify.feedback-to, and shape/design/plan/execute/verify.parallelism are required" >&2
+  echo "ERROR SOT missing required derived fields: verify.feedback-to, and shape/design/plan/execute/verify.parallelism are required" >&2
   exit 2
 fi
 
-EXPECTED_TEMPLATE_DESCRIPTION="Design is mandatory for UI, matched-domain, contract-bearing, or unresolved contract/interface decision work. Skips only for trivial mechanical work with no affects_ui, no matched domain, no design_required signal, and no contract_decision_required signal."
+EXPECTED_TEMPLATE_DESCRIPTION="Design always runs (W3 — pitch 116). UI work, matched-domain work, schema/API/domain/architecture contract impact, and unresolved contract/interface decision work all dispatch designer. Pure mechanical work walks Phase 0 trivial-pass fast-path emitting minimal design.md + verdict PROCEED."
 EXPECTED_VERIFY_DESCRIPTION="Agent gate. FO dispatches review agents, integrates findings, runs quality gate + UAT. Stage feedback returns to execute; any multi-destination routing by finding class is handled inside verify.md via route_to:. FO does not inline-fix BLOCKING/WARNING findings."
-EXPECTED_PLUGIN_DESIGN_LINE="- New stage \`design\` inserted between \`shape\` and \`plan\`. Conditional but mandatory for design-bearing work (\`manual: conditional\`, \`skip-when: ${DESIGN_SKIP_WHEN}\`). It runs for UI work, matched-domain work, and schema/API/domain/architecture contract impact; it skips only for trivial mechanical work with no design-bearing decision. Dispatched by \`/ship\` to \`designer\` teammate (opus). Output: \`design.md\` + narrow artifact bundle required by the selected \`design-dispatch-manifest\`."
+EXPECTED_PLUGIN_DESIGN_LINE="- New stage \`design\` inserted between \`shape\` and \`plan\`. Always runs (no \`skip-when:\` clause); trivial-pass fast-path in Phase 0 short-circuits pure mechanical work (no \`affects_ui\`, no matched domain, no \`design_required\`, no \`contract_decision_required\`, no \`open_contract_decisions\`). Dispatched by \`/ship\` to \`designer\` teammate (opus). Output: \`design.md\` + narrow artifact bundle required by the selected \`design-dispatch-manifest\`. Per pitch 116 W3 (design always runs); INVARIANTS Principle 11 \"Design Stage Required\"."
 
 DRIFT=0
 
@@ -142,7 +142,6 @@ record_drift() {
 }
 
 check_state() {
-  local template_design_skip
   local template_verify_feedback
   local template_design_description
   local template_verify_description
@@ -152,7 +151,6 @@ check_state() {
   local template_execute_parallelism
   local template_verify_parallelism
 
-  template_design_skip="$(read_template_stage_property "$TEMPLATE" design skip-when)"
   template_verify_feedback="$(read_template_stage_property "$TEMPLATE" verify feedback-to)"
   template_design_description="$(read_template_stage_property "$TEMPLATE" design description)"
   template_verify_description="$(read_template_stage_property "$TEMPLATE" verify description)"
@@ -162,7 +160,7 @@ check_state() {
   template_execute_parallelism="$(read_template_stage_property "$TEMPLATE" execute parallelism)"
   template_verify_parallelism="$(read_template_stage_property "$TEMPLATE" verify parallelism)"
 
-  [ "$template_design_skip" = "$DESIGN_SKIP_WHEN" ] || record_drift "template.design.skip-when" "$DESIGN_SKIP_WHEN" "$template_design_skip"
+  # template.design.skip-when drift check removed (pitch 116 W3 — no skip-when in template)
   [ "$template_verify_feedback" = "$VERIFY_FEEDBACK_TO" ] || record_drift "template.verify.feedback-to" "$VERIFY_FEEDBACK_TO" "$template_verify_feedback"
   [ "$template_design_description" = "$EXPECTED_TEMPLATE_DESCRIPTION" ] || record_drift "template.design.description" "$EXPECTED_TEMPLATE_DESCRIPTION" "$template_design_description"
   [ "$template_verify_description" = "$EXPECTED_VERIFY_DESCRIPTION" ] || record_drift "template.verify.description" "$EXPECTED_VERIFY_DESCRIPTION" "$template_verify_description"
@@ -183,7 +181,6 @@ write_template() {
   tmp="$(mktemp)"
   tmp_inserted="$(mktemp)"
   awk \
-    -v design_skip="$DESIGN_SKIP_WHEN" \
     -v verify_feedback="$VERIFY_FEEDBACK_TO" \
     -v shape_parallelism="$SHAPE_PARALLELISM" \
     -v design_parallelism="$DESIGN_PARALLELISM" \
@@ -223,7 +220,7 @@ write_template() {
       next
     }
     stage == "design" && /^[[:space:]]*skip-when:[[:space:]]*/ {
-      print "    skip-when: \"" design_skip "\""
+      # skip-when removed (pitch 116 W3); silently drop any stale skip-when line
       next
     }
     stage == "shape" && /^[[:space:]]*parallelism:[[:space:]]*/ {

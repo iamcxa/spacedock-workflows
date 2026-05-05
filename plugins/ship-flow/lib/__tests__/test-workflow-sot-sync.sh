@@ -33,8 +33,8 @@ echo ""
 check "dogfood README states design is mandatory for design-bearing work" \
   "grep -q 'Design is mandatory for UI work, matched-domain work, or any change with schema/API/domain/architecture contract impact' '${DOGFOOD_README}'"
 
-check "dogfood README frontmatter uses design-bearing skip semantics" \
-  "grep -q 'skip-when: \"!affects_ui && !domain && !design_required && !contract_decision_required\"' '${DOGFOOD_README}'"
+check "dogfood README design stage has no skip-when (W3 — design always runs)" \
+  "! grep -A6 'name: design' '${DOGFOOD_README}' | grep -q 'skip-when:'"
 
 check "dogfood README includes design.md in pipeline artifacts" \
   "grep -q 'design.md' '${DOGFOOD_README}' && grep -q 'Design Intent' '${DOGFOOD_README}'"
@@ -54,11 +54,11 @@ check "dogfood README status command discovers binary with guard" \
 check "dogfood README capture command discovers installed plugin binary with guard" \
   "grep -q 'SHIP_CAPTURE_BIN=' '${DOGFOOD_README}' && grep -q 'ship-flow ship-capture.sh not found' '${DOGFOOD_README}' && ! grep -q 'bash plugins/ship-flow/bin/ship-capture.sh' '${DOGFOOD_README}'"
 
-check "workflow template uses design-bearing skip semantics" \
-  "grep -q 'skip-when: \"!affects_ui && !domain && !design_required && !contract_decision_required\"' '${TEMPLATE}' && grep -q 'Design is mandatory for UI, matched-domain, contract-bearing, or unresolved contract/interface decision work' '${TEMPLATE}'"
+check "workflow template has no skip-when and states design always runs (W3)" \
+  "! grep -q 'skip-when:' '${TEMPLATE}' && grep -q 'Design always runs' '${TEMPLATE}'"
 
-check "plugin README agrees with dogfood design-bearing semantics" \
-  "grep -q 'skip-when: !affects_ui && !domain && !design_required && !contract_decision_required' '${PLUGIN_README}' && grep -q 'schema/API/domain/architecture contract impact' '${PLUGIN_README}'"
+check "plugin README states design always runs (no skip-when in design stage, W3)" \
+  "! grep -A6 'name: design' '${PLUGIN_README}' | grep -q 'skip-when:' && grep -q 'Always runs' '${PLUGIN_README}'"
 
 check "sync helper check mode passes on live repo" \
   "'${SOT_SYNC}' --check"

@@ -92,22 +92,20 @@ if [ "$ID_STYLE" != "slug" ]; then
 fi
 
 DESIGN_SKIP_WHEN="$(read_design_skip_when)"
-if [ -z "$DESIGN_SKIP_WHEN" ]; then
-  emit_blocker "design.skip-when: missing design stage skip-when; expected design-bearing expression such as !affects_ui && !domain && !design_required"
-elif ! printf '%s\n' "$DESIGN_SKIP_WHEN" | grep -q '!domain' || ! printf '%s\n' "$DESIGN_SKIP_WHEN" | grep -q '!design_required'; then
-  emit_blocker "design.skip-when: expected design-bearing routing such as !affects_ui && !domain && !design_required, found ${DESIGN_SKIP_WHEN}"
+if [ -n "$DESIGN_SKIP_WHEN" ]; then
+  emit_blocker "design.skip-when: present in stages.states[name=design]; pitch 116 W3 says design always runs (INVARIANTS Principle 11 'Design Stage Required'). Remove skip-when; use Phase 0 trivial-pass fast-path for pure mechanical work."
 fi
 
 if [ -f "$TEMPLATE_FILE" ]; then
   if ! grep -qE '^[[:space:]]*-[[:space:]]*name:[[:space:]]*design[[:space:]]*$' "$TEMPLATE_FILE"; then
     emit_recommended "workflow-template.yaml: installed template lacks the design stage; safe template sync recommended for future adopters"
-  elif ! awk '
+  elif awk '
     /^[[:space:]]*-[[:space:]]*name:[[:space:]]*design[[:space:]]*$/ { in_design = 1; next }
     in_design && /^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ { exit }
-    in_design && /^[[:space:]]*skip-when:[[:space:]]*/ { print; found = 1; exit }
+    in_design && /^[[:space:]]*skip-when:[[:space:]]*/ { found = 1; exit }
     END { exit !found }
-  ' "$TEMPLATE_FILE" | grep -q '!domain.*!design_required'; then
-    emit_recommended "workflow-template.yaml: design.skip-when is not design-bearing aware; safe template sync recommended for future adopters"
+  ' "$TEMPLATE_FILE"; then
+    emit_recommended "workflow-template.yaml: design.skip-when still present (stale pre-pitch-116 template); safe template sync recommended for future adopters"
   fi
 else
   emit_recommended "workflow-template.yaml: not found; cannot compare installed template drift"

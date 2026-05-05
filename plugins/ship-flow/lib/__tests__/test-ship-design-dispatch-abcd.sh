@@ -79,8 +79,8 @@ check "ship-shape designer spawn routes Category 0/A/B/C/D and domain triggers" 
   "grep -q 'route Category 0/A/B/C/D' '${SHAPE_SKILL}' && grep -q 'domain:' '${SHAPE_SKILL}'"
 check "INVARIANTS documents Category A-D design skill mapping" \
   "grep -q 'Category A-D' '${INVARIANTS}' && grep -q 'design-brief' '${INVARIANTS}' && grep -q 'frontend-design' '${INVARIANTS}'"
-check "plugin README documents domain-aware design skip and active Category A-D" \
-  "grep -q 'skip-when: !affects_ui && !domain' '${README}' && grep -q 'Category A-D' '${README}'"
+check "plugin README documents domain-aware design (no skip-when in design stage, W3) and active Category A-D" \
+  "! grep -A6 'name: design' '${README}' | grep -q 'skip-when:' && grep -q 'Category A-D' '${README}'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
