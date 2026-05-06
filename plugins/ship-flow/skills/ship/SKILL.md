@@ -218,7 +218,25 @@ After `review.md` cross-review PROCEED:
    checks stay in adopter config or package scripts; ship-flow core only owns the
    generic runner.
 
-3. **Create PR** via `gh pr create` with title from entity + body referencing all stage artifacts (plan/execute/verify/review links).
+3. **Create PR and persist PR metadata** via `gh pr create` with title from entity + body referencing all stage artifacts (plan/execute/verify/review links).
+
+   Capture the exact `gh pr create` stdout/stderr stream before any post-create checks, compute the active entity hash before PR creation, then persist metadata immediately after successful PR creation and confirmation:
+
+       INDEX_MD="<entity-folder>/index.md"
+       H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+       PR_CREATE_OUTPUT="$(mktemp)"
+       gh pr create ... >"$PR_CREATE_OUTPUT" 2>&1
+       bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/persist-pr-metadata.sh" \
+         --entity "$INDEX_MD" \
+         --pr-create-output "$PR_CREATE_OUTPUT" \
+         --if-hash "$H" \
+         ${MAIN_INDEX_MD:+--mirror-entity "$MAIN_INDEX_MD"}
+
+   The helper is the only PR metadata writer for ship-final. It parses the PR number only from the successful `gh pr create` URL, confirms it with `gh pr view "$number" --json number,url,headRefName,headRefOid,state`, and stores exactly `pr: "#N"` in active frontmatter. Do not discover a PR by branch or title as a fallback.
+
+   Metadata persistence happens before merge-state polling, Ready/reviewer routing, smoke routing, and any post-create auto-review. Refuse and stop ship-final progression on `missing-pr-number`, `pr-view-unconfirmed`, `stale-entity-hash`, `malformed-frontmatter`, `missing-entity`, or `conflicting-pr`; surface the helper report to the captain. An existing identical `pr: "#N"` is idempotent and may proceed.
+
+   The active worktree entity is primary. When a same-slug main/startup copy is known, pass it as `--mirror-entity`; the helper may mirror only the `pr` field and must skip the mirror on conflict without blocking the already-safe active write. This step does not add a captain plan gate, PR merge behavior, dashboards, or multi-entity sweeps.
 4. **Post-create merge-state check** — poll `gh pr view {pr} --json mergeStateStatus --jq '.mergeStateStatus'` every 5 seconds for up to 30 seconds, stopping on `CLEAN`, `CONFLICTING`, `DIRTY`, or `UNSTABLE`.
 
    - `CLEAN` → continue to post-create auto-review.
