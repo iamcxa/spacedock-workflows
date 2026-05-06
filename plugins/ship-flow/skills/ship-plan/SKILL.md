@@ -1,6 +1,6 @@
 ---
 name: ship-plan
-description: "Use when writing an implementation plan for a shaped entity. Agent-autonomous: size-adaptive research + TDD task plan, dispatched by /ship to `planner` teammate (SendMessage). Output: `<entity-folder>/plan.md` via lib/write-stage-artifact.sh. Layer A delegation: superpowers:writing-plans for plan authoring philosophy; ship-plan wraps with Shape Up scope anchoring + runtime detection + cross-review gate."
+description: "Use when writing a ship-flow plan for a shaped entity, especially implementation tasks, TDD needs, runtime commands, or scope anchoring. Layer A delegation: superpowers:writing-plans owns plan authoring; ship-flow:test-driven-development owns fallback TDD contracts."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---
@@ -86,7 +86,7 @@ Skip if no file:line citations (common for S-size).
 - Block has design-emitted fields (`design_constraints[]` / `render_fidelity_targets[]` / `whole_page_visual_targets[]`) → run mechanical mapping below.
 - Block ABSENT entirely → **BLOCKER** (status: blocked, reason: `hand-off-to-plan absent — neither design-skipped stub nor design output found`). Either shape Phase 8 missed the stub emit OR design errored without writing hand-off. Do not silently treat as "no UI" — that's the ambiguity G14 fixes.
 
-**Read** via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> hand_off_to_plan` (handles folder + flat layouts).
+**Read** via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> hand-off-to-plan` (handles folder + flat layouts).
 
 **Mechanical mapping** delegated to lib script:
 ```bash

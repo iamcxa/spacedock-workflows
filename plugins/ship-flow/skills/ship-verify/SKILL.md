@@ -1,6 +1,6 @@
 ---
 name: ship-verify
-description: "Use when verifying execute output before ship — standalone via `/verify <entity-id>` or pipeline-dispatched by `/ship`. Agent-autonomous ROI gate: scoped quality checks on touched surfaces, spot-check critical DCs against a LIVE worktree dev server (artifact-only is rejected), auto-fix NITs inline. Output: `docs/<wf>/<id>-<slug>/verify.md`. Layer A delegation: worktree-dev-server (project-level skill) for runtime preflight; e2e-pipeline:e2e-test/walkthrough plus ship-flow:ui-verify for agent-browser UI-DC verification; pr-review-toolkit personas for haiku review."
+description: "Use when verifying execute output before ship, including `/verify`, `/ship`, live worktree checks, UI DCs, e2e, reviewer panel, or NIT fixes. Layer A delegation: e2e-pipeline and ship-flow:ui-verify own UI DC verification; reviewer personas own haiku review."
 user-invocable: true
 argument-hint: "<entity-id> [--fast | --full]"
 ---
