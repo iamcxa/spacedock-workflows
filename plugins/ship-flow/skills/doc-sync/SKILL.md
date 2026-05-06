@@ -9,7 +9,9 @@ argument-hint: "[--check] [--auto] [--section <doc-file>] [--diff <ref>] [--prob
 
 Keep Ship Flow plugin documentation aligned with stage skills, shell primitives, invariants, workflow templates, and release expectations. Docs conform to source behavior; when docs and source disagree, update docs or block release rather than changing implementation from this skill.
 
-Read `plugins/ship-flow/references/doc-sync-context.md` before scanning. It defines the Source Map, Doc Structure, Style Guide, Probe Config, and Post-Sync Hooks for this plugin.
+Resolve `PLUGIN_ROOT` before reading or scanning any files. Prefer `${CLAUDE_PLUGIN_ROOT}` when present, then a runtime-provided Codex plugin root when available, then infer from this skill file by walking up from `skills/doc-sync/SKILL.md` to the plugin root. Repository note: in the spacedock-ui monorepo, this resolves to `plugins/ship-flow/`; installed plugin contexts resolve directly to the plugin cache/root.
+
+All source globs, doc targets, and reference paths below are relative to `PLUGIN_ROOT`. Read `references/doc-sync-context.md` before scanning. It defines the Source Map, Doc Structure, Style Guide, Probe Config, and Post-Sync Hooks for this plugin.
 
 ## Routing
 
@@ -31,7 +33,9 @@ If no doc-probe worker is available, run Light Mode: static scan, history enrich
 Find the diff base before inventory:
 
 ```bash
-DIFF_BASE=$(git tag -l "ship-flow-v*" --sort=-v:refname | head -1)
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-${CODEX_PLUGIN_ROOT:-}}"
+# If still empty, infer from this skill path or the current checkout before scanning.
+DIFF_BASE=$(git -C "$PLUGIN_ROOT" tag -l "ship-flow-v*" --sort=-v:refname | head -1)
 # If --diff <ref> is present, use that ref instead.
 # If no tags exist, use HEAD~10 and warn that older changes may be missed.
 ```
@@ -39,18 +43,18 @@ DIFF_BASE=$(git tag -l "ship-flow-v*" --sort=-v:refname | head -1)
 Extract added lines from release-relevant source surfaces:
 
 ```bash
-git diff "${DIFF_BASE:-HEAD~10}"..HEAD -- \
-  'plugins/ship-flow/skills/*/SKILL.md' \
-  'plugins/ship-flow/skills/architecture-lens/*.md' \
-  'plugins/ship-flow/bin/*.sh' \
-  'plugins/ship-flow/lib/*.sh' \
-  'plugins/ship-flow/hooks/*' \
-  'plugins/ship-flow/references/**/*' \
-  'plugins/ship-flow/registry/*.yaml' \
-  'plugins/ship-flow/workflow-template.yaml' \
-  'plugins/ship-flow/README.md' \
-  'plugins/ship-flow/INVARIANTS.md' \
-  'plugins/ship-flow/.claude-plugin/plugin.json' \
+git -C "$PLUGIN_ROOT" diff "${DIFF_BASE:-HEAD~10}"..HEAD -- \
+  'skills/*/SKILL.md' \
+  'skills/architecture-lens/*.md' \
+  'bin/*.sh' \
+  'lib/*.sh' \
+  'hooks/*' \
+  'references/**/*' \
+  'registry/*.yaml' \
+  'workflow-template.yaml' \
+  'README.md' \
+  'INVARIANTS.md' \
+  '.claude-plugin/plugin.json' \
   | grep '^+' | grep -v '^+++' | sed 's/^+//'
 ```
 
@@ -58,7 +62,7 @@ Group added lines by source file and cap the diff summary at 2000 characters.
 
 ### Step 1 - Inventory and Cross-Reference
 
-1. Read `plugins/ship-flow/references/doc-sync-context.md`.
+1. Read `references/doc-sync-context.md` from `PLUGIN_ROOT`.
 2. Inventory sources:
    - `skills/*/SKILL.md`: skill name, description, routing, flags, stage artifacts, FO bridges, safety gates.
    - `skills/architecture-lens/*.md`: domain lens triggers and routing implications.
