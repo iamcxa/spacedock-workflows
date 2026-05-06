@@ -44,6 +44,17 @@ else
     fail=1
   }
 fi
+if empty_out="$(bash "$VALIDATOR" "$FIXTURES/explicit-empty-version.md" 2>&1)"; then
+  echo "$empty_out"
+  echo "FAIL: explicit empty schema_version should fail"
+  fail=1
+else
+  grep -q "unsupported schema_version" <<<"$empty_out" || {
+    echo "$empty_out"
+    echo "FAIL: explicit empty schema_version failure missing unsupported-version message"
+    fail=1
+  }
+fi
 if missing_out="$(bash "$VALIDATOR" "$FIXTURES/missing-required-section.md" 2>&1)"; then
   echo "$missing_out"
   echo "FAIL: missing required section fixture should fail"
