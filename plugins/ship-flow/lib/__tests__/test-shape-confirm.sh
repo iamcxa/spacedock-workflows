@@ -271,6 +271,83 @@ fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
+echo
+echo "--- DC-34: folder layout cascades to children as index.md ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal.json"
+sample_proposal > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 0 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
+  "DC-34a folder layout happy path"
+if [ -f "docs/ship-flow/090.1-child-a/index.md" ] && [ -f "docs/ship-flow/090.2-child-b/index.md" ]; then
+  echo "OK DC-34b children written as folder index.md"
+else
+  echo "FAIL DC-34b children missing folder index.md"
+  FAIL=1
+fi
+if [ ! -f "docs/ship-flow/090.1-child-a.md" ] && [ ! -f "docs/ship-flow/090.2-child-b.md" ]; then
+  echo "OK DC-34c no flat child files in folder layout"
+else
+  echo "FAIL DC-34c folder layout still wrote flat child files"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-35: existing rabbit-hole todo is never silently overwritten ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal.json"
+sample_proposal > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+cat > docs/ship-flow/todos/rh-test.md <<'EOF'
+---
+tid: rh-test
+captured_at: 2026-01-01T00:00:00Z
+status: pending
+source_pitch: "088"
+---
+
+Original rabbit hole body that must survive.
+EOF
+BEFORE_HASH="$(git hash-object docs/ship-flow/todos/rh-test.md)"
+assert_exit 10 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP'" \
+  "DC-35a existing rabbit-hole todo rejects write"
+AFTER_HASH="$(git hash-object docs/ship-flow/todos/rh-test.md)"
+if [ "$BEFORE_HASH" = "$AFTER_HASH" ]; then
+  echo "OK DC-35b existing rabbit-hole todo content preserved"
+else
+  echo "FAIL DC-35b existing rabbit-hole todo content changed"
+  FAIL=1
+fi
+if [ ! -e "docs/ship-flow/090-test-pitch.md" ] && \
+   [ ! -e "docs/ship-flow/090-test-pitch" ] && \
+   [ ! -e "docs/ship-flow/090.1-child-a.md" ] && \
+   [ ! -e "docs/ship-flow/090.1-child-a" ]; then
+  echo "OK DC-35c duplicate todo refusal creates no pitch or child artifacts"
+else
+  echo "FAIL DC-35c duplicate todo refusal created pitch or child artifacts"
+  FAIL=1
+fi
+COMMITS=$({ git log --oneline || true; } | wc -l | tr -d ' ')
+if [ "$COMMITS" = "1" ]; then echo "OK DC-35d duplicate todo refusal creates no commit"
+else echo "FAIL DC-35d duplicate todo refusal created commit(s), got $COMMITS"; FAIL=1; fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-36: duplicate rabbit-hole todo preflight runs before write-phase mkdir ---"
+mkdir_line="$(grep -n 'mkdir -p "$ENTITY_DIR" "$TODO_DIR"' "${LIB_DIR}/shape-confirm.sh" | head -n 1 | cut -d: -f1)"
+duplicate_line="$(grep -n 'rabbit-hole todo already exists' "${LIB_DIR}/shape-confirm.sh" | head -n 1 | cut -d: -f1)"
+if [ -n "$mkdir_line" ] && [ -n "$duplicate_line" ] && [ "$duplicate_line" -lt "$mkdir_line" ]; then
+  echo "OK DC-36 duplicate todo preflight precedes write-phase mkdir"
+else
+  echo "FAIL DC-36 duplicate todo preflight must precede write-phase mkdir"
+  FAIL=1
+fi
+
 # ── DC-101.1-6: answers_density emitted in folder layout (pitch-101 Task 2) ──
 echo
 echo "--- DC-101.1-6: answers_density in folder layout ---"
