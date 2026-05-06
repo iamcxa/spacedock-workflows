@@ -179,6 +179,157 @@ Fixture merge hook.
 EOF
 }
 
+write_fixture_status_bin() {
+  local bin="$1"
+  cat > "$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+workflow_dir=""
+include_archived=no
+cmd=""
+ref=""
+where_expr=""
+slug=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --workflow-dir)
+      workflow_dir="$2"
+      shift 2
+      ;;
+    --archived)
+      include_archived=yes
+      shift
+      ;;
+    --resolve)
+      cmd=resolve
+      ref="$2"
+      shift 2
+      ;;
+    --where)
+      cmd=where
+      where_expr="$2"
+      shift 2
+      ;;
+    --set)
+      cmd=set
+      slug="$2"
+      shift 2
+      break
+      ;;
+    --archive)
+      cmd=archive
+      slug="$2"
+      shift 2
+      ;;
+    *)
+      echo "unknown status arg: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+[ -n "$workflow_dir" ] || exit 2
+
+frontmatter_field() {
+  local file="$1"
+  local field="$2"
+  awk -v field="$field" '
+    /^---[[:space:]]*$/ { fence++; next }
+    fence == 1 {
+      prefix = field ":"
+      if (index($0, prefix) == 1) {
+        value = substr($0, length(prefix) + 1)
+        sub(/^[[:space:]]*/, "", value)
+        sub(/[[:space:]]*$/, "", value)
+        gsub(/^["'\''"]|["'\''"]$/, "", value)
+        print value
+        exit
+      }
+    }
+  ' "$file"
+}
+
+update_frontmatter_field() {
+  local file="$1"
+  local field="$2"
+  local value="$3"
+  local tmp="${file}.tmp"
+  awk -v field="$field" -v value="$value" '
+    /^---[[:space:]]*$/ { fence++; print; next }
+    fence == 1 {
+      prefix = field ":"
+      if (index($0, prefix) == 1) {
+        print field ": " value
+        next
+      }
+    }
+    { print }
+  ' "$file" > "$tmp"
+  mv "$tmp" "$file"
+}
+
+resolve_path() {
+  local raw="$1"
+  raw="${raw#archive:}"
+  if [ "$include_archived" = yes ]; then
+    printf '%s/_archive/%s/index.md\n' "$workflow_dir" "$raw"
+  else
+    printf '%s/%s/index.md\n' "$workflow_dir" "$raw"
+  fi
+}
+
+case "$cmd" in
+  resolve)
+    path="$(resolve_path "$ref")"
+    [ -f "$path" ] || exit 1
+    slug_value="${ref#archive:}"
+    printf 'slug=%s path=%s\n' "$slug_value" "$path"
+    ;;
+  where)
+    slug_value="$(printf '%s\n' "$where_expr" | sed -E 's/^slug[[:space:]]*=[[:space:]]*//')"
+    path="${workflow_dir}/_archive/${slug_value}/index.md"
+    [ -f "$path" ] || exit 1
+    printf 'slug=%s path=%s status=%s\n' "$slug_value" "$path" "$(frontmatter_field "$path" status)"
+    ;;
+  set)
+    path="${workflow_dir}/${slug}/index.md"
+    [ -f "$path" ] || exit 1
+    for pair in "$@"; do
+      case "$pair" in
+        *=*)
+          key="${pair%%=*}"
+          value="${pair#*=}"
+          ;;
+        completed)
+          key=completed
+          value=2026-05-06T00:00:00Z
+          ;;
+        *)
+          echo "unsupported set pair: $pair" >&2
+          exit 2
+          ;;
+      esac
+      update_frontmatter_field "$path" "$key" "$value"
+    done
+    ;;
+  archive)
+    path="${workflow_dir}/${slug}/index.md"
+    [ -f "$path" ] || exit 1
+    update_frontmatter_field "$path" archived 2026-05-06T00:01:00Z
+    mkdir -p "${workflow_dir}/_archive"
+    mv "${workflow_dir}/${slug}" "${workflow_dir}/_archive/${slug}"
+    ;;
+  *)
+    echo "missing status command" >&2
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "$bin"
+}
+
 write_entity() {
   local workflow_dir="$1"
   local slug="$2"
@@ -596,6 +747,10 @@ run_doc_scope_cases() {
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
+write_fixture_status_bin "${TMP_DIR}/status-fixture"
+if [ ! -x "$STATUS_BIN" ]; then
+  STATUS_BIN="${TMP_DIR}/status-fixture"
+fi
 
 echo "=== test-merged-pr-closeout-reconciler.sh ==="
 echo ""
