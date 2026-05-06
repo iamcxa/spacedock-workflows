@@ -56,7 +56,7 @@ stages:
 
 | Command | Input | Output artifact | Human in loop? |
 |---|---|---|---|
-| `/shape <concept | issue | vague>` | directive or entity id | `<entity-folder>/spec.md` | YES |
+| `/shape <concept | issue | vague>` | directive or entity id | `<entity-folder>/shape.md` | YES |
 | `/ship <entity-id | requirement>` | entity-id OR concrete req | stage artifacts + code | NO after shape |
 | `/verify <entity-id | requirement>` | entity-id or req | `verify.md` | NO unless BLOCKING |
 | `/add-todos <idea>` | free text | todo entry | NO |

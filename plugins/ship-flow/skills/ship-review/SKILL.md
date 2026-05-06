@@ -25,7 +25,7 @@ Run before any review work. Stop and SendMessage(FO) if any check fails.
 
 ## Entity body contract (schema-as-prose)
 
-- Reads: `verify.md` verdict (PASS required), `execute.md` execution log, `spec.md` problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`, `docs/ship-flow/_mods/canonical-doc-sync.md`.
+- Reads: `verify.md` verdict (PASS required), `execute.md` execution log, resolved shape artifact (`shape.md`; legacy `spec.md` fallback alias) problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`, `docs/ship-flow/_mods/canonical-doc-sync.md`.
 - Writes: `<entity-folder>/review.md` sections — `## PR Draft` (title + body), `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (verdict / stage_cost / timestamps).
 - Side effects: ARCHITECTURE.md / PRODUCT.md / README.md / ROADMAP.md patched (by `planner` dispatch — NOT by this skill directly).
 - Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.review`.
@@ -57,7 +57,7 @@ Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / 
 
 ### Step 1 — Read verify verdict + entity sections
 
-Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS`. From execute.md: execution log (for PR body Changes section). From spec.md (aggregated across children): Problem, User Journey, Done Criteria, Shape Output, Size Assessment, `architecture-impact`, `product-impact`, `readme-impact`. From parent entity (if `parent:` set): `roadmap-phase`.
+Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS`. From execute.md: execution log (for PR body Changes section). From the resolved shape artifact (canonical `shape.md`, legacy `spec.md` fallback alias; aggregated across children): Problem, User Journey, Done Criteria, Shape Output, Size Assessment, `architecture-impact`, `product-impact`, `readme-impact`. From parent entity (if `parent:` set): `roadmap-phase`.
 
 **Pre-check**: verdict != PASS → write `## Review Report status: blocked, reason: verify verdict <actual>, expected passed` and return. Never proceed without PASS.
 
@@ -165,10 +165,10 @@ Title: {entity title}
 
 Body:
 ## Problem
-{from spec.md → Problem}
+{from shape.md → Problem}
 
 ## User Journey
-{from spec.md → User Journey — end-to-end flow}
+{from shape.md → User Journey — end-to-end flow}
 
 ## Done Criteria + Verification
 {Full UAT table from verify.md → UAT section: DC / Type / Assertion / Verify Procedure / Result}
@@ -193,7 +193,7 @@ Cost: ${token_actual} (budget: ${token_budget})
 
 ### Step 5 — Token summary
 
-Read `token_actual` from entity frontmatter (FO-accumulated). Read `token_budget` from spec.md Size Assessment.
+Read `token_actual` from entity frontmatter (FO-accumulated). Read `token_budget` from the resolved shape artifact (`shape.md`, with legacy `spec.md` fallback alias) Size Assessment.
 
 ```markdown
 ## Token Summary
@@ -230,7 +230,7 @@ Dispatch cross-review to `executer` teammate (reviews PR body + canonical-docs d
 4. **DC adequacy** — PR body's DC+Verification table is reproducible (copy-paste the procedure)?
 5. **Canonical sync** — 4-doc audit:
    - **ARCHITECTURE.md**: architecture-impact blocks aggregated cleanly per target_section? No section-tag corruption (patch-map.sh CAS held)?
-   - **PRODUCT.md**: constraints / user stories align with spec.md intent?
+   - **PRODUCT.md**: constraints / user stories align with shape intent?
    - **README.md**: `entry_critical` readme-impact blocks carefully applied (prose-varying needs closer audit)? Install / usage prose reads naturally?
    - **ROADMAP.md**: status flip matches pitch actual verdict? Shipped row carries correct date + PR placeholder?
 6. **Reverse-audit previous stage** — does review's canonical-sync check expose a gap in verify's render-fidelity assessment? Specifically: is `render_fidelity_status` from `### Hand-off to Review` consistent with what the PR diff shows? If `affects_ui: true` and `render_fidelity_status: not-applicable`, flag for captain review.

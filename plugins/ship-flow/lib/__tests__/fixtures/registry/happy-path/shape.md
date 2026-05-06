@@ -1,4 +1,4 @@
-# fixture: happy-path/spec.md
+# fixture: happy-path/shape.md
 # Tests: --classify matches schema domain via spec keywords (drizzle + fmodel)
 # This spec body intentionally contains trigger keywords for the schema domain.
 

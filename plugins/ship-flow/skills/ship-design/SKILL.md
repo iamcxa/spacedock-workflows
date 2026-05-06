@@ -63,7 +63,7 @@ Boolean predicate for FO and plan stage to determine gate type without runtime-o
 UI-lane := (affects_ui == true) OR (Files-modified glob matches *.tsx|*.css|*.html)
 non-UI-lane := (domain set) OR (design_required == true) OR (contract_decision_required == true)
 trivial-pass := neither UI-lane nor non-UI-lane conditions hold
-Mixed (both UI-lane and non-UI-lane signals true) → prefer UI gate (captain-gated; safe-side per spec.md A3)
+Mixed (both UI-lane and non-UI-lane signals true) → prefer UI gate (captain-gated; safe-side per shape artifact A3)
 ```
 
 - **UI-lane** entities are captain-gated at the design→plan boundary (Phase 9 verdict requires captain ack before FO may advance).
@@ -336,7 +336,7 @@ Per DC-8: `design-skipped: true` (not `design-skipped: false` with empty constra
    - exit 11 (M2 `knowledge_module_missing`) → same as M1 path: emit HALT block, SendMessage(FO), **STOP**.
    - exit 20 / 21 (M4 parse_error / M5 invalid_trigger_config) → fail loud per INVARIANTS Principle 9; SendMessage(FO): "registry config error exit $?; blocking design stage". **STOP**.
 3. **If `domain:` is unset AND `affects_ui: true`**: proceed to UI category-classifier (Category 0/A/B/C/D logic at Phase 0 step 4).
-4. Read entity spec.md. Determine category per classifier table.
+4. Resolve the shape artifact (`shape.md`, with legacy `spec.md` fallback alias) and determine category per classifier table.
 5. Build `design-dispatch-manifest`:
    - `affects_ui: true` → add `ui` lane with the selected Category.
    - for the `ui` lane, resolve adopter file-signal routing with
@@ -454,7 +454,7 @@ creates typed intent for later comparison.
 
 ### Phase 1 — Read exploration
 
-1. Locate exploration file at path:line cited in spec.md `## Problem`.
+1. Locate exploration file at path:line cited in the resolved shape artifact `## Problem`.
 2. List all visual decisions present: palettes, typography, spacing, motion, component mentions.
 3. Output: structured `visual_inventory[]` — section / claim / line-range for each decision.
 

@@ -49,7 +49,7 @@ Run before any verify work. Stop and SendMessage(FO) if any check fails.
 Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Read entity file (flat `.md` or folder `index.md` + prior `.md` stages). Record stage-start ISO timestamp.
 
 **Read** (tag-based via `bash plugins/ship-flow/lib/extract-section.sh <entity> <tag>`):
-- `spec.md` (or entity `## Sharp Output`) → `### Done Criteria`, `### Size Assessment`
+- resolved shape artifact (`shape.md`, with legacy `spec.md` fallback alias, or entity `## Sharp Output`) → `### Done Criteria`, `### Size Assessment`
 - `plan.md` → `### Plan` (`files_modified`), `### Verification Spec` (DC procedures)
 - `execute.md` → `### Execution Log` (commit SHAs, base SHA), `### Issues Found`, `## Execute UAT`
 - `PRODUCT.md` → `## Constraints` (if exists)
@@ -484,7 +484,7 @@ Automated pre-check runs BEFORE captain manual visual smoke. Captain's eyeball i
 
 **Runtime-mandatory cascade** (SEC-10 C8): declarative skill → agent-browser CLI → manual captain smoke. ≥1 tier MUST **execute against the live worktree dev server** (Step 4.0 green) on every UI-type DC. The cascade picks WHICH primitive — not WHETHER one runs.
 
-**Anti-pattern**: `visual verification skipped` is only acceptable when BOTH (a) entity has zero UI-type DCs AND (b) spec.md explicitly flags captain-smoke not required. Dev server unavailable → escalate per Step 4.0 (BLOCKER); do NOT silently skip. Compile artifact + type-check green is NOT a valid runtime substitute.
+**Anti-pattern**: `visual verification skipped` is only acceptable when BOTH (a) entity has zero UI-type DCs AND (b) the resolved shape artifact (`shape.md`, with legacy `spec.md` fallback alias) explicitly flags captain-smoke not required. Dev server unavailable → escalate per Step 4.0 (BLOCKER); do NOT silently skip. Compile artifact + type-check green is NOT a valid runtime substitute.
 
 **Artifact requirement**: every pre-check produces (a) report at `.claude/e2e/reports/<slug>-<stage>-<ts>.md` OR (b) inline block in `verify.md` `### UAT → visual:`. Include ≥1 screenshot for the primary affected route. Compiled-artifact path alone is NOT a report — the report MUST cite runtime output (browser console, screenshot, playwright `--reporter=line` excerpt).
 

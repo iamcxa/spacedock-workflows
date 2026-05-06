@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 REGISTRY_SCRIPT="${SCRIPT_DIR}/../registry-resolve.sh"
 FIXTURE_DIR="${SCRIPT_DIR}/fixtures/synthetic-schema-pitch"
 ADOPTER_CONFIG="${FIXTURE_DIR}/.claude/ship-flow/domains.yaml"
-SPEC_FILE="${FIXTURE_DIR}/spec.md"
+SPEC_FILE="${FIXTURE_DIR}/shape.md"
 SHAPE_FILE="${FIXTURE_DIR}/shape.md"
 DESIGN_FILE="${FIXTURE_DIR}/design.md"
 VERIFY_FILE="${FIXTURE_DIR}/verify.md"
@@ -60,7 +60,7 @@ check "fixture includes representative carlove schema paths" \
   "grep -qE 'domains/.+/src/(schema|.+\\.table\\.ts)|apps/supabase/migrations' '${SPEC_FILE}'"
 
 echo "Block 2: shape evidence resolves schema domain"
-check_stdout "registry classifies fixture spec to matched=schema" \
+check_stdout "registry classifies fixture shape to matched=schema" \
   "matched=schema" \
   "\"${REGISTRY_SCRIPT}\" --classify \"${SPEC_FILE}\" --adopter-config=\"${ADOPTER_CONFIG}\""
 check "shape evidence includes Domain Registry Validation block" \

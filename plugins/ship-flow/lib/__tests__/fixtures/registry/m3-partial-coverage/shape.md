@@ -1,4 +1,4 @@
-# fixture: m3-partial-coverage/spec.md
+# fixture: m3-partial-coverage/shape.md
 # Tests: M3 path — spec body triggers both schema domain and saga domain keywords
 # Expected: partial_coverage, matched=schema, missing=saga
 

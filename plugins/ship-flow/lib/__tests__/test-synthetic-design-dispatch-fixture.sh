@@ -9,7 +9,7 @@ RECEIPT_SCRIPT="${SCRIPT_DIR}/../check-guidance-receipt.sh"
 FIXTURE_DIR="${SCRIPT_DIR}/fixtures/synthetic-design-dispatch"
 ADOPTER_CONFIG="${FIXTURE_DIR}/.claude/ship-flow/domains.yaml"
 SKILL_ROUTING_CONFIG="${FIXTURE_DIR}/.claude/ship-flow/skill-routing.yaml"
-SPEC_FILE="${FIXTURE_DIR}/spec.md"
+SPEC_FILE="${FIXTURE_DIR}/shape.md"
 SHAPE_FILE="${FIXTURE_DIR}/shape.md"
 DESIGN_FILE="${FIXTURE_DIR}/design.md"
 MISSING_DESIGN_FILE="${FIXTURE_DIR}/design-missing-receipt.md"
@@ -63,7 +63,7 @@ check "fixture includes UI, schema, and fmodel-like file paths" \
   "grep -q 'apps/web/app/crm' '${SPEC_FILE}' && grep -q 'apps/supabase/migrations' '${SPEC_FILE}' && grep -q 'domains/crm/src/domain' '${SPEC_FILE}'"
 
 echo "Block 2: registry resolves schema skills"
-check_stdout "registry classifies fixture spec to matched=schema" \
+check_stdout "registry classifies fixture shape to matched=schema" \
   "matched=schema" \
   "\"${REGISTRY_SCRIPT}\" --classify \"${SPEC_FILE}\" --adopter-config=\"${ADOPTER_CONFIG}\""
 check_stdout "registry emits required_skills for downstream workers" \

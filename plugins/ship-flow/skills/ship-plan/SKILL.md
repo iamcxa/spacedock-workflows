@@ -9,7 +9,7 @@ argument-hint: "[entity-id | slug]"
 
 You run PLAN. Output: `<entity-folder>/plan.md`. Dispatched by `/ship` to `planner` teammate via SendMessage (team spawned at `/shape`). No captain gate.
 
-**Pipeline position**: reads `spec.md` + parent cross-entity contracts → produces `plan.md` → cross-review gate → advance to execute.
+**Pipeline position**: reads the resolved shape artifact (`shape.md`, with legacy `spec.md` fallback via `resolve-shape-artifact.sh`) + parent cross-entity contracts → produces `plan.md` → cross-review gate → advance to execute.
 
 ## Boot Self-Check
 
@@ -25,7 +25,7 @@ Run before any plan work. Stop and SendMessage(FO) if any check fails.
 
 ## Entity body contract (schema-as-prose)
 
-- Reads: `spec.md` (`## Sharp Output` / `## Shape Output` — problem, done criteria, size, scope, assumptions, children DAG), `design.md` when present, parent entity `## Cross-Entity Contracts` if `parent:` set, `PRODUCT.md` constraints, `ROADMAP.md` status, and relevant `ARCHITECTURE.md` sections.
+- Reads: resolved shape artifact (`shape.md`; legacy `spec.md` fallback alias) (`## Sharp Output` / `## Shape Output` — problem, done criteria, size, scope, assumptions, children DAG), `design.md` when present, parent entity `## Cross-Entity Contracts` if `parent:` set, `PRODUCT.md` constraints, `ROADMAP.md` status, and relevant `ARCHITECTURE.md` sections.
 - Writes: `<entity-folder>/plan.md` sections — `## Research Summary`, `## Size Re-evaluation`, `## Verification Spec`, `## Plan` (TDD tasks with waves), `## Plan Report` (status/cost/iterations/verdict).
 - Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.plan`.
 
@@ -48,7 +48,7 @@ Run before any plan work. Stop and SendMessage(FO) if any check fails.
 
 ### Step 1 — Read spec + cross-entity contracts
 
-Record stage-start ISO timestamp. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <section-tag>` (handles folder + flat layouts). From spec.md: problem, done criteria, size (S/M/L), scope-in bullets, musk-audit verdicts, stated assumptions.
+Record stage-start ISO timestamp. For folder entities, resolve the shape artifact first: `SHAPE_ARTIFACT="$(bash plugins/ship-flow/lib/resolve-shape-artifact.sh <entity-folder>)"`; this returns canonical `shape.md` or legacy `spec.md` fallback. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <section-tag>` (handles folder + flat layouts). From the resolved shape artifact: problem, done criteria, size (S/M/L), scope-in bullets, musk-audit verdicts, stated assumptions.
 
 If `parent:` frontmatter set: read parent `## Cross-Entity Contracts`. Extract `Contracts to implement`, `Inherited decisions` (ADR overrides), `Slice scope`. These override any conflicting research finding.
 
