@@ -322,8 +322,31 @@ else
   echo "FAIL DC-35b existing rabbit-hole todo content changed"
   FAIL=1
 fi
+if [ ! -e "docs/ship-flow/090-test-pitch.md" ] && \
+   [ ! -e "docs/ship-flow/090-test-pitch" ] && \
+   [ ! -e "docs/ship-flow/090.1-child-a.md" ] && \
+   [ ! -e "docs/ship-flow/090.1-child-a" ]; then
+  echo "OK DC-35c duplicate todo refusal creates no pitch or child artifacts"
+else
+  echo "FAIL DC-35c duplicate todo refusal created pitch or child artifacts"
+  FAIL=1
+fi
+COMMITS=$({ git log --oneline || true; } | wc -l | tr -d ' ')
+if [ "$COMMITS" = "1" ]; then echo "OK DC-35d duplicate todo refusal creates no commit"
+else echo "FAIL DC-35d duplicate todo refusal created commit(s), got $COMMITS"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
+
+echo
+echo "--- DC-36: duplicate rabbit-hole todo preflight runs before write-phase mkdir ---"
+mkdir_line="$(grep -n 'mkdir -p "$ENTITY_DIR" "$TODO_DIR"' "${LIB_DIR}/shape-confirm.sh" | head -n 1 | cut -d: -f1)"
+duplicate_line="$(grep -n 'rabbit-hole todo already exists' "${LIB_DIR}/shape-confirm.sh" | head -n 1 | cut -d: -f1)"
+if [ -n "$mkdir_line" ] && [ -n "$duplicate_line" ] && [ "$duplicate_line" -lt "$mkdir_line" ]; then
+  echo "OK DC-36 duplicate todo preflight precedes write-phase mkdir"
+else
+  echo "FAIL DC-36 duplicate todo preflight must precede write-phase mkdir"
+  FAIL=1
+fi
 
 # ── DC-101.1-6: answers_density emitted in folder layout (pitch-101 Task 2) ──
 echo
