@@ -16,6 +16,7 @@ I (claude 4.7) have 1M context + prompt cache. I don't need procedural teaching 
 - **Auditability for other agents + humans** — each stage's `.md` artifact + entity body + cross-review gate verdict = reconstructable decision history. Captain (or another agent) can audit my work without reading code.
 - **Canonical doc invariants** — ARCHITECTURE / PRODUCT / README / ROADMAP stay consistent with shipped work via atomic patch-map.sh CAS + named-teammate-dispatched updates at ship-review. Without this, canonical docs silently drift from implementation.
 - **Principle enforcement** — CI grep checks (Principle 1-8) catch harness regressions (preamble regrowth, skill count bloat, stale line-anchors, artifact verbosity, etc.) before they decay the flow.
+- **Mechanical guardrail harvest** — repeatable PR/debrief friction becomes config-driven lint, project checks, or workflow mods instead of chat memory.
 - **Adopter-local guidance enforcement** — ship-flow records non-root app-folder `AGENTS.md` / `CLAUDE.md` files and their project skills from touched files. This deliberately does not duplicate Codex root `AGENTS.md` session behavior; it covers the part Codex does not guarantee across planner, fresh execute workers, and PR-feedback re-entry.
 
 The flow does NOT teach me how to think. It keeps me honest across boundaries where I can't see the whole.
@@ -268,7 +269,7 @@ SendMessage(to: "verifier", message: "...verify brief with execute.md...")
 
 **Commissioning to a new repo**: use `/spacedock:commission` with `ship-flow` as template plugin. The commissioner scaffolds `docs/<wf>/README.md` with `entry-point:` frontmatter + creates initial `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` with section tags for `patch-map.sh`.
 
-**Debrief convention**: after each shipped pitch, run `spacedock:debrief` to write a session debrief under `docs/<wf>/_debriefs/<date>-<seq>.md`. Debriefs follow the schema in `references/debrief-schema.yaml` (required sections: `## Shipped`, `## Filed (backlog)`, `## Issues — Workflow`, `## Issues — Spacedock`, `## Non-PR commits (workflow-only)`, `## Observations`, `## Decisions`, `## What's Next`). The `spacebridge:debrief-promote` skill aggregates cross-project debrief patterns and promotes STRONG signals back into plugin canonical docs.
+**Debrief convention**: after each shipped pitch, run `spacedock:debrief` to write a session debrief under `docs/<wf>/_debriefs/<date>-<seq>.md`. Debriefs follow the schema in `references/debrief-schema.yaml` (required sections: `## Shipped`, `## Filed (backlog)`, `## Issues — Workflow`, `## Issues — Spacedock`, `## Non-PR commits (workflow-only)`, `## Observations`, `## Decisions`, `## What's Next`). When a session had review-loop churn, CI reruns, stale-head problems, or workflow surprise, apply `_mods/debrief-guardrail-harvest.md` and include `## Guardrail Harvest`. The `spacebridge:debrief-promote` skill aggregates cross-project debrief patterns and promotes STRONG signals back into plugin canonical docs.
 
 **Canonical docs section-tagging contract** (required for Layer C primitive compatibility):
 ```markdown
@@ -296,8 +297,9 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 | `lib/verify-assumption.sh` | asserts a critical assumption by running a shell command and logging result to entity |
 | `lib/density-classify.sh` | classifies entity density (4-tier: low/medium/high/critical) — used by cross-review verdict-flip whitelist (Principle 6 Rule C) |
 | `bin/check-invariants.sh` | CI grep enforcement of Principles 1-8 + stage-artifact-path / layer-a-delegation / cross-review-gate / structural-parity-dc / ask-fallback-coverage / indirection-sweep-emitted checks |
+| `bin/ship-flow-lint.mjs` | generic, config-driven workflow guardrail linter for Markdown, mod contracts, and required workflow surfaces |
 
-**Skill count policy** (Principle 2 split): stage skills ≤ 7 cap, utility skills uncapped. Current inventory: 7 stage (`ship-shape`, `ship`, `ship-design`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review`) + 3 utility (`add-todos`, `ship-onboard`, `ship-runtime-detect`). At cap (7/7). Enforced by `check-invariants.sh --check skill-count`.
+**Skill count policy** (Principle 2 split): stage skills ≤ 7 cap, utility skills uncapped. Current inventory: 7 stage (`ship-shape`, `ship`, `ship-design`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review`) + utility skills (`add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel`) plus non-skill utility scripts/mods such as `ship-flow-lint`. Stage skills remain at cap (7/7). Enforced by `check-invariants.sh --check skill-count`.
 
 **FO Discipline** (when to pause for captain): documented in `INVARIANTS.md § FO Discipline`. Short version: only `/shape` confirm, verify BLOCKING findings, PR merge, and explicit captain interrupt are captain-gates. All other transitions autonomous.
 
@@ -379,6 +381,11 @@ Incremental additions after the 0.5.0 release that are not yet a named version b
 **Principle 8 — Artifact verbosity discipline** (pitch-107):
 - New principle (8th) codified from pitch-107 dogfood. Stage `.md` files must budget body content: plan.md ≤200 lines, execute.md ≤150, verify.md ≤120, review.md ≤100, ship.md ≤60. Verbose evidence goes inside `<details>` blocks; main body holds TL;DR + structured findings table only.
 - `check-invariants.sh --check artifact-verbosity` is proposed but not yet wired as of pitch-107 ship.
+
+**Mechanical guardrail lint**:
+- `bin/ship-flow-lint.mjs` provides a generic guardrail runner for adopters. It always checks accidental Markdown table `||` rows and can load adopter config from `docs/<wf>/ship-flow-lint.config.json` for workflow-required surfaces and project-specific mod-contract patterns.
+- Workflow mods `_mods/ship-flow-lint.md` and `_mods/debrief-guardrail-harvest.md` define when the runner is used and how debrief learns from rough PRs.
+- Project-specific seed, migration, generated SQL, env, and deployment checks stay in adopter commands and are wired by config; they do not belong in the generic plugin.
 
 ---
 

@@ -207,8 +207,19 @@ After `review.md` cross-review PROCEED:
 
    On exit 6 (stale hash): write `## Ship Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 
-2. **Create PR** via `gh pr create` with title from entity + body referencing all stage artifacts (plan/execute/verify/review links).
-3. **Post-create merge-state check** — poll `gh pr view {pr} --json mergeStateStatus --jq '.mergeStateStatus'` every 5 seconds for up to 30 seconds, stopping on `CLEAN`, `CONFLICTING`, `DIRTY`, or `UNSTABLE`.
+2. **Mechanical guardrail lint** — if `plugins/ship-flow/bin/ship-flow-lint.mjs`
+   exists, run it before PR creation:
+
+       node plugins/ship-flow/bin/ship-flow-lint.mjs --workflow-dir docs/ship-flow
+
+   If the adopter exposes a package script such as `pnpm ship-flow:lint`, prefer
+   the package script. Any failure is a ship-final blocker: fix the deterministic
+   issue before spending PR review cycles. Project-specific seed/migration/env
+   checks stay in adopter config or package scripts; ship-flow core only owns the
+   generic runner.
+
+3. **Create PR** via `gh pr create` with title from entity + body referencing all stage artifacts (plan/execute/verify/review links).
+4. **Post-create merge-state check** — poll `gh pr view {pr} --json mergeStateStatus --jq '.mergeStateStatus'` every 5 seconds for up to 30 seconds, stopping on `CLEAN`, `CONFLICTING`, `DIRTY`, or `UNSTABLE`.
 
    - `CLEAN` → continue to post-create auto-review.
    - `CONFLICTING` or `DIRTY` → update the branch against main: `git fetch origin main && git rebase origin/main`.
@@ -219,9 +230,9 @@ After `review.md` cross-review PROCEED:
    - Timeout without one of the terminal statuses → surface the last observed state and continue only with captain direction.
 
    Additive auto-resolution currently has one known safe surface: `ROADMAP.md` sections `later`, `not-doing`, and `shipped`. Add more surfaces only when repo evidence proves they are append-only and structurally bounded by section markers.
-4. **Post-create auto-review** — invoke the workflow's pr-merge mod `Hook: post-create` (`docs/<wf>/_mods/pr-merge.md`). The FO computes a 5-signal confidence score (verify gate / quality gates / outstanding feedback / rebase clean / token spend); on score ≥90 auto-applies the policy steps (mark Ready via `gh pr ready` + request Copilot review with graceful skip if absent); on 80-89 surfaces breakdown to captain and asks; on <80 surfaces concerns and skips. Tagging `@claude review` is intentionally NOT a default step — adopters who have the Claude Code Action wired can extend in a project-scoped override of the mod. Failure of any post-create step is non-blocking — log + surface, never halt ship-final.
-5. **Announce** to captain: entity shipped + PR URL + stage artifact paths + post-create auto-review outcome (Ready ✓ / Copilot reviewer id or "skipped" / score breakdown if <90).
-6. TaskUpdate ship-final=completed.
+5. **Post-create auto-review** — invoke the workflow's pr-merge mod `Hook: post-create` (`docs/<wf>/_mods/pr-merge.md`). The FO computes a 5-signal confidence score (verify gate / quality gates / outstanding feedback / rebase clean / token spend); on score ≥90 auto-applies the policy steps (mark Ready via `gh pr ready` + request Copilot review with graceful skip if absent); on 80-89 surfaces breakdown to captain and asks; on <80 surfaces concerns and skips. Tagging `@claude review` is intentionally NOT a default step — adopters who have the Claude Code Action wired can extend in a project-scoped override of the mod. Failure of any post-create step is non-blocking — log + surface, never halt ship-final.
+6. **Announce** to captain: entity shipped + PR URL + stage artifact paths + post-create auto-review outcome (Ready ✓ / Copilot reviewer id or "skipped" / score breakdown if <90).
+7. TaskUpdate ship-final=completed.
 
 **Merge decision is captain's.** `/ship` does NOT auto-merge. Captain may comment on PR or run `gh pr merge` manually.
 

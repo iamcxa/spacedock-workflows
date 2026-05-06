@@ -33,6 +33,7 @@ optional_sections:
   - "## Rejected / Non-shipped terminal"
   - "## Pending merge"
   - "## Designer Perspective"   # present when session includes design stage; documents category classification, Q-loop captain decisions (D1-DN), and designer_lessons for future pitches
+  - "## Guardrail Harvest"       # present when review-loop churn, CI reruns, stale-head problems, or workflow surprise should become script/config/mod/todo/no-action
 
 # Forward-compatibility aliases (v2 reservation)
 # If spacedock:debrief skill evolves to use these section names, update schema_version to 2.
@@ -47,3 +48,6 @@ forward_compatibility_aliases:
     - "## Lifted to skill source"
   cross_project_signals_v2:
     - "## Cross-project signals"
+  guardrail_harvest_v2:
+    - "## Guardrail Harvest"
+    - "## Issues — Workflow"   # current source section when harvest is absent
