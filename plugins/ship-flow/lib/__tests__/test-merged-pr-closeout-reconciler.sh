@@ -77,6 +77,16 @@ assert_path_missing() {
   fi
 }
 
+assert_path_exists() {
+  local desc="$1"
+  local path="$2"
+  if [ -e "$path" ]; then
+    record_pass "$desc"
+  else
+    record_fail "$desc (missing path: ${path})"
+  fi
+}
+
 frontmatter_field() {
   local file="$1"
   local field="$2"
@@ -343,6 +353,27 @@ run_usage_and_dry_run_cases() {
   else
     record_fail "dry-run leaves workflow unchanged"
   fi
+
+  local active_done_repo="$TMP_DIR/dry-run-active-done-repo"
+  setup_repo "$active_done_repo"
+  write_entity "${active_done_repo}/docs/ship-flow" "merged-fixture-entity" "done" "#131" "" "2026-05-06T00:00:00Z" "PASSED"
+  git -C "$active_done_repo" add docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$active_done_repo" commit -qm "add active done entity"
+  before="$(hash_tree "${active_done_repo}/docs/ship-flow")"
+  rc="$(run_helper "$active_done_repo" "$TMP_DIR/dry-run-active-done.out" \
+    --entity merged-fixture-entity \
+    --pr-provider fixture \
+    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
+    --dry-run)"
+  after="$(hash_tree "${active_done_repo}/docs/ship-flow")"
+  assert_exit "dry-run active done exits success" 0 "$rc"
+  assert_contains "dry-run active done reports planned archive" '^state=already_done_archive_planned$' "$TMP_DIR/dry-run-active-done.out"
+  assert_contains "dry-run active done does not claim archived now" '^detail=active terminal entity archive planned$' "$TMP_DIR/dry-run-active-done.out"
+  if [ "$before" = "$after" ]; then
+    record_pass "dry-run active done leaves workflow unchanged"
+  else
+    record_fail "dry-run active done leaves workflow unchanged"
+  fi
 }
 
 run_cleanup_cases() {
@@ -412,6 +443,61 @@ run_cleanup_cases() {
     record_pass "branch mismatch leaves workflow unchanged"
   else
     record_fail "branch mismatch leaves workflow unchanged"
+  fi
+
+  local derived_repo="$TMP_DIR/derived-branch-repo"
+  setup_repo "$derived_repo"
+  mkdir -p "${derived_repo}/.worktrees"
+  write_entity "${derived_repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ".worktrees/not-pr-head"
+  git -C "$derived_repo" add docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$derived_repo" commit -qm "add derived branch entity"
+  git -C "$derived_repo" worktree add "${derived_repo}/.worktrees/not-pr-head" -b not-pr-head >/dev/null 2>&1
+  before="$(hash_tree "${derived_repo}/docs/ship-flow")"
+  rc="$(run_helper "$derived_repo" "$TMP_DIR/derived-branch-mismatch.out" \
+    --entity merged-fixture-entity \
+    --pr-provider fixture \
+    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
+  after="$(hash_tree "${derived_repo}/docs/ship-flow")"
+  assert_exit "derived branch mismatch prompts captain" 1 "$rc"
+  assert_contains "derived branch mismatch reports reason" '^reason=branch-mismatch$' "$TMP_DIR/derived-branch-mismatch.out"
+  assert_path_exists "derived branch mismatch keeps worktree path" "${derived_repo}/.worktrees/not-pr-head"
+  if [ "$before" = "$after" ]; then
+    record_pass "derived branch mismatch leaves workflow unchanged"
+  else
+    record_fail "derived branch mismatch leaves workflow unchanged"
+  fi
+
+  local failure_repo="$TMP_DIR/archive-failure-repo"
+  setup_repo "$failure_repo"
+  mkdir -p "${failure_repo}/.worktrees"
+  write_entity "${failure_repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ".worktrees/ship-merged-fixture-entity"
+  git -C "$failure_repo" add docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$failure_repo" commit -qm "add archive failure entity"
+  git -C "$failure_repo" worktree add "${failure_repo}/.worktrees/ship-merged-fixture-entity" -b ship-merged-fixture-entity >/dev/null 2>&1
+  local failing_status="$TMP_DIR/failing-status"
+  cat > "$failing_status" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+    --archive) exit 43 ;;
+  esac
+done
+exec "$STATUS_BIN" "\$@"
+EOF
+  chmod +x "$failing_status"
+  local original_status="$STATUS_BIN"
+  STATUS_BIN="$failing_status"
+  rc="$(run_helper "$failure_repo" "$TMP_DIR/archive-failure.out" \
+    --entity merged-fixture-entity \
+    --pr-provider fixture \
+    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
+  STATUS_BIN="$original_status"
+  assert_exit "archive failure exits before cleanup" 43 "$rc"
+  assert_path_exists "archive failure keeps worktree path" "${failure_repo}/.worktrees/ship-merged-fixture-entity"
+  if git -C "$failure_repo" show-ref --verify --quiet refs/heads/ship-merged-fixture-entity; then
+    record_pass "archive failure keeps worktree branch"
+  else
+    record_fail "archive failure keeps worktree branch"
   fi
 
   local missing_repo="$TMP_DIR/missing-repo"
@@ -502,6 +588,12 @@ run_scope_guard() {
   assert_not_contains "helper has no forbidden git/gh mutation commands" 'git branch -D|git push --delete|gh pr (create|merge)|git merge' "$HELPER"
 }
 
+run_doc_scope_cases() {
+  local pr_merge_doc="${PLUGIN_ROOT}/../../docs/ship-flow/_mods/pr-merge.md"
+  assert_contains "pr merge doc scopes v1 provider support" 'v1 reconciler supports GitHub `gh` and fixture-backed tests only' "$pr_merge_doc"
+  assert_not_contains "pr merge doc does not advertise GitLab closeout state checks" 'glab mr view|If `MERGED` .*GitLab|If `MERGED` \(GitHub\) or `merged` \(GitLab\)' "$pr_merge_doc"
+}
+
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -518,6 +610,7 @@ else
   run_cleanup_cases
   run_idempotency_cases
   run_scope_guard
+  run_doc_scope_cases
 fi
 
 echo ""

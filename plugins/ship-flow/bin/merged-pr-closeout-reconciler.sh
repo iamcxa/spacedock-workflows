@@ -188,15 +188,16 @@ branch_for_worktree_path() {
   '
 }
 
-preflight_and_remove_worktree() {
+preflight_worktree_cleanup() {
   local worktree_value="$1"
   cleanup_branch=""
+  cleanup_worktree_abs=""
   if [ -z "$worktree_value" ]; then
     worktree_cleanup="not_applicable"
     return 0
   fi
 
-  local primary_root worktree_abs branch derived_branch dirty
+  local primary_root worktree_abs branch dirty
   primary_root="$(primary_worktree_root)"
   [ -n "$primary_root" ] || prompt_captain "git-worktree-metadata-unavailable" "unable to read primary worktree"
   worktree_abs="$(absolute_worktree_path "$primary_root" "$worktree_value")"
@@ -209,9 +210,8 @@ preflight_and_remove_worktree() {
 
   branch="$(branch_for_worktree_path "$worktree_abs")"
   [ -n "$branch" ] || prompt_captain "worktree-not-registered" "local worktree path is not registered"
-  derived_branch="$(basename "$worktree_abs")"
-  if [ "$branch" != "$head_ref" ] && [ "$branch" != "$derived_branch" ]; then
-    prompt_captain "branch-mismatch" "registered worktree branch does not match PR head or path-derived branch"
+  if [ "$branch" != "$head_ref" ]; then
+    prompt_captain "branch-mismatch" "registered worktree branch does not match PR head"
   fi
 
   dirty="$(git -C "$worktree_abs" status --porcelain)"
@@ -222,12 +222,21 @@ preflight_and_remove_worktree() {
   if [ "$dry_run" = "yes" ]; then
     worktree_cleanup="planned"
     cleanup_branch="$branch"
+    cleanup_worktree_abs="$worktree_abs"
     return 0
   fi
 
-  if git -C "$repo_root" worktree remove "$worktree_abs" >/dev/null 2>&1; then
+  worktree_cleanup="planned"
+  cleanup_branch="$branch"
+  cleanup_worktree_abs="$worktree_abs"
+}
+
+remove_worktree_if_safe() {
+  if [ -z "${cleanup_worktree_abs:-}" ]; then
+    return 0
+  fi
+  if git -C "$repo_root" worktree remove "$cleanup_worktree_abs" >/dev/null 2>&1; then
     worktree_cleanup="removed"
-    cleanup_branch="$branch"
   else
     prompt_captain "worktree-remove-failed" "git worktree remove failed"
   fi
@@ -285,6 +294,7 @@ reason=""
 state_name=""
 detail=""
 cleanup_branch=""
+cleanup_worktree_abs=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -370,11 +380,14 @@ if coherent_terminal_file "$entity_path"; then
   if [ "$dry_run" = "no" ]; then
     archive_active_entity
     verify_archived_entity
+    state_name="already_done_archived_now"
+    detail="active terminal entity archived"
+  else
+    state_name="already_done_archive_planned"
+    detail="active terminal entity archive planned"
   fi
   verdict="PROCEED"
-  state_name="already_done_archived_now"
   pr_state="MERGED"
-  detail="active terminal entity archived"
   emit_report
   exit 0
 fi
@@ -404,13 +417,14 @@ case "$pr_state" in
     ;;
 esac
 
-preflight_and_remove_worktree "$worktree_value"
+preflight_worktree_cleanup "$worktree_value"
 terminal_action="set_done"
 
 if [ "$dry_run" = "no" ]; then
   set_terminal_fields
   archive_active_entity
   verify_archived_entity
+  remove_worktree_if_safe
 fi
 
 cleanup_branch_if_safe
