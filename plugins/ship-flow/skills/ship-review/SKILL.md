@@ -1,6 +1,6 @@
 ---
 name: ship-review
-description: "Use when verify passed and ship-flow needs review, PR readiness, PR body drafting, or canonical docs sync."
+description: "Layer A delegation: pr-review-toolkit:review-pr owns PR review agent philosophy when invoked. Use when verify passed and ship-flow needs review, PR readiness, PR body drafting, or canonical docs sync."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---
