@@ -1,6 +1,6 @@
 ---
 name: ship-execute
-description: "Layer A delegation: superpowers:subagent-driven-development owns dispatch philosophy. Use when ship-flow needs execute-stage implementation from an approved plan, including wave tasks, blocked work, or PR feedback re-entry."
+description: "Use when ship-flow needs execute-stage implementation from an approved plan, including wave tasks, blocked work, or PR feedback re-entry. Layer A delegation: superpowers:subagent-driven-development owns wave dispatch discipline."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---

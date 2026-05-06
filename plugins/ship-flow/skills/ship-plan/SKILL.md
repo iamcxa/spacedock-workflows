@@ -1,6 +1,6 @@
 ---
 name: ship-plan
-description: "Layer A delegation: superpowers:writing-plans owns plan authoring discipline; ship-flow:test-driven-development owns fallback TDD artifact rules. Use when writing a ship-flow plan for a shaped entity, especially implementation tasks, TDD needs, runtime commands, or scope anchoring."
+description: "Use when writing a ship-flow plan for a shaped entity, especially implementation tasks, TDD needs, runtime commands, or scope anchoring. Layer A delegation: superpowers:writing-plans owns plan authoring; ship-flow:test-driven-development owns fallback TDD contracts."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---

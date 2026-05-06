@@ -13,7 +13,7 @@
 #
 # Exit codes: 0 success, 1 usage/malformed JSON, 3 missing file,
 #             6 hash mismatch during patch, 7 required helpers missing,
-#             8 commit failed, 10 invalid proposal content
+#             8 commit failed, 10 invalid proposal content or repo-state refusal
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -94,7 +94,11 @@ CHILDREN_PATHS=()
 for i in $(seq 0 $((CHILD_COUNT - 1))); do
   c_id=$(yq --input-format=json ".children[$i].id" "$PROPOSAL" | tr -d '"')
   c_slug=$(yq --input-format=json ".children[$i].slug" "$PROPOSAL" | tr -d '"')
-  CHILDREN_PATHS+=("${ENTITY_DIR}/${c_id}-${c_slug}.md")
+  if [ "$LAYOUT" = "folder" ]; then
+    CHILDREN_PATHS+=("${ENTITY_DIR}/${c_id}-${c_slug}/index.md")
+  else
+    CHILDREN_PATHS+=("${ENTITY_DIR}/${c_id}-${c_slug}.md")
+  fi
 done
 
 RH_COUNT=$(yq --input-format=json '.rabbit_holes | length' "$PROPOSAL")
@@ -120,6 +124,15 @@ if [ "$DRY_RUN" = "1" ]; then
   echo "Would patch: ROADMAP.md sections next, later, not-doing"
   exit 0
 fi
+
+# Duplicate todo refusal shares exit 10 with proposal validation failures: both
+# reject unsafe write input before the write phase mutates directories or files.
+for rh_path in "${RH_PATHS[@]}"; do
+  if [ -e "$rh_path" ]; then
+    echo "Error: rabbit-hole todo already exists, refusing to overwrite: $rh_path" >&2
+    exit 10
+  fi
+done
 
 # === Real write phase ===
 mkdir -p "$ENTITY_DIR" "$TODO_DIR"
@@ -212,7 +225,13 @@ for i in $(seq 0 $((CHILD_COUNT - 1))); do
   c_id=$(yq --input-format=json ".children[$i].id" "$PROPOSAL" | tr -d '"')
   c_slug=$(yq --input-format=json ".children[$i].slug" "$PROPOSAL" | tr -d '"')
   c_title=$(yq --input-format=json ".children[$i].title" "$PROPOSAL" | tr -d '"')
-  c_path="${ENTITY_DIR}/${c_id}-${c_slug}.md"
+  if [ "$LAYOUT" = "folder" ]; then
+    c_folder="${ENTITY_DIR}/${c_id}-${c_slug}"
+    mkdir -p "$c_folder"
+    c_path="${c_folder}/index.md"
+  else
+    c_path="${ENTITY_DIR}/${c_id}-${c_slug}.md"
+  fi
   cat > "$c_path" <<EOF
 ---
 id: "${c_id}"
@@ -220,6 +239,7 @@ title: "${c_title}"
 status: sharp
 pattern: shaped-child
 parent_pitch: "${PITCH_ID}"
+$([ "$LAYOUT" = "folder" ] && echo "layout: folder" || true)
 ---
 
 ### Problem

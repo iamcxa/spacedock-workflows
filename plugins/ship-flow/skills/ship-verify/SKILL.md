@@ -1,6 +1,6 @@
 ---
 name: ship-verify
-description: "Layer A delegation: e2e-pipeline and ship-flow:ui-verify own UI-DC verification; pr-review-toolkit and ship-flow:verify-reviewer-panel own reviewer lenses. Use when verifying execute output before ship, including `/verify`, `/ship`, live worktree checks, UI DCs, e2e, reviewer panel, or NIT fixes."
+description: "Use when verifying execute output before ship, including `/verify`, `/ship`, live worktree checks, UI DCs, e2e, reviewer panel, or NIT fixes. Layer A delegation: e2e-pipeline and ship-flow:ui-verify own UI DC verification; reviewer personas own haiku review."
 user-invocable: true
 argument-hint: "<entity-id> [--fast | --full]"
 ---
