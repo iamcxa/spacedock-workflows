@@ -1,6 +1,6 @@
 ---
 name: ship-design
-description: "Use when shape detects a UI, domain, or contract/interface-bearing pitch needs design intent before plan — affects_ui, registered domain, design_required, contract_decision_required, UI files (*.tsx, *.css, *.html), visual ambiguity, or no design reference exists. Agent-autonomous: 5-category classifier plus design-dispatch-manifest routing for ui-designer, domain-designer, and contract/interface-designer workers. Output: `<entity-folder>/design.md` + optional `plugins/<app>/design/*` artifact bundle."
+description: "Use when shape finds UI, domain, contract, interface, visual ambiguity, affects_ui, design_required, or no design reference before plan."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---

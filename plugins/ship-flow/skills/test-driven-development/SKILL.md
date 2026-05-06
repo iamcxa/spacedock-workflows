@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-description: Use when ship-flow plan, execute, or verify needs test-first discipline for code-bearing tasks, especially when adopter environments may not have superpowers installed or when RED-before-GREEN evidence is missing.
+description: Use when ship-flow plan, execute, or verify needs TDD, test-first discipline, or RED-before-GREEN evidence for code-bearing tasks.
 ---
 
 # Ship-Flow Test-Driven Development

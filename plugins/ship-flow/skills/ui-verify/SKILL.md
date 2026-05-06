@@ -1,6 +1,6 @@
 ---
 name: ui-verify
-description: Use when verifying UI render fidelity in ship-flow with fixed selectors, design tokens, computed CSS values, pseudo-element styles, dimensions, or generated render_fidelity_targets from design handoff.
+description: Use when ship-flow needs UI verify coverage for render fidelity, selectors, design tokens, computed CSS, dimensions, or handoff targets.
 ---
 
 # UI Verify

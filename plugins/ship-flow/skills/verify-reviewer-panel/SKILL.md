@@ -1,6 +1,6 @@
 ---
 name: verify-reviewer-panel
-description: "Built-in ship-flow verify reviewer panel fallback. Use inside ship-verify when PR-review toolkit personas are unavailable, or as the contract wrapper around general external reviewer, silent failure reviewer, and domain expert reviewer lenses. Read-only, findings-only, file:line cited output."
+description: "Use when ship-verify needs a reviewer panel fallback, external reviewer, silent failure reviewer, domain expert, or file:line findings lens."
 user-invocable: false
 ---
 

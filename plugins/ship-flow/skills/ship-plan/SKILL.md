@@ -1,6 +1,6 @@
 ---
 name: ship-plan
-description: "Use when writing an implementation plan for a shaped entity. Agent-autonomous: size-adaptive research + TDD task plan, dispatched by /ship to `planner` teammate (SendMessage). Output: `<entity-folder>/plan.md` via lib/write-stage-artifact.sh. Layer A delegation: superpowers:writing-plans for plan authoring philosophy; ship-plan wraps with Shape Up scope anchoring + runtime detection + cross-review gate."
+description: "Use when writing a ship-flow plan for a shaped entity, especially implementation tasks, TDD needs, runtime commands, or scope anchoring. Layer A delegation: superpowers:writing-plans owns plan authoring; ship-flow:test-driven-development owns fallback TDD contracts."
 user-invocable: false
 argument-hint: "[entity-id | slug]"
 ---
