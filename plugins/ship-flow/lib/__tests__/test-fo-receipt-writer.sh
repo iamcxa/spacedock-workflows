@@ -264,6 +264,72 @@ for case_name in single-quoted-true single-quoted-yes double-quoted-true numeric
     bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
 done
 
+for case_name in missing ambiguous present path-payload text-payload quoted-missing quoted-ambiguous quoted-present; do
+  BAD_ENTITY_DIR="$(new_entity_dir)"
+  BAD_RECEIPT="$(mktemp)"
+  case "$case_name" in
+    missing)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001010Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "missing"
+      ;;
+    ambiguous)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001020Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "ambiguous"
+      ;;
+    present)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001030Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "present"
+      ;;
+    path-payload)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001040Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "/tmp/evidence.txt"
+      ;;
+    text-payload)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001050Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" '"needs captain evidence review"'
+      ;;
+    quoted-missing)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001060Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" '"missing"'
+      ;;
+    quoted-ambiguous)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001070Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "'ambiguous'"
+      ;;
+    quoted-present)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001080Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" '"present"'
+      ;;
+  esac
+  assert_failure_contains "self-approved receipt rejects blocker_scan ${case_name}" "captain" \
+    bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
+for case_name in none false no zero quoted-none quoted-false quoted-no quoted-zero; do
+  SAFE_ENTITY_DIR="$(new_entity_dir)"
+  SAFE_RECEIPT="$(mktemp)"
+  case "$case_name" in
+    none)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T001085Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none"
+      ;;
+    false)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T001086Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "false"
+      ;;
+    no)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T001087Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "no"
+      ;;
+    zero)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T001088Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "0"
+      ;;
+    quoted-none)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T001089Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" '"none"'
+      ;;
+    quoted-false)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T001090Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "'false'"
+      ;;
+    quoted-no)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T001091Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" '"no"'
+      ;;
+    quoted-zero)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T001092Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "'0'"
+      ;;
+  esac
+  assert_success "self-approved receipt accepts blocker_scan safe sentinel ${case_name}" \
+    bash "$HELPER" --entity-folder "$SAFE_ENTITY_DIR" --receipt-file "$SAFE_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
 MISSING_OPEN_ENTITY_DIR="$(new_entity_dir)"
 MISSING_OPEN_RECEIPT="$(mktemp)"
 write_receipt "$MISSING_OPEN_RECEIPT" "fo-20260512T001100Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"

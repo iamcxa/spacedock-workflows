@@ -123,61 +123,33 @@ open_decisions_non_empty() {
   ' "$RECEIPT_FILE"
 }
 
-blocker_scan_has_truthy_boolean() {
+blocker_scan_has_unsafe_value() {
   awk '
+    function unsafe_blocker_value(raw, value) {
+      value = raw
+      gsub(/#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^["\047]/, "", value)
+      gsub(/["\047]$/, "", value)
+      value = tolower(value)
+      return value != "" && value != "none" && value != "false" && value != "no" && value != "0"
+    }
     BEGIN { in_blockers = 0; found = 0 }
     /^blocker_scan:[[:space:]]*/ {
       in_blockers = 1
       value = $0
       sub(/^blocker_scan:[[:space:]]*/, "", value)
-      gsub(/#.*/, "", value)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      gsub(/^["\047]/, "", value)
-      gsub(/["\047]$/, "", value)
-      value = tolower(value)
-      if (value == "true" || value == "yes" || value == "on" || value == "1") found = 1
+      if (unsafe_blocker_value(value)) found = 1
       next
     }
     in_blockers && /^[^[:space:]]/ { in_blockers = 0 }
-    in_blockers && /^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/ {
+    in_blockers {
       value = $0
-      sub(/^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/, "", value)
-      gsub(/#.*/, "", value)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      gsub(/^["\047]/, "", value)
-      gsub(/["\047]$/, "", value)
-      value = tolower(value)
-      if (value == "true" || value == "yes" || value == "on" || value == "1") found = 1
-    }
-    END { exit found ? 0 : 1 }
-  ' "$RECEIPT_FILE"
-}
-
-blocker_scan_has_found() {
-  awk '
-    BEGIN { in_blockers = 0; found = 0 }
-    /^blocker_scan:[[:space:]]*/ {
-      in_blockers = 1
-      value = $0
-      sub(/^blocker_scan:[[:space:]]*/, "", value)
-      gsub(/#.*/, "", value)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      gsub(/^["\047]/, "", value)
-      gsub(/["\047]$/, "", value)
-      value = tolower(value)
-      if (value == "found") found = 1
-      next
-    }
-    in_blockers && /^[^[:space:]]/ { in_blockers = 0 }
-    in_blockers && /^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/ {
-      value = $0
-      sub(/^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/, "", value)
-      gsub(/#.*/, "", value)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      gsub(/^["\047]/, "", value)
-      gsub(/["\047]$/, "", value)
-      value = tolower(value)
-      if (value == "found") found = 1
+      sub(/^[[:space:]]*-?[[:space:]]*/, "", value)
+      if (value ~ /^[A-Za-z0-9_-]+:[[:space:]]*/) {
+        sub(/^[A-Za-z0-9_-]+:[[:space:]]*/, "", value)
+      }
+      if (unsafe_blocker_value(value)) found = 1
     }
     END { exit found ? 0 : 1 }
   ' "$RECEIPT_FILE"
@@ -257,12 +229,8 @@ validate_receipt() {
       captain_route "self-approved receipt has failing or missing preconditions"
       exit 5
     fi
-    if blocker_scan_has_found; then
-      captain_route "self-approved receipt has blocker_scan findings"
-      exit 5
-    fi
-    if blocker_scan_has_truthy_boolean; then
-      captain_route "self-approved receipt has truthy blocker_scan boolean"
+    if blocker_scan_has_unsafe_value; then
+      captain_route "self-approved receipt has unsafe blocker_scan value"
       exit 5
     fi
     if open_decisions_non_empty; then
