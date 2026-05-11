@@ -277,6 +277,51 @@ for case_name in precondition-fail precondition-missing blocker-found prompt-cap
     bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
 done
 
+for case_name in uppercase-self-approved unknown-decision; do
+  BAD_ENTITY_DIR="$(new_entity_dir)"
+  BAD_RECEIPT="$(new_temp_file)"
+  write_receipt "$BAD_RECEIPT" "fo-20260512T000601Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+  case "$case_name" in
+    uppercase-self-approved)
+      sed -i.bak '/^decision:/c\
+decision: SELF-APPROVED
+' "$BAD_RECEIPT"
+      ;;
+    unknown-decision)
+      sed -i.bak '/^decision:/c\
+decision: autonomous
+' "$BAD_RECEIPT"
+      ;;
+  esac
+  rm -f "${BAD_RECEIPT}.bak"
+  assert_failure_contains "receipt rejects decision ${case_name}" "decision" \
+    bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
+for case_name in precondition-pending precondition-empty precondition-status-absent; do
+  BAD_ENTITY_DIR="$(new_entity_dir)"
+  BAD_RECEIPT="$(new_temp_file)"
+  case "$case_name" in
+    precondition-pending)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000602Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pending"
+      ;;
+    precondition-empty)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000603Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+      sed -i.bak '/^[[:space:]]*status:/c\
+    status:
+' "$BAD_RECEIPT"
+      rm -f "${BAD_RECEIPT}.bak"
+      ;;
+    precondition-status-absent)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000604Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+      sed -i.bak '/^[[:space:]]*status:/d' "$BAD_RECEIPT"
+      rm -f "${BAD_RECEIPT}.bak"
+      ;;
+  esac
+  assert_failure_contains "self-approved receipt rejects ${case_name}" "captain" \
+    bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
 MISMATCH_TRIGGER_ENTITY_DIR="$(new_entity_dir)"
 MISMATCH_TRIGGER_RECEIPT="$(new_temp_file)"
 write_receipt "$MISMATCH_TRIGGER_RECEIPT" "fo-20260512T000605Z-verify-proceed-auto-advance" "other-trigger"
@@ -513,6 +558,19 @@ open_decisions: []
 rm -f "${SAFE_BLOCKER_MAP_RECEIPT}.bak"
 assert_success "self-approved receipt accepts blocker_scan explicit empty-map sentinel" \
   bash "$HELPER" --entity-folder "$SAFE_BLOCKER_MAP_ENTITY_DIR" --receipt-file "$SAFE_BLOCKER_MAP_RECEIPT" --transition-slug verify-proceed-auto-advance
+
+BLANK_BLOCKER_MAP_ENTITY_DIR="$(new_entity_dir)"
+BLANK_BLOCKER_MAP_RECEIPT="$(new_temp_file)"
+write_receipt "$BLANK_BLOCKER_MAP_RECEIPT" "fo-20260512T001094Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+sed -i.bak '/^blocker_scan:/,/^open_decisions:/c\
+blocker_scan:\
+  veto:\
+  prompt_captain_required: false\
+open_decisions: []
+' "$BLANK_BLOCKER_MAP_RECEIPT"
+rm -f "${BLANK_BLOCKER_MAP_RECEIPT}.bak"
+assert_failure_contains "self-approved receipt rejects blank blocker_scan mapping value" "captain" \
+  bash "$HELPER" --entity-folder "$BLANK_BLOCKER_MAP_ENTITY_DIR" --receipt-file "$BLANK_BLOCKER_MAP_RECEIPT" --transition-slug verify-proceed-auto-advance
 
 MISSING_OPEN_ENTITY_DIR="$(new_entity_dir)"
 MISSING_OPEN_RECEIPT="$(new_temp_file)"

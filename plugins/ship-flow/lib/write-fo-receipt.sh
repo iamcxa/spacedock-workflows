@@ -174,22 +174,23 @@ open_decisions_has_unsafe_value() {
 
 blocker_scan_has_unsafe_value() {
   awk '
-    function unsafe_blocker_value(raw, value) {
+    function trim_blocker_value(raw, value) {
       value = raw
       gsub(/#.*/, "", value)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
       gsub(/^["\047]/, "", value)
       gsub(/["\047]$/, "", value)
-      value = tolower(value)
+      return tolower(value)
+    }
+    function blank_blocker_value(raw) {
+      return trim_blocker_value(raw) == ""
+    }
+    function unsafe_blocker_value(raw, value) {
+      value = trim_blocker_value(raw)
       return value != "" && value != "{}" && value != "none" && value != "false" && value != "no" && value != "0"
     }
     function safe_blocker_value(raw, value) {
-      value = raw
-      gsub(/#.*/, "", value)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      gsub(/^["\047]/, "", value)
-      gsub(/["\047]$/, "", value)
-      value = tolower(value)
+      value = trim_blocker_value(raw)
       return value == "{}" || value == "none" || value == "false" || value == "no" || value == "0"
     }
     BEGIN { in_blockers = 0; found = 0; explicit_safe = 0 }
@@ -210,6 +211,10 @@ blocker_scan_has_unsafe_value() {
       sub(/^[[:space:]]*-?[[:space:]]*/, "", value)
       if (value ~ /^[A-Za-z0-9_-]+:[[:space:]]*/) {
         sub(/^[A-Za-z0-9_-]+:[[:space:]]*/, "", value)
+        if (blank_blocker_value(value)) {
+          found = 1
+          next
+        }
       }
       if (safe_blocker_value(value)) {
         explicit_safe = 1
@@ -221,25 +226,61 @@ blocker_scan_has_unsafe_value() {
   ' "$RECEIPT_FILE"
 }
 
-preconditions_have_fail_or_missing() {
+preconditions_not_explicit_pass() {
   awk '
-    BEGIN { in_preconditions = 0; found = 0 }
-    /^preconditions:[[:space:]]*/ {
-      in_preconditions = 1
-      next
-    }
-    in_preconditions && /^[^[:space:]]/ { in_preconditions = 0 }
-    in_preconditions && /^[[:space:]]*status:[[:space:]]*/ {
-      value = $0
-      sub(/^[[:space:]]*status:[[:space:]]*/, "", value)
+    function normalize_status(raw, value) {
+      value = raw
       gsub(/#.*/, "", value)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
       gsub(/^["\047]/, "", value)
       gsub(/["\047]$/, "", value)
-      value = tolower(value)
-      if (value == "fail" || value == "missing") found = 1
+      return tolower(value)
     }
-    END { exit found ? 0 : 1 }
+    function finish_item() {
+      if (item_count > 0 && !item_has_status) found = 1
+      item_has_status = 0
+    }
+    BEGIN {
+      in_preconditions = 0
+      found = 0
+      status_count = 0
+      item_count = 0
+      item_has_status = 0
+    }
+    /^preconditions:[[:space:]]*/ {
+      in_preconditions = 1
+      next
+    }
+    in_preconditions && /^[^[:space:]]/ {
+      finish_item()
+      in_preconditions = 0
+    }
+    in_preconditions && /^[[:space:]]*-/ {
+      finish_item()
+      item_count += 1
+    }
+    in_preconditions && /^[[:space:]]*status:[[:space:]]*/ {
+      value = $0
+      sub(/^[[:space:]]*status:[[:space:]]*/, "", value)
+      value = normalize_status(value)
+      if (item_count == 0) item_count = 1
+      item_has_status = 1
+      status_count += 1
+      if (value != "pass") found = 1
+    }
+    in_preconditions && /^[[:space:]]*-[[:space:]]*status:[[:space:]]*/ {
+      value = $0
+      sub(/^[[:space:]]*-[[:space:]]*status:[[:space:]]*/, "", value)
+      value = normalize_status(value)
+      item_has_status = 1
+      status_count += 1
+      if (value != "pass") found = 1
+    }
+    END {
+      if (in_preconditions) finish_item()
+      if (status_count == 0) found = 1
+      exit found ? 0 : 1
+    }
   ' "$RECEIPT_FILE"
 }
 
@@ -296,9 +337,17 @@ validate_receipt() {
   fi
 
   decision="$(trim_scalar "$(top_level_value decision)")"
+  case "$decision" in
+    self-approved|prompt-captain|blocked) ;;
+    *)
+      echo "Receipt payload decision must be one of: self-approved, prompt-captain, blocked" >&2
+      exit 4
+      ;;
+  esac
+
   if [ "$decision" = "self-approved" ]; then
-    if preconditions_have_fail_or_missing; then
-      captain_route "self-approved receipt has failing or missing preconditions"
+    if preconditions_not_explicit_pass; then
+      captain_route "self-approved receipt has preconditions that are not explicit pass"
       exit 5
     fi
     if blocker_scan_has_unsafe_value; then
