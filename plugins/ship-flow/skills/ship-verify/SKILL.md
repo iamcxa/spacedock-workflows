@@ -678,6 +678,61 @@ Verdict: **PROCEED** → TaskUpdate verify=completed, FO advances. **VETO** → 
 
 `--fast` captain mode skips this gate; captain takes responsibility for the bypass.
 
+### Step 6.0 — Write FO self-advance receipt
+
+When the final cross-review verdict is **PROCEED**, write the autonomous
+gate receipt before any status mutation. Build the receipt only from
+already-checked verify evidence; do not re-run policy checks here.
+
+Write a temporary YAML payload whose first non-empty line is `receipt_id`, then
+append it through the shared helper:
+
+```bash
+cat > "$TMPDIR/fo-verify-receipt.yml" <<'YAML'
+receipt_id: fo-<YYYYMMDDTHHMMSSZ>-verify-proceed-auto-advance
+created_at: "<ISO-8601 UTC>"
+actor: "first-officer"
+transition:
+  from: verify
+  to: review
+  trigger: verify-proceed-auto-advance
+decision: self-approved
+verdict: PROCEED
+rule_source: plugins/ship-flow/skills/ship-verify/SKILL.md
+evidence:
+  verify_artifact: verify.md
+  claim_records: "required VERIFIED=<n> NOT VERIFIED=0 INCONCLUSIVE=0"
+  cross_review_verdict: PROCEED
+preconditions:
+  - name: verify.md exists and has status passed
+    status: pass
+  - name: required claims verified
+    status: pass
+  - name: cross-review verdict permits advance
+    status: pass
+blocker_scan:
+  missing_verify_md: none
+  missing_hand_off_to_review: none
+  required_not_verified: none
+  invalid_required_inconclusive: none
+  veto: none
+  prompt_captain: none
+open_decisions: []
+next_action: "advance entity status to review"
+YAML
+
+bash plugins/ship-flow/lib/write-fo-receipt.sh \
+  --entity-folder "$ENTITY_FOLDER" \
+  --receipt-file "$TMPDIR/fo-verify-receipt.yml" \
+  --transition-slug verify-proceed-auto-advance
+```
+
+If `plugins/ship-flow/lib/write-fo-receipt.sh` refuses the payload, stop and
+prompt the captain with the helper diagnostic. Missing `verify.md`, missing
+`### Hand-off to Review`, missing hand-off evidence from earlier stages,
+required `NOT VERIFIED`, invalid required `INCONCLUSIVE`, `VETO`, and
+`PROMPT_CAPTAIN` are captain/block routes, not self-approved receipt routes.
+
 ### Step 6.1 — Advance entity status (frontmatter wiring)
 
 After stage artifact lands, advance sibling `index.md` frontmatter atomically:
