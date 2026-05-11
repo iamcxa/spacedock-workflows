@@ -716,7 +716,7 @@ blocker_scan:
   required_not_verified: none
   invalid_required_inconclusive: none
   veto: none
-  prompt_captain: none
+  prompt_captain_required: false
 open_decisions: []
 next_action: "advance entity status to review"
 YAML

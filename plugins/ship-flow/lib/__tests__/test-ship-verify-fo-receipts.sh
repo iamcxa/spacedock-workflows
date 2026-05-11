@@ -51,6 +51,9 @@ check "verify receipt example records verify-to-review transition trigger" \
 check "verify receipt example records self-approved PROCEED rule source" \
   "grep -q 'decision: self-approved' '${VERIFY_SKILL}' && grep -q 'verdict: PROCEED' '${VERIFY_SKILL}' && grep -q 'rule_source: plugins/ship-flow/skills/ship-verify/SKILL.md' '${VERIFY_SKILL}'"
 
+check "verify receipt example records captain prompt gate as boolean" \
+  "grep -q 'prompt_captain_required: false' '${VERIFY_SKILL}' && ! grep -q 'prompt_captain: none' '${VERIFY_SKILL}'"
+
 check "negative verify routes stay captain/block routed instead of self-approved" \
   "grep -q 'missing .*verify.md' '${VERIFY_SKILL}' && grep -q 'Missing Hand-off to Verify' '${VERIFY_SKILL}' && grep -q 'NOT VERIFIED' '${VERIFY_SKILL}' && grep -q 'invalid required .*INCONCLUSIVE' '${VERIFY_SKILL}' && grep -q 'VETO' '${VERIFY_SKILL}' && grep -q 'PROMPT_CAPTAIN' '${VERIFY_SKILL}' && grep -qi 'captain\\|block' '${VERIFY_SKILL}'"
 
