@@ -100,6 +100,36 @@ open_decisions_non_empty() {
   ' "$RECEIPT_FILE"
 }
 
+blocker_scan_has_truthy_boolean() {
+  awk '
+    BEGIN { in_blockers = 0; found = 0 }
+    /^blocker_scan:[[:space:]]*/ {
+      in_blockers = 1
+      value = $0
+      sub(/^blocker_scan:[[:space:]]*/, "", value)
+      gsub(/#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^"/, "", value)
+      gsub(/"$/, "", value)
+      value = tolower(value)
+      if (value == "true" || value == "yes" || value == "on" || value == "1") found = 1
+      next
+    }
+    in_blockers && /^[^[:space:]]/ { in_blockers = 0 }
+    in_blockers && /^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/ {
+      value = $0
+      sub(/^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/, "", value)
+      gsub(/#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^"/, "", value)
+      gsub(/"$/, "", value)
+      value = tolower(value)
+      if (value == "true" || value == "yes" || value == "on" || value == "1") found = 1
+    }
+    END { exit found ? 0 : 1 }
+  ' "$RECEIPT_FILE"
+}
+
 validate_args() {
   if [ -z "$ENTITY_FOLDER" ] || [ -z "$RECEIPT_FILE" ] || [ -z "$TRANSITION_SLUG" ]; then
     usage
@@ -154,6 +184,10 @@ validate_receipt() {
     fi
     if grep -Eq '^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*found([[:space:]]|$)' "$RECEIPT_FILE"; then
       captain_route "self-approved receipt has blocker_scan findings"
+      exit 5
+    fi
+    if blocker_scan_has_truthy_boolean; then
+      captain_route "self-approved receipt has truthy blocker_scan boolean"
       exit 5
     fi
     if open_decisions_non_empty; then

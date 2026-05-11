@@ -83,6 +83,7 @@ write_receipt() {
   local precondition_status="${4:-pass}"
   local blocker_value="${5:-none}"
   local open_decisions="${6:-[]}"
+  local prompt_captain_required="${7:-false}"
 
   cat > "$file" <<EOF
 receipt_id: ${receipt_id}
@@ -102,6 +103,7 @@ preconditions:
     status: ${precondition_status}
 blocker_scan:
   veto: ${blocker_value}
+  prompt_captain_required: ${prompt_captain_required}
 open_decisions: ${open_decisions}
 next_action: "advance to review"
 EOF
@@ -150,7 +152,7 @@ printf '%s\n' '---' 'title: Flat entity' '---' > "$FLAT_ENTITY"
 assert_failure_contains "flat entity target exits non-zero with captain-route diagnostic" "captain" \
   bash "$HELPER" --entity-folder "$FLAT_ENTITY" --receipt-file "$RECEIPT_FILE" --transition-slug verify-proceed-auto-advance
 
-for case_name in precondition-fail precondition-missing blocker-found open-decisions; do
+for case_name in precondition-fail precondition-missing blocker-found prompt-captain-required open-decisions; do
   BAD_ENTITY_DIR="$(new_entity_dir)"
   BAD_RECEIPT="$(mktemp)"
   case "$case_name" in
@@ -163,8 +165,11 @@ for case_name in precondition-fail precondition-missing blocker-found open-decis
     blocker-found)
       write_receipt "$BAD_RECEIPT" "fo-20260512T000400Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "found"
       ;;
+    prompt-captain-required)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000500Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "[]" "true"
+      ;;
     open-decisions)
-      write_receipt "$BAD_RECEIPT" "fo-20260512T000500Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" '["needs captain"]'
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000600Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" '["needs captain"]'
       ;;
   esac
   assert_failure_contains "self-approved receipt rejects ${case_name}" "captain" \
