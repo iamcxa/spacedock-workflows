@@ -90,6 +90,15 @@ trim_scalar() {
   printf '%s' "$1" | sed -E "s/^[[:space:]]+//; s/[[:space:]]+$//; s/^[\"']//; s/[\"']$//"
 }
 
+file_mode() {
+  local file="$1"
+  if stat -f '%OLp' "$file" >/dev/null 2>&1; then
+    stat -f '%OLp' "$file"
+  else
+    stat -c '%a' "$file"
+  fi
+}
+
 top_level_value() {
   local key="$1"
   awk -v key="$key" '
@@ -108,17 +117,33 @@ has_top_level_key() {
 
 open_decisions_non_empty() {
   awk '
+    function trim_safe_value(raw, value) {
+      value = raw
+      gsub(/#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^["\047]/, "", value)
+      gsub(/["\047]$/, "", value)
+      return tolower(value)
+    }
+    function is_empty_sentinel(raw, value) {
+      value = trim_safe_value(raw)
+      return value == "[]" || value == "{}" || value == "none" || value == "false" || value == "no" || value == "0"
+    }
     BEGIN { in_open = 0; value = ""; found = 0 }
     /^open_decisions:[[:space:]]*/ {
       in_open = 1
       value = $0
       sub(/^open_decisions:[[:space:]]*/, "", value)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      if (value != "" && value != "[]" && value != "null" && value != "\"\"") found = 1
+      value = trim_safe_value(value)
+      if (value != "" && !is_empty_sentinel(value)) found = 1
       next
     }
     in_open && /^[^[:space:]]/ { in_open = 0 }
-    in_open && /^[[:space:]]*-/ { found = 1 }
+    in_open {
+      value = trim_safe_value($0)
+      if (value == "") next
+      if ($0 ~ /^[[:space:]]*-/ || !is_empty_sentinel(value)) found = 1
+    }
     END { exit found ? 0 : 1 }
   ' "$RECEIPT_FILE"
 }
@@ -242,13 +267,23 @@ validate_receipt() {
 
 append_receipt() {
   local ledger="$ENTITY_FOLDER/fo-receipts.md"
-  local receipt_id before_hash current_hash tmp attempt
+  local receipt_id before_hash current_hash tmp attempt ledger_mode
   receipt_id="$(trim_scalar "$(top_level_value receipt_id)")"
 
   attempt=1
   while [ "$attempt" -le 2 ]; do
     before_hash="$(file_hash "$ledger")"
+    if [ -f "$ledger" ]; then
+      ledger_mode="$(file_mode "$ledger")" || exit 6
+    else
+      ledger_mode="644"
+    fi
     tmp="$(mktemp "${ENTITY_FOLDER}/.fo-receipts.XXXXXX")" || exit 6
+    if ! chmod "$ledger_mode" "$tmp"; then
+      rm -f "$tmp"
+      captain_route "could not prepare receipt ledger mode"
+      exit 6
+    fi
 
     if [ -f "$ledger" ]; then
       if ! cat "$ledger" > "$tmp"; then

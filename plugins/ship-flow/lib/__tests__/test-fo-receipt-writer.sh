@@ -113,6 +113,30 @@ assert_file_not_contains() {
   fi
 }
 
+file_mode() {
+  local file="$1"
+  if stat -f '%OLp' "$file" >/dev/null 2>&1; then
+    stat -f '%OLp' "$file"
+  else
+    stat -c '%a' "$file"
+  fi
+}
+
+assert_file_mode() {
+  local desc="$1"
+  local file="$2"
+  local expected="$3"
+  local actual
+  actual="$(file_mode "$file")"
+  if [ "$actual" = "$expected" ]; then
+    record_pass "$desc"
+  else
+    record_fail "$desc"
+    echo "    expected mode: $expected"
+    echo "    actual mode:   $actual"
+  fi
+}
+
 new_entity_dir() {
   local dir
   dir="$(mktemp -d)"
@@ -180,6 +204,7 @@ assert_success "folder-layout entity creates fo-receipts.md" \
 assert_file_contains "ledger starts with FO Receipts title" "$ENTITY_DIR/fo-receipts.md" '^# FO Receipts$'
 assert_file_contains "ledger includes receipt heading from receipt_id" "$ENTITY_DIR/fo-receipts.md" '^## fo-[0-9TZ]+-verify-proceed-auto-advance$'
 assert_file_contains "ledger includes fenced yaml receipt block" "$ENTITY_DIR/fo-receipts.md" '^```yaml receipt$'
+assert_file_mode "new ledger is normalized to mode 644" "$ENTITY_DIR/fo-receipts.md" "644"
 FIRST_KEY="$(awk '/^```yaml receipt$/{getline; print; exit}' "$ENTITY_DIR/fo-receipts.md" 2>/dev/null)"
 if [ "$FIRST_KEY" = "receipt_id: fo-20260512T000000Z-verify-proceed-auto-advance" ]; then
   record_pass "first YAML key inside receipt fence is receipt_id"
@@ -226,6 +251,80 @@ for case_name in precondition-fail precondition-missing blocker-found prompt-cap
   esac
   assert_failure_contains "self-approved receipt rejects ${case_name}" "captain" \
     bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
+for case_name in open-decisions-mapping open-decisions-list open-decisions-scalar; do
+  BAD_ENTITY_DIR="$(new_entity_dir)"
+  BAD_RECEIPT="$(mktemp)"
+  write_receipt "$BAD_RECEIPT" "fo-20260512T000610Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+  case "$case_name" in
+    open-decisions-mapping)
+      sed -i.bak '/^open_decisions:/c\
+open_decisions:\
+  owner: captain
+' "$BAD_RECEIPT"
+      ;;
+    open-decisions-list)
+      sed -i.bak '/^open_decisions:/c\
+open_decisions:\
+  - needs captain
+' "$BAD_RECEIPT"
+      ;;
+    open-decisions-scalar)
+      sed -i.bak '/^open_decisions:/c\
+open_decisions:\
+  needs captain
+' "$BAD_RECEIPT"
+      ;;
+  esac
+  rm -f "${BAD_RECEIPT}.bak"
+  assert_failure_contains "self-approved receipt rejects ${case_name}" "captain" \
+    bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
+for case_name in empty-list empty-map none false no zero quoted-empty-list quoted-empty-map quoted-none quoted-false quoted-no quoted-zero; do
+  SAFE_ENTITY_DIR="$(new_entity_dir)"
+  SAFE_RECEIPT="$(mktemp)"
+  case "$case_name" in
+    empty-list)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000620Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "[]"
+      ;;
+    empty-map)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000621Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "{}"
+      ;;
+    none)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000622Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "none"
+      ;;
+    false)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000623Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "false"
+      ;;
+    no)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000624Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "no"
+      ;;
+    zero)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000625Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "0"
+      ;;
+    quoted-empty-list)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000626Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" '"[]"'
+      ;;
+    quoted-empty-map)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000627Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "'{}'"
+      ;;
+    quoted-none)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000628Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" '"none"'
+      ;;
+    quoted-false)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000629Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "'false'"
+      ;;
+    quoted-no)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000630Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" '"no"'
+      ;;
+    quoted-zero)
+      write_receipt "$SAFE_RECEIPT" "fo-20260512T000631Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "'0'"
+      ;;
+  esac
+  assert_success "self-approved receipt accepts open_decisions safe sentinel ${case_name}" \
+    bash "$HELPER" --entity-folder "$SAFE_ENTITY_DIR" --receipt-file "$SAFE_RECEIPT" --transition-slug verify-proceed-auto-advance
 done
 
 for case_name in quoted-precondition-fail quoted-precondition-missing; do
@@ -364,6 +463,15 @@ assert_failure_contains "append fails when existing ledger cannot be read" "read
 chmod 600 "$READ_FAIL_ENTITY_DIR/fo-receipts.md" 2>/dev/null || true
 assert_file_contains "read failure preserves existing ledger content" "$READ_FAIL_ENTITY_DIR/fo-receipts.md" '^## existing$'
 assert_file_not_contains "read failure does not append new receipt" "$READ_FAIL_ENTITY_DIR/fo-receipts.md" '^## fo-20260512T001300Z-verify-proceed-auto-advance$'
+
+MODE_PRESERVE_ENTITY_DIR="$(new_entity_dir)"
+MODE_PRESERVE_RECEIPT="$(mktemp)"
+write_receipt "$MODE_PRESERVE_RECEIPT" "fo-20260512T001350Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+printf '%s\n' '# FO Receipts' '' '## existing' > "$MODE_PRESERVE_ENTITY_DIR/fo-receipts.md"
+chmod 640 "$MODE_PRESERVE_ENTITY_DIR/fo-receipts.md"
+assert_success "append preserves existing ledger mode" \
+  bash "$HELPER" --entity-folder "$MODE_PRESERVE_ENTITY_DIR" --receipt-file "$MODE_PRESERVE_RECEIPT" --transition-slug verify-proceed-auto-advance
+assert_file_mode "existing ledger remains mode 640 after append" "$MODE_PRESERVE_ENTITY_DIR/fo-receipts.md" "640"
 
 MOVE_FAIL_ENTITY_DIR="$(new_entity_dir)"
 MOVE_FAIL_RECEIPT="$(mktemp)"
