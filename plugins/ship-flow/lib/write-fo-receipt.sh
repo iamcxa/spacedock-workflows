@@ -2,9 +2,10 @@
 # write-fo-receipt.sh - append an FO autonomous gate receipt ledger entry.
 #
 # Usage:
+#   RECEIPT_FILE="$(mktemp "${TMPDIR:-/tmp}/fo-receipt.XXXXXX")"
 #   bash plugins/ship-flow/lib/write-fo-receipt.sh \
 #     --entity-folder docs/ship-flow/<entity-slug> \
-#     --receipt-file /tmp/receipt.yml \
+#     --receipt-file "$RECEIPT_FILE" \
 #     --transition-slug verify-proceed-auto-advance
 
 set -uo pipefail
@@ -13,9 +14,37 @@ ENTITY_FOLDER=""
 RECEIPT_FILE=""
 TRANSITION_SLUG=""
 
+captain_route() {
+  echo "FO receipt writer requires captain route: $*" >&2
+}
+
+usage() {
+  echo "Usage: write-fo-receipt.sh --entity-folder <folder> --receipt-file <file> --transition-slug <slug>" >&2
+}
+
+missing_option_value() {
+  echo "Missing value for $1" >&2
+  usage
+  exit 1
+}
+
+require_option_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [ "$#" -lt 2 ] || [ -z "$value" ]; then
+    missing_option_value "$option"
+  fi
+  case "$value" in
+    --*)
+      missing_option_value "$option"
+      ;;
+  esac
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --entity-folder)
+      require_option_value "$@"
       ENTITY_FOLDER="${2:-}"
       shift 2
       ;;
@@ -24,6 +53,7 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --receipt-file)
+      require_option_value "$@"
       RECEIPT_FILE="${2:-}"
       shift 2
       ;;
@@ -32,6 +62,7 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --transition-slug)
+      require_option_value "$@"
       TRANSITION_SLUG="${2:-}"
       shift 2
       ;;
@@ -45,14 +76,6 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
-
-captain_route() {
-  echo "FO receipt writer requires captain route: $*" >&2
-}
-
-usage() {
-  echo "Usage: write-fo-receipt.sh --entity-folder <folder> --receipt-file <file> --transition-slug <slug>" >&2
-}
 
 file_hash() {
   local file="$1"
@@ -160,6 +183,28 @@ blocker_scan_has_found() {
   ' "$RECEIPT_FILE"
 }
 
+preconditions_have_fail_or_missing() {
+  awk '
+    BEGIN { in_preconditions = 0; found = 0 }
+    /^preconditions:[[:space:]]*/ {
+      in_preconditions = 1
+      next
+    }
+    in_preconditions && /^[^[:space:]]/ { in_preconditions = 0 }
+    in_preconditions && /^[[:space:]]*status:[[:space:]]*/ {
+      value = $0
+      sub(/^[[:space:]]*status:[[:space:]]*/, "", value)
+      gsub(/#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^["\047]/, "", value)
+      gsub(/["\047]$/, "", value)
+      value = tolower(value)
+      if (value == "fail" || value == "missing") found = 1
+    }
+    END { exit found ? 0 : 1 }
+  ' "$RECEIPT_FILE"
+}
+
 validate_args() {
   if [ -z "$ENTITY_FOLDER" ] || [ -z "$RECEIPT_FILE" ] || [ -z "$TRANSITION_SLUG" ]; then
     usage
@@ -208,7 +253,7 @@ validate_receipt() {
 
   decision="$(trim_scalar "$(top_level_value decision)")"
   if [ "$decision" = "self-approved" ]; then
-    if grep -Eq '^[[:space:]]*status:[[:space:]]*(fail|missing)([[:space:]]|$)' "$RECEIPT_FILE"; then
+    if preconditions_have_fail_or_missing; then
       captain_route "self-approved receipt has failing or missing preconditions"
       exit 5
     fi
@@ -256,12 +301,22 @@ append_receipt() {
       fi
     fi
 
-    if ! {
-      printf '## %s\n\n' "$receipt_id"
-      printf '```yaml receipt\n'
-      cat "$RECEIPT_FILE"
-      printf '\n```\n'
-    } >> "$tmp"; then
+    if ! printf '## %s\n\n' "$receipt_id" >> "$tmp"; then
+      rm -f "$tmp"
+      captain_route "could not append receipt payload"
+      exit 6
+    fi
+    if ! printf '```yaml receipt\n' >> "$tmp"; then
+      rm -f "$tmp"
+      captain_route "could not append receipt payload"
+      exit 6
+    fi
+    if ! cat "$RECEIPT_FILE" >> "$tmp"; then
+      rm -f "$tmp"
+      captain_route "could not append receipt payload"
+      exit 6
+    fi
+    if ! printf '\n```\n' >> "$tmp"; then
       rm -f "$tmp"
       captain_route "could not append receipt payload"
       exit 6

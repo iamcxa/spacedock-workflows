@@ -11,6 +11,8 @@ PASS=0
 FAIL=0
 ERRORS=()
 TMP_DIRS=()
+CAPTURE_DIR="$(mktemp -d)"
+TMP_DIRS+=("$CAPTURE_DIR")
 
 record_pass() {
   echo "  PASS: $1"
@@ -25,28 +27,68 @@ record_fail() {
 
 assert_success() {
   local desc="$1"
+  local out err
   shift
-  if "$@" >/tmp/fo-receipt-test.out 2>/tmp/fo-receipt-test.err; then
+  out="$(mktemp "$CAPTURE_DIR/out.XXXXXX")"
+  err="$(mktemp "$CAPTURE_DIR/err.XXXXXX")"
+  if "$@" >"$out" 2>"$err"; then
     record_pass "$desc"
   else
     record_fail "$desc"
-    sed 's/^/    stderr: /' /tmp/fo-receipt-test.err
+    sed 's/^/    stderr: /' "$err"
   fi
 }
 
 assert_failure_contains() {
   local desc="$1"
   local expected="$2"
+  local out err
   shift 2
-  if "$@" >/tmp/fo-receipt-test.out 2>/tmp/fo-receipt-test.err; then
+  out="$(mktemp "$CAPTURE_DIR/out.XXXXXX")"
+  err="$(mktemp "$CAPTURE_DIR/err.XXXXXX")"
+  if "$@" >"$out" 2>"$err"; then
     record_fail "$desc"
-    sed 's/^/    stdout: /' /tmp/fo-receipt-test.out
-  elif grep -qi "$expected" /tmp/fo-receipt-test.err; then
+    sed 's/^/    stdout: /' "$out"
+  elif grep -qi "$expected" "$err"; then
     record_pass "$desc"
   else
     record_fail "$desc"
-    sed 's/^/    stderr: /' /tmp/fo-receipt-test.err
+    sed 's/^/    stderr: /' "$err"
   fi
+}
+
+assert_failure_contains_without_hang() {
+  local desc="$1"
+  local expected="$2"
+  local out err pid waited
+  shift 2
+  out="$(mktemp)"
+  err="$(mktemp)"
+
+  "$@" >"$out" 2>"$err" &
+  pid="$!"
+  waited=0
+  while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 20 ]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    record_fail "$desc"
+    echo "    stderr: command timed out waiting for missing option value failure"
+  elif wait "$pid"; then
+    record_fail "$desc"
+    sed 's/^/    stdout: /' "$out"
+  elif grep -qi "$expected" "$err"; then
+    record_pass "$desc"
+  else
+    record_fail "$desc"
+    sed 's/^/    stderr: /' "$err"
+  fi
+
+  rm -f "$out" "$err"
 }
 
 assert_file_contains() {
@@ -121,7 +163,6 @@ EOF
 }
 
 cleanup() {
-  rm -f /tmp/fo-receipt-test.out /tmp/fo-receipt-test.err
   for dir in "${TMP_DIRS[@]}"; do
     rm -rf "$dir"
   done
@@ -181,6 +222,21 @@ for case_name in precondition-fail precondition-missing blocker-found prompt-cap
       ;;
     open-decisions)
       write_receipt "$BAD_RECEIPT" "fo-20260512T000600Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" '["needs captain"]'
+      ;;
+  esac
+  assert_failure_contains "self-approved receipt rejects ${case_name}" "captain" \
+    bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
+for case_name in quoted-precondition-fail quoted-precondition-missing; do
+  BAD_ENTITY_DIR="$(new_entity_dir)"
+  BAD_RECEIPT="$(mktemp)"
+  case "$case_name" in
+    quoted-precondition-fail)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000650Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" '"fail"'
+      ;;
+    quoted-precondition-missing)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000660Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "'missing'"
       ;;
   esac
   assert_failure_contains "self-approved receipt rejects ${case_name}" "captain" \
@@ -256,6 +312,30 @@ EOF
 chmod +x "$MOVE_FAIL_BIN/mv"
 assert_failure_contains "append reports final ledger move failure" "move receipt ledger" \
   env PATH="$MOVE_FAIL_BIN:$PATH" bash "$HELPER" --entity-folder "$MOVE_FAIL_ENTITY_DIR" --receipt-file "$MOVE_FAIL_RECEIPT" --transition-slug verify-proceed-auto-advance
+
+READ_PAYLOAD_FAIL_ENTITY_DIR="$(new_entity_dir)"
+READ_PAYLOAD_FAIL_RECEIPT="$(mktemp)"
+READ_PAYLOAD_FAIL_BIN="$(mktemp -d)"
+TMP_DIRS+=("$READ_PAYLOAD_FAIL_BIN")
+write_receipt "$READ_PAYLOAD_FAIL_RECEIPT" "fo-20260512T001450Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+cat > "$READ_PAYLOAD_FAIL_BIN/cat" <<'EOF'
+#!/usr/bin/env bash
+echo "forced receipt payload read failure" >&2
+exit 1
+EOF
+chmod +x "$READ_PAYLOAD_FAIL_BIN/cat"
+assert_failure_contains "append reports receipt payload read failure" "append receipt payload" \
+  env PATH="$READ_PAYLOAD_FAIL_BIN:$PATH" bash "$HELPER" --entity-folder "$READ_PAYLOAD_FAIL_ENTITY_DIR" --receipt-file "$READ_PAYLOAD_FAIL_RECEIPT" --transition-slug verify-proceed-auto-advance
+
+MISSING_VALUE_ENTITY_DIR="$(new_entity_dir)"
+MISSING_VALUE_RECEIPT="$(mktemp)"
+write_receipt "$MISSING_VALUE_RECEIPT" "fo-20260512T001500Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+assert_failure_contains_without_hang "missing --entity-folder value fails fast" "Missing value for --entity-folder" \
+  bash "$HELPER" --entity-folder
+assert_failure_contains_without_hang "missing --receipt-file value fails fast" "Missing value for --receipt-file" \
+  bash "$HELPER" --entity-folder "$MISSING_VALUE_ENTITY_DIR" --receipt-file
+assert_failure_contains_without_hang "missing --transition-slug value fails fast" "Missing value for --transition-slug" \
+  bash "$HELPER" --entity-folder "$MISSING_VALUE_ENTITY_DIR" --receipt-file "$MISSING_VALUE_RECEIPT" --transition-slug
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
