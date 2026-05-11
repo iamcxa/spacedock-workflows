@@ -688,7 +688,8 @@ Write a temporary YAML payload whose first non-empty line is `receipt_id`, then
 append it through the shared helper:
 
 ```bash
-cat > "$TMPDIR/fo-verify-receipt.yml" <<'YAML'
+FO_RECEIPT_FILE="$(mktemp "${TMPDIR:-/tmp}/fo-verify-receipt.XXXXXX")"
+cat > "$FO_RECEIPT_FILE" <<'YAML'
 receipt_id: fo-<YYYYMMDDTHHMMSSZ>-verify-proceed-auto-advance
 created_at: "<ISO-8601 UTC>"
 actor: "first-officer"
@@ -723,7 +724,7 @@ YAML
 
 bash plugins/ship-flow/lib/write-fo-receipt.sh \
   --entity-folder "$ENTITY_FOLDER" \
-  --receipt-file "$TMPDIR/fo-verify-receipt.yml" \
+  --receipt-file "$FO_RECEIPT_FILE" \
   --transition-slug verify-proceed-auto-advance
 ```
 
@@ -767,7 +768,7 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - Parallel-session diff: scope review to `files_modified` when `git log <execute_base>..HEAD --oneline | grep -v <this-slug>` non-empty.
 - Feedback-to-execute capped at 2 rounds per gate (quality / review-BLOCKING / UAT); round 3 → PROMPT_CAPTAIN. Infra-fail (missing binary / server down) auto-routes; assertion-fail requires specific evidence.
 
-<!-- section:hand_off_to_review -->
+<!-- section:hand-off-to-review -->
 ## Step 6 (Hand-off): Emit Hand-off to Review + Read Incoming Hand-off
 
 **Read incoming**: at Step 1, read `### Hand-off to Verify` from entity body. Cross-check `dc_status` vs Verification Spec — any FAIL in execute-side DC → re-run that DC before trusting execute evidence.
@@ -777,7 +778,7 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - `blocking_issues`: list of any BLOCKING findings from verify; must be empty for review to proceed
 - `canonical_docs_touched`: confirm which canonical docs were updated in execute (INVARIANTS / README / schema); review cross-checks these
 - `render_fidelity_status`: result of `### Render Fidelity` subsection — `pass`, `not-applicable`, or `fail: <reason>`
-<!-- /section:hand_off_to_review -->
+<!-- /section:hand-off-to-review -->
 
 ---
 

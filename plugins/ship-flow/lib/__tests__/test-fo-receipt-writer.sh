@@ -60,6 +60,17 @@ assert_file_contains() {
   fi
 }
 
+assert_file_not_contains() {
+  local desc="$1"
+  local file="$2"
+  local pattern="$3"
+  if grep -Eq "$pattern" "$file"; then
+    record_fail "$desc"
+  else
+    record_pass "$desc"
+  fi
+}
+
 new_entity_dir() {
   local dir
   dir="$(mktemp -d)"
@@ -175,6 +186,76 @@ for case_name in precondition-fail precondition-missing blocker-found prompt-cap
   assert_failure_contains "self-approved receipt rejects ${case_name}" "captain" \
     bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
 done
+
+for case_name in single-quoted-true single-quoted-yes double-quoted-true numeric-one; do
+  BAD_ENTITY_DIR="$(new_entity_dir)"
+  BAD_RECEIPT="$(mktemp)"
+  case "$case_name" in
+    single-quoted-true)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000700Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "[]" "'true'"
+      ;;
+    single-quoted-yes)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000800Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "[]" "'yes'"
+      ;;
+    double-quoted-true)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T000900Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "[]" '"true"'
+      ;;
+    numeric-one)
+      write_receipt "$BAD_RECEIPT" "fo-20260512T001000Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "[]" "1"
+      ;;
+  esac
+  assert_failure_contains "self-approved receipt rejects prompt-captain-required ${case_name}" "captain" \
+    bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
+MISSING_OPEN_ENTITY_DIR="$(new_entity_dir)"
+MISSING_OPEN_RECEIPT="$(mktemp)"
+write_receipt "$MISSING_OPEN_RECEIPT" "fo-20260512T001100Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+sed -i.bak '/^open_decisions:/d' "$MISSING_OPEN_RECEIPT"
+rm -f "${MISSING_OPEN_RECEIPT}.bak"
+assert_failure_contains "self-approved receipt rejects missing open_decisions" "missing required top-level key: open_decisions" \
+  bash "$HELPER" --entity-folder "$MISSING_OPEN_ENTITY_DIR" --receipt-file "$MISSING_OPEN_RECEIPT" --transition-slug verify-proceed-auto-advance
+
+FOUND_OUTSIDE_ENTITY_DIR="$(new_entity_dir)"
+FOUND_OUTSIDE_RECEIPT="$(mktemp)"
+write_receipt "$FOUND_OUTSIDE_RECEIPT" "fo-20260512T001200Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+awk '
+  /^evidence:/ {
+    print
+    print "  reviewer_text: found in historical evidence only"
+    print "  unrelated_status: found"
+    next
+  }
+  { print }
+' "$FOUND_OUTSIDE_RECEIPT" > "${FOUND_OUTSIDE_RECEIPT}.next"
+mv "${FOUND_OUTSIDE_RECEIPT}.next" "$FOUND_OUTSIDE_RECEIPT"
+assert_success "found outside blocker_scan does not reject self-approved receipt" \
+  bash "$HELPER" --entity-folder "$FOUND_OUTSIDE_ENTITY_DIR" --receipt-file "$FOUND_OUTSIDE_RECEIPT" --transition-slug verify-proceed-auto-advance
+
+READ_FAIL_ENTITY_DIR="$(new_entity_dir)"
+READ_FAIL_RECEIPT="$(mktemp)"
+write_receipt "$READ_FAIL_RECEIPT" "fo-20260512T001300Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+printf '%s\n' '# FO Receipts' '' '## existing' > "$READ_FAIL_ENTITY_DIR/fo-receipts.md"
+chmod 000 "$READ_FAIL_ENTITY_DIR/fo-receipts.md"
+assert_failure_contains "append fails when existing ledger cannot be read" "read existing ledger" \
+  bash "$HELPER" --entity-folder "$READ_FAIL_ENTITY_DIR" --receipt-file "$READ_FAIL_RECEIPT" --transition-slug verify-proceed-auto-advance
+chmod 600 "$READ_FAIL_ENTITY_DIR/fo-receipts.md" 2>/dev/null || true
+assert_file_contains "read failure preserves existing ledger content" "$READ_FAIL_ENTITY_DIR/fo-receipts.md" '^## existing$'
+assert_file_not_contains "read failure does not append new receipt" "$READ_FAIL_ENTITY_DIR/fo-receipts.md" '^## fo-20260512T001300Z-verify-proceed-auto-advance$'
+
+MOVE_FAIL_ENTITY_DIR="$(new_entity_dir)"
+MOVE_FAIL_RECEIPT="$(mktemp)"
+MOVE_FAIL_BIN="$(mktemp -d)"
+TMP_DIRS+=("$MOVE_FAIL_BIN")
+write_receipt "$MOVE_FAIL_RECEIPT" "fo-20260512T001400Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+cat > "$MOVE_FAIL_BIN/mv" <<'EOF'
+#!/usr/bin/env bash
+echo "forced mv failure" >&2
+exit 1
+EOF
+chmod +x "$MOVE_FAIL_BIN/mv"
+assert_failure_contains "append reports final ledger move failure" "move receipt ledger" \
+  env PATH="$MOVE_FAIL_BIN:$PATH" bash "$HELPER" --entity-folder "$MOVE_FAIL_ENTITY_DIR" --receipt-file "$MOVE_FAIL_RECEIPT" --transition-slug verify-proceed-auto-advance
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

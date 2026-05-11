@@ -64,7 +64,7 @@ file_hash() {
 }
 
 trim_scalar() {
-  printf '%s' "$1" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"//; s/"$//'
+  printf '%s' "$1" | sed -E "s/^[[:space:]]+//; s/[[:space:]]+$//; s/^[\"']//; s/[\"']$//"
 }
 
 top_level_value() {
@@ -109,8 +109,8 @@ blocker_scan_has_truthy_boolean() {
       sub(/^blocker_scan:[[:space:]]*/, "", value)
       gsub(/#.*/, "", value)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      gsub(/^"/, "", value)
-      gsub(/"$/, "", value)
+      gsub(/^["\047]/, "", value)
+      gsub(/["\047]$/, "", value)
       value = tolower(value)
       if (value == "true" || value == "yes" || value == "on" || value == "1") found = 1
       next
@@ -121,10 +121,40 @@ blocker_scan_has_truthy_boolean() {
       sub(/^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/, "", value)
       gsub(/#.*/, "", value)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-      gsub(/^"/, "", value)
-      gsub(/"$/, "", value)
+      gsub(/^["\047]/, "", value)
+      gsub(/["\047]$/, "", value)
       value = tolower(value)
       if (value == "true" || value == "yes" || value == "on" || value == "1") found = 1
+    }
+    END { exit found ? 0 : 1 }
+  ' "$RECEIPT_FILE"
+}
+
+blocker_scan_has_found() {
+  awk '
+    BEGIN { in_blockers = 0; found = 0 }
+    /^blocker_scan:[[:space:]]*/ {
+      in_blockers = 1
+      value = $0
+      sub(/^blocker_scan:[[:space:]]*/, "", value)
+      gsub(/#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^["\047]/, "", value)
+      gsub(/["\047]$/, "", value)
+      value = tolower(value)
+      if (value == "found") found = 1
+      next
+    }
+    in_blockers && /^[^[:space:]]/ { in_blockers = 0 }
+    in_blockers && /^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/ {
+      value = $0
+      sub(/^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*/, "", value)
+      gsub(/#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^["\047]/, "", value)
+      gsub(/["\047]$/, "", value)
+      value = tolower(value)
+      if (value == "found") found = 1
     }
     END { exit found ? 0 : 1 }
   ' "$RECEIPT_FILE"
@@ -169,7 +199,7 @@ validate_receipt() {
       ;;
   esac
 
-  for key in receipt_id created_at actor transition decision verdict rule_source evidence preconditions blocker_scan next_action; do
+  for key in receipt_id created_at actor transition decision verdict rule_source evidence preconditions blocker_scan open_decisions next_action; do
     if ! has_top_level_key "$key"; then
       echo "Receipt payload missing required top-level key: $key" >&2
       exit 4
@@ -182,7 +212,7 @@ validate_receipt() {
       captain_route "self-approved receipt has failing or missing preconditions"
       exit 5
     fi
-    if grep -Eq '^[[:space:]]*[A-Za-z0-9_-]+:[[:space:]]*found([[:space:]]|$)' "$RECEIPT_FILE"; then
+    if blocker_scan_has_found; then
       captain_route "self-approved receipt has blocker_scan findings"
       exit 5
     fi
@@ -208,23 +238,43 @@ append_receipt() {
     tmp="$(mktemp "${ENTITY_FOLDER}/.fo-receipts.XXXXXX")" || exit 6
 
     if [ -f "$ledger" ]; then
-      cat "$ledger" > "$tmp"
-      printf '\n' >> "$tmp"
+      if ! cat "$ledger" > "$tmp"; then
+        rm -f "$tmp"
+        captain_route "could not read existing ledger before append"
+        exit 6
+      fi
+      if ! printf '\n' >> "$tmp"; then
+        rm -f "$tmp"
+        captain_route "could not prepare receipt ledger append"
+        exit 6
+      fi
     else
-      printf '# FO Receipts\n\n' > "$tmp"
+      if ! printf '# FO Receipts\n\n' > "$tmp"; then
+        rm -f "$tmp"
+        captain_route "could not initialize receipt ledger"
+        exit 6
+      fi
     fi
 
-    {
+    if ! {
       printf '## %s\n\n' "$receipt_id"
       printf '```yaml receipt\n'
       cat "$RECEIPT_FILE"
       printf '\n```\n'
-    } >> "$tmp"
+    } >> "$tmp"; then
+      rm -f "$tmp"
+      captain_route "could not append receipt payload"
+      exit 6
+    fi
 
     current_hash="$(file_hash "$ledger")"
     if [ "$before_hash" = "$current_hash" ]; then
-      mv "$tmp" "$ledger"
-      return 0
+      if mv "$tmp" "$ledger"; then
+        return 0
+      fi
+      rm -f "$tmp"
+      captain_route "could not move receipt ledger into place"
+      exit 6
     fi
 
     rm -f "$tmp"
