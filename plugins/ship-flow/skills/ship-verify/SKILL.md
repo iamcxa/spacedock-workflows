@@ -678,7 +678,7 @@ Verdict: **PROCEED** → TaskUpdate verify=completed, FO advances. **VETO** → 
 
 `--fast` captain mode skips this gate; captain takes responsibility for the bypass.
 
-### Step 6.0 — Write FO self-advance receipt
+### Step 6.0 — Write FO verify status receipt
 
 When the final cross-review verdict is **PROCEED**, write the autonomous
 gate receipt before any status mutation. Build the receipt only from
@@ -696,7 +696,7 @@ created_at: "<ISO-8601 UTC>"
 actor: "first-officer"
 transition:
   from: verify
-  to: review
+  to: verify
   trigger: verify-proceed-auto-advance
 decision: self-approved
 verdict: PROCEED
@@ -720,7 +720,7 @@ blocker_scan:
   veto: none
   prompt_captain_required: false
 open_decisions: []
-next_action: "advance entity status to review"
+next_action: "record verify stage status"
 YAML
 
 bash plugins/ship-flow/lib/write-fo-receipt.sh \

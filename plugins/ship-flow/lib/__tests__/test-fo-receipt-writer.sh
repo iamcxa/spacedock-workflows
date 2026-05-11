@@ -282,6 +282,27 @@ open_decisions:\
     bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
 done
 
+for case_name in open-decisions-empty open-decisions-null; do
+  BAD_ENTITY_DIR="$(new_entity_dir)"
+  BAD_RECEIPT="$(mktemp)"
+  write_receipt "$BAD_RECEIPT" "fo-20260512T000615Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+  case "$case_name" in
+    open-decisions-empty)
+      sed -i.bak '/^open_decisions:/c\
+open_decisions:
+' "$BAD_RECEIPT"
+      ;;
+    open-decisions-null)
+      sed -i.bak '/^open_decisions:/c\
+open_decisions: null
+' "$BAD_RECEIPT"
+      ;;
+  esac
+  rm -f "${BAD_RECEIPT}.bak"
+  assert_failure_contains "self-approved receipt rejects ${case_name}" "captain" \
+    bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
 for case_name in empty-list empty-map none false no zero quoted-empty-list quoted-empty-map quoted-none quoted-false quoted-no quoted-zero; do
   SAFE_ENTITY_DIR="$(new_entity_dir)"
   SAFE_RECEIPT="$(mktemp)"
@@ -396,6 +417,29 @@ for case_name in missing ambiguous present path-payload text-payload quoted-miss
     bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
 done
 
+for case_name in empty null; do
+  BAD_ENTITY_DIR="$(new_entity_dir)"
+  BAD_RECEIPT="$(mktemp)"
+  write_receipt "$BAD_RECEIPT" "fo-20260512T001081Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+  case "$case_name" in
+    empty)
+      sed -i.bak '/^blocker_scan:/,/^open_decisions:/c\
+blocker_scan:\
+open_decisions: []
+' "$BAD_RECEIPT"
+      ;;
+    null)
+      sed -i.bak '/^blocker_scan:/,/^open_decisions:/c\
+blocker_scan: null\
+open_decisions: []
+' "$BAD_RECEIPT"
+      ;;
+  esac
+  rm -f "${BAD_RECEIPT}.bak"
+  assert_failure_contains "self-approved receipt rejects empty/null blocker_scan ${case_name}" "captain" \
+    bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
+done
+
 for case_name in none false no zero quoted-none quoted-false quoted-no quoted-zero; do
   SAFE_ENTITY_DIR="$(new_entity_dir)"
   SAFE_RECEIPT="$(mktemp)"
@@ -428,6 +472,17 @@ for case_name in none false no zero quoted-none quoted-false quoted-no quoted-ze
   assert_success "self-approved receipt accepts blocker_scan safe sentinel ${case_name}" \
     bash "$HELPER" --entity-folder "$SAFE_ENTITY_DIR" --receipt-file "$SAFE_RECEIPT" --transition-slug verify-proceed-auto-advance
 done
+
+SAFE_BLOCKER_MAP_ENTITY_DIR="$(new_entity_dir)"
+SAFE_BLOCKER_MAP_RECEIPT="$(mktemp)"
+write_receipt "$SAFE_BLOCKER_MAP_RECEIPT" "fo-20260512T001093Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+sed -i.bak '/^blocker_scan:/,/^open_decisions:/c\
+blocker_scan: {}\
+open_decisions: []
+' "$SAFE_BLOCKER_MAP_RECEIPT"
+rm -f "${SAFE_BLOCKER_MAP_RECEIPT}.bak"
+assert_success "self-approved receipt accepts blocker_scan explicit empty-map sentinel" \
+  bash "$HELPER" --entity-folder "$SAFE_BLOCKER_MAP_ENTITY_DIR" --receipt-file "$SAFE_BLOCKER_MAP_RECEIPT" --transition-slug verify-proceed-auto-advance
 
 MISSING_OPEN_ENTITY_DIR="$(new_entity_dir)"
 MISSING_OPEN_RECEIPT="$(mktemp)"

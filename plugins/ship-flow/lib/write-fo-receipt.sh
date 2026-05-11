@@ -115,7 +115,7 @@ has_top_level_key() {
   grep -Eq "^${key}:" "$RECEIPT_FILE"
 }
 
-open_decisions_non_empty() {
+open_decisions_has_unsafe_value() {
   awk '
     function trim_safe_value(raw, value) {
       value = raw
@@ -129,22 +129,31 @@ open_decisions_non_empty() {
       value = trim_safe_value(raw)
       return value == "[]" || value == "{}" || value == "none" || value == "false" || value == "no" || value == "0"
     }
-    BEGIN { in_open = 0; value = ""; found = 0 }
+    BEGIN { in_open = 0; value = ""; found = 0; explicit_safe = 0 }
     /^open_decisions:[[:space:]]*/ {
       in_open = 1
       value = $0
       sub(/^open_decisions:[[:space:]]*/, "", value)
       value = trim_safe_value(value)
-      if (value != "" && !is_empty_sentinel(value)) found = 1
+      if (value == "") next
+      if (is_empty_sentinel(value)) {
+        explicit_safe = 1
+      } else {
+        found = 1
+      }
       next
     }
     in_open && /^[^[:space:]]/ { in_open = 0 }
     in_open {
       value = trim_safe_value($0)
       if (value == "") next
-      if ($0 ~ /^[[:space:]]*-/ || !is_empty_sentinel(value)) found = 1
+      if ($0 ~ /^[[:space:]]*-/ || !is_empty_sentinel(value)) {
+        found = 1
+      } else {
+        explicit_safe = 1
+      }
     }
-    END { exit found ? 0 : 1 }
+    END { exit (found || !explicit_safe) ? 0 : 1 }
   ' "$RECEIPT_FILE"
 }
 
@@ -157,14 +166,27 @@ blocker_scan_has_unsafe_value() {
       gsub(/^["\047]/, "", value)
       gsub(/["\047]$/, "", value)
       value = tolower(value)
-      return value != "" && value != "none" && value != "false" && value != "no" && value != "0"
+      return value != "" && value != "{}" && value != "none" && value != "false" && value != "no" && value != "0"
     }
-    BEGIN { in_blockers = 0; found = 0 }
+    function safe_blocker_value(raw, value) {
+      value = raw
+      gsub(/#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^["\047]/, "", value)
+      gsub(/["\047]$/, "", value)
+      value = tolower(value)
+      return value == "{}" || value == "none" || value == "false" || value == "no" || value == "0"
+    }
+    BEGIN { in_blockers = 0; found = 0; explicit_safe = 0 }
     /^blocker_scan:[[:space:]]*/ {
       in_blockers = 1
       value = $0
       sub(/^blocker_scan:[[:space:]]*/, "", value)
-      if (unsafe_blocker_value(value)) found = 1
+      if (safe_blocker_value(value)) {
+        explicit_safe = 1
+      } else if (unsafe_blocker_value(value)) {
+        found = 1
+      }
       next
     }
     in_blockers && /^[^[:space:]]/ { in_blockers = 0 }
@@ -174,9 +196,13 @@ blocker_scan_has_unsafe_value() {
       if (value ~ /^[A-Za-z0-9_-]+:[[:space:]]*/) {
         sub(/^[A-Za-z0-9_-]+:[[:space:]]*/, "", value)
       }
-      if (unsafe_blocker_value(value)) found = 1
+      if (safe_blocker_value(value)) {
+        explicit_safe = 1
+      } else if (unsafe_blocker_value(value)) {
+        found = 1
+      }
     }
-    END { exit found ? 0 : 1 }
+    END { exit (found || !explicit_safe) ? 0 : 1 }
   ' "$RECEIPT_FILE"
 }
 
@@ -258,7 +284,7 @@ validate_receipt() {
       captain_route "self-approved receipt has unsafe blocker_scan value"
       exit 5
     fi
-    if open_decisions_non_empty; then
+    if open_decisions_has_unsafe_value; then
       captain_route "self-approved receipt has open decisions"
       exit 5
     fi

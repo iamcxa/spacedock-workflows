@@ -45,8 +45,8 @@ check "receipt helper appears after final PROCEED verdict handling" \
 check "receipt helper appears before advance-stage.sh status mutation" \
   "[ -n '${HELPER_LINE}' ] && [ -n '${ADVANCE_LINE}' ] && [ '${HELPER_LINE:-99999}' -lt '${ADVANCE_LINE:-0}' ]"
 
-check "verify receipt example records verify-to-review transition trigger" \
-  "grep -q 'from: verify' '${VERIFY_SKILL}' && grep -q 'to: review' '${VERIFY_SKILL}' && grep -q 'trigger: verify-proceed-auto-advance' '${VERIFY_SKILL}'"
+check "verify receipt example records the verify status mutation trigger" \
+  "grep -q 'from: verify' '${VERIFY_SKILL}' && grep -q 'to: verify' '${VERIFY_SKILL}' && grep -q 'trigger: verify-proceed-auto-advance' '${VERIFY_SKILL}' && grep -q 'next_action: \"record verify stage status\"' '${VERIFY_SKILL}'"
 
 check "verify receipt example records self-approved PROCEED rule source" \
   "grep -q 'decision: self-approved' '${VERIFY_SKILL}' && grep -q 'verdict: PROCEED' '${VERIFY_SKILL}' && grep -q 'rule_source: plugins/ship-flow/skills/ship-verify/SKILL.md' '${VERIFY_SKILL}'"
