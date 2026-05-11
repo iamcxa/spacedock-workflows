@@ -13,6 +13,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 REGISTRY_SCRIPT="${SCRIPT_DIR}/../registry-resolve.sh"
 FIXTURES="${SCRIPT_DIR}/fixtures/registry"
+CONTEXT_FIXTURES="${SCRIPT_DIR}/fixtures/context-routing-manifest"
 
 PASS=0
 FAIL=0
@@ -183,6 +184,22 @@ check_exit "live defaults: schema domain validates with specialist anchor presen
 check_stdout "live defaults: schema domain resolves to ship-design#schema-designer" \
   "designer_section_anchor=ship-design#schema-designer" \
   "\"$REGISTRY_SCRIPT\" --domain=schema"
+
+check_stdout "context manifest: --domain emits typed context-routing-manifest envelope" \
+  "^context-routing-manifest:" \
+  "\"$REGISTRY_SCRIPT\" --domain=schema --context-routing-manifest --config=\"${CONTEXT_FIXTURES}/registry-positive/defaults.yaml\""
+
+check_stdout "context manifest: domain output preserves local registry rows" \
+  "authoritative_for_routing: true" \
+  "\"$REGISTRY_SCRIPT\" --domain=schema --context-routing-manifest --config=\"${CONTEXT_FIXTURES}/registry-positive/defaults.yaml\""
+
+check_stdout "context manifest: classify preserves matched domain and required skills" \
+  "skill: project-db" \
+  "\"$REGISTRY_SCRIPT\" --classify \"${CONTEXT_FIXTURES}/registry-positive/shape.md\" --context-routing-manifest --config=\"${CONTEXT_FIXTURES}/registry-positive/defaults.yaml\""
+
+check_stdout "context manifest: future provider hints are optional append-only" \
+  "status: optional_append_only" \
+  "\"$REGISTRY_SCRIPT\" --classify \"${CONTEXT_FIXTURES}/registry-positive/shape.md\" --context-routing-manifest --config=\"${CONTEXT_FIXTURES}/registry-positive/defaults.yaml\""
 
 # --- Summary ---
 echo ""

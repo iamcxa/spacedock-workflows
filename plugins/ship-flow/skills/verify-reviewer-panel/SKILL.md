@@ -21,6 +21,8 @@ Every reviewer lens receives the same immutable input bundle:
 - entity id and entity folder
 - plan/design/execute hand-off snippets relevant to the lens
 - plan task `reviewer_questions` and `domain_acceptance_checklist` rows when present
+- extracted `context-routing-manifest` rows when present; reviewers must not
+  accept prose-only routing as a substitute for extracted manifest input
 - required skills and knowledge modules for the lens, when derived from domain registry, `skills_needed`, adopter file signals, or touched files
 
 Reviewers are **read-only** and findings-only. The prompt must say: do not edit files, do not stage files, do not commit, and do not rewrite the plan.
@@ -106,8 +108,10 @@ Return YAML or a markdown table that can be pasted under `### Review Findings`:
 ```yaml
 reviewer_output_matrix:
   - lens: general-external-reviewer
+    source: reviewer_questions|domain_acceptance_checklist|context-routing-manifest
     reviewer_question: <question from plan, if any>
     affected_path_family: <path family from plan, if any>
+    manifest_required_skill: <skill from context-routing-manifest required_skills, if any>
     required_skills: <skills required by plan/checklist, if any>
     verdict: PASS|BLOCKING|WARNING|NIT
     finding: <short finding>

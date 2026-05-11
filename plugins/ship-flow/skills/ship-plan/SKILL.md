@@ -237,6 +237,13 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring when available. It 
   `Required Skills`, and `Evidence Required`. This is the plan-to-verify
   contract consumed by `ship-verify` when it populates
   `verify-check-manifest.review_lenses`.
+- When registry or domain routing is present, emit exactly one standalone
+  `context-routing-manifest` section-tagged block and a `## Context Routing
+  Receipt`. The receipt maps manifest rows to `tasks[].skills_needed`, task
+  `reviewer_questions`, and `domain_acceptance_checklist`; optional rows may
+  be skipped only with an explicit rationale. Future provider hints are
+  append-only and non-authoritative: the local registry remains the routing
+  source of truth for this block.
 - **T0.X auto-indirection-sweep** (T6.1, #106): when `theme_indirection` from ship-runtime-detect Step R5 is non-empty (e.g. `tailwind-v4`), auto-emit a Wave 0 task in the plan: `T0.X: Audit @theme inline indirection layer — verify design tokens align with CSS custom properties, no hardcoded hex values in component files`. REFUSE to emit a plan without this task when `theme_indirection != ""`. Enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check indirection-sweep-emitted` (fixture-based).
 - **Lens FLAG integration** (entity 110, 2026-04-29): after Step 1.7 lens verdicts are collected, plan worker MUST for each FLAG verdict: (a) add a DC covering the flagged concern, or (b) write an entry in `## Lens Findings: deferred` with explicit rationale. Gate refuses advance if any FLAG exists without Option A or Option B. Silence is NOT acceptable — the deferred section exists precisely to make punts explicit and captain-visible.
 
@@ -409,6 +416,10 @@ After this feature ships, re-read the `## Captain Bet` block in the entity body.
 - `stub_flags`: tasks containing `stub|fake|placeholder|v1.*only|wired only for` — must appear in Plan Report as captain-ack flags
 - `skills_needed_summary`: per-task skills_needed lists and note whether ≥2 distinct lists were produced for heterogeneous task sets
 - `domain_acceptance_checklist`: rows with `Task ID`, `Verify Lens`, `Reviewer Question`, `Affected Path Family`, `Required Skills`, and `Evidence Required` derived from task `reviewer_questions`
+- `context-routing-manifest`: exactly one standalone section-tagged manifest
+  block plus `## Context Routing Receipt`, with `domain_matches`,
+  `knowledge_modules`, `required_skills`, `stage_hints`,
+  `consumer_obligations`, and `future_provider_boundary`
 <!-- /section:hand_off_to_execute -->
 
 ---

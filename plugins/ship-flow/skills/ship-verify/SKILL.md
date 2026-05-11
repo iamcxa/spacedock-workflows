@@ -101,6 +101,18 @@ Verdict dominance:
 
 Before dispatching parallel checks, emit `verify-check-manifest` with rows for tests, lint/typecheck/build, `ship-flow:ui-verify`, `ship-flow:verify-reviewer-panel` review lenses, low-model domain reviewers, domain/schema review, and static/security reviewers when applicable. Read plan task `reviewer_questions` and `### Hand-off to Execute → domain_acceptance_checklist`; each checklist row becomes a `review_lenses` row with the same `Verify Lens`, `Reviewer Question`, affected path family, required skills, and evidence requirement. Also materialize any task-level reviewer_questions that are not already represented in `domain_acceptance_checklist`, including framework-only prompts, into `review_lenses` rows with source `task.reviewer_questions`. Concrete lenses such as `project-db`, `fmodel`, or `refine-gotchas` map to the `domain-expert-reviewer` reviewer kind while preserving the concrete lens name in `Lens`. Each row records input, owner, whether it can run in parallel, and required evidence. The verifier is the single integrator: parallel checks may gather evidence concurrently, but only the verifier classifies findings and writes the final verdict.
 
+When plan contains routed domain context, verify must first run
+`bash plugins/ship-flow/lib/extract-section.sh <plan.md> context-routing-manifest`
+and treat an empty result as BLOCKING with `route_to: execute` or `plan`
+depending on whether execute omitted evidence or plan omitted the block. The
+extracted `context-routing-manifest` is the only accepted input for routed
+obligations; prose-only inference is not valid evidence. Every manifest
+`required_skills` row must become a `review_lenses` row, a baseline quality
+check, or an explicit skip rationale. Record manifest-derived rows with source
+`context-routing-manifest`, the extracted block as input, and a
+`manifest_required_skill` evidence note when the row comes from
+`required_skills`.
+
 The general external reviewer baseline always runs for source diffs. It reviews the execute diff as a non-author against `plan.md`, `design.md`, execute hand-off, and changed files. Use `pr-review-toolkit:code-reviewer` when installed; otherwise use `ship-flow:verify-reviewer-panel` lens `general-external-reviewer`.
 
 The silent failure reviewer baseline always runs alongside the general external reviewer for source diffs. Use `pr-review-toolkit:silent-failure-hunter` when installed; otherwise use `ship-flow:verify-reviewer-panel` lens `silent-failure-reviewer`.

@@ -587,6 +587,17 @@ stages:
                 - { name: depends_on, type: list, items: string, description: "Task IDs that must finish before this task can start. Execute never starts a task until every dependency is committed." }
                 - { name: owned_paths, type: list, items: string, description: "Exclusive file/path globs this task may write. Parallel tasks must not overlap owned_paths." }
                 - { name: integration_owner, type: string, description: "Named teammate responsible for folding this task's output into the stage artifact; usually executer@pitch-XX for execute tasks." }
+            - name: context_routing_manifest
+              section: "context-routing-manifest"
+              section_tag: context-routing-manifest
+              type: yaml
+              description: "Exactly one standalone context-routing-manifest block emitted when local registry/domain routing is used. Local registry rows are authoritative; future_provider_boundary provider hints are optional append-only hints."
+              required_rows: ["domain_matches", "knowledge_modules", "required_skills", "stage_hints", "consumer_obligations", "future_provider_boundary"]
+            - name: context_routing_receipt
+              section: "## Context Routing Receipt"
+              type: table
+              description: "Maps context-routing-manifest rows to task skills_needed, reviewer_questions, and domain_acceptance_checklist rows, or records explicit skip rationale for optional rows."
+              columns: ["Manifest row", "Plan task skill mapping", "Reviewer questions", "domain_acceptance_checklist row"]
     report:
       section: "## Plan Report"
       section_tag: plan-report
@@ -820,6 +831,7 @@ stages:
               type: table
               description: "Reviewer panel lenses dispatched by ship-verify. General and silent-failure lenses are baseline for source diffs; concrete domain lenses are derived from domain registry, skills_needed, adopter file signals, and touched files."
               columns: ["Lens", "Source", "Reviewer Question", "Affected Path Family", "Required Skills", "Input Bundle", "Evidence Required", "Fallback"]
+              context_routing_manifest: "Rows derived from context-routing-manifest extraction use Source=context-routing-manifest and preserve each manifest_required_skill in Required Skills or Evidence Required."
               allowed_lens_kinds: ["general-external-reviewer", "silent-failure-reviewer", "domain-expert-reviewer", "concrete_lens"]
               concrete_lens_examples: ["project-db", "project-seed", "fmodel", "refine-gotchas", "refine-expert", "api-design", "expo"]
               example_row: ["project-db", "domain_acceptance_checklist", "Does the migration preserve rollback/generated-type expectations for the changed schema?", "apps/supabase/migrations/**", "project-db,test", "base..HEAD changed files plus plan/design/execute handoffs", "migration diff plus generated typecheck command", "ship-flow:verify-reviewer-panel domain-expert-reviewer"]
