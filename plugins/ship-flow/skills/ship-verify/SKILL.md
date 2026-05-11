@@ -688,6 +688,7 @@ Write a temporary YAML payload whose first non-empty line is `receipt_id`, then
 append it through the shared helper:
 
 ```bash
+ENTITY_FOLDER="<entity-folder>"
 FO_RECEIPT_FILE="$(mktemp "${TMPDIR:-/tmp}/fo-verify-receipt.XXXXXX")"
 cat > "$FO_RECEIPT_FILE" <<'YAML'
 receipt_id: fo-<YYYYMMDDTHHMMSSZ>-verify-proceed-auto-advance
