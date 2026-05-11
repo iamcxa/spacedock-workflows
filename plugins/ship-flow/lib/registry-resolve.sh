@@ -333,7 +333,7 @@ emit_context_routing_manifest() {
   local cfg="$1"
   shift
   local domains=("$@")
-  local dom skill
+  local dom skill section_output
 
   echo "context-routing-manifest:"
   echo "  schema_version: 1"
@@ -347,35 +347,56 @@ emit_context_routing_manifest() {
     echo "      match_type: local-registry"
     echo "      required: true"
   done
-  echo "  knowledge_modules:"
-  for dom in "${domains[@]}"; do
-    [ -z "$dom" ] && continue
-    local km anchor
-    km="$(get_domain_field "$cfg" "$dom" "knowledge_module")"
-    anchor="$(get_domain_field "$cfg" "$dom" "designer_section_anchor")"
-    [ -z "$km" ] && continue
-    echo "    - domain: $dom"
-    echo "      path: $km"
-    echo "      designer_section_anchor: $anchor"
-    echo "      load_required: false"
-    echo "      missing_behavior: warn"
-  done
-  echo "  required_skills:"
-  for dom in "${domains[@]}"; do
-    [ -z "$dom" ] && continue
-    while IFS= read -r skill; do
-      [ -z "$skill" ] && continue
-      echo "    - skill: $skill"
-      echo "      source: local-registry"
-    done < <(get_domain_list_field "$cfg" "$dom" "required_skills")
-  done
-  echo "  stage_hints:"
-  for stage in plan execute verify; do
-    echo "    $stage:"
+  section_output="$(
     for dom in "${domains[@]}"; do
       [ -z "$dom" ] && continue
-      get_skill_hints_for_stage "$cfg" "$dom" "$stage" | emit_yaml_list "      "
+      local km anchor
+      km="$(get_domain_field "$cfg" "$dom" "knowledge_module")"
+      anchor="$(get_domain_field "$cfg" "$dom" "designer_section_anchor")"
+      [ -z "$km" ] && continue
+      echo "    - domain: $dom"
+      echo "      path: $km"
+      echo "      designer_section_anchor: $anchor"
+      echo "      load_required: false"
+      echo "      missing_behavior: warn"
     done
+  )"
+  if [ -n "$section_output" ]; then
+    echo "  knowledge_modules:"
+    printf '%s\n' "$section_output"
+  else
+    echo "  knowledge_modules: []"
+  fi
+  section_output="$(
+    for dom in "${domains[@]}"; do
+      [ -z "$dom" ] && continue
+      while IFS= read -r skill; do
+        [ -z "$skill" ] && continue
+        echo "    - skill: $skill"
+        echo "      source: local-registry"
+      done < <(get_domain_list_field "$cfg" "$dom" "required_skills")
+    done
+  )"
+  if [ -n "$section_output" ]; then
+    echo "  required_skills:"
+    printf '%s\n' "$section_output"
+  else
+    echo "  required_skills: []"
+  fi
+  echo "  stage_hints:"
+  for stage in plan execute verify; do
+    section_output="$(
+      for dom in "${domains[@]}"; do
+        [ -z "$dom" ] && continue
+        get_skill_hints_for_stage "$cfg" "$dom" "$stage" | emit_yaml_list "      "
+      done
+    )"
+    if [ -n "$section_output" ]; then
+      echo "    $stage:"
+      printf '%s\n' "$section_output"
+    else
+      echo "    $stage: []"
+    fi
   done
   echo "  consumer_obligations:"
   echo "    plan:"
