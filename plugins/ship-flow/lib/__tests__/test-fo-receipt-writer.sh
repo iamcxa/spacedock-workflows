@@ -11,8 +11,16 @@ PASS=0
 FAIL=0
 ERRORS=()
 TMP_DIRS=()
-CAPTURE_DIR="$(mktemp -d)"
+CAPTURE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/fo-receipt-writer.XXXXXX")"
 TMP_DIRS+=("$CAPTURE_DIR")
+
+new_temp_file() {
+  mktemp "$CAPTURE_DIR/tmp.XXXXXX"
+}
+
+new_temp_dir() {
+  mktemp -d "$CAPTURE_DIR/dir.XXXXXX"
+}
 
 record_pass() {
   echo "  PASS: $1"
@@ -62,8 +70,8 @@ assert_failure_contains_without_hang() {
   local expected="$2"
   local out err pid waited
   shift 2
-  out="$(mktemp)"
-  err="$(mktemp)"
+  out="$(new_temp_file)"
+  err="$(new_temp_file)"
 
   "$@" >"$out" 2>"$err" &
   pid="$!"
@@ -106,7 +114,7 @@ assert_file_not_contains() {
   local desc="$1"
   local file="$2"
   local pattern="$3"
-  if grep -Eq "$pattern" "$file"; then
+  if [ -f "$file" ] && grep -Eq "$pattern" "$file"; then
     record_fail "$desc"
   else
     record_pass "$desc"
@@ -137,9 +145,25 @@ assert_file_mode() {
   fi
 }
 
+assert_test_uses_tracked_temp_files() {
+  local desc="$1"
+  local offenders
+  offenders="$(awk '
+    /\$\(mktemp\)/ || /\$\(mktemp -d\)/ {
+      print FNR ":" $0
+    }
+  ' "$0")"
+  if [ -z "$offenders" ]; then
+    record_pass "$desc"
+  else
+    record_fail "$desc"
+    printf '%s\n' "$offenders" | sed 's/^/    offender: /'
+  fi
+}
+
 new_entity_dir() {
   local dir
-  dir="$(mktemp -d)"
+  dir="$(new_temp_dir)"
   TMP_DIRS+=("$dir")
   mkdir -p "$dir/entity"
   cat > "$dir/entity/index.md" <<'EOF'
@@ -197,7 +221,7 @@ echo "=== test-fo-receipt-writer.sh ==="
 echo ""
 
 ENTITY_DIR="$(new_entity_dir)"
-RECEIPT_FILE="$(mktemp)"
+RECEIPT_FILE="$(new_temp_file)"
 write_receipt "$RECEIPT_FILE" "fo-20260512T000000Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 assert_success "folder-layout entity creates fo-receipts.md" \
   bash "$HELPER" --entity-folder "$ENTITY_DIR" --receipt-file "$RECEIPT_FILE" --transition-slug verify-proceed-auto-advance
@@ -212,7 +236,7 @@ else
   record_fail "first YAML key inside receipt fence is receipt_id"
 fi
 
-SECOND_RECEIPT="$(mktemp)"
+SECOND_RECEIPT="$(new_temp_file)"
 write_receipt "$SECOND_RECEIPT" "fo-20260512T000100Z-pr-creation-autonomy" "pr-creation-autonomy"
 assert_success "second append succeeds" \
   bash "$HELPER" --entity-folder "$ENTITY_DIR" --receipt-file "$SECOND_RECEIPT" --transition-slug pr-creation-autonomy
@@ -222,7 +246,7 @@ else
   record_fail "second append preserves first block and appends chronologically"
 fi
 
-FLAT_DIR="$(mktemp -d)"
+FLAT_DIR="$(new_temp_dir)"
 TMP_DIRS+=("$FLAT_DIR")
 FLAT_ENTITY="$FLAT_DIR/flat-entity.md"
 printf '%s\n' '---' 'title: Flat entity' '---' > "$FLAT_ENTITY"
@@ -231,7 +255,7 @@ assert_failure_contains "flat entity target exits non-zero with captain-route di
 
 for case_name in precondition-fail precondition-missing blocker-found prompt-captain-required open-decisions; do
   BAD_ENTITY_DIR="$(new_entity_dir)"
-  BAD_RECEIPT="$(mktemp)"
+  BAD_RECEIPT="$(new_temp_file)"
   case "$case_name" in
     precondition-fail)
       write_receipt "$BAD_RECEIPT" "fo-20260512T000200Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "fail"
@@ -253,9 +277,15 @@ for case_name in precondition-fail precondition-missing blocker-found prompt-cap
     bash "$HELPER" --entity-folder "$BAD_ENTITY_DIR" --receipt-file "$BAD_RECEIPT" --transition-slug verify-proceed-auto-advance
 done
 
+MISMATCH_TRIGGER_ENTITY_DIR="$(new_entity_dir)"
+MISMATCH_TRIGGER_RECEIPT="$(new_temp_file)"
+write_receipt "$MISMATCH_TRIGGER_RECEIPT" "fo-20260512T000605Z-verify-proceed-auto-advance" "other-trigger"
+assert_failure_contains "receipt transition trigger must match transition slug" "transition.trigger" \
+  bash "$HELPER" --entity-folder "$MISMATCH_TRIGGER_ENTITY_DIR" --receipt-file "$MISMATCH_TRIGGER_RECEIPT" --transition-slug verify-proceed-auto-advance
+
 for case_name in open-decisions-mapping open-decisions-list open-decisions-scalar; do
   BAD_ENTITY_DIR="$(new_entity_dir)"
-  BAD_RECEIPT="$(mktemp)"
+  BAD_RECEIPT="$(new_temp_file)"
   write_receipt "$BAD_RECEIPT" "fo-20260512T000610Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
   case "$case_name" in
     open-decisions-mapping)
@@ -284,7 +314,7 @@ done
 
 for case_name in open-decisions-empty open-decisions-null; do
   BAD_ENTITY_DIR="$(new_entity_dir)"
-  BAD_RECEIPT="$(mktemp)"
+  BAD_RECEIPT="$(new_temp_file)"
   write_receipt "$BAD_RECEIPT" "fo-20260512T000615Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
   case "$case_name" in
     open-decisions-empty)
@@ -305,7 +335,7 @@ done
 
 for case_name in empty-list empty-map none false no zero quoted-empty-list quoted-empty-map quoted-none quoted-false quoted-no quoted-zero; do
   SAFE_ENTITY_DIR="$(new_entity_dir)"
-  SAFE_RECEIPT="$(mktemp)"
+  SAFE_RECEIPT="$(new_temp_file)"
   case "$case_name" in
     empty-list)
       write_receipt "$SAFE_RECEIPT" "fo-20260512T000620Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "[]"
@@ -350,7 +380,7 @@ done
 
 for case_name in quoted-precondition-fail quoted-precondition-missing; do
   BAD_ENTITY_DIR="$(new_entity_dir)"
-  BAD_RECEIPT="$(mktemp)"
+  BAD_RECEIPT="$(new_temp_file)"
   case "$case_name" in
     quoted-precondition-fail)
       write_receipt "$BAD_RECEIPT" "fo-20260512T000650Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" '"fail"'
@@ -365,7 +395,7 @@ done
 
 for case_name in single-quoted-true single-quoted-yes double-quoted-true numeric-one; do
   BAD_ENTITY_DIR="$(new_entity_dir)"
-  BAD_RECEIPT="$(mktemp)"
+  BAD_RECEIPT="$(new_temp_file)"
   case "$case_name" in
     single-quoted-true)
       write_receipt "$BAD_RECEIPT" "fo-20260512T000700Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none" "[]" "'true'"
@@ -386,7 +416,7 @@ done
 
 for case_name in missing ambiguous present path-payload text-payload quoted-missing quoted-ambiguous quoted-present; do
   BAD_ENTITY_DIR="$(new_entity_dir)"
-  BAD_RECEIPT="$(mktemp)"
+  BAD_RECEIPT="$(new_temp_file)"
   case "$case_name" in
     missing)
       write_receipt "$BAD_RECEIPT" "fo-20260512T001010Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "missing"
@@ -419,7 +449,7 @@ done
 
 for case_name in empty null; do
   BAD_ENTITY_DIR="$(new_entity_dir)"
-  BAD_RECEIPT="$(mktemp)"
+  BAD_RECEIPT="$(new_temp_file)"
   write_receipt "$BAD_RECEIPT" "fo-20260512T001081Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
   case "$case_name" in
     empty)
@@ -442,7 +472,7 @@ done
 
 for case_name in none false no zero quoted-none quoted-false quoted-no quoted-zero; do
   SAFE_ENTITY_DIR="$(new_entity_dir)"
-  SAFE_RECEIPT="$(mktemp)"
+  SAFE_RECEIPT="$(new_temp_file)"
   case "$case_name" in
     none)
       write_receipt "$SAFE_RECEIPT" "fo-20260512T001085Z-verify-proceed-auto-advance" "verify-proceed-auto-advance" "pass" "none"
@@ -474,7 +504,7 @@ for case_name in none false no zero quoted-none quoted-false quoted-no quoted-ze
 done
 
 SAFE_BLOCKER_MAP_ENTITY_DIR="$(new_entity_dir)"
-SAFE_BLOCKER_MAP_RECEIPT="$(mktemp)"
+SAFE_BLOCKER_MAP_RECEIPT="$(new_temp_file)"
 write_receipt "$SAFE_BLOCKER_MAP_RECEIPT" "fo-20260512T001093Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 sed -i.bak '/^blocker_scan:/,/^open_decisions:/c\
 blocker_scan: {}\
@@ -485,7 +515,7 @@ assert_success "self-approved receipt accepts blocker_scan explicit empty-map se
   bash "$HELPER" --entity-folder "$SAFE_BLOCKER_MAP_ENTITY_DIR" --receipt-file "$SAFE_BLOCKER_MAP_RECEIPT" --transition-slug verify-proceed-auto-advance
 
 MISSING_OPEN_ENTITY_DIR="$(new_entity_dir)"
-MISSING_OPEN_RECEIPT="$(mktemp)"
+MISSING_OPEN_RECEIPT="$(new_temp_file)"
 write_receipt "$MISSING_OPEN_RECEIPT" "fo-20260512T001100Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 sed -i.bak '/^open_decisions:/d' "$MISSING_OPEN_RECEIPT"
 rm -f "${MISSING_OPEN_RECEIPT}.bak"
@@ -493,7 +523,7 @@ assert_failure_contains "self-approved receipt rejects missing open_decisions" "
   bash "$HELPER" --entity-folder "$MISSING_OPEN_ENTITY_DIR" --receipt-file "$MISSING_OPEN_RECEIPT" --transition-slug verify-proceed-auto-advance
 
 FOUND_OUTSIDE_ENTITY_DIR="$(new_entity_dir)"
-FOUND_OUTSIDE_RECEIPT="$(mktemp)"
+FOUND_OUTSIDE_RECEIPT="$(new_temp_file)"
 write_receipt "$FOUND_OUTSIDE_RECEIPT" "fo-20260512T001200Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 awk '
   /^evidence:/ {
@@ -509,7 +539,7 @@ assert_success "found outside blocker_scan does not reject self-approved receipt
   bash "$HELPER" --entity-folder "$FOUND_OUTSIDE_ENTITY_DIR" --receipt-file "$FOUND_OUTSIDE_RECEIPT" --transition-slug verify-proceed-auto-advance
 
 READ_FAIL_ENTITY_DIR="$(new_entity_dir)"
-READ_FAIL_RECEIPT="$(mktemp)"
+READ_FAIL_RECEIPT="$(new_temp_file)"
 write_receipt "$READ_FAIL_RECEIPT" "fo-20260512T001300Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 printf '%s\n' '# FO Receipts' '' '## existing' > "$READ_FAIL_ENTITY_DIR/fo-receipts.md"
 chmod 000 "$READ_FAIL_ENTITY_DIR/fo-receipts.md"
@@ -520,7 +550,7 @@ assert_file_contains "read failure preserves existing ledger content" "$READ_FAI
 assert_file_not_contains "read failure does not append new receipt" "$READ_FAIL_ENTITY_DIR/fo-receipts.md" '^## fo-20260512T001300Z-verify-proceed-auto-advance$'
 
 MODE_PRESERVE_ENTITY_DIR="$(new_entity_dir)"
-MODE_PRESERVE_RECEIPT="$(mktemp)"
+MODE_PRESERVE_RECEIPT="$(new_temp_file)"
 write_receipt "$MODE_PRESERVE_RECEIPT" "fo-20260512T001350Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 printf '%s\n' '# FO Receipts' '' '## existing' > "$MODE_PRESERVE_ENTITY_DIR/fo-receipts.md"
 chmod 640 "$MODE_PRESERVE_ENTITY_DIR/fo-receipts.md"
@@ -529,8 +559,8 @@ assert_success "append preserves existing ledger mode" \
 assert_file_mode "existing ledger remains mode 640 after append" "$MODE_PRESERVE_ENTITY_DIR/fo-receipts.md" "640"
 
 MOVE_FAIL_ENTITY_DIR="$(new_entity_dir)"
-MOVE_FAIL_RECEIPT="$(mktemp)"
-MOVE_FAIL_BIN="$(mktemp -d)"
+MOVE_FAIL_RECEIPT="$(new_temp_file)"
+MOVE_FAIL_BIN="$(new_temp_dir)"
 TMP_DIRS+=("$MOVE_FAIL_BIN")
 write_receipt "$MOVE_FAIL_RECEIPT" "fo-20260512T001400Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 cat > "$MOVE_FAIL_BIN/mv" <<'EOF'
@@ -543,8 +573,8 @@ assert_failure_contains "append reports final ledger move failure" "move receipt
   env PATH="$MOVE_FAIL_BIN:$PATH" bash "$HELPER" --entity-folder "$MOVE_FAIL_ENTITY_DIR" --receipt-file "$MOVE_FAIL_RECEIPT" --transition-slug verify-proceed-auto-advance
 
 READ_PAYLOAD_FAIL_ENTITY_DIR="$(new_entity_dir)"
-READ_PAYLOAD_FAIL_RECEIPT="$(mktemp)"
-READ_PAYLOAD_FAIL_BIN="$(mktemp -d)"
+READ_PAYLOAD_FAIL_RECEIPT="$(new_temp_file)"
+READ_PAYLOAD_FAIL_BIN="$(new_temp_dir)"
 TMP_DIRS+=("$READ_PAYLOAD_FAIL_BIN")
 write_receipt "$READ_PAYLOAD_FAIL_RECEIPT" "fo-20260512T001450Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 cat > "$READ_PAYLOAD_FAIL_BIN/cat" <<'EOF'
@@ -556,8 +586,31 @@ chmod +x "$READ_PAYLOAD_FAIL_BIN/cat"
 assert_failure_contains "append reports receipt payload read failure" "append receipt payload" \
   env PATH="$READ_PAYLOAD_FAIL_BIN:$PATH" bash "$HELPER" --entity-folder "$READ_PAYLOAD_FAIL_ENTITY_DIR" --receipt-file "$READ_PAYLOAD_FAIL_RECEIPT" --transition-slug verify-proceed-auto-advance
 
+ACTIVE_LOCK_ENTITY_DIR="$(new_entity_dir)"
+ACTIVE_LOCK_RECEIPT="$(new_temp_file)"
+write_receipt "$ACTIVE_LOCK_RECEIPT" "fo-20260512T001460Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+mkdir "$ACTIVE_LOCK_ENTITY_DIR/.fo-receipts.lock"
+printf '%s\n' "$$" > "$ACTIVE_LOCK_ENTITY_DIR/.fo-receipts.lock/pid"
+assert_failure_contains "active receipt lock refuses append" "locked" \
+  bash "$HELPER" --entity-folder "$ACTIVE_LOCK_ENTITY_DIR" --receipt-file "$ACTIVE_LOCK_RECEIPT" --transition-slug verify-proceed-auto-advance
+assert_file_not_contains "active lock refusal does not append receipt" "$ACTIVE_LOCK_ENTITY_DIR/fo-receipts.md" '^## fo-20260512T001460Z-verify-proceed-auto-advance$'
+rm -rf "$ACTIVE_LOCK_ENTITY_DIR/.fo-receipts.lock"
+
+STALE_LOCK_ENTITY_DIR="$(new_entity_dir)"
+STALE_LOCK_RECEIPT="$(new_temp_file)"
+write_receipt "$STALE_LOCK_RECEIPT" "fo-20260512T001470Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
+mkdir "$STALE_LOCK_ENTITY_DIR/.fo-receipts.lock"
+printf '%s\n' "999999" > "$STALE_LOCK_ENTITY_DIR/.fo-receipts.lock/pid"
+assert_success "stale receipt lock is cleaned up before append" \
+  bash "$HELPER" --entity-folder "$STALE_LOCK_ENTITY_DIR" --receipt-file "$STALE_LOCK_RECEIPT" --transition-slug verify-proceed-auto-advance
+if [ ! -d "$STALE_LOCK_ENTITY_DIR/.fo-receipts.lock" ]; then
+  record_pass "stale receipt lock is removed after append"
+else
+  record_fail "stale receipt lock is removed after append"
+fi
+
 MISSING_VALUE_ENTITY_DIR="$(new_entity_dir)"
-MISSING_VALUE_RECEIPT="$(mktemp)"
+MISSING_VALUE_RECEIPT="$(new_temp_file)"
 write_receipt "$MISSING_VALUE_RECEIPT" "fo-20260512T001500Z-verify-proceed-auto-advance" "verify-proceed-auto-advance"
 assert_failure_contains_without_hang "missing --entity-folder value fails fast" "Missing value for --entity-folder" \
   bash "$HELPER" --entity-folder
@@ -565,6 +618,8 @@ assert_failure_contains_without_hang "missing --receipt-file value fails fast" "
   bash "$HELPER" --entity-folder "$MISSING_VALUE_ENTITY_DIR" --receipt-file
 assert_failure_contains_without_hang "missing --transition-slug value fails fast" "Missing value for --transition-slug" \
   bash "$HELPER" --entity-folder "$MISSING_VALUE_ENTITY_DIR" --receipt-file "$MISSING_VALUE_RECEIPT" --transition-slug
+
+assert_test_uses_tracked_temp_files "test temp files are created under tracked cleanup roots"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

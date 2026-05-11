@@ -110,6 +110,21 @@ top_level_value() {
   ' "$RECEIPT_FILE"
 }
 
+transition_trigger_value() {
+  awk '
+    /^transition:[[:space:]]*$/ {
+      in_transition = 1
+      next
+    }
+    in_transition && /^[^[:space:]]/ { in_transition = 0 }
+    in_transition && /^[[:space:]]*trigger:[[:space:]]*/ {
+      sub(/^[[:space:]]*trigger:[[:space:]]*/, "", $0)
+      print
+      exit
+    }
+  ' "$RECEIPT_FILE"
+}
+
 has_top_level_key() {
   local key="$1"
   grep -Eq "^${key}:" "$RECEIPT_FILE"
@@ -244,7 +259,7 @@ validate_args() {
 }
 
 validate_receipt() {
-  local first_line receipt_id decision key
+  local first_line receipt_id decision key transition_trigger
   first_line="$(awk 'NF { print; exit }' "$RECEIPT_FILE")"
   case "$first_line" in
     receipt_id:*) ;;
@@ -274,6 +289,12 @@ validate_receipt() {
     fi
   done
 
+  transition_trigger="$(trim_scalar "$(transition_trigger_value)")"
+  if [ "$transition_trigger" != "$TRANSITION_SLUG" ]; then
+    echo "Receipt payload transition.trigger must match transition slug: $TRANSITION_SLUG" >&2
+    exit 4
+  fi
+
   decision="$(trim_scalar "$(top_level_value decision)")"
   if [ "$decision" = "self-approved" ]; then
     if preconditions_have_fail_or_missing; then
@@ -291,10 +312,53 @@ validate_receipt() {
   fi
 }
 
+LOCK_DIR=""
+
+release_receipt_lock() {
+  if [ -n "$LOCK_DIR" ] && [ -d "$LOCK_DIR" ]; then
+    rm -rf "$LOCK_DIR"
+  fi
+}
+
+acquire_receipt_lock() {
+  local pid attempt
+  LOCK_DIR="$ENTITY_FOLDER/.fo-receipts.lock"
+  attempt=1
+  while [ "$attempt" -le 2 ]; do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      if ! printf '%s\n' "$$" > "$LOCK_DIR/pid"; then
+        release_receipt_lock
+        captain_route "could not record receipt ledger lock owner"
+        exit 6
+      fi
+      trap release_receipt_lock EXIT HUP INT TERM
+      return 0
+    fi
+
+    pid=""
+    if [ -f "$LOCK_DIR/pid" ]; then
+      pid="$(awk 'NF { print; exit }' "$LOCK_DIR/pid" 2>/dev/null || true)"
+    fi
+    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+      rm -rf "$LOCK_DIR"
+      attempt=$((attempt + 1))
+      continue
+    fi
+
+    captain_route "receipt ledger locked by pid $pid"
+    exit 6
+  done
+
+  captain_route "could not acquire receipt ledger lock"
+  exit 6
+}
+
 append_receipt() {
   local ledger="$ENTITY_FOLDER/fo-receipts.md"
   local receipt_id before_hash current_hash tmp attempt ledger_mode
   receipt_id="$(trim_scalar "$(top_level_value receipt_id)")"
+
+  acquire_receipt_lock
 
   attempt=1
   while [ "$attempt" -le 2 ]; do
@@ -354,6 +418,7 @@ append_receipt() {
     current_hash="$(file_hash "$ledger")"
     if [ "$before_hash" = "$current_hash" ]; then
       if mv "$tmp" "$ledger"; then
+        release_receipt_lock
         return 0
       fi
       rm -f "$tmp"
