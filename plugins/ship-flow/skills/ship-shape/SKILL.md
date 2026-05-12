@@ -54,6 +54,42 @@ Main agent runs inline. Use TaskCreate to mark phases on main-agent path (skip i
 
 Record stage-start ISO timestamp. Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Run escape-hatch check now.
 
+### Captain Articulation (mandatory in Mode A default; escape hatch for small scope)
+
+**Why mandatory**: when shape-worker composes shape.md straight from a directive, captain becomes a reviewer who rubber-stamps agent framing — loses sense of direction, accepts artifacts without owning the problem. Forcing questions reverse the flow: captain articulates verbally first, worker organizes captain's words second. Captain's brain models the answer before speaking; shape.md becomes audit trail of captain's own thinking, not agent inference. AI-augmentation cargo-cult prevention — do NOT substitute agent thinking for captain thinking.
+
+**Small-scope escape hatch (captain agency, NEVER agent's silent judgment)**: scan `/shape <directive>` for keywords (case-insensitive, whole-word where applicable): `fix typo`, `rename`, `bump version`, `update dependency`, `remove unused`, `format`, `comment` (about code comments, not feature comments). If ANY keyword matches, ask captain ONCE:
+
+> "This looks like a small-scope change (matched keyword: `{matched}`). Skip forcing questions? (Y/n)"
+
+Send via SendMessage(captain) in team mode; inline prompt in bare mode (no team spawned — degrade per design-officer Bare Mode pattern). **Y** → skip articulation, stamp `articulation_mode: skipped-small-scope` in entity frontmatter, note "Articulation skipped per captain decision (small scope)." in shape.md. **n** OR no response → run full forcing flow below.
+
+**Forcing questions (default 5)** — send ONE AT A TIME via SendMessage(captain), or inline prompt in bare mode. STOP and wait for each response before asking next. Worker MAY smart-skip a question whose answer is already obvious from the directive, but MUST ask at least 3 of 5:
+
+1. **Problem**: "What gets worse without this? Name a concrete user/scenario where it matters."
+2. **Appetite**: "1 day / a few days / 2 weeks / longer?"
+3. **Wedge**: "If you could only do ONE part of this, which? Why?"
+4. **Out-of-scope**: "What do you happily NOT include this round?"
+5. **Assumption**: "What are you betting on that could be wrong?"
+
+Worker MUST NOT compose shape.md from agent inference. shape.md is organized from captain's verbatim answers.
+
+**Captain Articulation Trail in shape.md** — load-bearing for shape gate review. Captain confirms shape.md is "my words organized", not "agent's draft". Format:
+
+```markdown
+## Captain Articulation Trail
+
+**Q1 (Problem)**: What gets worse without this?
+> {captain verbatim answer}
+
+**Q2 (Appetite)**: How long?
+> {captain verbatim answer}
+
+(... etc per question asked)
+```
+
+Other shape.md sections (Problem, Scope, Non-goals, Assumptions) MUST reference and quote the Articulation Trail; worker does NOT introduce framing not derived from the trail. The trail is the audit anchor — if a Layer 1 line cannot be traced back to a captain quote, it does not belong in the proposal.
+
 ### Research (L0 → L1 → L2; skip layers that don't apply)
 
 - **L0 codebase** — dispatch **fresh-context subagent** (do NOT grep from orchestrating context). Return: `affected_files`, `existing_patterns`, `constraints`, `prior_entities[≤5]`, `open_questions[]`.
