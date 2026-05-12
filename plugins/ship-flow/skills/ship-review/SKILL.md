@@ -185,11 +185,34 @@ Body:
 ## Quality Gate
 {from verify.md → Quality Gate 5-check results}
 
+## Per-Feature Retrospective
+
+**Shipped this entity**: {link to entity folder / index.md}
+
+**Deferred via `ship-flow:add-todos`** (review with `/ship-flow:add-todos list` or whatever surface the skill exposes):
+- {N} informational findings from verify panel
+- {M} critical findings with confidence < 8
+
+**Risks accepted** (captain marked "accept-as-is" during verify panel CRITICAL escape, see verify.md `## ⚠️ Captain Attention`):
+- [file:line] {description} → captain reasoning: {captain's accept-as-is rationale}
+
+(If no CRITICAL accept-as-is: render single line "Risks accepted: none — all CRITICAL findings either bounced or fixed.")
+
+**Verify Panel Coverage**: Tier {A|B|C} ({full cross-model | single-model | minimal})
+- PR Quality Score: {N}/10
+- Specialists run: {comma-separated list with ✓/✗}
+- Adversarial: Claude {✓/✗}, Codex {✓/✗}
+
 Entity: #{entity-id}
 Ship-flow: shape → plan → execute → verify → review → ship-final (autonomous)
 Tracker: {tracker + issue, if set}
 Cost: ${token_actual} (budget: ${token_budget})
 ```
+
+Retro discipline:
+- **No separate `<entity>/retro.md` file.** The PR body IS the retro. Future readers (captain, Copilot, sibling-PR reviewers) read it inline with the diff.
+- **No repo `TODOS.md` path assumption.** `ship-flow:add-todos` skill owns deferred-finding storage internally; this section only emits the query pointer.
+- Risks-accepted block populates only when verify panel triggered CRITICAL escape AND captain chose accept-as-is; otherwise the single-line "none" rendering applies.
 
 ### Step 5 — Token summary
 
@@ -313,6 +336,8 @@ On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.m
 - `captain_ack_stubs`: stub flags cleared or pre-acked by captain (from Plan Report stub_flags — must be resolved)
 - `roadmap_row_ready`: `true` if ROADMAP.md Now → Shipped row is prepared; `false` + reason if not
 - `umbrella_closeout`: `yes/no` plus parent id or skip rationale
+
+**No auto-merge flag.** ship-review MUST NOT pass `--auto-merge` to `gh pr create` (and the hand-off MUST NOT instruct ship-final to do so either). PR-side gating — Copilot review, branch protection, repo's post-merge automation (release-please / Fly.io / Vercel / manual / none) — owns the merge decision. ship-flow's responsibility ends at PR creation; the repo decides what happens next. Copilot review is allowed as a repo-side reviewer, but ship-flow does not call into Greptile / CodeRabbit / other external review services — verify panel is the self-contained quality gate.
 <!-- /section:hand_off_to_ship -->
 
 ---
