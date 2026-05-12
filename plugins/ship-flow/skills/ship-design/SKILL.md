@@ -121,17 +121,21 @@ This is the single canonical reference for FO and plan stage lane classification
 
 ## 5-Category classifier
 
-| Category | Trigger | Active dispatch path |
-|---|---|---|
-| 0 — Distill from existing exploration | Shape cites exploratory HTML/markdown at file:line; contains ≥2 conflicting design directions | `ui-designer` distills existing exploration, invokes `storyboard`, `design-flow`, and `design-review` |
-| Category A — Net-new design system | `plugins/<app>/design/` directory absent; first-ever design for this app | `ui-designer` runs full chain: `design-flow` using `design-brief`, `information-architecture`, `design-tokens`, `brief-to-tasks`, then `frontend-design` and `design-review` |
-| Category B — Component breakout | `design-system.md` exists; new component specimen needed | `ui-designer` uses `frontend-design`, `design-tokens` if tokens change, and `design-review`; load `information-architecture` only when component placement/navigation changes |
-| Category C — Variation on existing component | `design-system.md` exists; variant on component spec | `ui-designer` preserves existing design canon, uses `frontend-design`, then `design-review` |
-| Category D — One-off visual | Pitch-local mockup only; does NOT touch design-system.md | `ui-designer` uses `frontend-design`; add `design-review` only for high-risk UI or accessibility-sensitive changes |
+All 5 categories below are **UI / visual / IA / aesthetic** work — they route to `design-officer` (standing teammate) in team mode, or to inline worker handling in bare mode. The separate **domain / schema / contract / business-logic** lane (triggered by `domain:` frontmatter) routes to `schema-designer` via the existing `domain-registry` path (Phase 0.5 §Domain path) and is NOT one of these 5 categories. Both paths can fire concurrently for an entity that needs both kinds of design work (e.g., new schema + new UI).
+
+| Category | Trigger | Routing target | Active dispatch path |
+|---|---|---|---|
+| 0 — Distill from existing exploration | Shape cites exploratory HTML/markdown at file:line; contains ≥2 conflicting design directions | `→ design-officer` (visual) | `ui-designer` distills existing exploration, invokes `storyboard`, `design-flow`, and `design-review` |
+| Category A — Net-new design system | `plugins/<app>/design/` directory absent; first-ever design for this app | `→ design-officer` (visual) | `ui-designer` runs full chain: `design-flow` using `design-brief`, `information-architecture`, `design-tokens`, `brief-to-tasks`, then `frontend-design` and `design-review` |
+| Category B — Component breakout | `design-system.md` exists; new component specimen needed | `→ design-officer` (visual) | `ui-designer` uses `frontend-design`, `design-tokens` if tokens change, and `design-review`; load `information-architecture` only when component placement/navigation changes |
+| Category C — Variation on existing component | `design-system.md` exists; variant on component spec | `→ design-officer` (visual) | `ui-designer` preserves existing design canon, uses `frontend-design`, then `design-review` |
+| Category D — One-off visual | Pitch-local mockup only; does NOT touch design-system.md | `→ design-officer` (visual) | `ui-designer` uses `frontend-design`; add `design-review` only for high-risk UI or accessibility-sensitive changes |
 
 Category A-D are active. Do not halt solely because the category is A, B, C, or D.
 If required design skills are missing, record the fallback in `Design Report` and
 continue with the narrowest viable route.
+
+> **Routing decoupling**: the "Routing target" column names *who owns the visual exploration* (design-officer in team mode, worker inline in bare mode). The "Active dispatch path" column names the *skill chain* the visual work runs through. design-officer (when alive) is the agent that drives the chain in team mode; the chain itself is unchanged. Domain work is never routed here — see Phase 0.5 §Domain path.
 
 ## Designer Dispatch Manifest
 
@@ -361,9 +365,13 @@ Per DC-8: `design-skipped: true` (not `design-skipped: false` with empty constra
    correction to plan or execute. If `folder_guidance_files` is empty, do not
    block on guidance-file absence.
 
-### Phase 0.5 — Specialist dispatch (domain path only)
+### Phase 0.5 — Specialist dispatch
 
-Reached only when Phase 0 step 2 returns exit 0 (domain registered + `specialist_missing` = false).
+Two routing paths that coexist. Both can fire concurrently when an entity has both UI and domain signals (e.g., new feature with new schema + new UI). Domain work is delegated to a deterministic codebase-aware specialist; visual work is delegated to a standing taste-accumulating teammate.
+
+#### Domain path (existing — `schema-designer` via `domain-registry`)
+
+Reached when Phase 0 step 2 returns exit 0 (domain registered + `specialist_missing` = false). Routing target: `schema-designer` (or other domain specialist named in `designer_section_anchor`). **Unchanged by this overhaul.**
 
 1. Resolve specialist anchor and knowledge module:
    ```bash
@@ -390,6 +398,44 @@ Reached only when Phase 0 step 2 returns exit 0 (domain registered + `specialist
 `designer_section_anchor: "ship-design#schema-designer"`, so schema-domain
 pitches proceed to the specialist path instead of the M1 HALT path. Domains
 without an anchor still use the M1 HALT-with-options surface.
+
+#### Visual path (new — `design-officer` via `SendMessage`)
+
+Reached when the entity matches any of the 5-Category classifier rows (UI / IA / aesthetic work). Routing target: `design-officer` — a standing teammate spawned by FO at boot from `_mods/design-officer.md` template (opus, session-scoped, taste accumulates across features within a session).
+
+**Why a separate path**: domain work needs a deterministic specialist with codebase access (schema-designer fits). Visual work needs iterative captain dialogue + cross-feature taste accumulation (design-officer fits). Different cognitive modes, different agents. NOT competing paths — both run if an entity needs both.
+
+**Team-mode protocol** (default when TeamCreate is available and FO is not in Degraded Mode):
+
+1. Worker checks team registry for design-officer. If alive → proceed; if absent → fall through to Bare Mode Degrade below.
+2. Worker SendMessages design-officer with the entity context. Template:
+   ```
+   to: design-officer
+   message: |
+     Entity {entity_id} ({title}) needs visual design exploration.
+     - Type: {variants | IA | tokens | review | full system}  (derived from 5-Category classifier row)
+     - Category: {0 | A | B | C | D}
+     - Constraints: read shape.md `## Design Constraints` if present
+     - Entity folder: <path>
+     - Existing design.md: <state>  (absent | partial | full prior draft)
+     Produce variants in <entity>/design-explore/ per
+     lib/design-methodology/{shotgun|consultation|html-generation}.md as appropriate.
+     SendMessage back when ready, or surface to captain for direct Shift+Down dialogue.
+   ```
+3. Worker waits **non-blocking** for design-officer's reply. Captain may Shift+Down to design-officer mid-flight to steer interactive design dialogue (variant selection, refinement, IA negotiation).
+4. When captain selects a variant via Shift+Down dialogue, design-officer writes the selection to `<entity>/design.md`. Worker observes design.md update and resumes structural design work (constraints, lanes, render-fidelity targets, hand-off).
+5. The visual path produces the *variant + selection*; the worker still owns Phase 4 (distill design-system.md), Phase 9 (cross-review), and Phase 9-hand-off (`### Hand-off to Plan` machine-readable contract). design-officer is the upstream visual-exploration source, not the hand-off owner.
+
+**Bare Mode Degrade** (when TeamCreate is unavailable OR FO is in Degraded Mode → design-officer is NOT spawned):
+
+1. Worker reads `plugins/ship-flow/lib/design-methodology/` files directly: `ux-principles.md`, plus `shotgun.md` / `consultation.md` / `html-generation.md` as needed per scope.
+2. Worker produces markdown variants in `<entity>/design-explore/variant-*.md` from its own context, following `shotgun.md` discipline (3 differentiated concepts, anti-convergence, full specs per variant — no convergent thinking before the comparison step).
+3. Captain reviews variants via Read tool in editor; communicates selection via next captain message (no live Shift+Down dialogue available).
+4. Worker iterates based on captain's text directive; eventually commits the selected variant to `<entity>/design.md` and continues to Phase 4.
+
+Tradeoffs in bare mode: **LOSE** cross-feature taste accumulation (worker fresh per entity); **LOSE** live Shift+Down dialogue (async text only). **KEEP** per-entity design quality and hermetic policy. Bare-mode degrade is the design stage's safety net — never block on design-officer absence.
+
+**Spawn config source**: `plugins/ship-flow/_mods/design-officer.md` (added by Phase 4 of this overhaul). FO consumes this mod template at boot to spawn the standing teammate.
 
 ## Schema Designer Specialist
 
