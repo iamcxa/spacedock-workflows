@@ -163,6 +163,34 @@ kill %1 2>/dev/null
 
 T2 failures count toward retries. Note `-sfN` for Next.js 16 Turbopack SSR (MEMORY #073).
 
+**T3 (always — critical-pass lite, in-worker self-discipline)** — troop reads `plugins/ship-flow/lib/review-checklists/critical-pass.md` and applies ONLY Pass 1 CRITICAL categories to its own diff for this task:
+
+- SQL & Data Safety
+- Race Conditions & Concurrency
+- LLM Output Trust Boundary
+- Shell Injection
+- Enum & Value Completeness
+
+In-process self-check. **Do NOT dispatch a subagent for T3.** Classify findings:
+
+- **Mechanical / Pass-2 informational** → auto-fix inline within the shared 3-iteration cap.
+- **CRITICAL class** → MUST NOT silently fix. Append finding to `execute.md` under `## Critical-Pass Self-Check Findings` as `- [file:line] {category}: {description} → recommended fix`. Worker may apply a fix if confident, but always notes it for verify panel cross-check.
+
+**Shared 3-iteration cap** — T1 + T2 + T3 fixes share the same 3-retry budget. If cumulative T1+T2+T3 cannot converge in 3 iterations, worker stops fixing and appends `## Self-Check Status` with `{check}: NOT CONVERGED after 3 iterations` plus a brief diagnosis. Worker still signals completion as normal; verify panel bounces back if needed.
+
+**Self-Check report block** — every task appends to `execute.md` before returning:
+
+```
+## Self-Check
+- typecheck: PASS / FAIL [optional inline note]
+- lint: PASS / FAIL [optional inline note]
+- unit tests: PASS (N/N) / FAIL
+- qa-only: PASS / FAIL  (only when T2 fired)
+- critical-pass lite: PASS / FAIL  (no SQL/race/LLM/shell/enum issues)
+```
+
+Rationale: lets verify panel trust self-check on these classes and focus on substantive failures instead of bouncing on mechanical issues.
+
 ### Step 3 — Handle task returns
 
 - **DONE** → schedule commit (Step 3.5) + dispatch review (Step 4).
