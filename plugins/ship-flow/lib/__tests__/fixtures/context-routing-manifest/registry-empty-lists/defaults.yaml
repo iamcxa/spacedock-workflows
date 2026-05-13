@@ -1,0 +1,15 @@
+# fixture: context-routing-manifest/registry-empty-lists/defaults.yaml
+schema_version: "1.0"
+domains:
+  empty_lists:
+    trigger_patterns: []
+    spec_keywords:
+      - empty-lists
+    knowledge_module: ""
+    designer_section_anchor: "ship-design#empty-lists"
+    required_skills: []
+    skill_hints:
+      plan: []
+      execute: []
+      verify: []
+    description: "Domain with intentionally empty list-shaped manifest sections"

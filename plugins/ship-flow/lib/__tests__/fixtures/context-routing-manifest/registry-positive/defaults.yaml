@@ -1,0 +1,23 @@
+# fixture: context-routing-manifest/registry-positive/defaults.yaml
+schema_version: "1.0"
+domains:
+  schema:
+    trigger_patterns: []
+    spec_keywords:
+      - schema
+      - drizzle
+      - fmodel
+    knowledge_module: plugins/ship-flow/references/domain-knowledge/schema.md
+    designer_section_anchor: "ship-design#schema-designer"
+    required_skills:
+      - project-db
+      - fmodel
+    skill_hints:
+      plan:
+        - project-db
+      execute:
+        - fmodel
+      verify:
+        - project-db
+        - fmodel
+    description: "Schema routing fixture for context-routing-manifest emission"

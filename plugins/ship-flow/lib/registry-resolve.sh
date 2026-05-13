@@ -10,6 +10,7 @@
 #   --validate                        Validate entire config (M4+M5 checks) + optional --domain check
 #   --config=<path>                   Override plugin default config path
 #   --adopter-config=<path>           Override adopter project config path
+#   --context-routing-manifest        Also emit typed context-routing-manifest YAML from local registry rows
 #
 # Exit codes:
 #   0  = ok or partial_coverage (consumer interprets status= field)
@@ -46,6 +47,7 @@ SPEC_FILE=""
 DOMAIN_NAME=""
 CONFIG_PATH=""
 ADOPTER_CONFIG_PATH=""
+CONTEXT_ROUTING_MANIFEST=false
 
 usage() {
   cat <<'EOF'
@@ -57,6 +59,7 @@ Usage:
   registry-resolve.sh --classify <spec-file> [--config=<path>] [--adopter-config=<path>]
   registry-resolve.sh --domain=<name> [--config=<path>] [--adopter-config=<path>]
   registry-resolve.sh --validate [--domain=<name>] [--config=<path>] [--adopter-config=<path>]
+  Add --context-routing-manifest to --classify or --domain to append typed manifest YAML.
 
 Exit codes: 0=ok/partial_coverage, 2=usage, 10=M1, 11=M2, 20=M4, 21=M5, 1=error
 EOF
@@ -96,6 +99,9 @@ while [ $# -gt 0 ]; do
       ;;
     --adopter-config=*)
       ADOPTER_CONFIG_PATH="${1#--adopter-config=}"
+      ;;
+    --context-routing-manifest)
+      CONTEXT_ROUTING_MANIFEST=true
       ;;
     *)
       die_usage "unknown argument: $1"
@@ -314,6 +320,101 @@ emit_skill_routes_for_domains() {
   echo "skill_hints.verify=$verify"
 }
 
+emit_yaml_list() {
+  local indent="$1"
+  local value
+  while IFS= read -r value; do
+    [ -z "$value" ] && continue
+    printf '%s- %s\n' "$indent" "$value"
+  done
+}
+
+emit_context_routing_manifest() {
+  local cfg="$1"
+  shift
+  local domains=("$@")
+  local dom skill section_output
+
+  echo "context-routing-manifest:"
+  echo "  schema_version: 1"
+  echo "  generated_by:"
+  echo "    source: local-registry"
+  echo "    provider_dependency: none"
+  echo "  domain_matches:"
+  for dom in "${domains[@]}"; do
+    [ -z "$dom" ] && continue
+    echo "    - domain: $dom"
+    echo "      match_type: local-registry"
+    echo "      required: true"
+  done
+  section_output="$(
+    for dom in "${domains[@]}"; do
+      [ -z "$dom" ] && continue
+      local km anchor
+      km="$(get_domain_field "$cfg" "$dom" "knowledge_module")"
+      anchor="$(get_domain_field "$cfg" "$dom" "designer_section_anchor")"
+      [ -z "$km" ] && continue
+      echo "    - domain: $dom"
+      echo "      path: $km"
+      echo "      designer_section_anchor: $anchor"
+      echo "      load_required: false"
+      echo "      missing_behavior: warn"
+    done
+  )"
+  if [ -n "$section_output" ]; then
+    echo "  knowledge_modules:"
+    printf '%s\n' "$section_output"
+  else
+    echo "  knowledge_modules: []"
+  fi
+  section_output="$(
+    for dom in "${domains[@]}"; do
+      [ -z "$dom" ] && continue
+      while IFS= read -r skill; do
+        [ -z "$skill" ] && continue
+        echo "    - skill: $skill"
+        echo "      source: local-registry"
+      done < <(get_domain_list_field "$cfg" "$dom" "required_skills")
+    done
+  )"
+  if [ -n "$section_output" ]; then
+    echo "  required_skills:"
+    printf '%s\n' "$section_output"
+  else
+    echo "  required_skills: []"
+  fi
+  echo "  stage_hints:"
+  for stage in plan execute verify; do
+    section_output="$(
+      for dom in "${domains[@]}"; do
+        [ -z "$dom" ] && continue
+        get_skill_hints_for_stage "$cfg" "$dom" "$stage" | emit_yaml_list "      "
+      done
+    )"
+    if [ -n "$section_output" ]; then
+      echo "    $stage:"
+      printf '%s\n' "$section_output"
+    else
+      echo "    $stage: []"
+    fi
+  done
+  echo "  consumer_obligations:"
+  echo "    plan:"
+  echo "      - map manifest rows to tasks[].skills_needed, reviewer_questions, and domain_acceptance_checklist"
+  echo "    verify:"
+  echo "      - extract context-routing-manifest by section before accepting routed obligations"
+  echo "  future_provider_boundary:"
+  echo "    status: optional_append_only"
+  echo "    provider_hints: []"
+  echo "    context_sources:"
+  echo "      - source_type: local-registry"
+  echo "        source_ref: $cfg"
+  echo "        authoritative_for_routing: true"
+  echo "    invariants:"
+  echo "      - Local registry remains authoritative for routing decisions in this slice."
+  echo "      - Providers may append hints or sources but may not replace local registry rows."
+}
+
 glob_to_regex() {
   local pattern="$1"
   awk -v s="$pattern" '
@@ -528,10 +629,16 @@ classify_spec() {
     echo "matched=${matched_str}"
     echo "missing=${missing_str}"
     emit_skill_routes_for_domains "$cfg" "${matched_domains[@]}"
+    if [ "$CONTEXT_ROUTING_MANIFEST" = "true" ]; then
+      emit_context_routing_manifest "$cfg" "${matched_domains[@]}"
+    fi
   else
     echo "status=ok"
     echo "matched=${matched_str}"
     emit_skill_routes_for_domains "$cfg" "${matched_domains[@]}"
+    if [ "$CONTEXT_ROUTING_MANIFEST" = "true" ]; then
+      emit_context_routing_manifest "$cfg" "${matched_domains[@]}"
+    fi
   fi
 }
 
@@ -588,6 +695,9 @@ case "$MODE" in
     echo "designer_section_anchor=$local_anchor"
     echo "knowledge_module_path=$local_km"
     emit_skill_routes_for_domains "$MERGED_CFG" "$DOMAIN_NAME"
+    if [ "$CONTEXT_ROUTING_MANIFEST" = "true" ]; then
+      emit_context_routing_manifest "$MERGED_CFG" "$DOMAIN_NAME"
+    fi
     ;;
 
   validate)
