@@ -86,6 +86,186 @@ Legacy flat entities (`docs/<wf>/<id>-<slug>.md`) continue to work; no migration
 
 ---
 
+## GStack Skill Tier Classification
+
+External skill libraries (GStack and similar) are categorized by how they may interact with ship-flow stages. Three tiers, applied to every skill considered for use inside the pipeline:
+
+- **Tier 1** — Read-only or report-producing; safe for worker to invoke; no UI; no auto-commit; output is structured data.
+- **Tier 2** — Captain-interactive; worker MUST NOT invoke; captain invokes directly OR routes via standing teammate (e.g., `design-officer`).
+- **Tier 3** — Excluded from ship-flow context entirely (session-level, post-merge-deploy concerns owned by repo, naming collisions, or unrelated).
+
+### Tier 1 — Worker-safe (written into Methods rows)
+
+| Skill | Use in stages | Why Tier 1 |
+|---|---|---|
+| `/qa-only` | execute (self-check), verify | Report-only, no auto-fix |
+| `/codex` (review mode) | plan, execute, verify, ship | Independent diff review → structured report |
+| `/browse` | execute, verify | DOM-aware operation → returns observations |
+| `/scrape` | execute (rare) | Pull data → JSON output |
+| `/design-review` | verify | Finds visual inconsistency → report |
+| `/devex-review` | verify | DX audit → report |
+| `/health` | verify, ship | Quality dashboard → numbers |
+| `/benchmark` | verify | Perf regression detection → report |
+| `/landing-report` | ship | Queue dashboard (read-only) |
+| `/learn` (read) | shape, plan | Review past learnings → reference |
+| `/find-skills` | any | Skill discovery → list |
+
+### Tier 2 — Captain-interactive (NOT in Methods rows; routed via design-officer or captain pre-stage)
+
+| Skill | Routing |
+|---|---|
+| `/design-shotgun` | design-officer standing teammate |
+| `/design-consultation` | design-officer standing teammate |
+| `/design-html` | design-officer standing teammate |
+| `/office-hours` | Captain pre-shape activity (manual) |
+| `/plan-ceo-review` | Captain pre-plan activity (manual) |
+| `/plan-design-review` | Captain pre-plan activity (manual) |
+| `/plan-eng-review` | Captain pre-plan activity (manual) |
+| `/plan-devex-review` | Captain pre-plan activity (manual) |
+| `/autoplan` | Captain pre-plan (runs all 4 above) |
+| `/investigate` | **MOVED OUT** — belongs to whatever debug workflow the project has (if any). ship-flow doesn't invoke; if entity becomes debug-shaped, captain routes through the project's debug workflow. |
+| `/cso` | Captain pre-ship security pass (manual) |
+| `/retro` | Captain post-ship periodic activity |
+| `/qa` (auto-fix variant) | **Banned** — use `/qa-only` only |
+| `/skillify` | Captain post-scrape (manual) |
+| `/pair-agent` | Captain-initiated, out of stage flow |
+| `/setup-*` | Captain-initiated setup, out of stage flow |
+
+### Tier 3 — Excluded entirely (declared in Excluded list below)
+
+| Skill | Reason |
+|---|---|
+| `/ship` | **Naming collision** with ship-flow `ship` stage; functional overlap (version bump + PR) replaced by ship-flow `ship` stage |
+| `/review` | **Naming collision** + captain-interactive. Ship-flow does NOT invoke `/review`; instead the **content** (checklists) is snapshotted into `plugins/ship-flow/lib/review-checklists/` and ship-verify implements its own multi-specialist panel. |
+| `/land-and-deploy` | Post-merge deploy is repo's own concern (release-please / Fly.io / Vercel / Netlify / manual / none). ship-flow ends at PR creation. |
+| `/canary` | Same — post-deploy monitoring is repo's deploy-stack concern, not ship-flow's per-entity scope |
+| `/document-release` | Repo's release-notes mechanism (e.g., release-please auto-generates) owns this. Out of ship-flow per-entity scope. |
+| `/setup-deploy` | Repo-level deploy configuration, captain runs at repo onboarding (once), not per ship-flow entity |
+| `/freeze`, `/unfreeze` | Session-level filesystem boundary; conflicts with worktree-scope discipline |
+| `/guard`, `/careful` | Session-level destructive-command warning; conflicts with FO orchestration |
+| `/context-save`, `/context-restore` | Session-level memory; orthogonal to entity state |
+| `/sync-gbrain`, `/setup-gbrain`, `/setup-browser-cookies`, `/open-gstack-browser` | Environment / session setup |
+| `/gstack-upgrade`, `/kc-marketplace-sync` | Plugin management; not stage work |
+| `/update-config`, `/keybindings-help`, `/fewer-permission-prompts`, `/plan-tune` | General config; not stage work |
+| `/kc-blog-voice`, `/make-pdf` | Content/voice tools; unrelated to ship-flow |
+| `/recce-local-integration-test` | Recce-specific |
+| `/loop`, `/schedule` | Scheduling primitives; orthogonal |
+| `/claude-api` | API dev tooling; not ship-flow stage work |
+| `/simplify`, `/mprocs-expert`, `/linear-expert`, `/kc-safehouse`, `/kc-github-actions-expert`, `/kc-gh-actions-audit` | Cross-cutting; not stage-bound |
+| `/benchmark-models` | Benchmark tooling; rare/manual |
+
+### Skills evaluated but not classified above
+
+`/pair-agent` and `/setup-*` — captain-initiated, out of stage flow (effectively Tier 2/3 hybrid). `/cso` — could be a Tier 2 captain-invoked pre-ship pass; listed as captain-interactive above.
+
+---
+
+## GStack Skills Excluded from Ship-Flow Context
+
+The following GStack skills are NOT invoked within ship-flow stages. Reasons:
+session-level safety (conflicts with worktree scope), post-merge-deploy
+concerns owned by repo, naming collision with ship-flow stages, or out-of-scope.
+
+**Naming collisions (banned in ship-flow context)**:
+- `/ship` — ship-flow `ship` stage owns merge/PR-ready
+- `/review` — ship-flow `verify` (multi-specialist panel) owns pre-landing review; captain may invoke `/review` manually outside ship-flow context if desired, but ship-flow workers never invoke it. The checklist content has been snapshotted into `lib/review-checklists/`.
+
+**Post-merge deploy chain (repo's own concern, not ship-flow)**:
+- `/land-and-deploy`, `/canary`, `/document-release`, `/setup-deploy`
+- These belong to whatever post-merge automation the repo uses (release-please / Fly.io / Vercel / Netlify / manual / none). ship-flow ends at PR creation.
+
+**Session-level safety (conflicts with worktree scope)**:
+- `/freeze`, `/unfreeze`, `/guard`, `/careful`
+- `/context-save`, `/context-restore`
+
+**Environment / plugin management**:
+- `/sync-gbrain`, `/setup-gbrain`, `/setup-browser-cookies`, `/open-gstack-browser`
+- `/gstack-upgrade`, `/kc-marketplace-sync`
+
+**Auto-fix variants (use report-only siblings)**:
+- `/qa` — use `/qa-only`
+
+Workers MUST NOT invoke these from inside a ship-flow stage. Captain may
+invoke them outside ship-flow context (e.g., at session start, between
+features) at their discretion.
+
+---
+
+## Hermetic Dependency Policy
+
+ship-flow plugin does NOT reference any path under `~/.claude/skills/gstack/` at runtime. Captain decision recorded 2026-05-12.
+
+### Why
+
+- GStack evolves independently; runtime coupling means ship-flow silently breaks on GStack upgrades.
+- Checklist content is stable enough to own; GStack's `gstack-*` bin layer is not appropriate as a shared runtime.
+- Per-entity persistence (verify.md, review-log.jsonl) is conceptually cleaner than cross-session global logs.
+
+### What ship-flow owns
+
+In `plugins/ship-flow/lib/` (content snapshots + portable shell helpers, all ship-flow-owned):
+
+```
+plugins/ship-flow/
+  lib/
+    review-checklists/             ← content snapshot from gstack /review, ship-flow owned
+      INDEX.md
+      critical-pass.md
+      design-checklist.md
+      specialists/
+        testing.md
+        maintainability.md
+        security.md
+        performance.md
+        data-migration.md
+        api-contract.md
+        red-team.md
+    design-methodology/            ← content snapshot from gstack /design-*, ship-flow owned
+      INDEX.md
+      ux-principles.md
+      shotgun.md
+      consultation.md
+      html-generation.md
+    review-scope.sh                ← portable diff scope detection
+    review-merge.sh                ← fingerprint dedup + multi-specialist merge
+    review-log.sh                  ← per-entity JSONL append helper
+    write-fo-receipt.sh            ← FO autonomous gate receipt writer (Step 6.0 in ship-verify)
+    registry-resolve.sh            ← domain registry resolver (feeds context-routing-manifest)
+    advance-stage.sh               ← atomic frontmatter advance with --if-hash CAS (Step 6.1 in ship-verify)
+    check-guidance-receipt.sh      ← folder guidance receipt gate (Phase B.0 in ship-verify)
+    __tests__/                     ← shell test fixtures + assertions for the above
+```
+
+design-officer reads `design-methodology/*` instead of invoking GStack `/design-*` skills at runtime. ship-verify's multi-specialist panel reads `review-checklists/specialists/*` instead of invoking GStack `/review` at runtime.
+
+### What ship-flow tolerates as optional runtime tool (not dependency)
+
+- `codex` CLI on PATH — used in Tier A codex-dispatch evidence; gracefully degraded to Tier B when absent or auth-broken. Never load-bearing.
+
+### What ship-flow explicitly refuses to depend on
+
+- Any `~/.claude/skills/gstack/bin/gstack-*` invocation
+- Any `~/.claude/skills/gstack/review/specialists/*` path
+- Any `~/.claude/skills/gstack/design-*/SKILL.md` path
+- `$D` design generation binary (image variants) — design-officer is text-native
+- `$B` browse daemon for comparison board UI — design-officer uses markdown comparison instead
+- Cross-session global state (gstack-review-log, gstack-learnings-log, gstack-specialist-stats, gstack-taste-profile.json)
+- Remote PR review services (Greptile, CodeRabbit, etc.)
+- GHA-side review jobs that block merge
+
+### Content sync policy
+
+When GStack updates a specialist checklist or design skill with valuable new categories/methodology:
+
+- Manual sync only — captain reviews diff and decides to pull
+- Update the corresponding file in `plugins/ship-flow/lib/{review-checklists,design-methodology}/`
+- Bump ship-flow plugin minor version
+- NO automatic sync hook, NO scheduled pull
+
+This is the same model as ship-flow's "decisions-log mod" pattern: stability over freshness.
+
+---
+
 ## The pipeline
 
 ```
