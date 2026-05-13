@@ -9,7 +9,7 @@ argument-hint: "<entity-id> [--fast | --full]"
 
 You run VERIFY. Output: `docs/<wf>/<id>-<slug>/verify.md`. **You are NOT the author of the code** — review as an independent agent. PASS advances to review; FAIL feeds back to execute (max 2 rounds).
 
-**Three concerns, one stage**: Quality (mechanical gate on touched surfaces) + Review (classified findings from dispatched haiku reviewers) + UAT (done-criteria evidence review + spot-check).
+**Three concerns, one stage**: Quality (mechanical gate on touched surfaces) + Review (multi-specialist panel — Step 3 Phase A-H, FO-autonomous routing per captain decision 2026-05-12) + UAT (done-criteria evidence review + spot-check). Captain UAT (Step 3.6.6) remains captain-interactive for UI work; only the Phase G code-quality verdict is FO-autonomous.
 
 ## Boot Self-Check
 
@@ -160,75 +160,220 @@ Surface-level scoping says "execute didn't touch surface X → failures are pre-
 
 ---
 
-## Step 3 — Review (haiku reviewer matrix + spot-check)
+## Step 3 — Review (Multi-Specialist Panel, FO-autonomous routing)
 
-**Reviewer matrix (Principle 3)**: default 2 reviewer lenses for source-file diffs; skip haiku dispatch entirely for non-source-only diffs.
+**Overhauled 2026-05-12 (captain decision):** the legacy "haiku reviewer matrix + spot-check" is REPLACED by a multi-specialist panel dispatched in parallel, with FO-autonomous verdict routing (no captain gate at verify — captain only sees verify.md at ship stage unless CRITICAL+high-confidence escape triggers).
 
-```bash
-DIFF_FILES=$(git diff {execute_base}..HEAD --name-only)
-SOURCE_FILES=$(echo "$DIFF_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|ex|exs|sh)$')
-```
+**Hermetic policy**: all panel logic depends on `plugins/ship-flow/lib/*` (review-scope.sh, review-merge.sh, review-log.sh, review-checklists/specialists/*.md). **DO NOT** reach into `~/.claude/skills/gstack/*` paths — those are reference-only.
 
-| Diff content | Haiku dispatches | Notes |
-|---|---|---|
-| Non-source only (docs / SKILL.md / config) | **0** — sonnet inline review on diff | 2026-04 D1: haiku hallucinate 50-100% on prompt-text diffs |
-| S/M/L with source | `pr-review-toolkit:code-reviewer` + `pr-review-toolkit:silent-failure-hunter`; fallback `ship-flow:verify-reviewer-panel` lenses `general-external-reviewer` + `silent-failure-reviewer` | Default pair |
-| Opt-in via `haiku-opt-in: <name>` | `trailofbits:{insecure-defaults \| sharp-edges \| variant-analysis}`, `pr-review-toolkit:{pr-test-analyzer \| type-design-analyzer \| comment-analyzer \| code-simplifier}` | Explicit tag only |
-
-Cost: ~$0.05/haiku. Default M/L = $0.10.
-
-**Inline pre-scan (always, before haiku findings arrive)**:
+**Pre-scan still runs first** (always, before panel dispatch, regardless of tier):
 1. **Stale references** — for every symbol removed, grep remaining refs outside the diff.
 2. **Plan consistency** — cross-check `git diff --stat` vs `plan.md → files_modified`. Unplanned change OR missed task = finding.
 3. **Constraint check** — `PRODUCT.md → ## Constraints` respected?
-4. **Canonical drift check** — read plan `canonical_doc_actions` and changed
-   files. If source changes touch schema/API/domain/data-flow/storage/runtime or
-   component-boundary files, compare the diff against relevant
-   `ARCHITECTURE.md` sections and the plan's action rows. Missing
-   `canonical_doc_actions`, stale architecture contract, or an `action: skip`
-   without `skip_rationale` is a WARNING with `route_to: review` when the code
-   is otherwise correct, or BLOCKING with `route_to: plan` when the verification
-   criteria are underspecified. If product constraints are violated, route to
-   execute or design depending on whether implementation or design intent is at
-   fault.
+4. **Canonical drift check** — read plan `canonical_doc_actions` and changed files. If source changes touch schema/API/domain/data-flow/storage/runtime or component-boundary files, compare the diff against relevant `ARCHITECTURE.md` sections and the plan's action rows. Missing `canonical_doc_actions`, stale architecture contract, or an `action: skip` without `skip_rationale` is a WARNING with `route_to: review` when the code is otherwise correct, or BLOCKING with `route_to: plan` when the verification criteria are underspecified. If product constraints are violated, route to execute or design depending on whether implementation or design intent is at fault.
 5. **CLAUDE.md walk** — for each changed file, walk dirname to repo root collecting `CLAUDE.md`; check each rule against the diff. Severity: "must/never/always" → BLOCKING; "prefer/should/consider" → WARNING. Dedup + cache during walk.
 6. **Folder guidance receipt gate** — for each execute-touched file group, run `bash plugins/ship-flow/lib/check-guidance-receipt.sh --config=.claude/ship-flow/skill-routing.yaml --files=<changed-files> --artifact=<entity-folder>/execute.md`. Exit 12 is BLOCKING: execute did not prove it read non-root app-folder `AGENTS.md`/`CLAUDE.md` or did not load routed/folder skills. Do not treat root `AGENTS.md`/`CLAUDE.md` absence as failure; the resolver's `codex_context_boundary` deliberately avoids duplicating Codex session behavior.
 
-**Spot-check haiku citations — 100%, not a sample** (MEMORY #078 precedent):
-- Read exact file at cited line ±2 lines.
-- Content matches → keep. Line shifted but content within ±5 → keep with updated line. Content absent → DROP + log `[D2-candidate] {agent} hallucinated at {file}:{line}` in `### Knowledge Captures`.
-- Single agent > 30% hallucination → discard ALL findings from that agent for this review; log as untrusted for this diff class.
+Pre-scan findings merge into Phase D alongside specialist findings.
 
-**Classify surviving findings**:
-- **BLOCKING** (security / broken / data-loss) → feedback to execute (max 2 rounds).
-- **WARNING** (potential bug / weak edge case) → log; proceed if no BLOCKING.
-- **NIT** (style / minor) → consider auto-fix per Step 5.
+### Phase A — Scope detection + Codex tier
 
-BLOCKING findings require a claim record under `### Review Findings` naming the reviewer lens, cited surface, threshold, comparison, verdict, and route. WARNING findings also require a claim record when verify allows them not to block; the record must explain why the claim is advisory or why `route_to: follow-up` is acceptable.
+Worker runs `plugins/ship-flow/lib/review-scope.sh` (Phase 1 commit `ce181145`):
 
-### Severity-disagreement aggregation
+```bash
+eval "$(bash plugins/ship-flow/lib/review-scope.sh --base=<execute_base> --head=HEAD)"
+# Sets: STACK / TEST_FW / DIFF_INS / DIFF_DEL / DIFF_LINES /
+#       SCOPE_AUTH / SCOPE_BACKEND / SCOPE_FRONTEND / SCOPE_API / SCOPE_MIGRATIONS
+```
 
-When the default haiku pair (`code-reviewer` + `silent-failure-hunter`) both return findings, aggregate using **FAIL > WARN > PASS** (strict dominance):
+**Small-diff short-circuit**: if `DIFF_LINES < 50` → skip all specialist dispatch. Worker runs the critical-pass checklist (`plugins/ship-flow/lib/review-checklists/critical-pass.md`) inline. Tag `panel_coverage: minimal` for the run.
 
-| Reviewer A | Reviewer B | Aggregate |
+**Codex tier detection** (inline at Phase A; result drives Phase C composition):
+
+```bash
+if which codex >/dev/null 2>&1; then
+  if codex exec "echo test" -s read-only </dev/null >/dev/null 2>&1; then
+    CODEX_TIER="A"
+  else
+    CODEX_TIER="B"   # binary present but auth/config broken
+  fi
+else
+  CODEX_TIER="B"     # binary missing
+fi
+```
+
+If Claude subagent dispatch also fails (team-registry collapse / Degraded Mode) → `CODEX_TIER="C"`, worker runs critical-pass-only inline (see Codex Fallback Ladder below).
+
+### Phase B — Parallel specialist dispatch
+
+Same-message `Agent()` × N. Each fresh-context subagent reads its checklist from `plugins/ship-flow/lib/review-checklists/specialists/{name}.md` (Phase 1 snapshot). Output: JSON findings, one per line, schema verbatim from snapshot (`severity / confidence / path / line / category / summary / fix / fingerprint / specialist`).
+
+**Specialist selection**:
+
+| Specialist | Trigger | Gate semantics |
 |---|---|---|
-| BLOCKING | any | BLOCKING |
-| WARNING | BLOCKING | BLOCKING |
-| WARNING | WARNING | WARNING |
-| WARNING | NIT or PASS | WARNING |
+| `testing` | DIFF ≥ 50, no scope gate | Always-on |
+| `maintainability` | DIFF ≥ 50, no scope gate | Always-on |
+| `security` | DIFF ≥ 50, no scope gate | **Always-on, NEVER_GATE** (captain decision 2026-05-12 — replaces /cso captain pre-ship; captain explicitly accepts the per-dispatch token cost) |
+| `performance` | `SCOPE_BACKEND` OR `SCOPE_FRONTEND` | Conditional |
+| `data-migration` | `SCOPE_MIGRATIONS` | Conditional, **NEVER_GATE** |
+| `api-contract` | `SCOPE_API` | Conditional |
+| `design` (uses `lib/review-checklists/design-checklist.md`) | `SCOPE_FRONTEND` | Conditional |
+
+**Existing (NOT replaced)**: `intent-match-verifier` continues to dispatch via the `domain-registry` mechanism (`registry/defaults.yaml` + `lib/registry-resolve.sh` — see Step 3.7). It compares execute output against `<domain>` design intent (schema drift, contract violations). Findings merge into Phase D alongside the new specialist findings using the same JSON schema. New specialists are CODE-QUALITY-aware; intent-match-verifier is DOMAIN-INTENT-aware. Different concerns, no conflict.
+
+**v1 NO adaptive gating** — every applicable specialist always dispatches.
+
+**Dispatch cap** (captain locked, §9 Q4): max **5 NEW specialists + 1 Claude adversarial + 1 Codex adversarial** in a single dispatch. NEVER_GATE specialists (`security`, `data-migration`) always included first; other applicable specialists selected by scope priority (api-contract > performance > design > testing > maintainability) until cap reached. `intent-match-verifier` does NOT count against the cap (separate registry-driven dispatch).
+
+### Phase C — Adversarial pass (parallel with Phase B)
+
+- **Claude adversarial subagent** (ALWAYS, all tiers ≥ B): fresh context, prompt is "attacker + chaos engineer mindset". Emits `Recommendation: <action> because <reason>` final line.
+- **Codex adversarial** (Tier A only): `codex exec` with adversarial prompt, 5-min timeout, read-only sandbox.
+- **Codex structured review** (Tier A only, `DIFF_LINES ≥ 200`): `codex review --base <execute_base>`; check for `[P1]` markers → emit as CRITICAL findings into Phase D.
+
+### Phase D — Findings merge (review-merge.sh)
+
+Worker pipes all specialist + adversarial + pre-scan JSON output through `plugins/ship-flow/lib/review-merge.sh` (Phase 1, smoke-tested):
+
+```bash
+cat all-findings.jsonl | bash plugins/ship-flow/lib/review-merge.sh > merged-findings.jsonl
+```
+
+`review-merge.sh` handles:
+- **Fingerprint dedup**: `path:line:category` (or `path:category` if line absent)
+- **Multi-specialist confirmation boost**: matching fingerprint across N specialists → tag `MULTI-SPECIALIST CONFIRMED`, boost confidence `+1 per extra specialist` (cap 10)
+- **Confidence gates**:
+  - 7-10 → shown normally
+  - 5-6 → shown with caveat
+  - 3-4 → appendix only
+  - 1-2 → suppressed
+- **PR Quality Score**: `max(0, 10 - critical*2 - informational*0.5)` (cap 10)
+- Final summary line: `merged=N critical=M informational=K quality=SCORE`
+
+Worker reads merged JSONL + summary line for Phase F/G classification.
+
+### Severity-disagreement aggregation (within Phase D)
+
+When ≥2 specialists report findings on the same fingerprint, the merge tool's confidence boost handles agreement. For disagreement (different severity on overlapping concern), aggregate using **CRITICAL > WARN > NIT > PASS** (strict dominance):
+
+| Specialist A | Specialist B | Aggregate |
+|---|---|---|
+| CRITICAL | any | CRITICAL |
+| WARN | CRITICAL | CRITICAL |
+| WARN | WARN | WARN |
+| WARN | NIT or PASS | WARN |
 | NIT | NIT or PASS | NIT |
 | PASS | PASS | PASS |
 
-At the verdict-mapping layer (Step 5 cross-review gate): **PROMPT_CAPTAIN > VETO > PROCEED** — the worse verdict wins.
+This is unconditional (Path X). Density-aware verdict-flip is handled downstream in `ship/SKILL.md → Verdict-flip transformation` (101.2 territory), NOT at panel-dispatch level. (Spec 101.3 PAR adjudication: the multi-specialist panel IS the baseline; aggregation rule preserved.)
 
-**Note**: Spec 101.3 originally framed PAR as adding a 2nd reviewer to the baseline. Current ship-verify SKILL.md already runs the default haiku pair unconditionally on source diffs (the pair IS the baseline). This section codifies the aggregation rule that was previously implicit; reviewer count unchanged. See `docs/ship-flow/101-density-aware-autonomy/plan.md` D1 for cross-review adjudication record.
+### Phase E — Red Team (conditional)
 
-**Density-aware gate**: the above aggregation is unconditional (Path X). On `density:high` entities, verdict-flip for PROMPT_CAPTAIN is handled downstream in `ship/SKILL.md → Verdict-flip transformation` (101.2 territory), NOT at reviewer dispatch level.
+Dispatch a red-team subagent if **either**:
+- `DIFF_LINES > 200`, OR
+- Any CRITICAL finding emerged from Phase B or C
 
+The red-team subagent receives Phase D merged findings as context. Prompt: "find what specialists missed". Uses `plugins/ship-flow/lib/review-checklists/specialists/red-team.md` as approach guide (not literal checklist). Red-team findings re-enter Phase D for one more merge pass before Phase F.
+
+### Phase F — Cross-review dedup (per-entity, prior-round captain skips)
+
+Worker reads prior-round captain-skipped fingerprints:
+
+```bash
+SKIPPED_FPS=$(bash plugins/ship-flow/lib/review-log.sh read-suppressed <entity-folder>)
+```
+
+For each current finding:
+- If fingerprint ∈ `SKIPPED_FPS` AND the finding's file path is NOT in this round's changed-files set → **suppress** (captain already decided in a prior round).
+- Otherwise → keep.
+
+Per-entity scope (not cross-entity). Each ship-flow entity owns its own `review-log.jsonl`.
+
+### Phase G — Verdict routing (FO autonomous, NO gate)
+
+**Captain decision 2026-05-12**: verify is NO LONGER GATED. FO classifies each surviving finding autonomously and routes per the table. Captain only sees consolidated `verify.md` at ship stage UNLESS the CRITICAL+high-confidence escape (row 3) triggers.
+
+| Class | Severity | Confidence | FO action | Audit trail |
+|---|---|---|---|---|
+| AUTO-FIX | any | any | Bounce to execute via `feedback-to: execute`; write `## Bounce Tasks` in verify.md | verify.md + execute.md round-N fixes section |
+| ASK | INFORMATIONAL | any | Emit via `ship-flow:add-todos` skill (plugin-internal); record reasoning in verify.md | add-todos entry + verify.md `→ deferred to add-todos` annotation |
+| ASK | CRITICAL | ≥ 8 | **Escalate captain**: send chat alert, write `## ⚠️ Captain Attention` section in verify.md, **block ship until captain responds** (fix / accept-as-is / escalate-further) | chat + verify.md + captain response recorded inline |
+| ASK | CRITICAL | < 8 | Emit via `ship-flow:add-todos` + write `## High-Confidence-Pending` in verify.md | add-todos entry + verify.md section |
+
+**FO classification heuristic** (worker decision logic):
+- AUTO-FIX class: mechanical/contained fixes the executer can solve from finding text alone (missing null guard, missing test, missing migration column, missing rate-limit decorator on a route the executer already touched).
+- ASK class: judgment-required findings (whether to add the rate-limit at all, whether the test coverage gap is acceptable for this milestone, contract change that needs design re-confirmation).
+
+**FO reasoning recorded per finding** in `verify.md → ### Review Findings`:
+
+```
+[file:line] severity:CRITICAL confidence:9 specialist:security
+  Finding: {description}
+  Class: AUTO-FIX | ASK
+  FO classification: {rule that triggered}
+  Reasoning: {1-line why}
+  Status: BOUNCED | DEFERRED | AWAITING CAPTAIN
+```
+
+**Loop behavior**:
+- If AUTO-FIX class exists → execute round N+1 runs BEFORE next Phase F dedup (cap: 2 bounce rounds per entity, round 3 → PROMPT_CAPTAIN).
+- If only ASK class exists → FO proceeds to ship stage with add-todos entries surfaced (no captain block).
+- If CRITICAL+≥8 escape triggered → FO halts, waits for captain response. Captain options: "fix it" (becomes AUTO-FIX bounce next round) / "accept as risk" (records reasoning in verify.md and proceeds) / "deeper investigation" (FO halts indefinitely, captain escalates manually).
+
+**TODO emission**: routed through `ship-flow:add-todos` skill (plugin-internal). Storage / format / promotion is the skill's responsibility, not ship-verify's. ship-verify only emits findings via the skill's interface. No repo-level `TODOS.md` assumption.
+
+### Phase H — Persist (review-log.sh append)
+
+Worker writes round summary via:
+
+```bash
+bash plugins/ship-flow/lib/review-log.sh append <entity-folder> '<json>'
+```
+
+JSON payload:
+
+```json
+{
+  "timestamp": "<ISO8601>",
+  "round": N,
+  "panel_coverage": "full|single-model|minimal",
+  "cross_model": true|false,
+  "quality_score": SCORE,
+  "specialists": { "testing": {...}, "security": {...}, ... },
+  "findings": [
+    {"fingerprint": "...", "severity": "...", "action": "auto-fix|ask|skipped|fixed"}
+  ],
+  "commit": "<short SHA>"
+}
+```
+
+Captain's skip decisions on ASK findings are recorded with `action: "skipped"` for Phase F cross-review dedup in future bounce rounds.
+
+### Codex Fallback Ladder
+
+The Codex tier detected at Phase A determines Phase C composition. The tier does NOT change Phase G gate logic — findings are findings — but it tells the captain how complete the review was via `## Panel Coverage` header (see Step 6).
+
+| Tier | Codex available | Claude subagents available | Panel composition |
+|---|---|---|---|
+| **A. Full** | ✅ | ✅ | All applicable specialists (capped) + Claude adversarial + Codex adversarial (always) + Codex structured review (DIFF≥200) |
+| **B. Single-model** | ❌ or auth failed | ✅ | All applicable specialists (capped) + Claude adversarial. **NO Codex passes.** Tag `cross_model: false`. |
+| **C. Minimal** | ❌ | ❌ | Critical-pass checklist (`lib/review-checklists/critical-pass.md`) run inline by worker. No subagent dispatch. Tag `panel_coverage: minimal`. Tag `single_eye: true`. |
+
+Tier B/C panels still produce a verify.md verdict; captain reads `## Panel Coverage` header at ship stage to decide whether to invoke `/codex review` manually before approving.
+
+### Citation spot-check (preserved from prior matrix)
+
+Spot-check specialist citations — **100% of cited file:line refs, not a sample** (MEMORY #078 precedent):
+- Read exact file at cited line ±2 lines.
+- Content matches → keep. Line shifted but content within ±5 → keep with updated line. Content absent → DROP + log `[D2-candidate] {specialist} hallucinated at {file}:{line}` in `### Knowledge Captures`.
+- Single specialist > 30% hallucination → discard ALL findings from that specialist for this round; log as untrusted for this diff class.
 
 ---
 
 ## Step 3.5 — Designer ui-verify (conditional)
+
+**Scope note (post-overhaul 2026-05-12)**: Step 3.5 / 3.6 / 3.6.1 / 3.6.5 / 3.6.6 / 3.7 cover **UI parity, visual regression, captain UAT, and domain-intent** — orthogonal to the Step 3 code-quality multi-specialist panel. Captain UAT (Step 3.6.6) remains captain-interactive for UI work; only the Phase G code-quality verdict is FO-autonomous. UI / UAT findings continue to route via their own routers (Step 3.6.5, Step 3.6.6) and merge into `### Review Findings` alongside Phase D output.
 
 **Trigger**: entity body contains `## Design Output` OR entity folder contains `design.md`.
 
@@ -600,12 +745,48 @@ Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before�
 **Atomic write** via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify --entity=<id>-<slug>`. Writer handles atomic commit with explicit pathspec. No `-a`/`-A` (MEMORY #14/#25/#37).
 
 **Section tagging (mandatory)** — every H2/H3 wrapped in paired `<!-- section:tag -->` ... `<!-- /section:tag -->`. Tag list + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.verify`. Required subsections:
+- `## Panel Coverage` — **mandatory header at top of verify.md** (immediately after frontmatter); see template below.
 - `### Quality Gate` — per-surface scoping decisions + check results + pre-existing attributions
-- `### Review Findings` — pre-scan + classified haiku table (file:line, severity, source, description)
+- `### Review Findings` — pre-scan + classified specialist findings (file:line, severity, confidence, specialist, FO class, route, status) + sub-sections `#### TDD Evidence Audit`, `#### Design Parity`, `#### Mechanical UI Parity`, `#### Whole-page Visual Parity` as triggered
 - `### Knowledge Captures` — `[D1]` / `[D2-candidate]` / `[inlined]` tags
 - `### Runtime Verification` — Step 4.0 preflight + per-DC runtime probes (template below). **Mandatory** if entity has any `api`/`ui`/`e2e`-type DC.
 - `### UAT` — mode line + results table with `Verify` column. Per-DC entry MUST be `DC-X PASS (runtime: <command> → <result excerpt>)`; legacy `conditional (artifact-only)` / `API offline` shorthand is rejected.
+- `## Bounce Tasks` — present only when Phase G AUTO-FIX class non-empty; lists fixes routed back to executer round N+1.
+- `## ⚠️ Captain Attention` — present only when Phase G CRITICAL+confidence≥8 escape triggered; halts ship until captain responds.
+- `## High-Confidence-Pending` — present only when Phase G ASK CRITICAL+confidence<8 entries exist.
 - `### Verdict` — `status:` (grep gate — `passed` | `failed` | `blocked`), `stage_cost:`, `claim_records: required VERIFIED=<n> NOT VERIFIED=<n> INCONCLUSIVE=<n>; advisory VERIFIED=<n> NOT VERIFIED=<n> INCONCLUSIVE=<n>`, `auto_fixes:`, `started_at:` / `completed_at:` / `duration_minutes:`
+- `## Deferred to TODO` — **mandatory footer at tail of verify.md** (after Verdict); see template below. N=0 case must still print the section with explicit zero count.
+
+**`## Panel Coverage` header template** (mandatory, top of verify.md, immediately after frontmatter):
+
+```markdown
+## Panel Coverage
+- Tier: A (full cross-model) | B (single-model, Codex unavailable) | C (minimal)
+- Specialists run: testing ✓, maintainability ✓, security ✓ (NEVER_GATE), performance ✓, api-contract ✓, design ✓
+- Adversarial: Claude ✓, Codex ✓|✗ (<reason if ✗>)
+- Structured Codex review: ran (DIFF <N> ≥ 200) | not applicable (DIFF <N> < 200) | skipped (Tier B/C)
+- PR Quality Score: <score>/10
+- Cross-model: YES | NO — captain may want manual /codex review pass before ship
+```
+
+Informational; never blocks. Captain reads at ship stage.
+
+**`## Deferred to TODO` footer template** (mandatory, tail of verify.md):
+
+```markdown
+## Deferred to TODO
+
+This round emitted <N> findings to `ship-flow:add-todos`:
+- <M> critical+confidence<8 findings (review priority — surface before next ship cycle)
+- <K> informational findings (lower priority)
+
+Review the deferred queue:
+  `/ship-flow:add-todos list` (or whatever surface the skill exposes)
+
+Findings escalated to captain (CRITICAL+confidence≥8): <J> entries; see `## ⚠️ Captain Attention` above.
+```
+
+N=0 case: print "Deferred to TODO: 0 findings this round" — absence explicit. Captain can confirm closure visually.
 
 Before emitting final status, count required and advisory claim records by verdict. Apply the claim-record dominance rules first, then existing quality/review/UAT gate rules. `status: passed` is invalid when a required claim record is missing, `NOT VERIFIED`, or unresolved `INCONCLUSIVE`.
 
@@ -666,6 +847,8 @@ Verdict: **PROCEED** → TaskUpdate verify=completed, FO advances. **VETO** → 
 
 `--fast` captain mode skips this gate; captain takes responsibility for the bypass.
 
+**Note on Phase G vs cross-review gate**: the Phase G FO-autonomous routing (Step 3) governs **code-quality findings** from the multi-specialist panel — captain only sees those at ship stage UNLESS the CRITICAL+confidence≥8 escape triggers. The cross-review gate above is the older Principle 6 Rule C process-level adjudication on the verify artifact itself (does the verdict align with evidence? is the gate scope correct?). They run independently and serve different concerns; do not collapse them.
+
 ### Step 6.1 — Advance entity status (frontmatter wiring)
 
 After stage artifact lands, advance sibling `index.md` frontmatter atomically:
@@ -689,16 +872,19 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - **Runtime preflight (Step 4.0) MUST run before any DC re-run.** Dev server unavailable → `status: blocked`, PROMPT_CAPTAIN. NEVER advance with `conditional pass`, `API offline`, `artifact-only`, or `visual verification skipped`. Compile-only verification (artifact + type-check + unit tests) is insufficient — gate requires `e2e-pipeline:e2e-test` (or `npx playwright test …`) actually executes against live server. Every NEW api-type DC requires ≥1 curl probe against the live contract surface; sampling 2-of-N cannot substitute. (carlove SEC-10/15 Pilot Wave 1 retro, 2026-04-26.)
 - Quality gate is scoped to touched surfaces (MEMORY #10); full-project noise ≠ failure.
 - Per-error attribution: pattern-in-other-files does NOT excuse execute-introduced line (MEMORY #078).
-- Haiku spot-check = 100% of citations, not sample (MEMORY #078 precedent).
-- Default haiku pair for source-files; ZERO haiku for non-source-only diffs (Principle 3).
-- UAT spot-check default; full re-run is fallback, not default.
-- Auto-fix NEVER on BLOCKING/WARNING; never on logic; ≤5 LOC mechanical only.
+- Citation spot-check = 100% of citations from specialist findings, not sample (MEMORY #078 precedent).
+- **Multi-specialist panel (Step 3 Phase A-H)** is the baseline for source diffs ≥ 50 LOC. Always-on specialists: `testing`, `maintainability`, `security` (NEVER_GATE). Conditional: `performance`, `data-migration` (NEVER_GATE), `api-contract`, `design`. Dispatch cap: 5 NEW specialists + 1 Claude adversarial + 1 Codex adversarial per round.
+- **Phase G FO-autonomous routing** (no captain gate at verify): AUTO-FIX → bounce to execute; ASK INFORMATIONAL → add-todos; ASK CRITICAL ≥8 → **block + escalate captain**; ASK CRITICAL <8 → add-todos + `## High-Confidence-Pending`. Captain only sees verify.md at ship stage UNLESS CRITICAL≥8 escape triggers.
+- **Codex Tier** (A/B/C) detected at Phase A; never blocks verdict, but `## Panel Coverage` header MUST surface tier so captain knows cross-model coverage status.
+- **`## Panel Coverage` header** (top of verify.md) and **`## Deferred to TODO` footer** (tail) both MANDATORY; N=0 footer still prints "0 findings this round".
+- UAT spot-check default; full re-run is fallback, not default. Captain UAT (Step 3.6.6) remains captain-interactive for UI work.
+- Auto-fix inline (Step 5) NEVER on BLOCKING/WARNING; never on logic; ≤5 LOC mechanical only. (Distinct from Phase G AUTO-FIX bounce, which routes to executer for next round.)
 - `verify.md` must exist with `### Verdict → status:` before exit — even on blocked pre-check.
 - Pipeline invocation inherits `/ship` team; standalone may CreateTeam. Fresh-subagent only for Rule A exceptions.
-- Cross-review mandatory except `--fast`; VETO feedback capped at 2 rounds per stage.
+- Cross-review mandatory except `--fast`; VETO feedback capped at 2 rounds per stage. Phase G AUTO-FIX bounce also capped at 2 rounds; round 3 → PROMPT_CAPTAIN.
 - Explicit pathspec on every commit (MEMORY #14/#25/#37). No `-a`/`-A`.
 - Parallel-session diff: scope review to `files_modified` when `git log <execute_base>..HEAD --oneline | grep -v <this-slug>` non-empty.
-- Feedback-to-execute capped at 2 rounds per gate (quality / review-BLOCKING / UAT); round 3 → PROMPT_CAPTAIN. Infra-fail (missing binary / server down) auto-routes; assertion-fail requires specific evidence.
+- Hermetic: panel logic depends only on `plugins/ship-flow/lib/*`. NEVER reach into `~/.claude/skills/gstack/*` paths.
 
 <!-- section:hand_off_to_review -->
 ## Step 6 (Hand-off): Emit Hand-off to Review + Read Incoming Hand-off
@@ -720,7 +906,10 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - Per-stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify` (landed commit `acd73545`).
 - Section/map helpers: `plugins/ship-flow/lib/extract-section.sh`, `extract-map.sh`, `patch-map.sh`.
 - Runtime detect: `ship-flow:ship-runtime-detect`.
-- Layer A — haiku reviewers: `pr-review-toolkit:code-reviewer`, `pr-review-toolkit:silent-failure-hunter`, `trailofbits:*`, `pr-review-toolkit:{pr-test-analyzer,type-design-analyzer,comment-analyzer,code-simplifier}`.
+- Multi-specialist panel libs (Step 3 Phase A-H): `plugins/ship-flow/lib/review-scope.sh`, `lib/review-merge.sh`, `lib/review-log.sh`, `lib/review-checklists/specialists/*.md`, `lib/review-checklists/critical-pass.md`, `lib/review-checklists/design-checklist.md`.
+- Domain-intent verifier (coexisting with new specialists): `lib/registry-resolve.sh` + `registry/defaults.yaml` — drives `intent-match-verifier` dispatch via `domain-registry` (Step 3.7).
+- Add-todos surface (Phase G ASK class emission): `ship-flow:add-todos` skill.
+- Layer A — legacy haiku reviewers (optional, supplemental — NOT the panel baseline post-overhaul): `pr-review-toolkit:code-reviewer`, `pr-review-toolkit:silent-failure-hunter`, `trailofbits:*`, `pr-review-toolkit:{pr-test-analyzer,type-design-analyzer,comment-analyzer,code-simplifier}`.
 - Layer A — agent-browser: `e2e-pipeline:e2e-test`, `e2e-pipeline:e2e-walkthrough`, `ship-flow:ui-verify`.
 - Layer A — runtime preflight: project's documented dev-server boot helper (conventionally `Skill: "worktree-dev-server"` — project-level skill in adopting repos; not a ship-flow plugin skill). Required by Step 4.0.
 - Layer A — inline review: `superpowers:verification-before-completion` (compatible mental model).
