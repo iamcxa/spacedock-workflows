@@ -456,6 +456,86 @@ mappings in stage SKILL.md prose are forbidden.
 
 ---
 
+### Principle 12: Hermetic Dependency Policy
+
+**Rule**: ship-flow stage SKILLs and `lib/` scripts MUST NOT reference any runtime path under `~/.claude/skills/gstack/`. The plugin owns `lib/review-checklists/` (snapshotted from GStack `/review`) and `lib/design-methodology/` (snapshotted from GStack `/design-*`) as self-contained content. GStack content sync is **manual** — captain reviews the diff, updates `lib/` deliberately, and bumps the plugin version. No daemon, no eager file fetch, no on-PATH binary lookup.
+
+Allowed exception: `codex` CLI on PATH (optional Codex adversarial reviewer, gracefully degraded — never load-bearing for verdict). If `codex` is absent, ship-verify Codex Tier drops to "absent" and the pipeline proceeds.
+
+**Forbidden runtime patterns** (grep-checkable):
+
+- `~/.claude/skills/gstack/` substring inside stage SKILLs (`plugins/ship-flow/skills/*/SKILL.md`) or `lib/*.sh` — runtime invocation of GStack content
+- `$D` envvar (GStack design binary) referenced in stage SKILLs / lib shell — drags GStack daemon into plugin runtime
+- `$B` envvar (GStack browse daemon) referenced in stage SKILLs / lib shell — same
+- `gstack-review-log`, `gstack-learnings-log`, `gstack-specialist-stats`, `gstack-taste-profile.json` references in stage SKILLs / lib shell — those are GStack-owned persistence layers; ship-flow has its own (`lib/review-log.sh`, per-entity ledger files)
+
+Documentation references in `*.md` files outside SKILL.md (e.g., `lib/review-checklists/INDEX.md`, `lib/design-methodology/INDEX.md`, README, INVARIANTS itself) are **allowed** — these surfaces explicitly call out the forbidden patterns so adopters and future maintainers understand the boundary. Stage SKILL.md prose may mention the forbidden patterns when accompanied by clear policy negation tokens (`DO NOT`, `MUST NOT`, `NEVER`, `forbidden`, `reference-only`); the check filters those out.
+
+**Failure modes**:
+
+1. Stage SKILL.md adds a `bash ~/.claude/skills/gstack/review/...` invocation — runtime coupling, breaks the moment GStack relocates or renames its content tree.
+2. `lib/*.sh` sources a GStack helper at `~/.claude/skills/gstack/*.sh` — same coupling, plus subagent dispatch path collapses on hosts without GStack installed.
+3. `$D` / `$B` envvar referenced in design-officer mod or ship-design SKILL — drags the GStack daemon into the plugin's runtime expectations; breaks under hermetic deployment (Vercel CI, fresh laptop without GStack).
+4. ship-flow internal log/profile file pointed at GStack-owned filenames (`gstack-review-log` etc.) — adopter projects without GStack silently lose the audit trail.
+
+**Grep check** (Tier A automated, WARN-level v1): `check-invariants.sh --check hermetic-no-gstack` greps `plugins/ship-flow/skills/*/SKILL.md` and `plugins/ship-flow/lib/*.sh` for the forbidden patterns and emits a WARN per hit. Lines containing policy-negation tokens (`DO NOT`, `MUST NOT`, `NEVER`, `forbidden`, `reference-only`) are filtered out so the in-prose warnings on the policy itself do not self-trip the check. Future hardening: tighten to FAIL once SKILL.md documentation references settle (TODO: re-evaluate 2026-06-01).
+
+**Source**: Phase 3A integration captain decision 2026-05-12, recorded in README "Hermetic Dependency Policy" section. Codifies the content-snapshot + manual-sync contract introduced when `lib/review-checklists/` and `lib/design-methodology/` were copied out of GStack.
+
+---
+
+### Principle 13: FO Receipt Persistence (ship-verify autonomous gate)
+
+**Rule**: When ship-verify Step 6 cross-review verdict is **PROCEED**, Step 6.0 MUST emit a valid FO receipt via `plugins/ship-flow/lib/write-fo-receipt.sh` to `<entity-folder>/fo-receipts.md` BEFORE Step 6.1 advances the entity frontmatter status. The receipt is the auditable record of self-approved stage transition — without it, the autonomous PROCEED is opaque and unreviewable.
+
+Receipt schema requires **12 top-level keys** (validated at `write-fo-receipt.sh:validate_receipt`, exits 4-6 on schema violation):
+
+`receipt_id`, `created_at`, `actor`, `transition`, `decision`, `verdict`, `rule_source`, `evidence`, `preconditions`, `blocker_scan`, `open_decisions`, `next_action`.
+
+`decision` ∈ `{self-approved, prompt-captain, blocked}` (validator exit 4). `self-approved` additionally requires `preconditions[*].status == pass`, `blocker_scan` values safe, `open_decisions: []` (validator exits 5-6 fail-closed).
+
+**Phase G verdict → receipt `decision` mapping** (canonical):
+
+| Phase G verdict | Receipt `decision` |
+|---|---|
+| PROCEED | `self-approved` |
+| VETO | `blocked` |
+| PROMPT_CAPTAIN | `prompt-captain` |
+
+**Failure modes**:
+
+1. Step 6 verdict PROCEED but no Step 6.0 receipt emission — silent autonomous advance without audit trail (the very failure mode this principle prevents).
+2. Receipt schema partial (e.g., missing `preconditions[*].status == pass` while `decision: self-approved`) — `write-fo-receipt.sh` exits 5 fail-closed, but if Step 6.0 swallows the exit code the gate bypasses anyway. Stage SKILL.md MUST propagate non-zero exit upward.
+3. Phase G writes mismatched decision (e.g., VETO verdict but receipt `decision: self-approved`) — integrity violation; auditor cannot trust the ledger.
+4. `fo-receipts.md` mtime predates `verify.md` mtime — receipt written before verdict finalized, indicating receipt was pre-staged before evidence existed.
+
+**Grep check** (Tier A automated): for every `<entity>/verify.md` whose `### Verdict` block contains `status: passed`, `<entity>/fo-receipts.md` MUST exist AND its mtime MUST be >= verify.md mtime AND the latest ledger entry MUST have `decision: self-approved`. Grace filter: skip entities whose entity index frontmatter `started:` field predates **2026-05-13** (pre-Phase 2B-5 + Phase 3A baseline date); entities without a `started:` field are also grandfathered.
+
+**Source**: Phase 2B-5 + Stage A merge integration (commit `ae78d196`); ship-verify SKILL.md Step 6.0 codifies the writer invocation; this Principle elevates the persistence guarantee to plugin-level so adopter mods cannot accidentally bypass it.
+
+---
+
+### Principle 14: Multi-Specialist Panel Output Contract
+
+**Rule**: Every ship-verify-generated `verify.md` MUST contain TWO mandatory H2 sections:
+
+1. **`## Panel Coverage`** — placed after `### Verdict`, before `### Runtime Verification` (or equivalent). Lists specialists dispatched per scope detection with PASS/WARN/FAIL counts, Codex tier (A/B/C/absent), cross-model status. Allows captain to audit which specialists actually ran for a given diff scope without reading the full panel logs.
+2. **`## Deferred to TODO`** — placed as the FINAL H2 in verify.md (tail). Lists findings deferred to `ship-flow:add-todos` per Phase G routing. N=0 case is **explicit** — emit `0 findings this round.` rather than omitting the section entirely. No silent drop of low-priority findings.
+
+**Dispatch cap** (informational): Phase B (parallel specialist dispatch) MAY launch at most **5 NEW specialists + 1 Claude adversarial + 1 Codex adversarial** per round (5+1+1 budget). The cap is enforced at SKILL.md Step 3 Phase B level — this Principle documents it so adopter mods do not accidentally widen the budget without an explicit captain review.
+
+**Failure modes**:
+
+1. `verify.md` missing `## Panel Coverage` H2 — opacity (captain cannot audit which specialists ran, cannot diagnose scope_detection misfit).
+2. `verify.md` missing `## Deferred to TODO` H2 — silent loss of low-priority findings; no audit trail for next ship cycle. NIT findings deferred without a tail-section breadcrumb effectively disappear.
+3. Phase B dispatches > 5 NEW specialists in one round — cost overrun + redundant coverage. Indicates `scope_detection` keyword list is too permissive or specialist routing logic is misfiring; symptom worth surfacing.
+
+**Grep check** (Tier A automated): `grep -c '^## Panel Coverage$' <entity>/verify.md` → exactly 1. `grep -c '^## Deferred to TODO$' <entity>/verify.md` → exactly 1. Grace filter: skip entities whose entity index frontmatter `started:` field predates **2026-05-13**; entities without a `started:` field are also grandfathered. Skip when `verify.md` has `status: blocked` or `status: failed` (panel coverage only required on completed verify rounds).
+
+**Source**: Phase 2B-5 ship-verify SKILL.md multi-specialist panel design (Step 3 Phase A-H, lines 967, 970 in current SKILL.md Invariants section). This Principle elevates the in-SKILL invariant to plugin-level so the contract survives stage-SKILL refactor cycles.
+
+---
+
 ## Related Files
 
 - `plugins/ship-flow/bin/check-invariants.sh` — CI grep implementation

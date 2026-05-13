@@ -978,6 +978,195 @@ check_principle_numbering() {
   return 0
 }
 
+# ---- C10-C13: 2026-05-13 Phase 1/2B/3A merge enforcement ----
+# Elevates Hermetic Dependency Policy + Multi-Specialist Panel + FO Receipt
+# contracts from stage-SKILL-internal invariants to plugin-level CI checks.
+
+# Helper: read `started:` from entity index.md (folder layout) or flat <slug>.md.
+# Echoes the started value (cut to YYYY-MM-DD) or empty when no field is present.
+# Used by C11/C12/C13 grace filter.
+_entity_started_date() {
+  local entity_dir="$1"
+  local idx line
+  idx=$(_entity_index_for_dir "$entity_dir")
+  [ -n "$idx" ] && [ -f "$idx" ] || { echo ""; return 0; }
+  # grep returning 1 (no match) is normal — pre-2026-05-13 entities often lack
+  # started:. `|| true` keeps set -euo pipefail from aborting the caller.
+  line=$({ grep -m1 '^started:' "$idx" 2>/dev/null || true; })
+  [ -z "$line" ] && { echo ""; return 0; }
+  echo "$line" | sed -E 's/^started:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/' | cut -c1-10
+}
+
+check_hermetic_no_gstack() {
+  # C10 — Principle 12: stage SKILLs + lib/*.sh must not reference
+  # `~/.claude/skills/gstack/`, `$D`, `$B`, or gstack-owned persistence filenames
+  # as RUNTIME paths. Lines containing policy-negation tokens (DO NOT, MUST NOT,
+  # NEVER, forbidden, reference-only) are filtered out — those are prose that
+  # documents the forbidden boundary, not runtime invocation.
+  #
+  # WARN-level v1 (additive, non-breaking). Future hardening: tighten to FAIL
+  # once SKILL.md documentation references settle (TODO: re-evaluate 2026-06-01).
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  local lib_dir="${ROOT}/plugins/ship-flow/lib"
+  [ -d "$skills_dir" ] || { echo "OK C10 hermetic-no-gstack (skills dir absent — skip)"; return 0; }
+
+  # Forbidden patterns:
+  #   1. ~/.claude/skills/gstack/ literal substring
+  #   2. $D / $B envvar (followed by a non-identifier char to avoid $DEBUG, $BAR etc.)
+  #   3. gstack-{review-log,learnings-log,specialist-stats,taste-profile}
+  # shellcheck disable=SC2088,SC2016  # Literal regex — tilde and $vars are intentional
+  local pattern='~/\.claude/skills/gstack/|\$D[^a-zA-Z_0-9]|\$B[^a-zA-Z_0-9]|gstack-(review-log|learnings-log|specialist-stats|taste-profile)'
+  # Lines that mention forbidden patterns AS POLICY (allowed).
+  local negation_tokens='DO NOT|MUST NOT|NEVER|forbidden|reference-only|do not'
+
+  local hits warn_count=0
+  # Scan stage SKILLs (*.md, prose-as-command surface).
+  local f
+  for f in "$skills_dir"/*/SKILL.md; do
+    [ -f "$f" ] || continue
+    hits=$(grep -nE "$pattern" "$f" 2>/dev/null || true)
+    [ -z "$hits" ] && continue
+    # Filter out policy-negation lines.
+    hits=$(echo "$hits" | grep -vE "$negation_tokens" || true)
+    [ -z "$hits" ] && continue
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      echo "WARN C10 hermetic-no-gstack: ${f#"$ROOT"/}:$line — Principle 12 forbidden GStack runtime reference. See plugins/ship-flow/INVARIANTS.md#principle-12" >&2
+      warn_count=$((warn_count + 1))
+    done <<< "$hits"
+  done
+  # Scan lib/*.sh (runtime shell, no documentation-allow exception).
+  if [ -d "$lib_dir" ]; then
+    for f in "$lib_dir"/*.sh; do
+      [ -f "$f" ] || continue
+      hits=$(grep -nE "$pattern" "$f" 2>/dev/null || true)
+      [ -z "$hits" ] && continue
+      hits=$(echo "$hits" | grep -vE "$negation_tokens" || true)
+      [ -z "$hits" ] && continue
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        echo "WARN C10 hermetic-no-gstack: ${f#"$ROOT"/}:$line — Principle 12 forbidden GStack runtime reference in lib shell. See plugins/ship-flow/INVARIANTS.md#principle-12" >&2
+        warn_count=$((warn_count + 1))
+      done <<< "$hits"
+    done
+  fi
+
+  if [ "$warn_count" = "0" ]; then
+    echo "OK C10 hermetic-no-gstack"
+  else
+    echo "OK C10 hermetic-no-gstack ($warn_count warnings — non-blocking in v1; future hardening tightens to FAIL)"
+  fi
+  return 0
+}
+
+check_panel_coverage_header() {
+  # C11 — Principle 14: every completed verify.md MUST contain exactly one
+  # `## Panel Coverage` H2 section (placed after Verdict). Grace filter skips
+  # entities whose started: predates 2026-05-13 or that lack a started: field
+  # (pre-Phase 2B-5 baseline). Blocked / failed verify rounds are also skipped —
+  # panel coverage is only required on completed verify rounds.
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || { echo "OK C11 panel-coverage-header (docs dir absent — skip)"; return 0; }
+  local fail=0 d verify entity started status_line
+  for d in "$docs_dir"/*/; do
+    verify="${d}verify.md"
+    [ -f "$verify" ] || continue
+    entity="$(basename "$d")"
+    # Grace filter: pre-2026-05-13 (or no started: field) → skip.
+    started="$(_entity_started_date "$d")"
+    if [ -z "$started" ] || [[ "$started" < "2026-05-13" ]]; then
+      continue
+    fi
+    # Skip blocked / failed verify rounds (panel coverage required only on completed rounds).
+    status_line=$(grep -m1 -E '^status:[[:space:]]*(blocked|failed)' "$verify" 2>/dev/null || true)
+    [ -n "$status_line" ] && continue
+    local n
+    n=$({ grep -cE '^## Panel Coverage$' "$verify" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${n:-0}" != "1" ]; then
+      echo "FAIL C11 panel-coverage-header: '$entity/verify.md' missing or duplicated ## Panel Coverage section (got $n, expected 1). See plugins/ship-flow/INVARIANTS.md#principle-14" >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C11 panel-coverage-header"
+  return "$fail"
+}
+
+check_deferred_to_todo_footer() {
+  # C12 — Principle 14: every completed verify.md MUST contain exactly one
+  # `## Deferred to TODO` H2 section (placed as final H2 in verify.md). N=0
+  # case still emits the section (explicit "0 findings this round."). Same
+  # grace filter + skip conditions as C11.
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || { echo "OK C12 deferred-to-todo-footer (docs dir absent — skip)"; return 0; }
+  local fail=0 d verify entity started status_line
+  for d in "$docs_dir"/*/; do
+    verify="${d}verify.md"
+    [ -f "$verify" ] || continue
+    entity="$(basename "$d")"
+    started="$(_entity_started_date "$d")"
+    if [ -z "$started" ] || [[ "$started" < "2026-05-13" ]]; then
+      continue
+    fi
+    status_line=$(grep -m1 -E '^status:[[:space:]]*(blocked|failed)' "$verify" 2>/dev/null || true)
+    [ -n "$status_line" ] && continue
+    local n
+    n=$({ grep -cE '^## Deferred to TODO$' "$verify" 2>/dev/null || true; } | tr -d ' ')
+    if [ "${n:-0}" != "1" ]; then
+      echo "FAIL C12 deferred-to-todo-footer: '$entity/verify.md' missing or duplicated ## Deferred to TODO section (got $n, expected 1). See plugins/ship-flow/INVARIANTS.md#principle-14" >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C12 deferred-to-todo-footer"
+  return "$fail"
+}
+
+check_fo_receipt_on_proceed() {
+  # C13 — Principle 13: every verify.md with status: passed MUST have a sibling
+  # fo-receipts.md whose mtime >= verify.md mtime AND whose latest ## ledger
+  # entry contains `decision: self-approved`. Grace filter skips pre-2026-05-13
+  # entities (pre-Step 6.0 era).
+  local docs_dir="${ROOT}/docs/ship-flow"
+  [ -d "$docs_dir" ] || { echo "OK C13 fo-receipt-on-proceed (docs dir absent — skip)"; return 0; }
+  local fail=0 d verify receipt entity started
+  for d in "$docs_dir"/*/; do
+    verify="${d}verify.md"
+    [ -f "$verify" ] || continue
+    entity="$(basename "$d")"
+    # Grace filter.
+    started="$(_entity_started_date "$d")"
+    if [ -z "$started" ] || [[ "$started" < "2026-05-13" ]]; then
+      continue
+    fi
+    # Only enforce when verify.md verdict is passed.
+    grep -qE '^status:[[:space:]]*passed' "$verify" 2>/dev/null || continue
+    receipt="${d}fo-receipts.md"
+    if [ ! -f "$receipt" ]; then
+      echo "FAIL C13 fo-receipt-on-proceed: '$entity' verify.md status passed but fo-receipts.md missing. See plugins/ship-flow/INVARIANTS.md#principle-13 + ship-verify/SKILL.md Step 6.0." >&2
+      fail=1
+      continue
+    fi
+    # mtime check: receipt must be at or after verify.md.
+    local v_mtime r_mtime
+    v_mtime=$(stat -f %m "$verify" 2>/dev/null || stat -c %Y "$verify" 2>/dev/null || echo 0)
+    r_mtime=$(stat -f %m "$receipt" 2>/dev/null || stat -c %Y "$receipt" 2>/dev/null || echo 0)
+    if [ "${r_mtime:-0}" -lt "${v_mtime:-0}" ]; then
+      echo "FAIL C13 fo-receipt-on-proceed: '$entity' fo-receipts.md mtime ($r_mtime) predates verify.md mtime ($v_mtime) — receipt staged before verdict finalized. See INVARIANTS.md#principle-13 failure mode 4." >&2
+      fail=1
+      continue
+    fi
+    # Latest ledger entry (last `^## ` heading) must contain `decision: self-approved`.
+    # ledger entries are appended as ## blocks; extract content after the last ## heading.
+    local latest_entry
+    latest_entry=$(awk '/^## / {buf=""; next} {buf=buf $0 ORS} END {printf "%s", buf}' "$receipt" 2>/dev/null || true)
+    if ! echo "$latest_entry" | grep -qE '^[[:space:]]*decision:[[:space:]]*self-approved'; then
+      echo "FAIL C13 fo-receipt-on-proceed: '$entity' latest fo-receipts.md ledger entry missing 'decision: self-approved' (verify status passed → Phase G PROCEED → receipt must be self-approved). See INVARIANTS.md#principle-13." >&2
+      fail=1
+    fi
+  done
+  [ "$fail" = "0" ] && echo "OK C13 fo-receipt-on-proceed"
+  return "$fail"
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -1011,6 +1200,10 @@ if [ -n "$SINGLE_CHECK" ]; then
     no-rubric-token) check_no_rubric_token; exit $? ;;
     context-manifest-emitted) check_context_manifest_emitted; exit $? ;;
     principle-numbering) check_principle_numbering; exit $? ;;
+    hermetic-no-gstack) check_hermetic_no_gstack; exit $? ;;
+    panel-coverage-header) check_panel_coverage_header; exit $? ;;
+    deferred-to-todo-footer) check_deferred_to_todo_footer; exit $? ;;
+    fo-receipt-on-proceed) check_fo_receipt_on_proceed; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -1062,5 +1255,11 @@ check_no_rubric_token || FAIL=1
 check_context_manifest_emitted || FAIL=1
 # C9: pitch-113.2 — INVARIANTS.md duplicate Principle-number detection (2026-04-29)
 check_principle_numbering || FAIL=1
+# C10-C13: Phase 1/2B/3A merge enforcement (2026-05-13) — Hermetic Dependency Policy,
+# Multi-Specialist Panel output contract, FO Receipt persistence
+check_hermetic_no_gstack || FAIL=1
+check_panel_coverage_header || FAIL=1
+check_deferred_to_todo_footer || FAIL=1
+check_fo_receipt_on_proceed || FAIL=1
 
 exit $FAIL
