@@ -65,6 +65,8 @@ Capture **execute base SHA** from first task's parent commit in `execute.md`. Do
 
 Use repeatable claim records for verdict-bearing evidence. Place each record under the subsection that owns the evidence being judged: `### Quality Gate`, `### Review Findings`, or `### UAT`. A required claim record is mandatory when accepting or rejecting a Done Criterion, acceptance criterion, captain UAT finding, blocking reviewer finding, runtime/API/UI/e2e spot-check, new contract smoke, or quality-gate result that determines the final verify verdict. Advisory format checks, repeated child rows covered by a named parent claim, and non-blocking notes may omit local records only when the omission is explicit.
 
+**Review-finding dispositions → claim records**: BLOCKING findings always generate a verdict-bearing required claim record (status: NOT VERIFIED, `route_to` set per severity); WARNING findings generate a claim record when they affect the verdict otherwise (e.g., escalate to NOT VERIFIED if multiple WARNINGs cluster on the same path family), and may remain as advisory notes without a local record when isolated and non-blocking. NITs never carry their own claim record (mechanical, auto-fix path or NIT-only summary).
+
 ```markdown
 #### Verification Claim: <short falsifiable claim>
 

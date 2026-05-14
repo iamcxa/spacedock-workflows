@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ship-flow-hook-version: 1.1.0
+# ship-flow-hook-version: 1.2.0
 # Ship-flow FO state-drift — SessionStart hook
 #
-# Two drift detectors, both advisory-only (never blocks session start):
+# Two drift detectors, both advisory-by-default (never blocks session start):
 #
 #   Rule A: entity at `status: ship` whose `pr: #N` is MERGED on GitHub
 #           (original rule, week 2026-04-20 observation — 3 instances)
@@ -15,15 +15,32 @@
 #           don't invoke the frontmatter helpers (see entity 099-ship-flow-
 #           stage-wiring). Rule B is the detection safety-net.
 #
+# Auto-fix (v1.2.0, D1 from strengthening-roadmap-2026-05.md):
+#
+#   Workflow README frontmatter MAY declare `auto_fix: off | execute`
+#   (default: `off`). When `execute`, this hook auto-runs the `done + archive`
+#   sequence for each Rule A entity that passes a safety re-probe (working
+#   tree clean + PR.state == MERGED still holds at exec time). Rule B is
+#   NEVER auto-fixed (status-update semantics nuanced; surfaces as WARN).
+#
+#   Safety guards (any fail → skip auto-fix, fall back to WARN):
+#     - working tree clean (uncommitted changes block all auto-fixes)
+#     - spacedock status binary discoverable in expected paths
+#     - per-entity PR state re-probe matches MERGED
+#
+#   Output reformats: ✅ Auto-fixed (N) / ⚠️ Auto-fix blocked (M reason) /
+#   🔴 Rule A pending (K, auto_fix off or blocked) / 🔴 Rule B (P).
+#
 # Also extended to scan folder entities (<slug>/index.md at depth 2), which
 # v1.0 missed entirely (maxdepth 1 -type f only caught flat .md files).
 #
 # Triggers on: SessionStart (matcher: "")
-# Action:      Advisory — injects additionalContext via hookSpecificOutput
+# Action:      Advisory by default; optional autonomous fix per workflow config
 # Exit:        Always 0
 # Timeout:     10s set by hooks.json; Rule A per-PR check capped at 2s;
 #              Rule B is local-fs-only (no network) so cheap regardless of
-#              entity count.
+#              entity count. Auto-fix loop adds 2s per entity (re-probe) +
+#              ~100ms per entity (status binary + git commit).
 
 set -uo pipefail
 
@@ -37,6 +54,29 @@ for candidate in docs/ship-flow .planning/ship-flow; do
   fi
 done
 [ -z "$workflow_dir" ] && exit 0
+
+# --- 1b. Read auto_fix config from workflow README frontmatter (D1) -------
+# Default: off (status quo for all adopters who don't opt in).
+# Values: off | execute (advise reserved for future; treat as off for v1.2.0).
+auto_fix=$(awk '/^---$/{c++; next} c==1 && /^auto_fix:/{print $2; exit}' \
+  "$workflow_dir/README.md" 2>/dev/null | tr -d '"' | tr -d "'")
+auto_fix="${auto_fix:-off}"
+
+# --- 1c. Safety probe: working tree clean? --------------------------------
+# Auto-fix path requires clean tree (atomic commits, no contamination).
+git_clean=1
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+  git_clean=0
+fi
+
+# --- 1d. Locate spacedock status binary (needed for auto-fix) -------------
+# Same discovery path as commission/bin/status — try plugin cache first.
+status_bin=""
+if [ "$auto_fix" = "execute" ]; then
+  for candidate in "$HOME"/.claude/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status; do
+    [ -x "$candidate" ] && status_bin="$candidate" && break
+  done
+fi
 
 # Stage order (for Rule B later-stage detection)
 # sharp → plan → execute → verify → review → ship → done
@@ -55,6 +95,10 @@ later_stages_for() {
 # --- 2. Prep accumulators -------------------------------------------------
 rule_a_lines=""
 rule_a_count=0
+# Per-Rule-A entity records for auto-fix loop. Newline-separated, pipe-
+# delimited fields: slug|pr_num|entity_file|stage_dir
+# stage_dir is empty for flat .md entities.
+rule_a_records=""
 rule_b_lines=""
 rule_b_count=0
 have_gh=0
@@ -87,6 +131,8 @@ check_entity() {
       if [ "$state" = "MERGED" ]; then
         rule_a_lines+="  - #${id:-?} \`$slug\` — PR #$pr_num MERGED, entity still at \`status: ship\`"$'\n'
         rule_a_count=$((rule_a_count + 1))
+        # Record for D1 auto-fix loop (consumed in section 4b below)
+        rule_a_records+="$slug|$pr_num|$entity_file|$stage_dir"$'\n'
       fi ;;
     esac
   fi
@@ -123,17 +169,130 @@ while IFS= read -r -d '' f; do
   check_entity "$f" "$(dirname "$f")"
 done < <(find "$workflow_dir" -mindepth 2 -maxdepth 2 -type f -name 'index.md' -print0 2>/dev/null)
 
-# --- 5. Emit structured advisory (only if anything drifted) --------------
-[ "$rule_a_count" -eq 0 ] && [ "$rule_b_count" -eq 0 ] && exit 0
+# --- 4b. Auto-fix execution (D1, Rule A only) ----------------------------
+# Pre-conditions for execute path:
+#   - workflow declares `auto_fix: execute` in README frontmatter
+#   - working tree clean (atomic commits, no parallel-session contamination)
+#   - status binary discoverable
+#   - at least one Rule A entity detected
+# Any pre-condition fails → all Rule A entities flow into "pending" path.
+# Per-entity re-probe (PR.state == MERGED) catches detect-time → exec-time race.
+auto_fixed_lines=""
+auto_fixed_count=0
+auto_fix_blocked_lines=""
+auto_fix_blocked_count=0
+auto_fix_reason=""
 
-msg="[ship-flow] FO state-drift detected:"
+if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
+  if [ "$git_clean" = "0" ]; then
+    auto_fix_reason="working tree has uncommitted changes"
+  elif [ -z "$status_bin" ]; then
+    auto_fix_reason="spacedock status binary not found in expected paths"
+  fi
+
+  if [ -z "$auto_fix_reason" ]; then
+    # All pre-conditions met. Iterate Rule A entities.
+    while IFS='|' read -r slug pr_num entity_file stage_dir; do
+      [ -z "$slug" ] && continue
+
+      # Per-entity re-probe (paranoia: detect → exec gap; PR may have unmerged)
+      state=$(timeout 2 gh pr view "$pr_num" --json state -q .state 2>/dev/null || true)
+      if [ "$state" != "MERGED" ]; then
+        auto_fix_blocked_lines+="  - \`$slug\` — re-probe says state=${state:-unknown}, not MERGED (race?); manual fix required"$'\n'
+        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+        continue
+      fi
+
+      ts=$(date -u +%FT%TZ)
+
+      # status --set (advance to done + verdict + completed)
+      if ! python3 "$status_bin" --workflow-dir "$workflow_dir" \
+           --set "$slug" status=done verdict=PASSED completed="$ts" \
+           >/dev/null 2>&1; then
+        auto_fix_blocked_lines+="  - \`$slug\` — status --set failed"$'\n'
+        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+        continue
+      fi
+
+      # status --archive (move to _archive/)
+      if ! python3 "$status_bin" --workflow-dir "$workflow_dir" \
+           --archive "$slug" >/dev/null 2>&1; then
+        auto_fix_blocked_lines+="  - \`$slug\` — status --archive failed after set"$'\n'
+        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+        continue
+      fi
+
+      # Determine src + dst pathspec for explicit-pathspec commit
+      if [ -n "$stage_dir" ]; then
+        src="$stage_dir"
+        dst="$workflow_dir/_archive/$slug"
+      else
+        src="$entity_file"
+        dst="$workflow_dir/_archive/$(basename "$entity_file")"
+      fi
+
+      if git add -- "$src" "$dst" 2>/dev/null && \
+         git commit -m "done + archive: $slug (PR #$pr_num merged, auto-fix from SessionStart hook)" \
+             -- "$src" "$dst" >/dev/null 2>&1; then
+        auto_fixed_lines+="  - \`$slug\` — PR #$pr_num → status=done verdict=PASSED + archived + committed"$'\n'
+        auto_fixed_count=$((auto_fixed_count + 1))
+      else
+        auto_fix_blocked_lines+="  - \`$slug\` — commit failed (status updated, archive moved, but \`git commit\` errored)"$'\n'
+        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+      fi
+    done <<< "$rule_a_records"
+
+    # Subtract auto-fixed from rule_a_lines for clean "pending" reporting
+    if [ "$auto_fixed_count" -gt 0 ]; then
+      # Rebuild rule_a_lines from records that did NOT auto-fix successfully
+      # Simpler approach: zero out rule_a_lines + count, since blocked entities
+      # are already tracked in auto_fix_blocked_lines.
+      rule_a_lines=""
+      rule_a_count=0
+    fi
+  else
+    # Pre-condition failed — surface single blanket reason, no per-entity loop
+    auto_fix_blocked_lines+="  - auto-fix skipped for all $rule_a_count Rule A entities ($auto_fix_reason)"$'\n'
+    auto_fix_blocked_count=$rule_a_count
+    rule_a_lines=""
+    rule_a_count=0
+  fi
+fi
+
+# --- 5. Emit structured advisory (only if anything drifted) --------------
+[ "$rule_a_count" -eq 0 ] && [ "$rule_b_count" -eq 0 ] && \
+  [ "$auto_fixed_count" -eq 0 ] && [ "$auto_fix_blocked_count" -eq 0 ] && exit 0
+
+msg="[ship-flow] FO state-drift report:"
+
+# Auto-fixed section (D1) — show successes first
+if [ "$auto_fixed_count" -gt 0 ]; then
+  plural=$([ "$auto_fixed_count" -eq 1 ] && echo "entity" || echo "entities")
+  msg+="
+
+✅ **Auto-fixed** ($auto_fixed_count $plural, via \`auto_fix: execute\` workflow config):
+$auto_fixed_lines
+No action needed — entities are now at \`status: done\` and moved to \`_archive/\`. Each had its own atomic commit on this branch."
+fi
+
+# Auto-fix blocked section (D1) — Rule A entities where execute path tripped a guard
+if [ "$auto_fix_blocked_count" -gt 0 ]; then
+  plural=$([ "$auto_fix_blocked_count" -eq 1 ] && echo "entity" || echo "entities")
+  msg+="
+
+⚠️ **Auto-fix blocked** ($auto_fix_blocked_count $plural — execute mode set but pre-condition or re-probe failed):
+$auto_fix_blocked_lines
+Resolve the blocking reason (commit/stash uncommitted work; verify status binary; re-check PR state) and re-trigger SessionStart, or run the manual \`done + archive\` sequence from \`plugins/ship-flow/skills/ship-execute/SKILL.md\` for each entity."
+fi
+
+# Rule A pending section — auto_fix off OR all entities blocked above
 if [ "$rule_a_count" -gt 0 ]; then
   plural=$([ "$rule_a_count" -eq 1 ] && echo "entity" || echo "entities")
   msg+="
 
-**Rule A** — $rule_a_count $plural with merged PR still at \`status: ship\`:
+🔴 **Rule A** — $rule_a_count $plural with merged PR still at \`status: ship\`:
 $rule_a_lines
-Before new execute work, run the \`done + archive\` sequence from \`plugins/ship-flow/skills/ship-execute/SKILL.md\` for each."
+Before new execute work, run the \`done + archive\` sequence from \`plugins/ship-flow/skills/ship-execute/SKILL.md\` for each. To enable autonomous fix in future sessions, set \`auto_fix: execute\` in workflow README frontmatter (D1, see \`plugins/ship-flow/_plans/strengthening-roadmap-2026-05.md\`)."
 fi
 if [ "$rule_b_count" -gt 0 ]; then
   plural=$([ "$rule_b_count" -eq 1 ] && echo "entity" || echo "entities")

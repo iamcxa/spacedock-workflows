@@ -989,7 +989,10 @@ _entity_started_date() {
   local entity_dir="$1"
   local idx line
   idx=$(_entity_index_for_dir "$entity_dir")
-  [ -n "$idx" ] && [ -f "$idx" ] || { echo ""; return 0; }
+  if [ -z "$idx" ] || [ ! -f "$idx" ]; then
+    echo ""
+    return 0
+  fi
   # grep returning 1 (no match) is normal — pre-2026-05-13 entities often lack
   # started:. `|| true` keeps set -euo pipefail from aborting the caller.
   line=$({ grep -m1 '^started:' "$idx" 2>/dev/null || true; })
