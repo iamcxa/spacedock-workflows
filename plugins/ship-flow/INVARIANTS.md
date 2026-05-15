@@ -536,6 +536,28 @@ Receipt schema requires **12 top-level keys** (validated at `write-fo-receipt.sh
 
 ---
 
+### Principle 15: Entity Status Mutation via advance-stage Primitive
+
+**Rule**: Any commit that mutates an entity's `status:` YAML frontmatter field on `docs/<workflow>/<id>-<slug>/index.md` (folder layout) or `docs/<workflow>/<id>-<slug>.md` (flat) MUST go through `plugins/ship-flow/lib/advance-stage.sh` (or its sub-helpers invoked by the same call chain). Direct YAML edit + manual `git commit` is forbidden.
+
+The detection signature is the substring `": advance status to "` injected into the commit message by `advance-stage.sh` line 122 (`--commit-as="${COMMIT_MSG}: advance status to ${NEW_STATUS}"`). Commits with a status mutation but lacking this signature substring are flagged as bypass.
+
+**Mutation** is defined as a diff containing BOTH `+status:` AND `-status:` lines (a true status change). Pure additions (NEW entity index.md from sharp-claim where only `+status:` appears in the diff) are NOT mutations and are exempt.
+
+**Failure modes**:
+
+1. Direct YAML edit bypassing `advance-stage.sh` leaves `stage_outputs:` frontmatter blank. The next legitimate `advance-stage.sh` call's `render-stage-links` sub-step rebuilds the body table from `stage_outputs:` ONLY — silently nuking the body table rows. See MEMORY `advance-stage-destructive-on-legacy-bodies.md`. Evidence: pitch-106 commit `898d006c`.
+2. Cross-session race: two parallel sessions hand-editing different stages of the same entity index produce desynced frontmatter ↔ body table. `advance-stage.sh` serializes via `--if-hash` CAS; manual edits do not.
+3. Squash-merge intersession: if a feature branch contains bypass commits and is later squash-merged into main, the squash collapses the violations into a single commit on main. The C14 check scopes to `merge-base..HEAD` (branch-local) — this catches pre-merge but not post-squash retroactively. Acceptable trade-off: catch at PR time, before squash.
+
+**Grep check** (Tier A automated): `check_entity_status_via_advance_stage_only()` in `plugins/ship-flow/bin/check-invariants.sh`. Scans commits ahead of `git merge-base origin/main HEAD` for entity-index modifications; flags any with `+status:` ∧ `-status:` ∧ commit message NOT containing `: advance status to `. Skips gracefully when `origin/main` ref is absent (e.g., fresh test fixtures).
+
+**v1 limitation — body-forgery false negative**: the substring match runs against the full commit message INCLUDING body, not subject-line-only. A committer aware of the signature can include `": advance status to "` in the body to bypass detection. v1 is calibrated for **accidental** bypass (the motivating evidence at pitch-106 was unintentional, not adversarial); v2 hardening (`docs/ship-flow/todos/enforce-advance-stage-primitive-only-v2-subject-only-match.md`) tightens to subject-line-only OR requires a commit trailer like `Stage-Advance-Tool: advance-stage.sh@<sha>`.
+
+**Source**: source pitch `enforce-advance-stage-primitive-only` (sharp 2026-05-15); source todo `docs/ship-flow/todos/enforce-advance-stage-primitive-only.md`; source evidence pitch-106 verify-stage D1 (commit `898d006c`).
+
+---
+
 ## Related Files
 
 - `plugins/ship-flow/bin/check-invariants.sh` — CI grep implementation

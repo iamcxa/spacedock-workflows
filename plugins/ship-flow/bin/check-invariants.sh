@@ -1170,6 +1170,81 @@ check_fo_receipt_on_proceed() {
   return "$fail"
 }
 
+# C14: Entity status mutation must go through lib/advance-stage.sh
+# ----------------------------------------------------------------
+# Scans commits on the current branch ahead of merge-base with origin/main.
+# For each commit modifying an entity index.md (folder layout) or flat
+# <id>-<slug>.md, if the diff contains BOTH +status: AND -status: lines
+# (a true mutation, not a new-entity sharp-claim which only adds +status:),
+# the commit message MUST contain the substring ": advance status to "
+# (injected by lib/advance-stage.sh line 122 when invoked legitimately).
+#
+# Source pitch: enforce-advance-stage-primitive-only (sharp 2026-05-15).
+# Source evidence: pitch-106 commit 898d006c — direct YAML edit bypassed
+# advance-stage.sh, would have nuked entity body table per MEMORY
+# "advance-stage destructive on legacy body tables".
+# Sibling: plugins/ship-flow/INVARIANTS.md Principle 15.
+check_entity_status_via_advance_stage_only() {
+  local entity_status_paths=(
+    ':(glob)docs/*/*/index.md'
+    ':(glob)docs/*/*-*.md'
+  )
+
+  # Bound scan to current-branch commits only (merge-base..HEAD).
+  # Pre-existing main-history commits are out of scope per plan T3.
+  local merge_base
+  if ! merge_base="$(git merge-base origin/main HEAD 2>/dev/null)"; then
+    # No origin/main reference — likely a fresh test fixture without it; PASS.
+    echo "OK C14 entity-status-via-advance-stage-only (no origin/main; skipping)"
+    return 0
+  fi
+
+  # Range may be empty when HEAD == merge-base; that's a clean PASS.
+  if [ "$merge_base" = "$(git rev-parse HEAD)" ]; then
+    echo "OK C14 entity-status-via-advance-stage-only (no branch commits to scan)"
+    return 0
+  fi
+
+  local violations=0
+  local commits
+  commits="$(git log --format=%H "${merge_base}..HEAD" -- "${entity_status_paths[@]}" 2>/dev/null)"
+
+  local sha
+  for sha in $commits; do
+    # Inspect diff for entity index/flat .md files only.
+    local diff_body
+    diff_body="$(git show --format= "$sha" -- "${entity_status_paths[@]}" 2>/dev/null)"
+    [ -z "$diff_body" ] && continue
+
+    # Mutation = diff contains BOTH a removed status: line AND an added status: line.
+    # Pure addition (sharp-claim of new entity) has only +status:, no -status:.
+    local has_plus has_minus
+    has_plus="$(echo "$diff_body" | grep -cE '^\+status:' || true)"
+    has_minus="$(echo "$diff_body" | grep -cE '^-status:' || true)"
+    if [ "${has_plus:-0}" -eq 0 ] || [ "${has_minus:-0}" -eq 0 ]; then
+      continue
+    fi
+
+    # Check commit message for advance-stage.sh signature.
+    local msg
+    msg="$(git log -1 --format=%B "$sha")"
+    case "$msg" in
+      *": advance status to "*) continue ;;
+      *)
+        violations=$((violations + 1))
+        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} mutated entity status: without advance-stage.sh signature. See plugins/ship-flow/INVARIANTS.md#principle-15." >&2
+        echo "       commit msg head: $(echo "$msg" | head -1)" >&2
+        ;;
+    esac
+  done
+
+  if [ "$violations" -gt 0 ]; then
+    return 1
+  fi
+  echo "OK C14 entity-status-via-advance-stage-only"
+  return 0
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -1207,6 +1282,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     panel-coverage-header) check_panel_coverage_header; exit $? ;;
     deferred-to-todo-footer) check_deferred_to_todo_footer; exit $? ;;
     fo-receipt-on-proceed) check_fo_receipt_on_proceed; exit $? ;;
+    entity-status-via-advance-stage-only) check_entity_status_via_advance_stage_only; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -1264,5 +1340,8 @@ check_hermetic_no_gstack || FAIL=1
 check_panel_coverage_header || FAIL=1
 check_deferred_to_todo_footer || FAIL=1
 check_fo_receipt_on_proceed || FAIL=1
+# C14: entity-status mutation must go through lib/advance-stage.sh
+# Source: pitch enforce-advance-stage-primitive-only (sharp 2026-05-15)
+check_entity_status_via_advance_stage_only || FAIL=1
 
 exit $FAIL
