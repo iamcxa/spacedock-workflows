@@ -73,7 +73,13 @@ fi
 # Same discovery path as commission/bin/status — try plugin cache first.
 status_bin=""
 if [ "$auto_fix" = "execute" ]; then
-  for candidate in "$HOME"/.claude/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status; do
+  if [ -n "${SHIP_FLOW_STATUS_BIN:-}" ] && [ -x "$SHIP_FLOW_STATUS_BIN" ]; then
+    status_bin="$SHIP_FLOW_STATUS_BIN"
+  fi
+  for candidate in \
+      "$HOME"/.claude/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status \
+      "$HOME"/.codex/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status; do
+    [ -n "$status_bin" ] && break
     [ -x "$candidate" ] && status_bin="$candidate" && break
   done
 fi
@@ -101,6 +107,8 @@ rule_a_count=0
 rule_a_records=""
 rule_b_lines=""
 rule_b_count=0
+unsafe_pr_lines=""
+unsafe_pr_count=0
 have_gh=0
 command -v gh >/dev/null 2>&1 && have_gh=1
 
@@ -120,19 +128,32 @@ check_entity() {
     slug=$(basename "$entity_file" .md)
   fi
 
-  # Rule A — status=ship + PR merged
-  if [ "$status" = "ship" ] && [ "$have_gh" = "1" ] && \
-     [ -n "$pr" ] && [ "$pr" != "empty" ] && [ "$pr" != "null" ]; then
+  # Rule A — status=ship + PR merged. Other status=ship PR states are
+  # warning-only: visible to captain, never terminal-mutated by this hook.
+  if [ "$status" = "ship" ]; then
+    if [ -z "$pr" ] || [ "$pr" = "empty" ] || [ "$pr" = "null" ]; then
+      unsafe_pr_lines+="  - #${id:-?} \`$slug\` — missing PR number; no auto-fix attempted"$'\n'
+      unsafe_pr_count=$((unsafe_pr_count + 1))
+      return
+    fi
     local pr_num="${pr##\#}"
-    case "$pr_num" in ''|*[!0-9]*) : ;;
+    case "$pr_num" in
+    ''|*[!0-9]*)
+      unsafe_pr_lines+="  - #${id:-?} \`$slug\` — invalid PR value \`${pr}\`; no auto-fix attempted"$'\n'
+      unsafe_pr_count=$((unsafe_pr_count + 1))
+      ;;
     *)
       local state
-      state=$(timeout 2 gh pr view "$pr_num" --json state -q .state 2>/dev/null || true)
+      state=""
+      [ "$have_gh" = "1" ] && state=$(timeout 2 gh pr view "$pr_num" --json state -q .state 2>/dev/null || true)
       if [ "$state" = "MERGED" ]; then
         rule_a_lines+="  - #${id:-?} \`$slug\` — PR #$pr_num MERGED, entity still at \`status: ship\`"$'\n'
         rule_a_count=$((rule_a_count + 1))
         # Record for D1 auto-fix loop (consumed in section 4b below)
         rule_a_records+="$slug|$pr_num|$entity_file|$stage_dir"$'\n'
+      elif [ -n "$state" ]; then
+        unsafe_pr_lines+="  - #${id:-?} \`$slug\` — PR #$pr_num state=${state}; warning-only, no auto-fix attempted"$'\n'
+        unsafe_pr_count=$((unsafe_pr_count + 1))
       fi ;;
     esac
   fi
@@ -206,7 +227,7 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
       ts=$(date -u +%FT%TZ)
 
       # status --set (advance to done + verdict + completed)
-      if ! python3 "$status_bin" --workflow-dir "$workflow_dir" \
+      if ! "$status_bin" --workflow-dir "$workflow_dir" \
            --set "$slug" status=done verdict=PASSED completed="$ts" \
            >/dev/null 2>&1; then
         auto_fix_blocked_lines+="  - \`$slug\` — status --set failed"$'\n'
@@ -215,7 +236,7 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
       fi
 
       # status --archive (move to _archive/)
-      if ! python3 "$status_bin" --workflow-dir "$workflow_dir" \
+      if ! "$status_bin" --workflow-dir "$workflow_dir" \
            --archive "$slug" >/dev/null 2>&1; then
         auto_fix_blocked_lines+="  - \`$slug\` — status --archive failed after set"$'\n'
         auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
@@ -261,6 +282,7 @@ fi
 
 # --- 5. Emit structured advisory (only if anything drifted) --------------
 [ "$rule_a_count" -eq 0 ] && [ "$rule_b_count" -eq 0 ] && \
+  [ "$unsafe_pr_count" -eq 0 ] && \
   [ "$auto_fixed_count" -eq 0 ] && [ "$auto_fix_blocked_count" -eq 0 ] && exit 0
 
 msg="[ship-flow] FO state-drift report:"
@@ -293,6 +315,14 @@ if [ "$rule_a_count" -gt 0 ]; then
 🔴 **Rule A** — $rule_a_count $plural with merged PR still at \`status: ship\`:
 $rule_a_lines
 Before new execute work, run the \`done + archive\` sequence from \`plugins/ship-flow/skills/ship-execute/SKILL.md\` for each. To enable autonomous fix in future sessions, set \`auto_fix: execute\` in workflow README frontmatter (D1, see \`plugins/ship-flow/_plans/strengthening-roadmap-2026-05.md\`)."
+fi
+if [ "$unsafe_pr_count" -gt 0 ]; then
+  plural=$([ "$unsafe_pr_count" -eq 1 ] && echo "entity" || echo "entities")
+  msg+="
+
+⚠️ **Warning-only PR states** — $unsafe_pr_count $plural at \`status: ship\` but outside Rule A:
+$unsafe_pr_lines
+No terminal mutation was attempted. Rule A auto-fix is limited to parseable PRs whose provider state is \`MERGED\`."
 fi
 if [ "$rule_b_count" -gt 0 ]; then
   plural=$([ "$rule_b_count" -eq 1 ] && echo "entity" || echo "entities")
