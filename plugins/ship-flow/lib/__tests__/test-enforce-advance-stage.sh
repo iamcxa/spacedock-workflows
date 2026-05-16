@@ -32,6 +32,7 @@ assert_exit() {
 #       $2 = "mutate" (change status:) | "noop" (touch file body, leave status:)
 #            | "nonentity" (modify a non-entity file)
 #            | "stageartifact" (modify a folder entity stage artifact, not index.md)
+#            | "flatbody" (modify a flat entity body status: line, not frontmatter)
 #       $3 = "new" (NEW entity index.md — only +status:) | "edit" (mutate existing — both +status: and -status:)
 #
 # Returns: prints the path of the repo dir.
@@ -56,6 +57,20 @@ status: sharp
 EOF
     git add docs/test-wf/baseline-entity/index.md
     git commit -qm "baseline: pre-existing entity"
+
+    # Flat entity baseline for body-only status: false-positive coverage.
+    cat > docs/test-wf/flat-entity.md <<'EOF'
+---
+id: "flat-entity"
+title: "Flat"
+status: sharp
+---
+
+Example body metadata:
+status: pending
+EOF
+    git add docs/test-wf/flat-entity.md
+    git commit -qm "baseline: pre-existing flat entity"
 
     # Branch off main; the scrutinized commit lives here
     git checkout -q -b feature
@@ -111,6 +126,14 @@ EOF
         git add docs/test-wf/baseline-entity/plan.md
         git commit -qm "$mutation_msg"
         ;;
+      flatbody)
+        # Modify a body-level status: line in a flat entity. Frontmatter status
+        # is unchanged, so this must not count as an entity status mutation.
+        sed -i.bak 's/^status: pending$/status: resolved/' docs/test-wf/flat-entity.md
+        rm -f docs/test-wf/flat-entity.md.bak
+        git add docs/test-wf/flat-entity.md
+        git commit -qm "$mutation_msg"
+        ;;
     esac
   )
   echo "$dir"
@@ -118,6 +141,7 @@ EOF
 
 # Run only the new check against the fixture repo via --check mode.
 # Uses check-invariants.sh's existing single-check dispatch path.
+# shellcheck disable=SC2329 # invoked indirectly through assert_exit/eval cases below
 run_check_only() {
   local repo_dir="$1"
   (
@@ -161,6 +185,12 @@ echo
 echo "--- Case 6: STAGE ARTIFACT status line changes → PASS (not entity frontmatter) ---"
 TMP="$(setup_fixture "docs(baseline-entity): update plan artifact status" "stageartifact" "edit")"
 assert_exit 0 "run_check_only '$TMP'" "Case-6 stage artifact status no false positive (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 7: BODY status line changes → PASS (not entity frontmatter) ---"
+TMP="$(setup_fixture "docs(flat-entity): update body status example" "flatbody" "edit")"
+assert_exit 0 "run_check_only '$TMP'" "Case-7 body status no false positive (exit 0)"
 rm -rf "$TMP"
 
 echo

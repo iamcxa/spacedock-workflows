@@ -1170,14 +1170,30 @@ check_fo_receipt_on_proceed() {
   return "$fail"
 }
 
+_frontmatter_status_at_rev_path() {
+  local rev="$1"
+  local path="$2"
+  { git show "${rev}:${path}" 2>/dev/null || true; } | awk '
+    BEGIN{d=0}
+    /^---[[:space:]]*$/ {d++; next}
+    d==1 && /^status:[[:space:]]*/ {
+      sub(/^status:[[:space:]]*/, "", $0)
+      gsub(/[[:space:]]+$/, "", $0)
+      print
+      exit
+    }
+    d>=2 {exit}
+  '
+}
+
 # C14: Entity status mutation must go through lib/advance-stage.sh
 # ----------------------------------------------------------------
 # Scans commits on the current branch ahead of merge-base with origin/main.
 # For each commit modifying an entity index.md (folder layout) or flat
-# <id>-<slug>.md, if the diff contains BOTH +status: AND -status: lines
-# (a true mutation, not a new-entity sharp-claim which only adds +status:),
-# the commit message MUST contain the substring ": advance status to "
-# (injected by lib/advance-stage.sh line 122 when invoked legitimately).
+# <id>-<slug>.md, if the frontmatter status value changes between the
+# commit's first parent and the commit, the commit message MUST contain the
+# substring ": advance status to " (injected by lib/advance-stage.sh line 122
+# when invoked legitimately).
 #
 # Source pitch: enforce-advance-stage-primitive-only (sharp 2026-05-15).
 # Source evidence: pitch-106 commit 898d006c — direct YAML edit bypassed
@@ -1211,17 +1227,22 @@ check_entity_status_via_advance_stage_only() {
 
   local sha
   for sha in $commits; do
-    # Inspect diff for entity index/flat .md files only.
-    local diff_body
-    diff_body="$(git show --format= "$sha" -- "${entity_status_paths[@]}" 2>/dev/null)"
-    [ -z "$diff_body" ] && continue
+    # Mutation = frontmatter status changed between first parent and this commit.
+    # Body-level `status:` examples are ignored; pure additions have no parent
+    # frontmatter status and are exempt.
+    local has_status_mutation=0
+    local path before_status after_status
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      before_status="$(_frontmatter_status_at_rev_path "${sha}^" "$path")"
+      after_status="$(_frontmatter_status_at_rev_path "$sha" "$path")"
+      if [ -n "$before_status" ] && [ -n "$after_status" ] && [ "$before_status" != "$after_status" ]; then
+        has_status_mutation=1
+        break
+      fi
+    done < <(git diff-tree --no-commit-id --name-only -r "$sha" -- "${entity_status_paths[@]}" 2>/dev/null || true)
 
-    # Mutation = diff contains BOTH a removed status: line AND an added status: line.
-    # Pure addition (sharp-claim of new entity) has only +status:, no -status:.
-    local has_plus has_minus
-    has_plus="$(echo "$diff_body" | grep -cE '^\+status:' || true)"
-    has_minus="$(echo "$diff_body" | grep -cE '^-status:' || true)"
-    if [ "${has_plus:-0}" -eq 0 ] || [ "${has_minus:-0}" -eq 0 ]; then
+    if [ "$has_status_mutation" = "0" ]; then
       continue
     fi
 
