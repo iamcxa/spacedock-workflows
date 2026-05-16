@@ -141,6 +141,8 @@ Before dispatching a wave, write `execute-dispatch-manifest` into `execute.md` d
 - Tiered quality check spec (T1 always, T2 if frontend touched).
 - `Do NOT commit — return changed_files and status.` (orchestrator owns commits).
 
+**Inject discipline (skill-load validation anti-pattern)** — light skill prime is allowed (`Skill(skill='<name>') — read "<section>"`). What is NOT allowed: requiring workers to log "Skills loaded" in stage report as a GATE input, designing per-dispatch grep validation around inject effectiveness, adding `canary_echo:` attestation fields to entity schema, or authoring `check-skill-canary-receipt.sh`-class verification primitives. The safety net for skill-rule application is verify-stage per-domain DC (output-shape, not process attestation). Read `plugins/ship-flow/references/validation-discipline.md` before adding any validation token, attestation field, or N-dispatch experiment to ship-flow.
+
 ### Step 2.5 — Tiered quality check (mandatory per task before DONE)
 
 **T1 (always, ~30s)** — troop runs all three; all must pass (max 3 retry attempts):

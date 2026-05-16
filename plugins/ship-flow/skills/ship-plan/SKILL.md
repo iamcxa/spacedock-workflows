@@ -249,6 +249,11 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring when available. It 
 
 ### Step 3.5 — Verification spec (structural parity enforcement)
 
+**Validation task design discipline** — when a plan task description is "validate X", classify X before authoring:
+
+- X is **output-shape** (code pattern, file presence, schema match, runtime assertion) → write as DC in `## Verification Spec`, consumed by verify stage. Predicate-grep-able, evidence accumulates across N naturally.
+- X is **process-shape** (did the worker load skill, did the worker read section, did the worker echo attestation token, did the canary appear in the receipt) → **do not author**. Per-dispatch process-effect validation has structurally bad cost-to-signal ratio (baseline contamination + scope mismatch + timing pollution; see `plugins/ship-flow/references/validation-discipline.md`). Either rewrite as the equivalent output-shape DC, or drop the task.
+
 Per typed Done Criterion, fill exact verification procedure:
 
 | Type | Procedure | Fallback |

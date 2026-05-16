@@ -633,6 +633,16 @@ Use `route_to: design` when the design intent is incomplete, contradicted, impos
 
 **Default**: spot-check ≤2 critical DCs + evidence review (full re-run is fallback). 2026-04 D1: n=31 DCs, 0 verdict changes on full re-run.
 
+### Per-domain DC pattern (output-shape over process attestation)
+
+When a project domain has known load-bearing rules (e.g. fmodel saga listener / Rejection event naming, RBAC verb pattern, design-token usage, deterministic command via `occurred_at`), the safety net is a **per-domain DC executed on touched files in this stage** — not a per-dispatch attestation experiment on whether the worker loaded the source skill.
+
+Pattern: scoped grep / AST / runtime probe against `files_modified` matching the domain's path glob. Fail action: route to execute with specific remediation (e.g. "fmodel saga: every command under `domains/*/commands/` MUST have either a registered listener or an explicit Rejection event").
+
+Authoring home: project-side adopter doc (e.g. `.context/verify-dc.md` per project). Pluggable yaml schema deferred until ≥3 adopters accumulate substantial DC lists (avoid premature abstraction).
+
+Decision rule: rule checkable from code output → per-domain DC here; rule only checkable from worker process (did the worker load skill, did the worker echo attestation token) → **cut, do not author**. See `plugins/ship-flow/references/validation-discipline.md` for the full rationalization-rejection table before adding any new validation primitive.
+
 **Runtime mandate** (carlove SEC-10/15 retro, 2026-04-26): DC re-runs in 4.2/4.3/4.4 MUST execute against a **live runtime** — worktree dev server up + API reachable + browser able to load route. Artifact-only verification (compiled script, type-check, unit tests) is **insufficient**: 4 critical bugs slipped past artifact-green verify on SEC-10 #574 + SEC-15 #573, caught by reviewers in 4 minutes.
 
 ### 4.0 — Runtime preflight (hard gate — runs before 4.1)
