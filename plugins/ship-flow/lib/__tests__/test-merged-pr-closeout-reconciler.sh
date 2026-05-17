@@ -384,7 +384,7 @@ run_helper_without_status_override() {
   local home_dir="$3"
   shift 3
   local rc=0
-  env -u STATUS_BIN HOME="$home_dir" "$HELPER" --workflow-dir "${repo}/docs/ship-flow" "$@" > "$output" 2>&1 || rc=$?
+  env -u STATUS_BIN -u SHIP_FLOW_STATUS_BIN HOME="$home_dir" "$HELPER" --workflow-dir "${repo}/docs/ship-flow" "$@" > "$output" 2>&1 || rc=$?
   echo "$rc"
 }
 
