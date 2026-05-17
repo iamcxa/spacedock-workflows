@@ -378,6 +378,98 @@ run_helper() {
   echo "$rc"
 }
 
+run_helper_without_status_override() {
+  local repo="$1"
+  local output="$2"
+  local home_dir="$3"
+  shift 3
+  local rc=0
+  env -u STATUS_BIN HOME="$home_dir" "$HELPER" --workflow-dir "${repo}/docs/ship-flow" "$@" > "$output" 2>&1 || rc=$?
+  echo "$rc"
+}
+
+run_helper_with_path() {
+  local repo="$1"
+  local output="$2"
+  local path_value="$3"
+  shift 3
+  local rc=0
+  PATH="$path_value" STATUS_BIN="$STATUS_BIN" "$HELPER" --workflow-dir "${repo}/docs/ship-flow" "$@" > "$output" 2>&1 || rc=$?
+  echo "$rc"
+}
+
+run_runtime_regression_cases() {
+  local repo="$TMP_DIR/default-status-repo"
+  local fake_home="$TMP_DIR/fake-home"
+  local cache_status="${fake_home}/.codex/plugins/cache/spacedock/spacedock/0.11.2/skills/commission/bin/status"
+  setup_repo "$repo"
+  mkdir -p "$(dirname "$cache_status")"
+  write_fixture_status_bin "$cache_status"
+  write_entity "${repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ""
+  git -C "$repo" add docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$repo" commit -qm "add default status entity"
+
+  local rc
+  rc="$(run_helper_without_status_override "$repo" "$TMP_DIR/default-status.out" "$fake_home" \
+    --entity merged-fixture-entity \
+    --pr-provider fixture \
+    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
+    --dry-run)"
+  assert_exit "default status helper resolves from active plugin cache" 0 "$rc"
+  assert_not_contains "default status helper does not report missing helper" '^reason=missing-status-helper$' "$TMP_DIR/default-status.out"
+  assert_not_contains "helper source does not pin stale 0.10.2 cache path" 'spacedock/0\.10\.2/skills/commission/bin/status' "$HELPER"
+
+  local pipe_repo="$TMP_DIR/pipefail-repo"
+  local worktree_path="${pipe_repo}/.worktrees/ship-merged-fixture-entity"
+  setup_repo "$pipe_repo"
+  mkdir -p "$worktree_path"
+  write_entity "${pipe_repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ".worktrees/ship-merged-fixture-entity"
+  git -C "$pipe_repo" add docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$pipe_repo" commit -qm "add pipefail entity"
+
+  local fake_bin="$TMP_DIR/fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "${fake_bin}/git" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+REAL_GIT="$(command -v git)"
+REPO="$pipe_repo"
+TARGET="$worktree_path"
+repo_arg=""
+if [ "\${1:-}" = "-C" ]; then
+  repo_arg="\$2"
+  shift 2
+fi
+if [ "\${1:-}" = "worktree" ] && [ "\${2:-}" = "list" ] && [ "\${3:-}" = "--porcelain" ]; then
+  printf 'worktree %s\nHEAD fixture-main\nbranch refs/heads/main\n\n' "\$REPO"
+  i=0
+  while [ "\$i" -lt 3000 ]; do
+    printf 'worktree %s/.worktrees/noise-%04d\nHEAD fixture-noise-%04d\nbranch refs/heads/noise-%04d\n\n' "\$REPO" "\$i" "\$i" "\$i"
+    i=\$((i + 1))
+  done
+  printf 'worktree %s\nHEAD fixture-target\nbranch refs/heads/ship-merged-fixture-entity\n\n' "\$TARGET"
+  exit 0
+fi
+if [ "\$repo_arg" = "\$TARGET" ] && [ "\${1:-}" = "status" ] && [ "\${2:-}" = "--porcelain" ]; then
+  exit 0
+fi
+if [ -n "\$repo_arg" ]; then
+  exec "\$REAL_GIT" -C "\$repo_arg" "\$@"
+fi
+exec "\$REAL_GIT" "\$@"
+EOF
+  chmod +x "${fake_bin}/git"
+
+  rc="$(run_helper_with_path "$pipe_repo" "$TMP_DIR/pipefail-dry-run.out" "${fake_bin}:$PATH" \
+    --entity merged-fixture-entity \
+    --pr-provider fixture \
+    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
+    --dry-run)"
+  assert_exit "dry-run survives large worktree list under pipefail" 0 "$rc"
+  assert_contains "dry-run large worktree list plans cleanup" '^worktree_cleanup=planned$' "$TMP_DIR/pipefail-dry-run.out"
+  assert_contains "dry-run large worktree list plans branch cleanup" '^branch_cleanup=planned$' "$TMP_DIR/pipefail-dry-run.out"
+}
+
 run_merged_fixture_case() {
   local repo="$TMP_DIR/merged-repo"
   setup_repo "$repo"
@@ -759,6 +851,7 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
+  run_runtime_regression_cases
   run_merged_fixture_case
   run_refusal_cases
   run_usage_and_dry_run_cases
