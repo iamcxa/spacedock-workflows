@@ -216,6 +216,19 @@ PM skills delegate framing discipline so shape stage doesn't reinvent. Invoke pe
 
 **Mandatory (cannot skip)**: `pol-probe-advisor` for any pitch with `appetite: medium-batch | big-batch`. Critical-assumption misfiltering was pitch-103's 18-file/3641-LOC drift root cause; POL probe is the structural guard against `criticality: critical` decaying into `important`.
 
+### PM-Skill Receipt Guard (before compose)
+
+For non-trivial Mode A folder-layout proposals, emit exactly one `<!-- section:pm-skill-receipts -->` YAML block in `shape.md` before compose/proposal acceptance. `shape-confirm.sh --layout=folder` refuses proposal JSON that lacks `pitch.pm_skill_receipts`, validates it before any write, then renders the same receipt block into `shape.md`.
+
+The receipt root is `pm_skill_receipts` with `stage: ship-shape`, `mode: mode-a`, `compose_guard: passed`, and one row per required primary delegate: `problem-framing-canvas`, `opportunity-solution-tree`, `pol-probe-advisor`, and `press-release`. Each row records `phase`, `delegate`, `required`, `status`, `evidence`, `fallback`, and `rationale`.
+
+Allowed `status` values are exactly:
+- `invoked` — requires non-empty `evidence`, normally `Skill: <delegate>`.
+- `unavailable` — requires non-empty `fallback` and `rationale`.
+- `skipped` — requires non-empty `rationale`; `pol-probe-advisor` cannot be skipped for `medium-batch` or `big-batch`.
+
+Hard stop before compose/acceptance: missing receipt block, duplicate receipt blocks, invalid status, missing required delegate row, missing invoked evidence, missing unavailable fallback/rationale, missing skipped rationale, or medium/big `pol-probe-advisor` skip. This receipt guard is separate from the 088/097 static Layer A declaration/parity checks; those checks prove skill docs declare delegation, while this artifact proves the shape proposal carried invocation/fallback/skip evidence.
+
 ### Compose + present proposal
 
 **Fat-marker-sketch rule**: Children are titles, not specs. Stated assumptions are claims + confidence + criticality + `verified_by`, not verification RESULTS. DCs, tool choices, file paths, greppable queries, npm-dep choices, LOC estimates all belong to PLAN. If a child description exceeds one line of vertical-slice intent, or if an assumption reproduces verification output, delete detail and keep the claim. Acceptance outcome MUST be user-observable (what captain receives) — NOT artifact list / infrastructure description / "support for X". One captain-readable claim per pitch.

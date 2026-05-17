@@ -478,6 +478,33 @@ check_layer_a_table_parity() {
 }
 
 
+check_pm_skill_receipts() {
+  # Named-only guard for post-107 shape receipt artifacts. Historical shapes did
+  # not emit this block, so the default invariant suite does not call this check.
+  local docs_dir="${ROOT}/docs/ship-flow"
+  local validator="${ROOT}/plugins/ship-flow/lib/validate-pm-skill-receipts.sh"
+  [ -d "$docs_dir" ] || return 0
+  if [ ! -f "$validator" ]; then
+    echo "ERROR [pm-skill-receipts]: validator not found at $validator" >&2
+    return 1
+  fi
+
+  local fail=0
+  local f
+  for f in "$docs_dir"/*/shape.md "$docs_dir"/*.md; do
+    [ -f "$f" ] || continue
+    case "$f" in *_archive*|*_debriefs*|*_mods*) continue ;; esac
+    if grep -q '^<!-- section:pm-skill-receipts -->$' "$f" 2>/dev/null; then
+      bash "$validator" "$f" >/dev/null || {
+        echo "ERROR [pm-skill-receipts]: invalid receipt artifact: ${f#"$ROOT"/}" >&2
+        fail=1
+      }
+    fi
+  done
+  return "$fail"
+}
+
+
 check_verdict_flip_whitelist() {
   # Verify ship/SKILL.md contains a verdict-flip block with:
   #   1. is_high_density or verdict.flip/verdict_flip reference
@@ -1287,6 +1314,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     team-fallback-documented) check_team_fallback_documented; exit $? ;;
     cross-review-gate) check_cross_review_gate; exit $? ;;
     layer-a-table-parity) check_layer_a_table_parity; exit $? ;;
+    pm-skill-receipts) check_pm_skill_receipts; exit $? ;;
     structural-parity-dc) check_structural_parity_dc; exit $? ;;
     verdict-flip-whitelist) check_verdict_flip_whitelist; exit $? ;;
     workflow-dir-portability) check_workflow_dir_portability; exit $? ;;
