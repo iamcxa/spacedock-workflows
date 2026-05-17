@@ -67,7 +67,7 @@ check_skill_count() {
   # DC-6 — Principle 2: stage skill count ≤ 7; utility skills uncapped.
   # Explicit allowlists — catches unclassified additions immediately.
   local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
-  local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect domain-registry ui-verify test-driven-development verify-reviewer-panel doc-sync)
+  local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect domain-registry ui-verify test-driven-development verify-reviewer-panel doc-sync distill-reference)
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
 
@@ -1002,7 +1002,8 @@ _entity_started_date() {
 
 check_hermetic_no_gstack() {
   # C10 — Principle 12: stage SKILLs + lib/*.sh must not reference
-  # `~/.claude/skills/gstack/`, `$D`, `$B`, or gstack-owned persistence filenames
+  # `~/.claude/skills/gstack/`, `~/.agents/skills/gstack/`, `$D`, `$B`,
+  # generic gstack-* runtime binaries, or gstack-owned persistence filenames
   # as RUNTIME paths. Lines containing policy-negation tokens (DO NOT, MUST NOT,
   # NEVER, forbidden, reference-only) are filtered out — those are prose that
   # documents the forbidden boundary, not runtime invocation.
@@ -1015,10 +1016,11 @@ check_hermetic_no_gstack() {
 
   # Forbidden patterns:
   #   1. ~/.claude/skills/gstack/ literal substring
-  #   2. $D / $B envvar (followed by a non-identifier char to avoid $DEBUG, $BAR etc.)
-  #   3. gstack-{review-log,learnings-log,specialist-stats,taste-profile}
+  #   2. ~/.agents/skills/gstack/ literal substring
+  #   3. $D / $B envvar (followed by a non-identifier char to avoid $DEBUG, $BAR etc.)
+  #   4. generic gstack-* runtime binaries and gstack-owned state names
   # shellcheck disable=SC2088,SC2016  # Literal regex — tilde and $vars are intentional
-  local pattern='~/\.claude/skills/gstack/|\$D[^a-zA-Z_0-9]|\$B[^a-zA-Z_0-9]|gstack-(review-log|learnings-log|specialist-stats|taste-profile)'
+  local pattern='~/\.(claude|agents)/skills/gstack/|\$D[^a-zA-Z_0-9]|\$B[^a-zA-Z_0-9]|gstack-[a-zA-Z0-9_.-]+'
   # Lines that mention forbidden patterns AS POLICY (allowed).
   local negation_tokens='DO NOT|MUST NOT|NEVER|forbidden|reference-only|do not'
 

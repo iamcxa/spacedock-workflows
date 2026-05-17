@@ -41,7 +41,7 @@ Three layers, each catching a different failure mode:
 **Split counting** (updated 2026-04-23 via entity #085 Wave 5b, commit `d51620e4`): stage-skills and utility-skills are counted SEPARATELY. Stage-skills have a hard cap ≤ 7; utility-skills are uncapped. Current inventory under the split rule:
 
 - **Stage-skills (≤7 cap)**: `ship-shape`, `ship-design`, `ship`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review` — 7 total (at cap).
-- **Utility-skills (uncapped)**: `add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel` — 7 total. Utility scripts/mods such as `ship-flow-lint` and `debrief-guardrail-harvest` are non-stage, non-skill guardrails and do not count against the stage-skill cap.
+- **Utility-skills (uncapped)**: `add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel`, `doc-sync`, `distill-reference` — 9 total. Utility scripts/mods such as `ship-flow-lint` and `debrief-guardrail-harvest` are non-stage, non-skill guardrails and do not count against the stage-skill cap.
 
 The pre-2026-04-23 "temp cap = 10" rule is superseded: `check-invariants.sh --check skill-count` now runs split-counted assertions. Rationale: stage-skills define the workflow's shape and must stay cognitively manageable; utility-skills are on-demand helpers that don't add pipeline surface area.
 
@@ -458,16 +458,16 @@ mappings in stage SKILL.md prose are forbidden.
 
 ### Principle 12: Hermetic Dependency Policy
 
-**Rule**: ship-flow stage SKILLs and `lib/` scripts MUST NOT reference any runtime path under `~/.claude/skills/gstack/`. The plugin owns `lib/review-checklists/` (snapshotted from GStack `/review`) and `lib/design-methodology/` (snapshotted from GStack `/design-*`) as self-contained content. GStack content sync is **manual** — captain reviews the diff, updates `lib/` deliberately, and bumps the plugin version. No daemon, no eager file fetch, no on-PATH binary lookup.
+**Rule**: ship-flow stage SKILLs and `lib/` scripts MUST NOT reference any runtime path under `~/.claude/skills/gstack/` or `~/.agents/skills/gstack/`, and MUST NOT require generic `gstack-*` runtime binaries. The plugin owns `lib/review-checklists/` (snapshotted from GStack `/review`) and `lib/design-methodology/` (snapshotted from GStack `/design-*`) as self-contained content. GStack content sync is **manual** — captain reviews the diff, updates `lib/` deliberately, and bumps the plugin version. No daemon, no eager file fetch, no on-PATH binary lookup.
 
 Allowed exception: `codex` CLI on PATH (optional Codex adversarial reviewer, gracefully degraded — never load-bearing for verdict). If `codex` is absent, ship-verify Codex Tier drops to "absent" and the pipeline proceeds.
 
 **Forbidden runtime patterns** (grep-checkable):
 
-- `~/.claude/skills/gstack/` substring inside stage SKILLs (`plugins/ship-flow/skills/*/SKILL.md`) or `lib/*.sh` — runtime invocation of GStack content
+- `~/.claude/skills/gstack/` or `~/.agents/skills/gstack/` substring inside stage SKILLs (`plugins/ship-flow/skills/*/SKILL.md`) or `lib/*.sh` — runtime invocation of GStack content
 - `$D` envvar (GStack design binary) referenced in stage SKILLs / lib shell — drags GStack daemon into plugin runtime
 - `$B` envvar (GStack browse daemon) referenced in stage SKILLs / lib shell — same
-- `gstack-review-log`, `gstack-learnings-log`, `gstack-specialist-stats`, `gstack-taste-profile.json` references in stage SKILLs / lib shell — those are GStack-owned persistence layers; ship-flow has its own (`lib/review-log.sh`, per-entity ledger files)
+- Generic `gstack-*` binaries or GStack-owned persistence names (`gstack-review-log`, `gstack-learnings-log`, `gstack-specialist-stats`, `gstack-taste-profile.json`) referenced in stage SKILLs / lib shell — those are outside the ship-flow runtime contract; ship-flow has its own (`lib/review-log.sh`, per-entity ledger files)
 
 Documentation references in `*.md` files outside SKILL.md (e.g., `lib/review-checklists/INDEX.md`, `lib/design-methodology/INDEX.md`, README, INVARIANTS itself) are **allowed** — these surfaces explicitly call out the forbidden patterns so adopters and future maintainers understand the boundary. Stage SKILL.md prose may mention the forbidden patterns when accompanied by clear policy negation tokens (`DO NOT`, `MUST NOT`, `NEVER`, `forbidden`, `reference-only`); the check filters those out.
 
@@ -478,7 +478,7 @@ Documentation references in `*.md` files outside SKILL.md (e.g., `lib/review-che
 3. `$D` / `$B` envvar referenced in design-officer mod or ship-design SKILL — drags the GStack daemon into the plugin's runtime expectations; breaks under hermetic deployment (Vercel CI, fresh laptop without GStack).
 4. ship-flow internal log/profile file pointed at GStack-owned filenames (`gstack-review-log` etc.) — adopter projects without GStack silently lose the audit trail.
 
-**Grep check** (Tier A automated, WARN-level v1): `check-invariants.sh --check hermetic-no-gstack` greps `plugins/ship-flow/skills/*/SKILL.md` and `plugins/ship-flow/lib/*.sh` for the forbidden patterns and emits a WARN per hit. Lines containing policy-negation tokens (`DO NOT`, `MUST NOT`, `NEVER`, `forbidden`, `reference-only`) are filtered out so the in-prose warnings on the policy itself do not self-trip the check. Future hardening: tighten to FAIL once SKILL.md documentation references settle (TODO: re-evaluate 2026-06-01).
+**Grep check** (Tier A automated, WARN-level v1): `check-invariants.sh --check hermetic-no-gstack` greps `plugins/ship-flow/skills/*/SKILL.md` and `plugins/ship-flow/lib/*.sh` for the forbidden patterns, including both GStack skill home roots and generic `gstack-*` runtime names, and emits a WARN per hit. Lines containing policy-negation tokens (`DO NOT`, `MUST NOT`, `NEVER`, `forbidden`, `reference-only`) are filtered out so the in-prose warnings on the policy itself do not self-trip the check. Future hardening: tighten to FAIL once SKILL.md documentation references settle (TODO: re-evaluate 2026-06-01).
 
 **Source**: Phase 3A integration captain decision 2026-05-12, recorded in README "Hermetic Dependency Policy" section. Codifies the content-snapshot + manual-sync contract introduced when `lib/review-checklists/` and `lib/design-methodology/` were copied out of GStack.
 
