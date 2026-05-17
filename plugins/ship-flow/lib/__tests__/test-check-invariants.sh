@@ -937,4 +937,91 @@ assert_stderr_contains "duplicate '### Principle 7:'" \
 
 rm -f "$TMP_INV"
 
+# ========== DC-107: named PM-skill receipt invariant validates receipt-bearing shapes ==========
+pm_receipt_fixture_shape() {
+  local path="$1" status="${2:-invoked}"
+  cat > "$path" <<EOF
+# PM Receipt Fixture
+
+## Problem
+
+Fixture shape.
+
+<!-- section:pm-skill-receipts -->
+\`\`\`yaml
+pm_skill_receipts:
+  stage: ship-shape
+  mode: mode-a
+  appetite: small-batch
+  compose_guard: passed
+  receipts:
+    - phase: intake-problem
+      delegate: problem-framing-canvas
+      required: true
+      status: ${status}
+      evidence: "Skill: problem-framing-canvas"
+      fallback: null
+      rationale: "Feeds Problem."
+    - phase: scope-decompose
+      delegate: opportunity-solution-tree
+      required: true
+      status: unavailable
+      evidence: null
+      fallback: inline
+      rationale: "Skill unavailable; inline fallback recorded before compose."
+    - phase: assumption-extract
+      delegate: pol-probe-advisor
+      required: true
+      status: invoked
+      evidence: "Skill: pol-probe-advisor"
+      fallback: null
+      rationale: "Filters assumptions."
+    - phase: acceptance-outcome
+      delegate: press-release
+      required: true
+      status: skipped
+      evidence: null
+      fallback: null
+      rationale: "Small-scope skip rule matched before compose."
+\`\`\`
+<!-- /section:pm-skill-receipts -->
+EOF
+}
+
+dc107_pm_receipt_named_check_valid_passes() {
+  local d
+  d="$(create_mock_plugin_dir)" || return 1
+  cp "$LIB_DIR/validate-pm-skill-receipts.sh" "$d/plugins/ship-flow/lib/validate-pm-skill-receipts.sh"
+  mkdir -p "$d/docs/ship-flow/valid-shape"
+  pm_receipt_fixture_shape "$d/docs/ship-flow/valid-shape/shape.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check pm-skill-receipts >/dev/null 2>&1
+  rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if dc107_pm_receipt_named_check_valid_passes 2>/dev/null; then
+  echo "OK DC-107a pm-skill-receipts named check passes valid receipt fixture"
+else
+  echo "FAIL DC-107a pm-skill-receipts named check should pass valid receipt fixture"; FAIL=1
+fi
+
+dc107_pm_receipt_named_check_invalid_fails() {
+  local d
+  d="$(create_mock_plugin_dir)" || return 1
+  cp "$LIB_DIR/validate-pm-skill-receipts.sh" "$d/plugins/ship-flow/lib/validate-pm-skill-receipts.sh"
+  mkdir -p "$d/docs/ship-flow/invalid-shape"
+  pm_receipt_fixture_shape "$d/docs/ship-flow/invalid-shape/shape.md" "maybe"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check pm-skill-receipts >/dev/null 2>&1
+  rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if dc107_pm_receipt_named_check_invalid_fails 2>/dev/null; then
+  echo "OK DC-107b pm-skill-receipts named check fails invalid receipt fixture"
+else
+  echo "FAIL DC-107b pm-skill-receipts named check should fail invalid receipt fixture"; FAIL=1
+fi
+
 exit $FAIL

@@ -41,6 +41,8 @@ done
 # Validate required helpers
 PATCH_MAP="${SCRIPT_DIR}/patch-map.sh"
 [ -x "$PATCH_MAP" ] || { echo "Error: patch-map.sh not found/executable" >&2; exit 7; }
+PM_RECEIPT_VALIDATOR="${SCRIPT_DIR}/validate-pm-skill-receipts.sh"
+[ -f "$PM_RECEIPT_VALIDATOR" ] || { echo "Error: validate-pm-skill-receipts.sh not found" >&2; exit 7; }
 
 # Validate yq for JSON parsing
 command -v yq >/dev/null 2>&1 || { echo "Error: yq required for JSON parse" >&2; exit 1; }
@@ -73,6 +75,41 @@ fi
 if [ "${#PITCH_ACCEPTANCE_OUTCOME}" -lt 50 ]; then
   echo "Error: pitch.acceptance_outcome too short (${#PITCH_ACCEPTANCE_OUTCOME} chars, min 50). Describe an observable outcome, not an artifact list." >&2
   exit 10
+fi
+
+PM_RECEIPTS_YAML=""
+if [ "$LAYOUT" = "folder" ]; then
+  if ! yq --input-format=json -e '(.pitch.pm_skill_receipts // .pm_skill_receipts) != null' "$PROPOSAL" >/dev/null 2>&1; then
+    echo "Error: pitch.pm_skill_receipts or top-level pm_skill_receipts is required for folder-layout Mode A shape proposals" >&2
+    exit 10
+  fi
+
+  PM_RECEIPTS_YAML="$(mktemp)"
+  PM_RECEIPTS_VALIDATION_MD="$(mktemp)"
+  cleanup_pm_receipts() {
+    rm -f "$PM_RECEIPTS_YAML" "$PM_RECEIPTS_VALIDATION_MD"
+  }
+  trap cleanup_pm_receipts EXIT
+
+  {
+    echo "pm_skill_receipts:"
+    yq --input-format=json -o=yaml '.pitch.pm_skill_receipts // .pm_skill_receipts' "$PROPOSAL" | sed 's/^/  /'
+  } > "$PM_RECEIPTS_YAML"
+
+  {
+    echo "# PM Skill Receipts"
+    echo
+    echo "<!-- section:pm-skill-receipts -->"
+    echo '```yaml'
+    cat "$PM_RECEIPTS_YAML"
+    echo '```'
+    echo "<!-- /section:pm-skill-receipts -->"
+  } > "$PM_RECEIPTS_VALIDATION_MD"
+
+  if ! bash "$PM_RECEIPT_VALIDATOR" "$PM_RECEIPTS_VALIDATION_MD" >/dev/null; then
+    echo "Error: invalid pitch.pm_skill_receipts" >&2
+    exit 10
+  fi
 fi
 
 ENTITY_DIR="docs/ship-flow"
@@ -170,6 +207,12 @@ ${PITCH_PROBLEM}
 
 ${PITCH_ACCEPTANCE_OUTCOME}
 
+<!-- section:pm-skill-receipts -->
+\`\`\`yaml
+$(cat "$PM_RECEIPTS_YAML")
+\`\`\`
+<!-- /section:pm-skill-receipts -->
+
 ## Appetite
 
 ${PITCH_APPETITE}
@@ -197,6 +240,7 @@ done)
 
 (fill in from deleted_from_shape)
 EOF
+  bash "$PM_RECEIPT_VALIDATOR" "$PITCH_SHAPE" >/dev/null || exit 10
   WRITTEN_FILES=("$PITCH_INDEX" "$PITCH_SHAPE")
 else
   cat > "$PITCH_PATH" <<EOF
