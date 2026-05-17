@@ -18,19 +18,24 @@ resolve_status_bin() {
   local home_dir="${HOME:-}"
   [ -n "$home_dir" ] || return 1
 
-  local candidate best newest
+  local candidate best candidate_version best_version newest_version
   best=""
+  best_version=""
   for candidate in \
       "$home_dir"/.codex/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status \
       "$home_dir"/.claude/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status; do
     [ -x "$candidate" ] || continue
+    candidate_version="${candidate#*/plugins/cache/spacedock/spacedock/}"
+    candidate_version="${candidate_version%%/*}"
     if [ -z "$best" ]; then
       best="$candidate"
+      best_version="$candidate_version"
       continue
     fi
-    newest="$(printf '%s\n%s\n' "$best" "$candidate" | sort -V | tail -n 1)"
-    if [ "$newest" = "$candidate" ]; then
+    newest_version="$(printf '%s\n%s\n' "$best_version" "$candidate_version" | sort -V | tail -n 1)"
+    if [ "$newest_version" = "$candidate_version" ]; then
       best="$candidate"
+      best_version="$candidate_version"
     fi
   done
 
