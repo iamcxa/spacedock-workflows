@@ -6,7 +6,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../../.." &> /dev/null && pwd)"
 REPORT="${REPO_ROOT}/docs/ship-flow/_distillations/2026-05-17--gstack-gsd.md"
-ENTITY="${REPO_ROOT}/docs/ship-flow/distill-reference-skill-meta-capability.md"
+ACTIVE_ENTITY="${REPO_ROOT}/docs/ship-flow/distill-reference-skill-meta-capability.md"
+ARCHIVED_ENTITY="${REPO_ROOT}/docs/ship-flow/_archive/distill-reference-skill-meta-capability.md"
+if [ -f "${ACTIVE_ENTITY}" ]; then
+  ENTITY="${ACTIVE_ENTITY}"
+else
+  ENTITY="${ARCHIVED_ENTITY}"
+fi
 
 PASS=0
 FAIL=0
@@ -110,6 +116,8 @@ check "report marks duplicated snapshots as already-owned or rejected imports" \
   "grep -q 'already-owned' '${REPORT}' && grep -q 'Rejected Imports' '${REPORT}'"
 check "entity frontmatter includes dashboard id" \
   "awk 'BEGIN{in_fm=0} /^---$/{in_fm++; next} in_fm==1 && /^id:[[:space:]]*\"?129\"?/ {found=1} END{exit found ? 0 : 1}' '${ENTITY}'"
+check "entity resolves from active or archived location" \
+  "test -f '${ENTITY}'"
 check "entity stage notes avoid local absolute maintainer paths" \
   "! grep -q '/Users/kent' '${ENTITY}'"
 

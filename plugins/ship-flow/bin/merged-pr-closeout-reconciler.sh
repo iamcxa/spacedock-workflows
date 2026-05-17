@@ -3,7 +3,45 @@
 
 set -euo pipefail
 
-STATUS_BIN="${STATUS_BIN:-/Users/kent/.codex/plugins/cache/spacedock/spacedock/0.10.2/skills/commission/bin/status}"
+STATUS_BIN="${STATUS_BIN:-}"
+
+resolve_status_bin() {
+  if [ -n "${STATUS_BIN:-}" ]; then
+    printf '%s\n' "$STATUS_BIN"
+    return 0
+  fi
+  if [ -n "${SHIP_FLOW_STATUS_BIN:-}" ]; then
+    printf '%s\n' "$SHIP_FLOW_STATUS_BIN"
+    return 0
+  fi
+
+  local home_dir="${HOME:-}"
+  [ -n "$home_dir" ] || return 1
+
+  local candidate best candidate_version best_version newest_version
+  best=""
+  best_version=""
+  for candidate in \
+      "$home_dir"/.codex/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status \
+      "$home_dir"/.claude/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status; do
+    [ -x "$candidate" ] || continue
+    candidate_version="${candidate#*/plugins/cache/spacedock/spacedock/}"
+    candidate_version="${candidate_version%%/*}"
+    if [ -z "$best" ]; then
+      best="$candidate"
+      best_version="$candidate_version"
+      continue
+    fi
+    newest_version="$(printf '%s\n%s\n' "$best_version" "$candidate_version" | sort -V | tail -n 1)"
+    if [ "$newest_version" = "$candidate_version" ]; then
+      best="$candidate"
+      best_version="$candidate_version"
+    fi
+  done
+
+  [ -n "$best" ] || return 1
+  printf '%s\n' "$best"
+}
 
 usage() {
   echo "Usage: merged-pr-closeout-reconciler.sh --workflow-dir <dir> --entity <ref> [--pr-provider gh|fixture] [--pr-fixture <path>] [--dry-run]" >&2
@@ -159,7 +197,9 @@ read_provider_gh() {
 }
 
 primary_worktree_root() {
-  git -C "$repo_root" worktree list --porcelain | awk '/^worktree / { sub(/^worktree /, ""); print; exit }'
+  local worktree_list
+  worktree_list="$(git -C "$repo_root" worktree list --porcelain)" || return 1
+  awk '/^worktree / { sub(/^worktree /, ""); print; exit }' <<< "$worktree_list"
 }
 
 absolute_worktree_path() {
@@ -173,7 +213,9 @@ absolute_worktree_path() {
 
 branch_for_worktree_path() {
   local target_path="$1"
-  git -C "$repo_root" worktree list --porcelain | awk -v target="$target_path" '
+  local worktree_list
+  worktree_list="$(git -C "$repo_root" worktree list --porcelain)" || return 1
+  awk -v target="$target_path" '
     /^worktree / {
       current = $0
       sub(/^worktree /, "", current)
@@ -185,7 +227,7 @@ branch_for_worktree_path() {
       print branch
       exit
     }
-  '
+  ' <<< "$worktree_list"
 }
 
 preflight_worktree_cleanup() {
@@ -334,6 +376,7 @@ done
 [ -n "$workflow_dir" ] || reject_usage "missing-workflow-dir" "--workflow-dir is required"
 [ -n "$entity_ref" ] || reject_usage "missing-entity" "--entity is required"
 [ -d "$workflow_dir" ] || reject_input "workflow-dir-not-found" "workflow directory not found"
+STATUS_BIN="$(resolve_status_bin || true)"
 [ -x "$STATUS_BIN" ] || reject_input "missing-status-helper" "status helper is not executable"
 case "$pr_provider" in
   gh|fixture) ;;
