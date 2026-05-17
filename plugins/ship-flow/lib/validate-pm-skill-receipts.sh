@@ -49,7 +49,6 @@ required_delegates=(
   "press-release"
 )
 
-APPETITE=$(yq -r '.pm_skill_receipts.appetite // ""' "$TMP_YAML")
 FAIL=0
 
 err() {
@@ -67,9 +66,30 @@ is_blank() {
   [ -z "$(printf '%s' "$value" | tr -d '[:space:]')" ] || [ "$value" = "null" ]
 }
 
+STAGE=$(yq -r '.pm_skill_receipts.stage // ""' "$TMP_YAML")
+MODE=$(yq -r '.pm_skill_receipts.mode // ""' "$TMP_YAML")
+APPETITE=$(yq -r '.pm_skill_receipts.appetite // ""' "$TMP_YAML")
+COMPOSE_GUARD=$(yq -r '.pm_skill_receipts.compose_guard // ""' "$TMP_YAML")
+
+if [ "$STAGE" != "ship-shape" ]; then
+  err "pm_skill_receipts.stage must be ship-shape"
+fi
+if [ "$MODE" != "mode-a" ]; then
+  err "pm_skill_receipts.mode must be mode-a"
+fi
+case "$APPETITE" in
+  small-batch|medium-batch|big-batch) ;;
+  *) err "pm_skill_receipts.appetite must be one of: small-batch, medium-batch, big-batch" ;;
+esac
+if [ "$COMPOSE_GUARD" != "passed" ]; then
+  err "pm_skill_receipts.compose_guard must be passed"
+fi
+
 receipt_count=$(yq -r '.pm_skill_receipts.receipts | length' "$TMP_YAML")
 for i in $(seq 0 $((receipt_count - 1))); do
+  phase="$(field_at "$i" phase)"
   delegate="$(field_at "$i" delegate)"
+  required="$(field_at "$i" required)"
   status="$(field_at "$i" status)"
   evidence="$(field_at "$i" evidence)"
   fallback="$(field_at "$i" fallback)"
@@ -78,6 +98,22 @@ for i in $(seq 0 $((receipt_count - 1))); do
   if is_blank "$delegate"; then
     err "receipt row $i missing delegate"
     continue
+  fi
+
+  expected_phase=""
+  case "$delegate" in
+    problem-framing-canvas) expected_phase="intake-problem" ;;
+    opportunity-solution-tree) expected_phase="scope-decompose" ;;
+    pol-probe-advisor) expected_phase="assumption-extract" ;;
+    press-release) expected_phase="acceptance-outcome" ;;
+  esac
+  if [ -n "$expected_phase" ]; then
+    if [ "$phase" != "$expected_phase" ]; then
+      err "required delegate ${delegate} must have phase ${expected_phase}"
+    fi
+    if [ "$required" != "true" ]; then
+      err "required delegate ${delegate} must set required: true"
+    fi
   fi
 
   case "$status" in

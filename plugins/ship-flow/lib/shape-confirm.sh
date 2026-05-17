@@ -80,7 +80,7 @@ fi
 PM_RECEIPTS_YAML=""
 if [ "$LAYOUT" = "folder" ]; then
   if ! yq --input-format=json -e '(.pitch.pm_skill_receipts // .pm_skill_receipts) != null' "$PROPOSAL" >/dev/null 2>&1; then
-    echo "Error: pitch.pm_skill_receipts is required for folder-layout Mode A shape proposals" >&2
+    echo "Error: pitch.pm_skill_receipts or top-level pm_skill_receipts is required for folder-layout Mode A shape proposals" >&2
     exit 10
   fi
 

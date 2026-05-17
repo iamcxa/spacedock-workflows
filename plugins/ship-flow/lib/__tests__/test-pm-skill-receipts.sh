@@ -124,6 +124,26 @@ case_invalid_status() {
   run_fixture "$(valid_receipt_block | replace_first 'status: invoked' 'status: maybe')"
 }
 
+case_wrong_stage() {
+  run_fixture "$(valid_receipt_block | replace_first 'stage: ship-shape' 'stage: ship-plan')"
+}
+
+case_wrong_mode() {
+  run_fixture "$(valid_receipt_block | replace_first 'mode: mode-a' 'mode: mode-b')"
+}
+
+case_wrong_compose_guard() {
+  run_fixture "$(valid_receipt_block | replace_first 'compose_guard: passed' 'compose_guard: failed')"
+}
+
+case_missing_appetite() {
+  run_fixture "$(valid_receipt_block | grep -v 'appetite: small-batch')"
+}
+
+case_invalid_appetite() {
+  run_fixture "$(valid_receipt_block | replace_first 'appetite: small-batch' 'appetite: weekend')"
+}
+
 case_optional_invalid_status() {
   run_fixture "$(valid_receipt_block | awk '
     /^```$/ && !inserted {
@@ -142,6 +162,14 @@ case_optional_invalid_status() {
 
 case_missing_delegate() {
   run_fixture "$(valid_receipt_block | grep -v 'delegate: press-release')"
+}
+
+case_required_delegate_wrong_phase() {
+  run_fixture "$(valid_receipt_block | replace_first 'phase: scope-decompose' 'phase: intake-problem')"
+}
+
+case_required_delegate_not_required() {
+  run_fixture "$(valid_receipt_block | replace_first 'required: true' 'required: false')"
 }
 
 case_invoked_without_evidence() {
@@ -194,6 +222,43 @@ assert_stderr_contains "duplicate section:pm-skill-receipts" \
   "duplicate receipt blocks report reason"
 
 echo
+echo "--- PM receipt validator: root contract fails closed ---"
+assert_exit 1 \
+  "case_wrong_stage" \
+  "wrong stage fails"
+assert_stderr_contains "pm_skill_receipts.stage must be ship-shape" \
+  "case_wrong_stage" \
+  "wrong stage reports reason"
+
+assert_exit 1 \
+  "case_wrong_mode" \
+  "wrong mode fails"
+assert_stderr_contains "pm_skill_receipts.mode must be mode-a" \
+  "case_wrong_mode" \
+  "wrong mode reports reason"
+
+assert_exit 1 \
+  "case_wrong_compose_guard" \
+  "wrong compose_guard fails"
+assert_stderr_contains "pm_skill_receipts.compose_guard must be passed" \
+  "case_wrong_compose_guard" \
+  "wrong compose_guard reports reason"
+
+assert_exit 1 \
+  "case_missing_appetite" \
+  "missing appetite fails"
+assert_stderr_contains "pm_skill_receipts.appetite must be one of: small-batch, medium-batch, big-batch" \
+  "case_missing_appetite" \
+  "missing appetite reports reason"
+
+assert_exit 1 \
+  "case_invalid_appetite" \
+  "invalid appetite fails"
+assert_stderr_contains "pm_skill_receipts.appetite must be one of: small-batch, medium-batch, big-batch" \
+  "case_invalid_appetite" \
+  "invalid appetite reports reason"
+
+echo
 echo "--- PM receipt validator: enum, delegate, and evidence semantics fail closed ---"
 assert_exit 1 \
   "case_invalid_status" \
@@ -215,6 +280,20 @@ assert_exit 1 \
 assert_stderr_contains "missing required delegate: press-release" \
   "case_missing_delegate" \
   "missing required delegate reports reason"
+
+assert_exit 1 \
+  "case_required_delegate_wrong_phase" \
+  "required delegate wrong phase fails"
+assert_stderr_contains "required delegate opportunity-solution-tree must have phase scope-decompose" \
+  "case_required_delegate_wrong_phase" \
+  "required delegate wrong phase reports reason"
+
+assert_exit 1 \
+  "case_required_delegate_not_required" \
+  "required delegate required=false fails"
+assert_stderr_contains "required delegate problem-framing-canvas must set required: true" \
+  "case_required_delegate_not_required" \
+  "required delegate required=false reports reason"
 
 assert_exit 1 \
   "case_invoked_without_evidence" \

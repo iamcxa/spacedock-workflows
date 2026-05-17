@@ -15,6 +15,18 @@ assert_exit() {
   else echo "FAIL $name (expected exit $expected, got $got)"; FAIL=1; fi
 }
 
+assert_stderr_contains() {
+  local needle="$1" cmd="$2" name="$3"
+  local err
+  err="$(eval "$cmd" 2>&1 >/dev/null)"
+  if echo "$err" | grep -qF "$needle"; then
+    echo "OK $name"
+  else
+    echo "FAIL $name (stderr missing: $needle)"
+    FAIL=1
+  fi
+}
+
 # Fixture: isolated workflow tree in mktemp git repo with ROADMAP.md already section-marked
 setup_fixture() {
   local dir
@@ -122,6 +134,38 @@ proposal_without_pm_skill_receipts() {
     "acceptance_outcome": "Captain receives a working shape-confirm test suite that exercises the missing PM-skill receipt guard before mutation.",
     "stated_assumptions": [],
     "dag_mermaid": "graph LR\n  A --> B"
+  },
+  "children": [],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+proposal_with_top_level_pm_skill_receipts() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing shape-confirm.sh",
+    "acceptance_outcome": "Captain receives a working shape-confirm test suite that accepts the legacy top-level PM-skill receipt location.",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B"
+  },
+  "pm_skill_receipts": {
+    "stage": "ship-shape",
+    "mode": "mode-a",
+    "appetite": "small-batch",
+    "compose_guard": "passed",
+    "receipts": [
+      {"phase": "intake-problem", "delegate": "problem-framing-canvas", "required": true, "status": "invoked", "evidence": "Skill: problem-framing-canvas", "fallback": null, "rationale": "Feeds the Problem block."},
+      {"phase": "scope-decompose", "delegate": "opportunity-solution-tree", "required": true, "status": "unavailable", "evidence": null, "fallback": "inline", "rationale": "Skill unavailable; inline fallback recorded before compose."},
+      {"phase": "assumption-extract", "delegate": "pol-probe-advisor", "required": true, "status": "invoked", "evidence": "Skill: pol-probe-advisor", "fallback": null, "rationale": "Filters critical assumptions."},
+      {"phase": "acceptance-outcome", "delegate": "press-release", "required": true, "status": "skipped", "evidence": null, "fallback": null, "rationale": "Small-scope skip rule matched before compose."}
+    ]
   },
   "children": [],
   "rabbit_holes": [],
@@ -409,6 +453,9 @@ pushd "$TMP" >/dev/null || exit 1
 assert_exit 10 \
   "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
   "DC-37a missing PM-skill receipts exit 10"
+assert_stderr_contains "Error: pitch.pm_skill_receipts or top-level pm_skill_receipts is required for folder-layout Mode A shape proposals" \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
+  "DC-37a2 missing PM-skill receipts diagnostic names both accepted JSON locations"
 if [ ! -e "docs/ship-flow/090-test-pitch" ] && [ ! -e "docs/ship-flow/090-test-pitch.md" ]; then
   echo "OK DC-37b missing receipt refusal creates no pitch artifacts"
 else
@@ -418,6 +465,24 @@ fi
 COMMITS=$({ git log --oneline || true; } | wc -l | tr -d ' ')
 if [ "$COMMITS" = "1" ]; then echo "OK DC-37c missing receipt refusal creates no commit"
 else echo "FAIL DC-37c missing receipt refusal created commit(s), got $COMMITS"; FAIL=1; fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-38: top-level PM-skill receipts remain accepted ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-top-level-receipts.json"
+proposal_with_top_level_pm_skill_receipts > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 0 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
+  "DC-38a top-level pm_skill_receipts accepted"
+if bash "${LIB_DIR}/validate-pm-skill-receipts.sh" docs/ship-flow/090-test-pitch/shape.md >/dev/null 2>&1; then
+  echo "OK DC-38b rendered top-level PM-skill receipt validates"
+else
+  echo "FAIL DC-38b rendered top-level PM-skill receipt did not validate"
+  FAIL=1
+fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
