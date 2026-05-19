@@ -1,13 +1,13 @@
 ---
 name: ship
-description: "Use when `/ship` should run ship-flow for an entity id or concrete requirement; use shape first for vague or unmatched requests."
+description: "Use when `/ship` should run ship-flow for an entity id or good-enough raw requirement; vague inputs need shape clarification."
 user-invocable: true
 argument-hint: "<entity-id | slug | concrete-requirement>"
 ---
 
 # Ship — Pipeline Entry (2.0)
 
-You run the SHIP pipeline entry. Produce 5 per-stage .md artifacts + final PR per Principle 6 3-layer architecture, dispatching to named teammates via SendMessage where the team was spawned at `/shape`.
+You run the SHIP pipeline entry. Produce unified stage artifacts from shape through ship-final per Principle 6 3-layer architecture, dispatching to named teammates via SendMessage where the team already exists or is created during inline shape.
 
 ## First-Officer Bootstrap
 
@@ -29,13 +29,14 @@ under the First Officer contract. Do not bypass first-officer startup, status
 resolution, gate policy, or feedback routing because the input looks like a
 simple entity id.
 
-If requirements are vague, route through first-officer-managed workflow state to
-`ship-flow:ship-shape`; do not bypass first-officer by inventing a plan or
-executing inline.
+If requirements are vague enough to need clarification, route through
+first-officer-managed workflow state to `ship-flow:ship-shape` clarification; do not bypass first-officer by inventing a plan or executing inline.
 
-**Layer A delegation**: none — `/ship` is pure orchestration. Stage skills (ship-plan / ship-execute / ship-verify / ship-review) own their Layer A delegations.
+**Layer A delegation**: none — `/ship` is pure orchestration. Stage skills (ship-shape / ship-design / ship-plan / ship-execute / ship-verify / ship-review) own their Layer A delegations.
 
 **Pipeline artifacts** (`<entity-folder>` = `docs/<wf>/<id>-<slug>/`):
+- `shape.md` — ship-shape output (problem, appetite, acceptance, assumptions); legacy `spec.md` counts as shaped input for old entities.
+- `design.md` — ship-design output, or a recorded design trivial-pass when no design-bearing decision exists.
 - `plan.md` — ship-plan output (task breakdown, verification spec, DCs).
 - `execute.md` — ship-execute output (commits, files modified, UAT evidence).
 - `verify.md` — ship-verify output (quality gate, review, UAT, verdict).
@@ -46,9 +47,9 @@ executing inline.
 
 - `/ship <entity-id>` — entity folder OR flat entity exists → run pipeline.
 - `/ship <slug>` — match via `docs/<wf>/<slug>.md` or `docs/<wf>/*-<slug>/`.
-- `/ship "<concrete requirement>"` — specifies files, reproducible bug, OR typed acceptance → run pipeline inline (autonomous sharp-claim then pipeline).
+- `/ship "<concrete requirement>"` — good-enough raw requirement: specifies files, reproducible bug, typed acceptance, or otherwise enough material for shape → run `ship-flow:ship-shape inline`, then design before plan.
 
-**Inverse escape hatch (route to /shape):** raw requirement with NO file paths AND NO reproducible bug AND NO typed acceptance → announce `vague directive — run /shape first` and EXIT. Entity-id/slug with no matching file → announce `entity not found; run /shape <directive> to create` and EXIT.
+**Inverse escape hatch (needs shape clarification):** raw requirement with NO file paths AND NO reproducible bug AND NO typed acceptance → announce `vague directive — provide a shapeable requirement or invoke shape with more context` and EXIT. Entity-id/slug with no matching file → announce `entity not found; provide a requirement to shape or create the entity first` and EXIT.
 
 ---
 
@@ -60,31 +61,38 @@ Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Then:
 |---|---|---|
 | Entity id (e.g. `085`) | `docs/<workflow>/<id>-*.md` OR `docs/<workflow>/<id>-*/index.md` | entity path |
 | Slug | `docs/<workflow>/*-<slug>.md` OR `docs/<workflow>/*-<slug>/index.md` | entity path |
-| Concrete requirement | has file paths / reproducible bug / typed acceptance | sharp-claim + entity path |
+| Good-enough raw requirement | has file paths / reproducible bug / typed acceptance / enough detail to shape | FO-managed inline shape + entity path |
 | Vague directive | none of above | inverse-escape EXIT |
 
-**Concrete-requirement sharp-claim** (before pipeline): allocate ID via `python3 "$SPACEDOCK_PLUGIN_DIR/skills/commission/bin/status" --workflow-dir "$WORKFLOW_DIR" --next-id` (MEMORY #5 — `--next-id` → commit is ONE uninterrupted pair). Minimal body: the captain's directive verbatim + sharp-claim commit. Then fall into entity path.
+**Good-enough raw requirement inline shape** (before design/plan): allocate or resolve
+the entity under first-officer-managed workflow state, preserve the captain's
+directive verbatim, and dispatch `ship-flow:ship-shape inline` as the first
+stage. After shape produces `shape.md`, continue into design before plan.
+
+**Existing entity shape check**: if the entity has neither `shape.md` nor legacy `spec.md`, the next stage is shape before plan. Do not treat an existing `index.md` or flat entity body as permission to start planning.
 
 ## Step 2 — TaskCreate umbrella
 
-Create 5 top-level tasks (ship owns the umbrella; each stage skill creates its own sub-phase tasks internally):
+Create 7 top-level tasks (ship owns the umbrella; each stage skill creates its own sub-phase tasks internally):
 
-`plan` → `execute` → `verify` → `review` → `ship-final`
+`shape` → `design` → `plan` → `execute` → `verify` → `review` → `ship-final`
 
 Mark each `in_progress` before dispatching that stage; `completed` when stage skill returns and cross-review verdict is PROCEED.
 
 ## Step 3 — Dispatch per stage (Principle 6 Rule A)
 
-**Team reuse (NOT spawn).** Team `pitch-<id>` was created at `/shape` with `planner` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size). `/ship` REUSES via SendMessage — never re-spawns. If no team exists (rare edge: entity created outside `/shape`), create team inline:
+**Team reuse (NOT spawn) after shape exists.** Team `pitch-<id>` is created by `/shape` or the inline shape leg with `planner` (opus) + `designer` (opus) + `executer` (sonnet) + `verifier` (opus or sonnet by pitch size). `/ship` REUSES via SendMessage when the team already exists. If no team exists (edge: entity created outside `/shape` or legacy entity missing team state), create team inline before dispatching the next required stage:
 
 ```
-TeamCreate(team_name: "pitch-<id>", members: ["planner", "executer", "verifier"])
+TeamCreate(team_name: "pitch-<id>", members: ["planner", "designer", "executer", "verifier"])
 ```
 
 Then dispatch each stage to its assigned teammate via SendMessage (hot-context ~10× faster than fresh dispatch):
 
 | Stage | Teammate | Skill invoked by teammate | Artifact |
 |---|---|---|---|
+| shape | `planner` | `ship-flow:ship-shape` | `<entity-folder>/shape.md` |
+| design | `designer` | `ship-flow:ship-design` | `<entity-folder>/design.md` or design trivial-pass |
 | plan | `planner` | `ship-flow:ship-plan` | `<entity-folder>/plan.md` |
 | execute | `executer` | `ship-flow:ship-execute` | `<entity-folder>/execute.md` |
 | verify | `verifier` | `ship-flow:ship-verify` | `<entity-folder>/verify.md` |
@@ -122,13 +130,15 @@ Output, or ## Intent Match Findings block for the triggered stage.`
 
 Sequentially advance; do NOT parallelize stages (they have hard ordering).
 
-1. **plan** → `planner` runs `ship-plan`, writes `plan.md`. On return, cross-review gate (see Step 5) → TaskUpdate plan=completed → advance.
-2. **execute** → `executer` runs `ship-execute`, writes `execute.md`. Cross-review gate → TaskUpdate → advance.
-3. **verify** → `verifier` runs `ship-verify`, writes `verify.md`. Cross-review gate → TaskUpdate → advance.
-4. **review** → `planner` runs `ship-review`, writes `review.md`. Cross-review gate → TaskUpdate → advance.
-5. **ship-final** → THIS skill writes `ship.md` + creates PR + announces merge status (see Step 6).
+1. **shape** → if missing `shape.md` and legacy `spec.md`, `planner` runs `ship-shape`, writes `shape.md`, and completes the shape gate before any design or plan dispatch.
+2. **design** → `designer` runs `ship-design` before plan. It writes `design.md` for UI/domain/schema/API/architecture/contract impact, or records a design trivial-pass when no design-bearing decision exists.
+3. **plan** → `planner` runs `ship-plan`, writes `plan.md`. On return, cross-review gate (see Step 5) → TaskUpdate plan=completed → advance.
+4. **execute** → `executer` runs `ship-execute`, writes `execute.md`. Cross-review gate → TaskUpdate → advance.
+5. **verify** → `verifier` runs `ship-verify`, writes `verify.md`. Cross-review gate → TaskUpdate → advance.
+6. **review** → `planner` runs `ship-review`, writes `review.md`. Cross-review gate → TaskUpdate → advance.
+7. **ship-final** → THIS skill writes `ship.md` + creates PR + announces merge status (see Step 6).
 
-**Interrupt handling**: captain may pause between stages. Each stage artifact is self-contained resumable; next `/ship <entity-id>` invocation reads existing artifacts and resumes at first missing .md (or first stage whose cross-review verdict was not PROCEED).
+**Interrupt handling**: captain may pause between stages. Each stage artifact is self-contained resumable; next `/ship <entity-id>` invocation reads existing artifacts and resumes at the first missing required artifact or first stage whose cross-review verdict was not PROCEED. Missing `shape.md`/legacy `spec.md` resumes at shape. Missing `design.md` and missing design trivial-pass resumes at design. Plan is reachable only after shape exists and design before plan has either produced its artifact or recorded the trivial-pass.
 
 ## Step 5 — Cross-review gate per stage (Principle 6 Rule C)
 
@@ -322,11 +332,11 @@ No `-a`/`-A` staging (MEMORY #14/#25/#37). Sharp-claim → pipeline-start commit
 ## Invariants + red flags (STOP or escalate if violated)
 
 - `/ship` NEVER spawns a new team — reuses the team from `/shape` via SendMessage. Spawn only on rare edge case (entity created outside `/shape`).
-- 5 stages advance sequentially. Skipping a stage = fake pipeline.
+- 7 stages advance sequentially: shape, design, plan, execute, verify, review, ship-final. Skipping a required stage = fake pipeline.
 - Each stage emits its .md before cross-review runs. Empty or missing .md → cross-review has nothing to review → STOP.
 - Cross-review gate per stage is non-negotiable (Principle 6 Rule C).
 - VETO loop capped at 2 rounds per stage; round 3 → PROMPT_CAPTAIN.
-- `/ship "<vague>"` without file paths / reproducible bug / typed acceptance → inverse escape EXIT. Do NOT shape inline — user runs `/shape` explicitly.
+- `/ship "<vague>"` without file paths / reproducible bug / typed acceptance → inverse escape EXIT with a request for shapeable clarification. Do not require a separate `/shape` invocation as the only valid path.
 - Entity-id unresolved → EXIT with `entity not found` hint.
 - Within-pitch stage transition via fresh-subagent without (a/b/c/d) exception → Principle 6 Rule A violation.
 - TaskCreate umbrella at THIS skill; each stage skill owns its sub-task list (do not duplicate).
@@ -341,7 +351,6 @@ No `-a`/`-A` staging (MEMORY #14/#25/#37). Sharp-claim → pipeline-start commit
 - Entity folder schema: `plugins/ship-flow/references/entity-body-schema.yaml`.
 - Per-stage writer: `plugins/ship-flow/lib/write-stage-artifact.sh` (landed commit `acd73545`).
 - Atomic writer (shape): `plugins/ship-flow/lib/shape-confirm.sh`.
-- Stage skills: `ship-flow:ship-plan`, `ship-flow:ship-execute`, `ship-flow:ship-verify`, `ship-flow:ship-review`.
-- Upstream shape skill: `ship-flow:ship-shape` (team spawn happens here).
+- Stage skills: `ship-flow:ship-shape`, `ship-flow:ship-design`, `ship-flow:ship-plan`, `ship-flow:ship-execute`, `ship-flow:ship-verify`, `ship-flow:ship-review`.
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
 - MEMORY: #5 (--next-id atomicity), #14/#25/#37 (explicit pathspec / staging contamination), #30 (verification-dispatch), #35 (dispatch discipline, amended by Principle 6 Rule A), opus-4.7-naturally-does (2026-04-23 harness diet).
