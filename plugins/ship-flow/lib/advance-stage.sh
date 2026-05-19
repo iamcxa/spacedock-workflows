@@ -73,6 +73,9 @@ done
 [ -f "$ENTITY" ] || { echo "Error: entity not found: $ENTITY" >&2; exit 3; }
 [ -n "$IF_HASH" ] || { echo "Error: --if-hash required" >&2; exit 7; }
 
+H="$(sha256_of "$ENTITY")"
+[ "$H" = "$IF_HASH" ] || { echo "Error: hash mismatch before register-stage-output (expected $IF_HASH, got $H)" >&2; exit 6; }
+
 # Check if already at target status — may skip status update but still register artifact
 CURRENT_STATUS="$(awk 'BEGIN{d=0} /^---$/{d++; if(d==2)exit} d==1 && /^status:[[:space:]]/{print; exit}' "$ENTITY" | awk '{print $2}')"
 STATUS_ALREADY_SET=0
@@ -80,37 +83,53 @@ if [ "$CURRENT_STATUS" = "$NEW_STATUS" ]; then
   STATUS_ALREADY_SET=1
 fi
 
-# Check if stage artifact already registered — skip register+render if both already done
-STAGE_ALREADY_REGISTERED="$(awk -v stage="$STAGE_NAME" '
-  BEGIN{d=0;in_so=0;found=0}
-  /^---$/{d++; if(d==2)exit}
-  d==1 && /^stage_outputs:[[:space:]]*$/{in_so=1;next}
-  d==1 && in_so && /^[[:space:]]/{
-    line=$0; sub(/^[[:space:]]+/,"",line)
-    split(line,p,":"); if(p[1]==stage){found=1}; next
-  }
-  d==1 && in_so && /^[^[:space:]]/{in_so=0}
-  END{print found}
-' "$ENTITY")"
-
-# Fully idempotent: status already set AND artifact already registered
-if [ "$STATUS_ALREADY_SET" = "1" ] && [ "$STAGE_ALREADY_REGISTERED" = "1" ]; then
-  exit 0
+if [ "$STATUS_ALREADY_SET" = "0" ]; then
+  case "$COMMIT_MSG" in
+    *": advance status to "*) ;;
+    *)
+      echo "Error: --commit-as for status mutation must contain ': advance status to ' for C14 invariant compatibility" >&2
+      exit 1
+      ;;
+  esac
 fi
+
+ORIGINAL_ENTITY="$(mktemp)"
+INDEX_PATCH=""
+INDEX_PATCH_HAS_DIFF=0
+cp -p "$ENTITY" "$ORIGINAL_ENTITY"
+cleanup_original() {
+  rm -f "$ORIGINAL_ENTITY"
+  if [ -n "$INDEX_PATCH" ]; then
+    rm -f "$INDEX_PATCH"
+  fi
+}
+restore_original() {
+  cp -p "$ORIGINAL_ENTITY" "$ENTITY"
+}
+restore_entity_and_index() {
+  local rc=0
+  git -C "$GIT_CONTEXT" reset -q -- "$ENTITY_ABS" >/dev/null 2>&1 || rc=1
+  restore_original
+  if [ "$INDEX_PATCH_HAS_DIFF" = "1" ]; then
+    git -C "$GIT_CONTEXT" apply --cached --binary "$INDEX_PATCH" >/dev/null 2>&1 || rc=1
+  fi
+  return "$rc"
+}
+trap cleanup_original EXIT INT TERM
 
 # Step 1: register-stage-output (writes stage_outputs.<stage>)
 # Re-read hash from disk (initial hash provided by caller)
-H="$(sha256_of "$ENTITY")"
-[ "$H" = "$IF_HASH" ] || { echo "Error: hash mismatch before register-stage-output (expected $IF_HASH, got $H)" >&2; exit 6; }
-
 bash "${SCRIPT_DIR}/register-stage-output.sh" \
   --entity="$ENTITY" \
   --stage="$STAGE_NAME" \
   --file="$STAGE_FILE" \
   --if-hash="$H" \
-  --commit-as="${COMMIT_MSG}: register stage_outputs.${STAGE_NAME}"
+  --no-commit
 RC=$?
-[ "$RC" -eq 0 ] || exit "$RC"
+if [ "$RC" -ne 0 ]; then
+  restore_original
+  exit "$RC"
+fi
 
 # Step 2: update-entity-status (advances status field) — skip if already at target
 if [ "$STATUS_ALREADY_SET" = "0" ]; then
@@ -119,9 +138,12 @@ if [ "$STATUS_ALREADY_SET" = "0" ]; then
     --entity="$ENTITY" \
     --new-status="$NEW_STATUS" \
     --if-hash="$H" \
-    --commit-as="${COMMIT_MSG}: advance status to ${NEW_STATUS}"
+    --no-commit
   RC=$?
-  [ "$RC" -eq 0 ] || exit "$RC"
+  if [ "$RC" -ne 0 ]; then
+    restore_original
+    exit "$RC"
+  fi
 fi
 
 # Step 3: render-stage-links (re-renders body table from frontmatter)
@@ -130,8 +152,66 @@ H="$(sha256_of "$ENTITY")"
 bash "${SCRIPT_DIR}/render-stage-links.sh" \
   --entity="$ENTITY" \
   --if-hash="$H" \
-  --commit-as="${COMMIT_MSG}: render stage-artifact-links"
+  --no-commit
 RC=$?
-[ "$RC" -eq 0 ] || exit "$RC"
+if [ "$RC" -ne 0 ]; then
+  restore_original
+  exit "$RC"
+fi
+
+ENTITY_DIR="$(cd "$(dirname "$ENTITY")" 2>/dev/null && pwd)"
+ENTITY_ABS="${ENTITY_DIR}/$(basename "$ENTITY")"
+GIT_CONTEXT=""
+if git -C "$ENTITY_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+  GIT_CONTEXT="$ENTITY_DIR"
+fi
+
+if [ -z "$GIT_CONTEXT" ]; then
+  if cmp -s "$ENTITY" "$ORIGINAL_ENTITY"; then
+    restore_original
+  fi
+  echo "Warning: not a git repo; skipping commit" >&2
+  exit 0
+fi
+
+INDEX_PATCH="$(mktemp)"
+git -C "$GIT_CONTEXT" diff --cached --binary -- "$ENTITY_ABS" > "$INDEX_PATCH"
+if [ -s "$INDEX_PATCH" ]; then
+  INDEX_PATCH_HAS_DIFF=1
+fi
+
+if cmp -s "$ENTITY" "$ORIGINAL_ENTITY"; then
+  restore_original
+  exit 0
+fi
+
+if ! git -C "$GIT_CONTEXT" add -- "$ENTITY_ABS"; then
+  if ! restore_entity_and_index; then
+    echo "Error: git add failed; index restore failed" >&2
+    exit 8
+  fi
+  echo "Error: git add failed" >&2
+  exit 8
+fi
+if git -C "$GIT_CONTEXT" diff --cached --quiet -- "$ENTITY_ABS"; then
+  if ! restore_entity_and_index; then
+    echo "Error: no diff after advance; index restore failed" >&2
+    exit 8
+  fi
+  exit 0
+fi
+if ! git -c user.email="${GIT_AUTHOR_EMAIL:-author@example.com}" \
+          -c user.name="${GIT_AUTHOR_NAME:-Ship-flow}" \
+          -C "$GIT_CONTEXT" commit -m "$COMMIT_MSG" -- "$ENTITY_ABS"; then
+  if ! restore_entity_and_index; then
+    echo "Error: commit failed; index restore failed" >&2
+    exit 8
+  fi
+  echo "Error: commit failed" >&2
+  exit 8
+fi
+
+trap - EXIT INT TERM
+cleanup_original
 
 exit 0

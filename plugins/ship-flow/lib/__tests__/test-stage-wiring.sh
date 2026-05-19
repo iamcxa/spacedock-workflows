@@ -45,15 +45,16 @@ EOF
   for stage in plan execute verify review ship; do
     echo "# ${stage} artifact" > "$dir/${stage}.md"
   done
-  (cd "$dir" && git init -q && git add . && \
+  (cd "$dir" && git init -q && git add -- index.md plan.md execute.md verify.md review.md ship.md && \
     git -c user.email=test@test -c user.name=test commit -qm "init")
   echo "$dir"
 }
 
 advance() {
   local dir="$1" new_status="$2" stage_name="$3" stage_file="$4"
-  local h
+  local h before after delta rc
   h="$(sha256_of "$dir/index.md")"
+  before="$(cd "$dir" && git rev-list --count HEAD)"
   # Run in fixture dir so git operations resolve against its own git repo
   (cd "$dir" && bash "${LIB_DIR}/advance-stage.sh" \
     --entity="index.md" \
@@ -61,7 +62,17 @@ advance() {
     --stage-name="$stage_name" \
     --stage-file="${stage_file}" \
     --if-hash="$h" \
-    --commit-as="${stage_name}(test-wiring): advance")
+    --commit-as="${stage_name}(test-wiring): advance status to ${new_status}")
+  rc=$?
+  after="$(cd "$dir" && git rev-list --count HEAD)"
+  delta=$(( after - before ))
+  if [ "$rc" = "0" ] && [ "$delta" = "1" ]; then
+    echo "OK one commit for ${stage_name}->${new_status}"
+  else
+    echo "FAIL expected one commit for ${stage_name}->${new_status}, got rc=$rc delta=$delta"
+    FAIL=1
+  fi
+  return "$rc"
 }
 
 echo "=== DC-2: status advances sharp→plan→execute→verify→ship ==="
@@ -91,6 +102,13 @@ echo "--- ship→ship (advance-stage ship artifact) ---"
 advance "$TMP" ship ship ship.md
 if grep -q '^status: ship$' "$TMP/index.md"; then echo "OK status=ship (idempotent)"
 else echo "FAIL status not ship"; FAIL=1; fi
+
+FINAL_COMMITS="$(cd "$TMP" && git rev-list --count HEAD)"
+if [ "$FINAL_COMMITS" = "6" ]; then
+  echo "OK full stage sequence has initial + 5 commits"
+else
+  echo "FAIL full stage sequence expected 6 commits, got $FINAL_COMMITS"; FAIL=1
+fi
 
 rm -rf "$TMP"
 
@@ -147,7 +165,7 @@ RC=0
   --stage-name=plan \
   --stage-file=plan.md \
   --if-hash="$H" \
-  --commit-as="plan(test): stale") >/dev/null 2>&1 || RC=$?
+  --commit-as="plan(test): advance status to plan") >/dev/null 2>&1 || RC=$?
 if [ "$RC" = "6" ]; then echo "OK DC-4 stale hash returns exit 6"
 else echo "FAIL DC-4 expected exit 6, got $RC"; FAIL=1; fi
 rm -rf "$TMP"
@@ -174,7 +192,7 @@ RC=0
   --stage-name=ship \
   --stage-file=ship.md \
   --if-hash="$H" \
-  --commit-as="ship(test): noop") >/dev/null 2>&1 || RC=$?
+  --commit-as="ship(test): advance status to ship") >/dev/null 2>&1 || RC=$?
 if [ "$RC" = "0" ]; then echo "OK DC-5a no-op exits 0"
 else echo "FAIL DC-5a expected exit 0, got $RC"; FAIL=1; fi
 COMMITS_AFTER="$(cd "$TMP" && git rev-list --count HEAD)"
