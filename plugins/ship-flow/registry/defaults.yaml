@@ -22,8 +22,8 @@
 # Examples of adopter-specific patterns that belong in project override, NOT here:
 #   project globs like fmodel patterns, migration path globs, or team-specific keywords.
 #
-# VERSIONING: v1 ships with schema domain only (deliberate minimal seed).
-# Additional domains (saga, rbac, contract, etc.) added via future X-children of #113.
+# VERSIONING: v1 seeded schema first. Portable non-UI contract/interface
+# domains route to the built-in contract-interface design lane.
 
 schema_version: "1.0"
 domains:
@@ -43,3 +43,70 @@ domains:
     # this domain entry to point at a project-specific schema designer anchor.
     designer_section_anchor: "ship-design#schema-designer"
     description: "Schema design — drizzle tables, fmodel L1/L2/L3, indexes, FK, migration sequencing"
+
+  agent-contract:
+    trigger_patterns: []
+    spec_keywords:
+      - "agent contract"
+      - "worker contract"
+      - "role definition"
+      - "dispatch agent"
+      - "ensign contract"
+    designer_section_anchor: "ship-design#contract-interface-designer"
+    description: "Agent/worker contract design — role definitions, dispatch contract, worker protocol boundaries"
+
+  api-vocabulary:
+    trigger_patterns: []
+    spec_keywords:
+      - "API vocabulary"
+      - "api vocabulary"
+      - "endpoint vocabulary"
+      - "request vocabulary"
+      - "response vocabulary"
+      - "resource naming"
+    designer_section_anchor: "ship-design#contract-interface-designer"
+    description: "API vocabulary design — endpoint/resource naming, request/response terminology, contract words"
+
+  selector-grammar:
+    trigger_patterns: []
+    spec_keywords:
+      - "selector grammar"
+      - "role selector"
+      - "name selector"
+      - "locator grammar"
+      - "lookup selector"
+    designer_section_anchor: "ship-design#contract-interface-designer"
+    description: "Selector grammar design — selector syntax, role/name lookup grammar, locator semantics"
+
+  tool-protocol:
+    trigger_patterns: []
+    spec_keywords:
+      - "tool protocol"
+      - "tool call protocol"
+      - "tool invocation"
+      - "MCP tool"
+      - "protocol envelope"
+    designer_section_anchor: "ship-design#contract-interface-designer"
+    description: "Tool protocol design — tool call shapes, invocation envelopes, protocol semantics"
+
+  dsl:
+    trigger_patterns: []
+    spec_keywords:
+      - "DSL"
+      - "domain specific language"
+      - "query language"
+      - "command language"
+      - "syntax grammar"
+    designer_section_anchor: "ship-design#contract-interface-designer"
+    description: "DSL design — command/query language syntax and semantic boundaries"
+
+  message-format:
+    trigger_patterns: []
+    spec_keywords:
+      - "message format"
+      - "payload format"
+      - "response format"
+      - "request envelope"
+      - "wire message"
+    designer_section_anchor: "ship-design#contract-interface-designer"
+    description: "Message format design — payload/envelope/message shape before implementation"

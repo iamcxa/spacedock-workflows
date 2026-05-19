@@ -10,6 +10,7 @@ SHAPE_SKILL="${REPO_ROOT}/plugins/ship-flow/skills/ship-shape/SKILL.md"
 DESIGN_SKILL="${REPO_ROOT}/plugins/ship-flow/skills/ship-design/SKILL.md"
 PLAN_SKILL="${REPO_ROOT}/plugins/ship-flow/skills/ship-plan/SKILL.md"
 SCHEMA="${REPO_ROOT}/plugins/ship-flow/references/entity-body-schema.yaml"
+CONTRACT_DOMAINS="agent-contract api-vocabulary selector-grammar tool-protocol dsl message-format"
 
 PASS=0
 FAIL=0
@@ -66,6 +67,24 @@ check "README says design covers contract/interface design" \
   "grep -q 'contract/interface design' '${README}' && grep -q 'selector grammar' '${README}'"
 check "README design stage no longer has skip-when (W3 — design always runs per pitch 116)" \
   "! grep -A6 'name: design' '${README}' | grep -q 'skip-when:'"
+
+echo "Block 6: registry-backed contract domains route to contract-interface design"
+check "shape documents registry-backed contract domains as no-UI/no-schema design triggers" \
+  "grep -q 'registry-backed contract domains' '${SHAPE_SKILL}' && grep -q 'no UI or schema trigger' '${SHAPE_SKILL}'"
+check "shape names the full portable contract domain set" \
+  "for domain in ${CONTRACT_DOMAINS}; do grep -q \"\${domain}\" '${SHAPE_SKILL}' || exit 1; done"
+check "shape handles comma-separated contract domain matches" \
+  "grep -q 'comma-separated' '${SHAPE_SKILL}' && grep -q 'split the matched list' '${SHAPE_SKILL}' && grep -q 'any matched domain' '${SHAPE_SKILL}'"
+check "shape says matched contract domains set contract_decision_required true" \
+  "grep -q 'contract_decision_required:true' '${SHAPE_SKILL}' && grep -q 'registry evidence' '${SHAPE_SKILL}'"
+check "ship-design exposes the contract-interface designer anchor" \
+  "grep -q 'ship-design#contract-interface-designer' '${DESIGN_SKILL}' && grep -q 'Contract Interface Designer' '${DESIGN_SKILL}'"
+check "ship-design maps registry contract domains to the existing contract-interface lane" \
+  "grep -q 'registry target for portable contract/interface domains' '${DESIGN_SKILL}' && grep -q 'contract-interface lane' '${DESIGN_SKILL}'"
+check "ship-design excludes contract-interface anchor domains from generic domain specialist path" \
+  "grep -q 'skip the generic domain specialist path' '${DESIGN_SKILL}' && grep -q 'contract-interface anchor' '${DESIGN_SKILL}'"
+check "ship-design keeps empty knowledge modules scoped to contract-interface anchor only" \
+  "grep -q 'does not make empty knowledge modules generally acceptable' '${DESIGN_SKILL}'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

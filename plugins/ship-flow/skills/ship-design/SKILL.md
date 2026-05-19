@@ -238,6 +238,18 @@ Dispatch rules:
   `CLAUDE.md` remain runtime/session context; ship-design only enforces
   non-root folder guidance reported by `resolve-skill-routing.sh`.
 
+### Contract Interface Designer
+
+Anchor: `ship-design#contract-interface-designer`
+
+This is the registry target for portable contract/interface domains such as
+`agent-contract`, `api-vocabulary`, `selector-grammar`, `tool-protocol`, `dsl`,
+and `message-format`. It maps to the existing `contract-interface` lane rather
+than a dedicated specialist scaffold. The lane resolves the open
+contract/interface choice with a trade-off table, emits `D{N}|Captain decision`
+markers, and hands plan structured `design_constraints[]` with
+`open_decisions[]` empty or explicitly blocking.
+
 ### Whole-page visual parity targets
 
 Fragment-level ui-verify checks are necessary but not sufficient. They catch
@@ -335,7 +347,7 @@ Per DC-8: `design-skipped: true` (not `design-skipped: false` with empty constra
    bash plugins/ship-flow/lib/registry-resolve.sh --validate --domain=<domain-name>
    ```
    Branch on exit code:
-   - exit 0 → domain registered + specialist available → proceed to Phase 0.5 (specialist dispatch).
+   - exit 0 → domain registered + specialist available. Resolve `designer_section_anchor` with `registry-resolve.sh --domain=<domain-name>`. If the anchor is `ship-design#contract-interface-designer`, skip the generic domain specialist path and let the contract-interface lane handle it; otherwise proceed to Phase 0.5 (specialist dispatch).
    - exit 10 (M1 `specialist_missing`) → emit `## Design Output → ### Router HALT` block with all 3 options (skip / generalist-marker / file-specialist-first). SendMessage(FO): halt notice with domain name + options. **STOP** — captain acks one option in entity body, then re-runs design.
    - exit 11 (M2 `knowledge_module_missing`) → same as M1 path: emit HALT block, SendMessage(FO), **STOP**.
    - exit 20 / 21 (M4 parse_error / M5 invalid_trigger_config) → fail loud per INVARIANTS Principle 9; SendMessage(FO): "registry config error exit $?; blocking design stage". **STOP**.
@@ -347,10 +359,14 @@ Per DC-8: `design-skipped: true` (not `design-skipped: false` with empty constra
      `resolve-skill-routing.sh` before dispatch; include `skills_needed`,
      `folder_guidance_files`, `folder_guidance_skills`, and
      `codex_context_boundary` in the manifest.
-   - `domain:` set → add `domain` lane with registry `required_skills`,
-     `skill_hints.*`, `knowledge_module_path`, and `designer_section_anchor`.
-     Mark high-risk domain lanes as `panel_lane: domain-expert` and require
-     read-only findings that become constraints for plan.
+   - `domain:` set → resolve the registry envelope. If
+     `designer_section_anchor=ship-design#contract-interface-designer`, do not
+     add a separate `domain` lane; this contract-interface anchor is handled
+     only by the `contract-interface` lane below. For all other anchors, add
+     `domain` lane with registry `required_skills`, `skill_hints.*`,
+     `knowledge_module_path`, and `designer_section_anchor`. Mark high-risk
+     domain lanes as `panel_lane: domain-expert` and require read-only findings
+     that become constraints for plan.
    - `contract_decision_required: true` or `open_contract_decisions[]` non-empty → add `contract-interface` lane. The lane reads each open contract decision, produces a trade-off table, and converts the captain-selected option into `### Captain Decisions` plus `design_constraints[]`. If the captain does not decide, carry it to `open_decisions[]` so plan blocks.
    - multiple lanes present → `integration.mode: parallel`.
    - one low-risk lane present → `integration.mode: single-designer`.
@@ -371,7 +387,7 @@ Two routing paths that coexist. Both can fire concurrently when an entity has bo
 
 #### Domain path (existing — `schema-designer` via `domain-registry`)
 
-Reached when Phase 0 step 2 returns exit 0 (domain registered + `specialist_missing` = false). Routing target: `schema-designer` (or other domain specialist named in `designer_section_anchor`). **Unchanged by this overhaul.**
+Reached when Phase 0 step 2 returns exit 0 (domain registered + `specialist_missing` = false) and the resolved `designer_section_anchor` is not `ship-design#contract-interface-designer`. Routing target: `schema-designer` (or other domain specialist named in `designer_section_anchor`). Contract-interface anchors skip the generic domain specialist path to avoid a duplicate/contradictory lane beside `contract_decision_required:true`.
 
 1. Resolve specialist anchor and knowledge module:
    ```bash
@@ -386,6 +402,9 @@ Reached when Phase 0 step 2 returns exit 0 (domain registered + `specialist_miss
    in the design handoff so plan stage can preserve them in `skills_needed`.
    Specialist sub-section defines its own typed `## Design Output` block
    (e.g., `## Schema Design Output`).
+   This contract-interface anchor exception does not make empty knowledge modules generally acceptable for unrelated anchors; non-contract-interface
+   domain specialist rows still follow M1/M2 validation and must provide their
+   required specialist and knowledge-module contract.
 4. If prior shape evidence contains `## Domain Registry Validation` with `result: HALT-with-options` or a non-ok registry status, but this design-stage validation now returns exit 0, emit `### Registry Validation Resolution` in `design.md`:
    - `prior_result: <status/result from shape>`
    - `current_result: ok`

@@ -185,6 +185,23 @@ check_stdout "live defaults: schema domain resolves to ship-design#schema-design
   "designer_section_anchor=ship-design#schema-designer" \
   "\"$REGISTRY_SCRIPT\" --domain=schema"
 
+check "live defaults: list exposes portable contract/interface domains" \
+  "missing=0; for dom in agent-contract api-vocabulary selector-grammar tool-protocol dsl message-format; do \"$REGISTRY_SCRIPT\" --list | grep -qx \"\$dom\" || missing=1; done; [ \"\$missing\" -eq 0 ]"
+
+check_stdout "live defaults: selector-grammar resolves to contract-interface designer anchor" \
+  "designer_section_anchor=ship-design#contract-interface-designer" \
+  "\"$REGISTRY_SCRIPT\" --domain=selector-grammar"
+
+check "live defaults: all portable contract domains use contract-interface designer anchor" \
+  "missing=0; for dom in agent-contract api-vocabulary selector-grammar tool-protocol dsl message-format; do out=\$(\"$REGISTRY_SCRIPT\" --domain=\"\$dom\"); case \"\$out\" in *designer_section_anchor=ship-design#contract-interface-designer*) ;; *) missing=1 ;; esac; done; [ \"\$missing\" -eq 0 ]"
+
+check_stdout "live defaults: selector grammar fixture classifies as selector-grammar" \
+  "matched=selector-grammar" \
+  "\"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/contract-domains/selector-grammar.md\""
+
+check "live defaults: selector grammar fixture does not match schema" \
+  "! \"$REGISTRY_SCRIPT\" --classify \"${FIXTURES}/contract-domains/selector-grammar.md\" | grep -q 'matched=.*schema'"
+
 check_stdout "context manifest: --domain emits typed context-routing-manifest envelope" \
   "^context-routing-manifest:" \
   "\"$REGISTRY_SCRIPT\" --domain=schema --context-routing-manifest --config=\"${CONTEXT_FIXTURES}/registry-positive/defaults.yaml\""

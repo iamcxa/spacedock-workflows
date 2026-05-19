@@ -487,7 +487,9 @@ When `affects_ui: false` AND `domain:` is unset AND `design_required: false` AND
 
 ## Phase 8.5 — Domain Registry Validation
 
-After spec is composed (or post-shape-confirm if pre-existing spec), run or instruct the shape worker to run domain classification once whenever the pitch may touch non-UI domains such as schema, saga, RBAC, permissions, data model, migrations, storage, API contract, or workflow runtime:
+After spec is composed (or post-shape-confirm if pre-existing spec), run or instruct the shape worker to run domain classification once whenever the pitch may touch non-UI domains such as schema, saga, RBAC, permissions, data model, migrations, storage, API contract, workflow runtime, or registry-backed contract domains.
+
+Registry-backed contract domains are no-UI/no-schema design triggers. The portable plugin-default set is `agent-contract`, `api-vocabulary`, `selector-grammar`, `tool-protocol`, `dsl`, and `message-format`; these domains can route a pitch to design from registry evidence even when there is no UI or schema trigger.
 
 Before classification, check whether adopter routing exists:
 
@@ -513,10 +515,12 @@ bash plugins/ship-flow/lib/registry-resolve.sh --classify <spec-or-entity-file>
 ```
 
 Branch on output:
-- `status=ok` + non-empty `matched=<domain>` → set `domain: <name>` in entity frontmatter at shape stage (single-domain match). Advance entity to design stage via standard Hand-off to Design path.
+- `status=ok` + non-empty `matched=<domain-list>` → `matched` can be a single domain or a comma-separated list; split the matched list on commas, trim names, set `domain: <name>` to the first matched domain at shape stage, and advance entity to design stage via standard Hand-off to Design path.
 - `status=partial_coverage` + `matched=<dom-list>` + `missing=<dom-list>` → set `domain: <name>` to the first matched domain at shape stage; emit `## Domain Classification Report` block listing partial coverage (ship-design router will surface partial-coverage annotation).
 - `status=ok` + empty `matched=` → no domain match; do NOT set `domain:` (UI-only or no-trigger path proceeds as before).
 - `status=parse_error` / `invalid_trigger_config` (M4 exit 20 / M5 exit 21) → fail loud per INVARIANTS Principle 9; BLOCK shape. Do not proceed to design or plan.
+
+When any matched domain is one of the registry-backed contract domains above, also set `contract_decision_required:true` from registry evidence and emit at least one `open_contract_decisions[]` item naming the contract/interface choice that design must resolve. This applies even when `matched=` contains comma-separated multi-domain matches and the first `domain:` value is another contract domain. This prevents planner from silently choosing selector grammar, API vocabulary, tool protocol, DSL syntax, message format, or agent contract semantics.
 
 If captain/shape explicitly specifies a `domain:` value before or during shape, validate that value before the shape gate:
 
