@@ -1,0 +1,331 @@
+#!/usr/bin/env node
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+function issue(ruleId, file, message, evidence = undefined) {
+  return {
+    ruleId: `auto-merge-readiness.${ruleId}`,
+    file,
+    line: 1,
+    message,
+    ...(evidence ? { evidence } : {}),
+  };
+}
+
+function isObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readJsonFile(cwd, jsonPath, description) {
+  if (!jsonPath) {
+    return {
+      ok: false,
+      path: "<args>",
+      issue: issue(
+        "missing-input",
+        "<args>",
+        `${description} JSON path is required`,
+      ),
+    };
+  }
+  const absolutePath = path.resolve(cwd, jsonPath);
+  try {
+    return {
+      ok: true,
+      path: absolutePath,
+      value: JSON.parse(await readFile(absolutePath, "utf8")),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      path: absolutePath,
+      issue: issue(
+        error instanceof SyntaxError ? "invalid-input-json" : "input-read-failed",
+        absolutePath,
+        `${description} JSON could not be ${error instanceof SyntaxError ? "parsed" : "read"}`,
+        error.message,
+      ),
+    };
+  }
+}
+
+function checkName(check) {
+  return check?.name ?? check?.workflowName ?? check?.context ?? "";
+}
+
+function normalizeCheckState(check) {
+  const status = String(check?.status ?? "").toUpperCase();
+  const conclusion = String(check?.conclusion ?? "").toUpperCase();
+  if (status && status !== "COMPLETED") return "pending";
+  if (conclusion === "SUCCESS" || conclusion === "NEUTRAL" || conclusion === "SKIPPED") {
+    return "pass";
+  }
+  if (conclusion) return "fail";
+  return "pending";
+}
+
+function flattenChecks(value) {
+  if (!Array.isArray(value)) return [];
+  if (value.every((entry) => Array.isArray(entry))) return value.flat();
+  return value;
+}
+
+function checkRollupFromPr(pr) {
+  return flattenChecks(pr?.statusCheckRollup).filter(isObject);
+}
+
+function requiredCheckIssues({ pr, requiredChecks, prPath }) {
+  const checks = checkRollupFromPr(pr);
+  const blockers = [];
+  const nextActions = [];
+  for (const requiredCheck of requiredChecks) {
+    const matches = checks.filter((check) => checkName(check) === requiredCheck);
+    if (matches.length === 0) {
+      blockers.push(
+        issue(
+          "required-check-missing",
+          prPath,
+          `Required check ${requiredCheck} is missing from statusCheckRollup`,
+        ),
+      );
+      nextActions.push(`wait_for_required_check:${requiredCheck}`);
+      continue;
+    }
+    const states = matches.map(normalizeCheckState);
+    if (states.includes("fail")) {
+      blockers.push(
+        issue(
+          "required-check-failed",
+          prPath,
+          `Required check ${requiredCheck} failed`,
+          requiredCheck,
+        ),
+      );
+      nextActions.push(`fix_required_check:${requiredCheck}`);
+    } else if (!states.includes("pass")) {
+      blockers.push(
+        issue(
+          "required-check-pending",
+          prPath,
+          `Required check ${requiredCheck} is pending`,
+          requiredCheck,
+        ),
+      );
+      nextActions.push(`wait_for_required_check:${requiredCheck}`);
+    }
+  }
+  return { blockers, nextActions };
+}
+
+function prStateIssues(pr, prPath) {
+  const blockers = [];
+  if (!isObject(pr)) {
+    return {
+      blockers: [issue("invalid-pr-json", prPath, "PR JSON must be an object")],
+      nextAction: "collect_missing_readiness_inputs",
+    };
+  }
+  if (pr.state && pr.state !== "OPEN") {
+    blockers.push(
+      issue("pr-not-open", prPath, "PR must be open before auto-merge can be enabled", String(pr.state)),
+    );
+  }
+  if (pr.isDraft === true) {
+    blockers.push(issue("pr-is-draft", prPath, "Draft PRs are not auto-merge ready"));
+  }
+  if (pr.mergeable !== "MERGEABLE") {
+    blockers.push(
+      issue(
+        "pr-not-mergeable",
+        prPath,
+        "PR must be mergeable before auto-merge can be enabled",
+        String(pr.mergeable),
+      ),
+    );
+  }
+  return {
+    blockers,
+    nextAction:
+      blockers.find((blocker) => blocker.ruleId.endsWith("pr-not-mergeable"))
+        ? "resolve_mergeability"
+        : blockers.length > 0
+          ? "update_pr_state"
+          : undefined,
+  };
+}
+
+function semanticGateIssues(semanticGate, semanticPath) {
+  if (!isObject(semanticGate)) {
+    return {
+      blockers: [issue("invalid-semantic-gate-json", semanticPath, "Semantic gate JSON must be an object")],
+      nextAction: "collect_missing_readiness_inputs",
+    };
+  }
+  if (semanticGate.ok !== true || semanticGate.status !== "valid") {
+    return {
+      blockers: [
+        issue(
+          "semantic-review-gate-failed",
+          semanticPath,
+          "Semantic review gate must be valid before auto-merge can be enabled",
+          JSON.stringify({
+            ok: semanticGate.ok,
+            status: semanticGate.status,
+            issues: semanticGate.issues ?? [],
+          }),
+        ),
+      ],
+      nextAction: "regenerate_semantic_review_packet",
+    };
+  }
+  return { blockers: [], nextAction: undefined };
+}
+
+function threadGateIssues(threadGate, threadPath) {
+  if (!isObject(threadGate)) {
+    return {
+      blockers: [issue("invalid-thread-gate-json", threadPath, "Review thread gate JSON must be an object")],
+      nextAction: "collect_missing_readiness_inputs",
+    };
+  }
+  if (threadGate.ok !== true) {
+    return {
+      blockers: [
+        issue(
+          "review-thread-gate-failed",
+          threadPath,
+          "Review thread gate must pass before auto-merge can be enabled",
+          JSON.stringify(threadGate.issues ?? []),
+        ),
+      ],
+      nextAction: "resolve_review_threads",
+    };
+  }
+  return { blockers: [], nextAction: undefined };
+}
+
+function firstAction(...actions) {
+  return actions.find((action) => typeof action === "string" && action.length > 0);
+}
+
+export async function runAutoMergeReadiness(options = {}) {
+  const cwd = options.cwd ?? process.cwd();
+  const requiredChecks = Array.isArray(options.requiredChecks) ? options.requiredChecks : [];
+  const prJson = await readJsonFile(cwd, options.prJsonPath, "PR");
+  const semanticGateJson = await readJsonFile(cwd, options.semanticGateJsonPath, "semantic gate");
+  const threadGateJson = await readJsonFile(cwd, options.threadGateJsonPath, "review thread gate");
+
+  const inputIssues = [prJson, semanticGateJson, threadGateJson]
+    .filter((entry) => !entry.ok)
+    .map((entry) => entry.issue);
+  const metadata = {
+    prPath: prJson.path,
+    semanticGatePath: semanticGateJson.path,
+    threadGatePath: threadGateJson.path,
+    requiredChecks,
+  };
+  if (inputIssues.length > 0) {
+    return {
+      ready: false,
+      status: "unknown",
+      blockers: inputIssues,
+      nextAction: "collect_missing_readiness_inputs",
+      metadata,
+    };
+  }
+
+  const prIssues = prStateIssues(prJson.value, prJson.path);
+  const checkIssues = requiredCheckIssues({
+    pr: prJson.value,
+    requiredChecks,
+    prPath: prJson.path,
+  });
+  const semanticIssues = semanticGateIssues(semanticGateJson.value, semanticGateJson.path);
+  const threadIssues = threadGateIssues(threadGateJson.value, threadGateJson.path);
+  const blockers = [
+    ...prIssues.blockers,
+    ...checkIssues.blockers,
+    ...semanticIssues.blockers,
+    ...threadIssues.blockers,
+  ];
+
+  if (blockers.length > 0) {
+    return {
+      ready: false,
+      status: "blocked",
+      blockers,
+      nextAction: firstAction(
+        prIssues.nextAction,
+        checkIssues.nextActions[0],
+        semanticIssues.nextAction,
+        threadIssues.nextAction,
+      ),
+      metadata: {
+        ...metadata,
+        checkCount: checkRollupFromPr(prJson.value).length,
+      },
+    };
+  }
+
+  return {
+    ready: true,
+    status: "ready",
+    blockers: [],
+    nextAction: "enable_auto_merge",
+    metadata: {
+      ...metadata,
+      checkCount: checkRollupFromPr(prJson.value).length,
+    },
+  };
+}
+
+function parseArgs(argv) {
+  const args = { requiredChecks: [] };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--pr-json") {
+      args.prJsonPath = argv[++index];
+    } else if (arg === "--semantic-gate-json") {
+      args.semanticGateJsonPath = argv[++index];
+    } else if (arg === "--thread-gate-json") {
+      args.threadGateJsonPath = argv[++index];
+    } else if (arg === "--required-check") {
+      args.requiredChecks.push(argv[++index]);
+    }
+  }
+  return args;
+}
+
+async function main() {
+  const result = await runAutoMergeReadiness(parseArgs(process.argv.slice(2)));
+  console.log(JSON.stringify(result, null, 2));
+  if (result.status !== "ready") process.exitCode = 1;
+}
+
+const currentFile = fileURLToPath(import.meta.url);
+if (process.argv[1] && path.resolve(process.argv[1]) === currentFile) {
+  main().catch((error) => {
+    console.error(
+      JSON.stringify(
+        {
+          ready: false,
+          status: "unknown",
+          blockers: [
+            {
+              ruleId: "auto-merge-readiness.unhandled-error",
+              file: "<runtime>",
+              line: 1,
+              message: error.message,
+            },
+          ],
+          nextAction: "inspect_readiness_runtime_error",
+          metadata: {},
+        },
+        null,
+        2,
+      ),
+    );
+    process.exitCode = 1;
+  });
+}

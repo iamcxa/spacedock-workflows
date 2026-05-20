@@ -478,6 +478,11 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 | `lib/density-classify.sh` | classifies entity density (4-tier: low/medium/high/critical) — used by cross-review verdict-flip whitelist (Principle 6 Rule C) |
 | `bin/check-invariants.sh` | CI grep enforcement of Principles 1-8 + stage-artifact-path / layer-a-delegation / cross-review-gate / structural-parity-dc / ask-fallback-coverage / indirection-sweep-emitted checks |
 | `bin/ship-flow-lint.mjs` | generic, config-driven workflow guardrail linter for Markdown, mod contracts, and required workflow surfaces |
+| `bin/semantic-review-packet.mjs` | validates a structured PR semantic-review packet against current head and adopter policy |
+| `bin/semantic-review-prepare.mjs` | builds packet JSON plus marked PR comment body from local review evidence and command evidence |
+| `bin/semantic-review-gate.mjs` | validates the newest marked PR packet comment when semantic review is required |
+| `bin/review-thread-gate.mjs` | blocks merge while unresolved, non-outdated GitHub review threads remain on the PR head |
+| `bin/auto-merge-readiness.mjs` | reports whether a PR is ready for auto-merge and names the next action when blocked |
 
 **Skill count policy** (Principle 2 split): stage skills ≤ 7 cap, utility skills uncapped. Current inventory: 7 stage (`ship-shape`, `ship`, `ship-design`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review`) + utility skills (`add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel`) plus non-skill utility scripts/mods such as `ship-flow-lint`. Stage skills remain at cap (7/7). Enforced by `check-invariants.sh --check skill-count`.
 
@@ -566,6 +571,12 @@ Incremental additions after the 0.5.0 release that are not yet a named version b
 - `bin/ship-flow-lint.mjs` provides a generic guardrail runner for adopters. It always checks accidental Markdown table `||` rows and can load adopter config from `docs/<wf>/ship-flow-lint.config.json` for workflow-required surfaces and project-specific mod-contract patterns.
 - Workflow mods `_mods/ship-flow-lint.md` and `_mods/debrief-guardrail-harvest.md` define when the runner is used and how debrief learns from rough PRs.
 - Project-specific seed, migration, generated SQL, env, and deployment checks stay in adopter commands and are wired by config; they do not belong in the generic plugin.
+
+**Semantic PR review primitives**:
+- `bin/semantic-review-packet.mjs`, `bin/semantic-review-prepare.mjs`, and `bin/semantic-review-gate.mjs` provide the reusable mechanism layer for structured PR review evidence. The plugin validates schema, current-head freshness, required reviewer verdicts, required local review dimensions, traceable evidence fields, and command exit evidence.
+- Adopter policy stays outside the plugin default: repos pass `--policy-json` with `required_reviewers`, `local_review_key`, `required_dimensions`, and optional `required_label`. This keeps Carlove-style `kc_pr_review` or domain-specific dimensions as project policy rather than plugin law.
+- `bin/review-thread-gate.mjs` is a separate mechanical gate for GitHub review threads. It fails when an unresolved, non-outdated thread remains on the PR head, which lets Copilot or another reviewer produce actionable comments without requiring human approval as the branch protection primitive.
+- `bin/auto-merge-readiness.mjs` is report-only. It consumes PR/check snapshots plus semantic-review and review-thread gate outputs, then returns `ready`, `blocked`, or `unknown` with `nextAction`. It does not call `gh pr merge`, enable auto-merge, or mutate remote state; adopter repos decide whether to wire a separate executor after this report is stable.
 
 ---
 
