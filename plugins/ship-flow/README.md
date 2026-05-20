@@ -483,6 +483,8 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 | `bin/semantic-review-gate.mjs` | validates the newest marked PR packet comment when semantic review is required |
 | `bin/review-thread-gate.mjs` | blocks merge while unresolved, non-outdated GitHub review threads remain on the PR head |
 | `bin/auto-merge-readiness.mjs` | reports whether a PR is ready for auto-merge and names the next action when blocked |
+| `bin/auto-merge-readiness-collect.mjs` | collects GitHub PR evidence, runs semantic/thread gates, and writes readiness artifacts |
+| `bin/auto-merge-run.mjs` | executes the readiness result by enabling native auto-merge or policy-approved direct merge with `expectedHeadOid` |
 
 **Skill count policy** (Principle 2 split): stage skills ≤ 7 cap, utility skills uncapped. Current inventory: 7 stage (`ship-shape`, `ship`, `ship-design`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review`) + utility skills (`add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel`) plus non-skill utility scripts/mods such as `ship-flow-lint`. Stage skills remain at cap (7/7). Enforced by `check-invariants.sh --check skill-count`.
 
@@ -573,10 +575,12 @@ Incremental additions after the 0.5.0 release that are not yet a named version b
 - Project-specific seed, migration, generated SQL, env, and deployment checks stay in adopter commands and are wired by config; they do not belong in the generic plugin.
 
 **Semantic PR review primitives**:
-- `bin/semantic-review-packet.mjs`, `bin/semantic-review-prepare.mjs`, and `bin/semantic-review-gate.mjs` provide the reusable mechanism layer for structured PR review evidence. The plugin validates schema, current-head freshness, required reviewer verdicts, required local review dimensions, traceable evidence fields, and command exit evidence.
+- `bin/semantic-review-packet.mjs`, `bin/semantic-review-prepare.mjs`, and `bin/semantic-review-gate.mjs` provide the reusable mechanism layer for structured PR review evidence. The plugin validates schema, current-head freshness, required reviewer verdicts, required local review dimensions, traceable evidence fields, and command exit evidence. Generated packet comments keep the marker and fenced JSON for the gate, but fold the long JSON body in `<details>` so PR timelines show a short verdict first.
 - Adopter policy stays outside the plugin default: repos pass `--policy-json` with `required_reviewers`, `local_review_key`, `required_dimensions`, and optional `required_label`. This keeps Carlove-style `kc_pr_review` or domain-specific dimensions as project policy rather than plugin law.
 - `bin/review-thread-gate.mjs` is a separate mechanical gate for GitHub review threads. It fails when an unresolved, non-outdated thread remains on the PR head, which lets Copilot or another reviewer produce actionable comments without requiring human approval as the branch protection primitive.
-- `bin/auto-merge-readiness.mjs` is report-only. It consumes PR/check snapshots plus semantic-review and review-thread gate outputs, then returns `ready`, `blocked`, or `unknown` with `nextAction`. It does not call `gh pr merge`, enable auto-merge, or mutate remote state; adopter repos decide whether to wire a separate executor after this report is stable.
+- `bin/auto-merge-readiness.mjs` is report-only. It consumes PR/check snapshots plus semantic-review and review-thread gate outputs, then returns `ready`, `blocked`, or `unknown` with `nextAction`. It does not call `gh pr merge`, enable auto-merge, or mutate remote state.
+- `bin/auto-merge-readiness-collect.mjs` is the evidence collector for GitHub-backed PRs. It gathers PR snapshot, labels, issue comments, review threads, semantic gate output, review-thread gate output, and readiness output under `.context/ship-flow-auto-merge/` so the merge decision is inspectable. Pass `--policy-json` when an adopter repo uses a project-specific semantic review key or dimensions.
+- `bin/auto-merge-run.mjs` is the optional mutating executor. It first runs the collector; when readiness is clean, it tries GitHub native auto-merge with `expectedHeadOid`. If GitHub reports the PR is already `clean`, it direct-merges with the same expected head. If GitHub reports `unstable`, direct merge requires adopter opt-in via `--allow-direct-merge-unstable`; otherwise the runner returns `blocked` and asks the operator to wait or opt in explicitly. The runner also accepts `--policy-json` and forwards it to the collector.
 
 ---
 

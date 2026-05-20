@@ -35,6 +35,7 @@ function prSnapshot(overrides = {}) {
     state: "OPEN",
     isDraft: false,
     mergeable: "MERGEABLE",
+    mergeStateStatus: "CLEAN",
     statusCheckRollup: [
       checkRun("ci-gate"),
       checkRun("review-thread-gate"),
@@ -92,6 +93,30 @@ test("reports ready when mergeability, required checks, semantic gate, and threa
   assert.equal(result.nextAction, "enable_auto_merge");
 });
 
+test("accepts required status contexts that expose state instead of check-run conclusion", async () => {
+  const result = await runFixture({
+    pr: prSnapshot({
+      statusCheckRollup: [
+        { __typename: "StatusContext", context: "ci-gate", state: "SUCCESS" },
+        { __typename: "StatusContext", context: "review-thread-gate", state: "SUCCESS" },
+      ],
+    }),
+    requiredChecks: ["ci-gate", "review-thread-gate"],
+  });
+
+  assert.equal(result.status, "ready");
+  assert.equal(result.ready, true);
+});
+
+test("requires explicit required checks before reporting ready", async () => {
+  const result = await runFixture({ requiredChecks: [] });
+
+  assert.equal(result.status, "unknown");
+  assert.equal(result.ready, false);
+  assert.equal(result.nextAction, "supply_required_checks");
+  assert.match(result.blockers.map((blocker) => blocker.ruleId).join("\n"), /missing-required-checks/);
+});
+
 test("blocks with a specific next action when a required check is pending", async () => {
   const result = await runFixture({
     pr: prSnapshot({
@@ -131,6 +156,16 @@ test("blocks non-mergeable PRs before checking auto-merge readiness", async () =
   assert.equal(result.status, "blocked");
   assert.equal(result.nextAction, "resolve_mergeability");
   assert.match(result.blockers.map((blocker) => blocker.ruleId).join("\n"), /pr-not-mergeable/);
+});
+
+test("reports closed PRs as state updates instead of mergeability repairs", async () => {
+  const result = await runFixture({
+    pr: prSnapshot({ state: "MERGED", mergeable: "UNKNOWN", mergeStateStatus: "UNKNOWN" }),
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.nextAction, "update_pr_state");
+  assert.match(result.blockers.map((blocker) => blocker.ruleId).join("\n"), /pr-not-open/);
 });
 
 test("reports unknown instead of ready when required input snapshots are missing", async () => {

@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   buildSemanticReviewPacket,
   parseArgs,
+  packetCommentBody,
   prepareSemanticReviewPacket,
 } from "./semantic-review-prepare.mjs";
 import { runSemanticReviewPacketValidation } from "./semantic-review-packet.mjs";
@@ -105,6 +106,7 @@ test("writes packet and marked PR comment body that validate against the current
     assert.equal(result.validation.ok, true);
     const comment = await readFile(path.join(root, ".context/comment.md"), "utf8");
     assert.match(comment, /<!-- ship-flow-semantic-review-packet:v1 -->/);
+    assert.match(comment, /<details>\n<summary>Semantic review packet JSON<\/summary>/);
     assert.match(comment, /```json\n/);
 
     const validation = await runSemanticReviewPacketValidation({
@@ -115,6 +117,24 @@ test("writes packet and marked PR comment body that validate against the current
     });
     assert.equal(validation.ok, true);
   });
+});
+
+test("formats marked PR comment with a readable summary and folded packet JSON", () => {
+  const packet = {
+    schema_version: "ship-flow.semantic-review-packet.v1",
+    head_sha: headSha,
+    verdict: "pass",
+    rounds: 1,
+    commands: [{ name: "semantic review tests", command: "node --test", exit_code: 0 }],
+  };
+
+  const comment = packetCommentBody(packet);
+
+  assert.match(comment, /^<!-- ship-flow-semantic-review-packet:v1 -->/);
+  assert.match(comment, /Semantic review packet: `pass` for `aaaaaaaa`/);
+  assert.match(comment, /<details>\n<summary>Semantic review packet JSON<\/summary>/);
+  assert.match(comment, /```json\n/);
+  assert.match(comment, /<\/details>\n$/);
 });
 
 test("rejects preparation when adopter-required dimension evidence is missing", async () => {

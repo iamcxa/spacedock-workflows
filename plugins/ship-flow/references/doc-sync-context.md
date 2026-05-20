@@ -50,6 +50,8 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `bin/semantic-review-gate.mjs` | `README.md` (semantic review PR comment gate) | `INVARIANTS.md` (PR gate evidence, if promoted) |
 | `bin/review-thread-gate.mjs` | `README.md` (unresolved PR thread gate) | `INVARIANTS.md` (PR gate evidence, if promoted) |
 | `bin/auto-merge-readiness.mjs` | `README.md` (auto-merge readiness reporter) | `workflow-template.yaml` (adopter command wiring, if scaffolded) |
+| `bin/auto-merge-readiness-collect.mjs` | `README.md` (auto-merge evidence collector) | `workflow-template.yaml` (adopter command wiring, if scaffolded) |
+| `bin/auto-merge-run.mjs` | `README.md` (optional auto-merge executor policy) | `workflow-template.yaml` (adopter command wiring, if scaffolded) |
 | `lib/advance-stage.sh` | `README.md` (stage transition helper) | `workflow-template.yaml` |
 | `lib/write-stage-artifact.sh` | `README.md` (stage artifacts) | `references/doc-format.md` |
 | `lib/register-stage-output.sh` | `README.md` (stage output registration) | `references/entity-body-schema.yaml` |
