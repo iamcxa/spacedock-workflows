@@ -63,7 +63,10 @@ check "PR head is revalidated after Claude challenge run" \
   "grep -q 'PR_HEAD_SHA_DIFF_AFTER' '${PR_MERGE_MOD}' && grep -q 'PR_HEAD_SHA_AFTER' '${PR_MERGE_MOD}' && grep -q 'changed during Claude challenge' '${PR_MERGE_MOD}'"
 
 check "Claude challenge command exit status is checked" \
-  "grep -q 'set -euo pipefail' '${PR_MERGE_MOD}' && grep -q 'if ! timeout 600' '${PR_MERGE_MOD}' && grep -q 'Claude challenge command failed' '${PR_MERGE_MOD}'"
+  "grep -q 'set -euo pipefail' '${PR_MERGE_MOD}' && grep -q 'TIMEOUT_BIN' '${PR_MERGE_MOD}' && grep -q 'TIMEOUT_BIN\" 600' '${PR_MERGE_MOD}' && grep -q 'Claude challenge command failed' '${PR_MERGE_MOD}'"
+
+check "origin main fetch failure blocks with clear error" \
+  "grep -q 'Unable to fetch origin main' '${PR_MERGE_MOD}' && ! grep -q 'git fetch origin main --quiet 2>/dev/null || true' '${PR_MERGE_MOD}'"
 
 check "PR diff command exit status is checked" \
   "grep -q 'if ! gh pr diff' '${PR_MERGE_MOD}' && grep -q 'Unable to read PR diff' '${PR_MERGE_MOD}'"
@@ -90,7 +93,7 @@ check "missing Claude CLI or authentication blocks merge" \
   "grep -q 'Claude CLI not found' '${PR_MERGE_MOD}' && grep -q 'No Claude authentication found' '${PR_MERGE_MOD}' && grep -q 'BLOCK merge' '${PR_MERGE_MOD}'"
 
 check "Claude authentication is verified by tool-less smoke run" \
-  "grep -q 'CLAUDE_AUTH_SMOKE' '${PR_MERGE_MOD}' && grep -q 'timeout 60' '${PR_MERGE_MOD}' && grep -q 'claude -p --output-format json --disable-slash-commands --tools \"\"' '${PR_MERGE_MOD}'"
+  "grep -q 'CLAUDE_AUTH_SMOKE' '${PR_MERGE_MOD}' && grep -q 'TIMEOUT_BIN\" 60' '${PR_MERGE_MOD}' && grep -q 'claude -p --output-format json --disable-slash-commands --tools \"\"' '${PR_MERGE_MOD}'"
 
 check "blocking Claude challenge findings route to review-resolve" \
   "grep -q 'CLAUDE_CHALLENGE_BLOCKING' '${PR_MERGE_MOD}' && grep -q 'kc-pr-review-resolve' '${PR_MERGE_MOD}' && grep -q 'do not merge' '${PR_MERGE_MOD}'"
