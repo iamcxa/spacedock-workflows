@@ -32,8 +32,8 @@ line_no() {
 echo "=== test-pr-merge-fo-receipts.sh ==="
 echo ""
 
-check "pr-merge version remains 0.11.3" \
-  "grep -q '^version: 0.11.3$' '${PR_MERGE_MOD}'"
+check "pr-merge version remains 0.11.4" \
+  "grep -q '^version: 0.11.4$' '${PR_MERGE_MOD}'"
 
 check "merge hook names the shared FO receipt helper" \
   "awk '/^## Hook: merge/{in_hook=1} /^## Hook:/{if(in_hook && \$0 !~ /^## Hook: merge/) in_hook=0} in_hook && /plugins\\/ship-flow\\/lib\\/write-fo-receipt.sh/{found=1} END{exit found ? 0 : 1}' '${PR_MERGE_MOD}'"
@@ -44,7 +44,7 @@ HELPER_LINE="$(line_no 'plugins/ship-flow/lib/write-fo-receipt.sh')"
 PUSH_LINE="$(line_no 'git push origin {branch}')"
 GH_CREATE_LINE="$(line_no 'gh pr create --base main')"
 
-check "receipt helper appears after v0.11.3 preconditions" \
+check "receipt helper appears after v0.11.4 preconditions" \
   "[ -n '${PRECONDITION_LINE}' ] && [ -n '${HELPER_LINE}' ] && [ '${HELPER_LINE:-0}' -gt '${PRECONDITION_LINE:-0}' ]"
 
 check "receipt helper appears after privacy pre-flight requirement" \
@@ -60,7 +60,7 @@ check "PR receipt example records review-to-pr transition trigger" \
   "grep -q 'from: review' '${PR_MERGE_MOD}' && grep -q 'to: pr' '${PR_MERGE_MOD}' && grep -q 'trigger: pr-creation-autonomy' '${PR_MERGE_MOD}'"
 
 check "PR receipt example records self-approved PR_READY rule source" \
-  "grep -q 'decision: self-approved' '${PR_MERGE_MOD}' && grep -q 'verdict: PR_READY' '${PR_MERGE_MOD}' && grep -q 'rule_source: docs/ship-flow/_mods/pr-merge.md v0.11.3' '${PR_MERGE_MOD}'"
+  "grep -q 'decision: self-approved' '${PR_MERGE_MOD}' && grep -q 'verdict: PR_READY' '${PR_MERGE_MOD}' && grep -q 'rule_source: docs/ship-flow/_mods/pr-merge.md v0.11.4' '${PR_MERGE_MOD}'"
 
 check "negative PR routes stay captain or review gated" \
   "grep -qi 'missing.*ambiguous' '${PR_MERGE_MOD}' && grep -qi 'dirty' '${PR_MERGE_MOD}' && grep -qi 'stale.*branch\\|branch.*current' '${PR_MERGE_MOD}' && grep -qi 'privacy pre-flight' '${PR_MERGE_MOD}' && grep -qi 'unresolved.*feedback' '${PR_MERGE_MOD}' && grep -qi 'merge approval' '${PR_MERGE_MOD}' && grep -qi 'auto-merge' '${PR_MERGE_MOD}' && grep -qi 'captain\\|review-gated' '${PR_MERGE_MOD}'"
