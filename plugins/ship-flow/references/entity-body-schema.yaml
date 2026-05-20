@@ -451,6 +451,18 @@ stages:
                 description: "Path to design artifact establishing this constraint (e.g., plugins/<app>/design/tokens.css, components/<name>.html)"
           required_when: "design-skipped == false"
           description: "Visual / token / interaction constraints plan MUST honor. Each item structured (G9). D{N} backref enforced (G12)."
+        - name: ui_quality_contract
+          type: object
+          required_when: "design-skipped == false AND affects_ui == true"
+          description: "Compact UI quality contract from references/ui-quality-contract.md. Complements design_constraints, render_fidelity_targets, and whole_page_visual_targets; plan imports each group as DCs, reviewer questions, or explicit N/A rows; verify audits evidence or explicit N/A for each group."
+          schema:
+            copy: { type: object, description: "CTA, empty-state, error-state, and destructive-confirmation copy obligations." }
+            visual_hierarchy: { type: object, description: "Primary focal point, scan order, and icon-only fallback obligations." }
+            color: { type: object, description: "Accent scope, semantic colors, destructive color, and token binding obligations." }
+            typography: { type: object, description: "Allowed sizes, weights, and line-height obligations." }
+            spacing: { type: object, description: "Spacing scale, exceptions, and grid multiple obligations." }
+            interaction_states: { type: object, description: "Loading, empty, error, disabled, and focus state obligations." }
+            source_safety: { type: object, description: "Third-party source, provenance, vetting, and verify-time evidence obligations." }
         - { name: open_decisions, type: list, description: "Design decisions still pending captain input. Non-empty → plan Step 1.6 BLOCKER (bounce to designer@pitch-XX)." }
         - name: artifact_paths
           type: list

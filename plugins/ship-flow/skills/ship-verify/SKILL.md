@@ -158,6 +158,20 @@ Record results inside existing `### Review Findings` in `verify.md` under subsec
 
 When TDD Evidence Audit changes the verify outcome, add a claim record under `### Review Findings`: missing or invalid RED-before-GREEN evidence is a verdict-bearing quality/review claim with `claim_source` `quality-gate:tdd-evidence-audit` and `route_to: execute`.
 
+### Step 2.1.5 — UI Quality Contract Evidence Audit
+
+When the entity `### Hand-off to Plan` includes `ui_quality_contract`, read
+`plugins/ship-flow/references/ui-quality-contract.md` and verify that execute
+evidence or explicit N/A exists for every group: `copy`, `visual_hierarchy`,
+`color`, `typography`, `spacing`, `interaction_states`, and `source_safety`.
+
+Plan should have converted these groups into DCs, reviewer questions, or
+explicit N/A rows. If any group has no evidence route, emit a `BLOCKING`
+finding with `route_to: plan` for missing import or `route_to: execute` for
+missing implementation evidence. This audit does not require a new visual
+capture harness; existing render-fidelity and whole-page visual parity fields
+remain the only automated visual-capture triggers.
+
 ### Step 2.2 — Per-error diff-aware attribution (ROI critical)
 
 **Trigger**: any check output contains `file:line` references.

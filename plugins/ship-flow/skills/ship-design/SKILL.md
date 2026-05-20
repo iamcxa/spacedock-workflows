@@ -702,14 +702,15 @@ Read the incoming `### Hand-off to Design` block from the entity body (written b
 
 Emit `### Hand-off to Plan` (structured fields per `entity-body-schema.yaml → stages.design.hand_off_to_plan`):
 - `design_constraints[]` — each item: `{type, assertion, rationale_decision: D{N}, source_artifact}` — `type` enum mandatory. UI design uses `token-binding | layout | interaction`; domain specialist design uses `contract | schema-contract | filter-contract | api-contract | data-contract | domain-contract`. `rationale_decision: D{N}` MUST cross-reference a `**D{N}|Captain decision**` in Phase 8 Captain Decisions (validated by `validate-d-references.sh`).
+- `ui_quality_contract` — for UI/design-bearing work, emit the compact UI quality contract from `plugins/ship-flow/references/ui-quality-contract.md`. Include the groups `copy`, `visual_hierarchy`, `color`, `typography`, `spacing`, `interaction_states`, and `source_safety`. This complements `design_constraints[]`, `render_fidelity_targets[]`, and `whole_page_visual_targets[]`; it does not add a separate visual capture harness or external runtime dependency.
 - `open_decisions[]` — any design decisions still pending captain input (ideally empty; non-empty → plan Step 1.6 BLOCKER).
 - `artifact_paths[]` — paths to committed design artifacts (`tokens.css`, specimens, composite mockup).
 - `render_fidelity_targets[]` — each item: `{selector, css_property, expected_value, rationale_decision: D{N}}` — feeds ship-verify Step 3.6 ui-verify YAML; `rationale_decision: D{N}` MUST cross-reference Phase 8.
 - `whole_page_visual_targets[]` — each item: `{route, reference_artifact, capture, threshold, rationale_decision: D{N}}` — feeds plan visual-parity DCs and ship-verify whole-page screenshot comparison. Use this for whole-screen composition, spacing hierarchy, and whether the implemented page still resembles the design reference after fragments pass.
 
 For `affects_ui: true`, the handoff MUST include non-empty `design_constraints[]`
-and `render_fidelity_targets[]`, plus `whole_page_visual_targets[]` for the
-primary affected route, plus a captain-visible
+and `render_fidelity_targets[]`, a `ui_quality_contract`, plus
+`whole_page_visual_targets[]` for the primary affected route, plus a captain-visible
 `### Visible UI Design Output` section in `design.md`. Category D may use a
 single composite mockup or prose-plus-selector target instead of a full
 `design/` artifact bundle, but it still emits a visible UI design decision and
