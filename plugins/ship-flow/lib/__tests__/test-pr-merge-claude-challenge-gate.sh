@@ -56,6 +56,9 @@ check "large diffs use bounded challenge bundle" \
 check "verdict markers are parsed from anchored final lines" \
   "grep -q 'FINAL_VERDICT_LINE' '${PR_MERGE_MOD}' && grep -q 'FINAL_VERDICT_NONCE' '${PR_MERGE_MOD}' && grep -q 'FINAL_VERDICT_' '${PR_MERGE_MOD}'"
 
+check "multiple or conflicting Claude verdict markers fail closed" \
+  "grep -q 'blocking > 0' '${PR_MERGE_MOD}' && grep -q 'clean == 1' '${PR_MERGE_MOD}' && grep -q 'PROMPT_CAPTAIN' '${PR_MERGE_MOD}'"
+
 check "blocking or prompt-captain verdict exits before merge-readiness" \
   "grep -q 'CLAUDE_CHALLENGE_BLOCKING|PROMPT_CAPTAIN|CLAUDE_CHALLENGE_TRUNCATED' '${PR_MERGE_MOD}' && grep -q 'exit 12' '${PR_MERGE_MOD}'"
 
@@ -76,6 +79,9 @@ check "temporary challenge files are cleaned up" \
 
 check "gate records receipt evidence before merge" \
   "grep -q 'claude_challenge' '${PR_MERGE_MOD}' && grep -q 'receipt_id: \${RECEIPT_ID}' '${PR_MERGE_MOD}' && grep -q 'CLAUDE_VERDICT' '${PR_MERGE_MOD}' && grep -q 'CLAUDE_RECOMMENDATION' '${PR_MERGE_MOD}'"
+
+check "merge paths require latest Claude receipt to match current head" \
+  "grep -q 'Head-bound receipt guard' '${PR_MERGE_MOD}' && grep -q 'diff_head.*current PR head' '${PR_MERGE_MOD}' && grep -q 'Latest.*pre-merge-claude-challenge.*diff_head.*current PR head' '${PR_MERGE_MOD}'"
 
 check "receipt records durable Claude response artifact and requires entity folder" \
   "grep -q 'ENTITY_FOLDER:?ENTITY_FOLDER required' '${PR_MERGE_MOD}' && grep -q 'CLAUDE_RESPONSE_ARTIFACT' '${PR_MERGE_MOD}' && grep -q 'cp ' '${PR_MERGE_MOD}'"
