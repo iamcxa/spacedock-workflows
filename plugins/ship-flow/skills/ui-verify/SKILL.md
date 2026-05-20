@@ -17,11 +17,20 @@ Use this for:
   `generate-ui-verify-spec.sh`.
 - Static CSS, design-token, pseudo-element, spacing, and dimension checks.
 - Regression checks where the selector and expected value are already known.
+- `design-system-parity` runtime evidence when the selector and CSS property
+  are known; ship-verify populates its `actual_computed_value` evidence field
+  from the runner report's per-property `Actual` browser-returned
+  `getComputedStyle()` value.
 
 Do not use this as whole-page approval. Fragment-level checks can pass while the
 page composition still diverges from design. Whole-page parity is handled by
 ship-verify Step 3.6.1 via `whole_page_visual_targets[]`, full-page screenshot
 capture, and reference-artifact comparison.
+
+`mockup-parity` is outside fixed selector/value checks: it compares live DOM
+structure against an HTML mockup or design artifact. Ship-verify owns that Done
+Criterion judgment; use a DOM structure comparator, e2e/browser report, or
+normalized digest rather than this computed-style utility.
 
 ## Inputs
 
@@ -71,6 +80,8 @@ property. A selector not found is a failed check, not a skip.
 | Need | Use |
 |---|---|
 | Fixed selector × exact computed value | `ship-flow:ui-verify` |
+| `design-system-parity` computed-style evidence | `ship-flow:ui-verify` when selector/property are known |
+| `mockup-parity` DOM structure comparison | ship-verify with a live DOM structure comparator; outside fixed selector/value checks |
 | Navigation, state transitions, user actions | `e2e-pipeline:e2e-test` or Playwright |
 | Whole-page visual/design reference parity | ship-verify Step 3.6.1 |
 | Unknown selector, CSS forensics, dynamic element discovery | `agent-browser` directly |

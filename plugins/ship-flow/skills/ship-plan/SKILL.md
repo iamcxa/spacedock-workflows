@@ -261,10 +261,19 @@ Per typed Done Criterion, fill exact verification procedure:
 | `cli` | bash command + expected exit/output | always available |
 | `api` | `curl` with method/URL/body + status + response pattern | always available |
 | `ui` | `curl -sfN <route>` + `grep` content; complex interaction → `e2e-test <flow.yaml>` | curl+grep skip interaction |
+| `design-system-parity` | Runtime computed-style evidence compared to a design-system token table or explicit token contract. Required plan evidence fields: `selector`, `css_property`, `token_source`, `expected_token`, `expected_resolved_value`, `actual_computed_value`, `runtime_report`, `verdict`. | `ship-flow:ui-verify` for fixed selector/value checks; inline browser `getComputedStyle()` probe only as break-glass |
+| `mockup-parity` | Live DOM structure evidence compared to an HTML mockup or committed design artifact. Required plan evidence fields: `mockup_artifact`, `route`, `root_selector`, `expected_structure`, `actual_dom_structure`, `comparison_method`, `runtime_report`, `verdict`. | deterministic selector hierarchy, role/name sequence, landmark order, repeated-item counts, or normalized DOM digest |
 | `skill` | `Skill("<name>")` invoke + expected output shape | session-only verification |
 | `e2e` | `e2e-test <flow.yaml>` with step assertions | degrade to `ui` type |
 
 Every DC MUST have a runnable verify procedure. "Manual check" = plan failure.
+
+`design-system-parity` and `mockup-parity` are first-class Done Criterion
+subtypes, not optional prose. A planner must turn each into an executable
+procedure with runtime-backed evidence. Token tables, `tokens.css`, screenshots,
+generated artifacts, source grep, mockup files, or source-only diffs are
+artifact-only claims unless execute and verify can inspect the required runtime
+fields above.
 
 **UI entities MUST have ≥1 structural-parity DC** — grep DCs prove wiring, not rendering. Column/cell count parity / grid-template vs header count / prop-type assertion / class-name presence. MEMORY #048: all grep DCs passed while 3 CSS-grid / prop-mis-wire bugs shipped; captain cycle wasted. Budget one structural DC per UI entity.
 

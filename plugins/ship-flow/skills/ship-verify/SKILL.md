@@ -643,6 +643,53 @@ Authoring home: project-side adopter doc (e.g. `.context/verify-dc.md` per proje
 
 Decision rule: rule checkable from code output → per-domain DC here; rule only checkable from worker process (did the worker load skill, did the worker echo attestation token) → **cut, do not author**. See `plugins/ship-flow/references/validation-discipline.md` for the full rationalization-rejection table before adding any new validation primitive.
 
+### Parity DC subtypes
+
+`design-system-parity` and `mockup-parity` are first-class Done Criterion
+subtypes. Verify judges their runtime evidence, not just the presence of a
+design artifact.
+
+For `design-system-parity`, require a runtime computed-style comparison against
+a design-system token table or explicit token contract:
+
+| Field | Required evidence |
+|---|---|
+| `selector` | Stable live DOM selector checked in the browser. |
+| `css_property` | CSS property read from computed style. |
+| `token_source` | Token table, `tokens.css`, design-system doc, or explicit token contract used as expected source. |
+| `expected_token` | Token name or contract key expected by design. |
+| `expected_resolved_value` | Browser-comparable value the token resolves to. |
+| `actual_computed_value` | Actual value returned by `getComputedStyle()` against the live route. |
+| `runtime_report` | Path to ui-verify, browser, or e2e report proving the live runtime was checked. |
+| `verdict` | PASS/FAIL with comparison rationale. |
+
+`design-system-parity` artifact-only claims are NOT VERIFIED. A token table,
+`tokens.css`, YAML spec, screenshot, generated artifact, source grep, or source
+diff without `actual_computed_value` does not prove rendered token parity.
+
+For `mockup-parity`, require live DOM structure evidence compared to an HTML
+mockup or committed design artifact:
+
+| Field | Required evidence |
+|---|---|
+| `mockup_artifact` | HTML mockup, design handoff, or committed artifact used as expected source. |
+| `route` | Live route loaded for the comparison. |
+| `root_selector` | Stable root for the compared DOM subtree. |
+| `expected_structure` | Expected selector hierarchy, role/name sequence, landmark order, repeated-item count, or normalized DOM digest. |
+| `actual_dom_structure` | Actual live DOM structure captured from the rendered route. |
+| `comparison_method` | Comparator used, such as role sequence, selector hierarchy, count table, or normalized digest. |
+| `runtime_report` | Path to browser/e2e report proving the live DOM was checked. |
+| `verdict` | PASS/FAIL with comparison rationale. |
+
+`mockup-parity` artifact-only claims are NOT VERIFIED. A mockup file,
+screenshot, generated artifact, implementation source comparison, or
+source-only diff without `actual_dom_structure` does not prove rendered DOM
+structure parity.
+
+Missing required runtime evidence routes to execute when implementation evidence
+was omitted. Route to plan or design only when the missing field comes from an
+underspecified plan procedure or contradictory design intent.
+
 **Runtime mandate** (carlove SEC-10/15 retro, 2026-04-26): DC re-runs in 4.2/4.3/4.4 MUST execute against a **live runtime** — worktree dev server up + API reachable + browser able to load route. Artifact-only verification (compiled script, type-check, unit tests) is **insufficient**: 4 critical bugs slipped past artifact-green verify on SEC-10 #574 + SEC-15 #573, caught by reviewers in 4 minutes.
 
 ### 4.0 — Runtime preflight (hard gate — runs before 4.1)
