@@ -163,11 +163,22 @@ export async function buildSemanticReviewPacket({
 }
 
 export function packetCommentBody(packet) {
+  const shortHead = typeof packet?.head_sha === "string" ? packet.head_sha.slice(0, 8) : "unknown";
+  const verdict = typeof packet?.verdict === "string" ? packet.verdict : "unknown";
+  const commandCount = Array.isArray(packet?.commands) ? packet.commands.length : 0;
+
   return `${SEMANTIC_REVIEW_PACKET_MARKER}
+
+Semantic review packet: \`${verdict}\` for \`${shortHead}\`. Evidence JSON is folded below for CI parsing. Commands recorded: ${commandCount}.
+
+<details>
+<summary>Semantic review packet JSON</summary>
 
 \`\`\`json
 ${JSON.stringify(packet, null, 2)}
 \`\`\`
+
+</details>
 `;
 }
 

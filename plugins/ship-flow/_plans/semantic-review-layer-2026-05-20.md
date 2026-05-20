@@ -170,3 +170,75 @@ The reporter must not call `gh pr merge` and must not mutate remote state.
 Run: `node --test plugins/ship-flow/bin/auto-merge-readiness.test.mjs`
 
 Expected: PASS.
+
+### Task 9: Auto-Merge Evidence Collector
+
+**Files:**
+- Create: `plugins/ship-flow/bin/auto-merge-readiness-collect.mjs`
+- Test: `plugins/ship-flow/bin/auto-merge-readiness-collect.test.mjs`
+- Modify: `plugins/ship-flow/README.md`
+- Modify: `plugins/ship-flow/references/doc-sync-context.md`
+
+**Goal:** Make the report-only readiness layer self-sufficient for GitHub PRs by collecting the required evidence snapshots first.
+
+**Step 1: Write failing tests**
+
+Add tests proving the collector:
+- Calls `gh` for PR snapshot, labels, comments, and review threads.
+- Runs semantic-review gate, review-thread gate, and readiness reporter.
+- Writes every artifact under `.context/ship-flow-auto-merge/`.
+- Rejects missing CLI values and reports command failures with stderr/stdout evidence.
+
+**Step 2: Implement minimal collector**
+
+Implement `runAutoMergeReadinessCollect(options)` and CLI flags:
+- `--pr`
+- `--repo owner/name`
+- `--out-dir`
+- `--mode`
+- repeatable `--required-check`
+
+The collector must not mutate GitHub.
+
+**Step 3: Run GREEN**
+
+Run: `node --test plugins/ship-flow/bin/auto-merge-readiness-collect.test.mjs`
+
+Expected: PASS.
+
+### Task 10: Optional Auto-Merge Executor
+
+**Files:**
+- Create: `plugins/ship-flow/bin/auto-merge-run.mjs`
+- Test: `plugins/ship-flow/bin/auto-merge-run.test.mjs`
+- Modify: `plugins/ship-flow/README.md`
+- Modify: `plugins/ship-flow/references/doc-sync-context.md`
+
+**Goal:** Provide a reusable executor for adopter repos that want unattended merge behavior without hard-coding Carlove policy into the plugin.
+
+**Step 1: Write failing tests**
+
+Add tests proving the runner:
+- Does not mutate GitHub when readiness is blocked.
+- Enables native GitHub auto-merge when GitHub accepts it.
+- Direct-merges with `expectedHeadOid` when GitHub says the PR is already `clean`.
+- Does not direct-merge `unstable` status unless adopter policy opts in.
+- Direct-merges `unstable` status only with explicit `--allow-direct-merge-unstable`.
+
+**Step 2: Implement minimal executor**
+
+Implement `runAutoMerge(options)` and CLI flags:
+- `--pr`
+- `--repo owner/name`
+- `--out-dir`
+- repeatable `--required-check`
+- `--merge-method`
+- `--allow-direct-merge-unstable`
+
+The executor always runs the collector first and always sends GitHub mutations with `expectedHeadOid`.
+
+**Step 3: Run GREEN**
+
+Run: `node --test plugins/ship-flow/bin/auto-merge-run.test.mjs`
+
+Expected: PASS.

@@ -57,11 +57,15 @@ function checkName(check) {
 function normalizeCheckState(check) {
   const status = String(check?.status ?? "").toUpperCase();
   const conclusion = String(check?.conclusion ?? "").toUpperCase();
+  const state = String(check?.state ?? "").toUpperCase();
   if (status && status !== "COMPLETED") return "pending";
   if (conclusion === "SUCCESS" || conclusion === "NEUTRAL" || conclusion === "SKIPPED") {
     return "pass";
   }
   if (conclusion) return "fail";
+  if (state === "SUCCESS") return "pass";
+  if (state === "PENDING") return "pending";
+  if (state) return "fail";
   return "pending";
 }
 
@@ -74,6 +78,8 @@ function flattenChecks(value) {
 function checkRollupFromPr(pr) {
   return flattenChecks(pr?.statusCheckRollup).filter(isObject);
 }
+
+const BLOCKING_MERGE_STATE_STATUSES = new Set(["BEHIND", "BLOCKED", "DIRTY", "DRAFT", "UNKNOWN"]);
 
 function requiredCheckIssues({ pr, requiredChecks, prPath }) {
   const checks = checkRollupFromPr(pr);
@@ -92,7 +98,12 @@ function requiredCheckIssues({ pr, requiredChecks, prPath }) {
       nextActions.push(`wait_for_required_check:${requiredCheck}`);
       continue;
     }
-    const states = matches.map(normalizeCheckState);
+    const statusContextMatches = matches.filter(
+      (check) => check.__typename === "StatusContext" || check.context,
+    );
+    const states = (statusContextMatches.length > 0 ? statusContextMatches : matches).map(
+      normalizeCheckState,
+    );
     if (states.includes("fail")) {
       blockers.push(
         issue(
@@ -144,11 +155,26 @@ function prStateIssues(pr, prPath) {
       ),
     );
   }
+  const mergeStateStatus = String(pr.mergeStateStatus ?? "UNKNOWN").toUpperCase();
+  if (BLOCKING_MERGE_STATE_STATUSES.has(mergeStateStatus)) {
+    blockers.push(
+      issue(
+        "pr-merge-state-blocking",
+        prPath,
+        "PR merge state must not be blocking before auto-merge can be enabled",
+        mergeStateStatus,
+      ),
+    );
+  }
   return {
     blockers,
     nextAction:
-      blockers.find((blocker) => blocker.ruleId.endsWith("pr-not-mergeable"))
-        ? "resolve_mergeability"
+      blockers.find((blocker) => blocker.ruleId.endsWith("pr-not-open"))
+        ? "update_pr_state"
+        : blockers.find((blocker) => blocker.ruleId.endsWith("pr-not-mergeable"))
+          ? "resolve_mergeability"
+          : blockers.find((blocker) => blocker.ruleId.endsWith("pr-merge-state-blocking"))
+            ? "wait_for_required_check:mergeStateStatus"
         : blockers.length > 0
           ? "update_pr_state"
           : undefined,
@@ -161,6 +187,9 @@ function semanticGateIssues(semanticGate, semanticPath) {
       blockers: [issue("invalid-semantic-gate-json", semanticPath, "Semantic gate JSON must be an object")],
       nextAction: "collect_missing_readiness_inputs",
     };
+  }
+  if (semanticGate.ok === true && semanticGate.required === false && semanticGate.status === "skipped") {
+    return { blockers: [], nextAction: undefined };
   }
   if (semanticGate.ok !== true || semanticGate.status !== "valid") {
     return {
@@ -225,6 +254,21 @@ export async function runAutoMergeReadiness(options = {}) {
     threadGatePath: threadGateJson.path,
     requiredChecks,
   };
+  if (requiredChecks.length === 0) {
+    return {
+      ready: false,
+      status: "unknown",
+      blockers: [
+        issue(
+          "missing-required-checks",
+          "<args>",
+          "At least one --required-check value is required before auto-merge readiness can be evaluated",
+        ),
+      ],
+      nextAction: "supply_required_checks",
+      metadata,
+    };
+  }
   if (inputIssues.length > 0) {
     return {
       ready: false,
