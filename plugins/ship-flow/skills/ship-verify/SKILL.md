@@ -101,7 +101,7 @@ Verdict dominance:
 
 **Rule**: run quality checks ONLY on runtime surfaces execute wrote commits to. Full-project checks on untouched surfaces are baseline noise (MEMORY #10 generalized). Invoke `ship-flow:ship-runtime-detect` to populate `{commands.test/build/typecheck/lint}`.
 
-Before dispatching parallel checks, emit `verify-check-manifest` with rows for tests, lint/typecheck/build, `ship-flow:ui-verify`, `ship-flow:verify-reviewer-panel` review lenses, low-model domain reviewers, domain/schema review, and static/security reviewers when applicable. Read plan task `reviewer_questions` and `### Hand-off to Execute → domain_acceptance_checklist`; each checklist row becomes a `review_lenses` row with the same `Verify Lens`, `Reviewer Question`, affected path family, required skills, and evidence requirement. Also materialize any task-level reviewer_questions that are not already represented in `domain_acceptance_checklist`, including framework-only prompts, into `review_lenses` rows with source `task.reviewer_questions`. Concrete lenses such as `project-db`, `fmodel`, or `refine-gotchas` map to the `domain-expert-reviewer` reviewer kind while preserving the concrete lens name in `Lens`. Each row records input, owner, whether it can run in parallel, and required evidence. The verifier is the single integrator: parallel checks may gather evidence concurrently, but only the verifier classifies findings and writes the final verdict.
+Before dispatching parallel checks, emit `verify-check-manifest` with rows for tests, lint/typecheck/build, `ship-flow:ui-verify`, `ship-flow:verify-reviewer-panel` review lenses, low-model domain reviewers, domain/schema review, and static/security reviewers when applicable. Read plan task `reviewer_questions` and `### Hand-off to Execute → domain_acceptance_checklist`; each checklist row becomes a `review_lenses` row with the same `Verify Lens`, `Reviewer Question`, affected path family, required skills, and evidence requirement. Also materialize any task-level reviewer_questions that are not already represented in `domain_acceptance_checklist`, including framework-only prompts, into `review_lenses` rows with source `reviewer_questions`. Concrete lenses such as `project-db`, `fmodel`, or `refine-gotchas` map to the `domain-expert-reviewer` reviewer kind while preserving the concrete lens name in `Lens`. Each row records input, owner, whether it can run in parallel, and required evidence. The verifier is the single integrator: parallel checks may gather evidence concurrently, but only the verifier classifies findings and writes the final verdict.
 
 When plan contains routed domain context, verify must first run
 `bash plugins/ship-flow/lib/extract-section.sh <plan.md> context-routing-manifest`
@@ -118,6 +118,14 @@ check, or an explicit skip rationale. Record manifest-derived rows with source
 The general external reviewer baseline always runs for source diffs. It reviews the execute diff as a non-author against `plan.md`, `design.md`, execute hand-off, and changed files. Use `pr-review-toolkit:code-reviewer` when installed; otherwise use `ship-flow:verify-reviewer-panel` lens `general-external-reviewer`.
 
 The silent failure reviewer baseline always runs alongside the general external reviewer for source diffs. Use `pr-review-toolkit:silent-failure-hunter` when installed; otherwise use `ship-flow:verify-reviewer-panel` lens `silent-failure-reviewer`.
+
+### Reviewer Output Matrix and PASS Gate
+
+For any source diff, `general-external-reviewer` and `silent-failure-reviewer` are mandatory coverage rows. For `DIFF_LINES >= 50`, testing, maintainability, and security are mandatory coverage rows; performance, api-contract, data-migration, design, threat-surface, and concrete domain lenses are trigger-based according to the changed surfaces and D1/D2 reviewer manifest.
+
+PASS prerequisites: mandatory or triggered lens coverage is valid only when represented by PASS, NO_FINDINGS, accepted non-blocking findings, or allowed DEGRADED rows. NO_FINDINGS rows are required for mandatory lenses with no findings and must name reviewed scope and evidence. The discarded reviewer output is excluded from coverage, including INVALID_CONTEXT, wrong-worktree, uncited, hallucinated, mutating, or schema-invalid output; re-run it, replace it with allowed DEGRADED coverage, or return non-PASS.
+
+Every verdict-bearing BLOCKING, WARNING, and NIT reviewer row must have verifier-owned disposition before PASS. Verdict-changing findings must link to Verification Claim records, and panel_coverage plus cross_model must remain visible in verify.md before the verifier can write a PASS verdict.
 
 Domain expert panel checks are read-only and findings-only. For each matched domain or adopter file-signal lane, dispatch a low-model reviewer with the correct worktree path, base/head diff range, touched files, domain lens, and required skills/knowledge modules. The prompt MUST say "do not edit files" and require `file:line` citations. Discard outputs from the wrong worktree, wrong base/head, or uncited claims before classification.
 
@@ -192,7 +200,7 @@ Surface-level scoping says "execute didn't touch surface X → failures are pre-
 
 **Overhauled 2026-05-12 (captain decision):** the legacy "haiku reviewer matrix + spot-check" is REPLACED by a multi-specialist panel dispatched in parallel, with FO-autonomous verdict routing (no captain gate at verify — captain only sees verify.md at ship stage unless CRITICAL+high-confidence escape triggers).
 
-**Hermetic policy**: all panel logic depends on `plugins/ship-flow/lib/*` (review-scope.sh, review-merge.sh, review-log.sh, review-checklists/specialists/*.md). **DO NOT** reach into `~/.claude/skills/gstack/*` paths — those are reference-only.
+**Hermetic policy**: all panel logic depends on `plugins/ship-flow/lib/*` (review-scope.sh, review-merge.sh, review-log.sh, review-checklists/specialists/*.md). Do not reach into live GStack skill home paths; those are reference-only.
 
 ### Phase B.0 — Inline pre-scan (before parallel dispatch)
 
@@ -1048,7 +1056,7 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - Cross-review mandatory except `--fast`; VETO feedback capped at 2 rounds per stage. Phase G AUTO-FIX bounce also capped at 2 rounds; round 3 → PROMPT_CAPTAIN. Infra-fail (missing binary / server down) auto-routes; assertion-fail requires specific evidence.
 - Explicit pathspec on every commit (MEMORY #14/#25/#37). No `-a`/`-A`.
 - Parallel-session diff: scope review to `files_modified` when `git log <execute_base>..HEAD --oneline | grep -v <this-slug>` non-empty.
-- **Hermetic policy**: panel logic depends only on `plugins/ship-flow/lib/*`. NEVER reach into `~/.claude/skills/gstack/*` paths (those are reference-only).
+- **Hermetic policy**: panel logic depends only on `plugins/ship-flow/lib/*`. Never reach into live GStack skill home paths; those are reference-only.
 - Phase H `review-log.sh` ledger (per-specialist findings) and Step 6.0 `fo-receipts.md` ledger (gate transitions) coexist; do not collapse — they serve different audit trails.
 
 <!-- section:hand-off-to-review -->

@@ -8,6 +8,10 @@
 
 Captain confirmed (this conversation, 2026-05-12) that ship-flow plugin must NOT depend on `~/.claude/skills/gstack/` at runtime — too brittle, GStack evolves independently. This directory is a one-time content copy. Ship-flow owns these checklists from now on; future GStack changes are pulled in deliberately, not auto-followed.
 
+## Ship-flow orchestration overrides
+
+ship-flow orchestration supersedes copied specialist scope notes. The copied specialist scope notes remain historical checklist context, but `ship-verify` owns current dispatch semantics: security is always-on for non-trivial diffs (`DIFF_LINES >= 50`), while threat-surface-review is conditional on auth/API/backend/migration/CI/secrets/config/file/network/subprocess/LLM trust-boundary/access-control signals. This preserves the hermetic policy: ship-flow uses this snapshot and does not depend on live GStack internals at runtime.
+
 ## What was copied verbatim
 
 - `critical-pass.md` ← `checklist.md` (main pre-landing checklist, 5 critical categories + informational)

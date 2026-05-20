@@ -850,9 +850,15 @@ stages:
             - name: reviewer_output_matrix
               type: table
               description: "Schema-backed output from pr-review-toolkit or ship-flow:verify-reviewer-panel."
-              columns: ["Lens", "Reviewer Question", "Affected Path Family", "Required Skills", "Verdict", "Finding", "file_line", "route_to", "Evidence Required", "Evidence"]
+              columns: ["Lens", "Source", "Scope", "Reviewer Question", "Affected Path Family", "Required Skills", "Verdict", "Finding", "file_line", "route_to", "Evidence Required", "Evidence", "confidence", "disposition", "disposition_reason"]
               column_formats:
-                file_line: "<path:line>"
+                file_line: "<path:line|null>"
+              file_line_nullable_for: ["NO_FINDINGS", "INVALID_CONTEXT", "DEGRADED"]
+              allowed_verdict_values: ["PASS", "BLOCKING", "WARNING", "NIT", "NO_FINDINGS", "INVALID_CONTEXT", "DEGRADED"]
+              allowed_source_values: ["baseline", "reviewer_questions", "domain_acceptance_checklist", "context-routing-manifest", "scope-detection", "inline-critical-pass"]
+              allowed_route_to_values: ["execute", "plan", "design", "review", "follow-up", "captain", "none"]
+              allowed_confidence_values: ["1-10", "null"]
+              allowed_disposition_values: ["pending", "accepted", "bounced", "deferred", "discarded", "not-applicable"]
     legacy_sections:
       description: "Pre-2026-04-19 layout used 3 separate H2 sections. Readers (ship-review, ship-execute pr-feedback mode) accept both layouts."
       sections:
