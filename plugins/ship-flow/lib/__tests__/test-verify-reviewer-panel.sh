@@ -55,6 +55,18 @@ check "ship-verify keeps pr-review-toolkit delegation optional with fallback" \
 check "schema exposes verify reviewer panel manifest and output matrix" \
   "grep -q 'review_lenses' '${SCHEMA}' && grep -q 'general-external-reviewer' '${SCHEMA}' && grep -q 'silent-failure-reviewer' '${SCHEMA}' && grep -q 'domain-expert-reviewer' '${SCHEMA}' && grep -q 'reviewer_output_matrix' '${SCHEMA}'"
 
+check "reviewer panel output matrix supports explicit non-findings invalid context degraded confidence disposition" \
+  "grep -q 'NO_FINDINGS' '${PANEL_SKILL}' && grep -q 'INVALID_CONTEXT' '${PANEL_SKILL}' && grep -q 'DEGRADED' '${PANEL_SKILL}' && grep -q 'confidence' '${PANEL_SKILL}' && grep -q 'disposition' '${PANEL_SKILL}' && grep -q 'disposition_reason' '${PANEL_SKILL}'"
+
+check "reviewer panel explicit non-findings require lens source scope route_to none evidence" \
+  "grep -q 'NO_FINDINGS.*lens' '${PANEL_SKILL}' && grep -q 'NO_FINDINGS.*source' '${PANEL_SKILL}' && grep -q 'NO_FINDINGS.*scope' '${PANEL_SKILL}' && grep -q 'route_to: none' '${PANEL_SKILL}' && grep -q 'NO_FINDINGS.*evidence' '${PANEL_SKILL}'"
+
+check "reviewer panel nullable file_line is limited to non-findings invalid context and degraded rows" \
+  "grep -q 'file_line.*null.*NO_FINDINGS.*INVALID_CONTEXT.*DEGRADED' '${PANEL_SKILL}'"
+
+check "schema reviewer output matrix includes source scope confidence disposition fields and allowed verdicts" \
+  "grep -q 'Source' '${SCHEMA}' && grep -q 'Scope' '${SCHEMA}' && grep -q 'confidence' '${SCHEMA}' && grep -q 'disposition' '${SCHEMA}' && grep -q 'disposition_reason' '${SCHEMA}' && grep -q 'NO_FINDINGS' '${SCHEMA}' && grep -q 'INVALID_CONTEXT' '${SCHEMA}' && grep -q 'DEGRADED' '${SCHEMA}'"
+
 check "README documents general external reviewer baseline and domain specialization" \
   "grep -q 'general external reviewer' '${README}' && grep -q 'ship-flow:verify-reviewer-panel' '${README}' && grep -q 'domain expert panel.*specialization' '${README}'"
 

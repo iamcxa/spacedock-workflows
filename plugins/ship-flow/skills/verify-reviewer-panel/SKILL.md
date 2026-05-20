@@ -109,16 +109,24 @@ Return YAML or a markdown table that can be pasted under `### Review Findings`:
 reviewer_output_matrix:
   - lens: general-external-reviewer
     source: reviewer_questions|domain_acceptance_checklist|context-routing-manifest
+    scope: <reviewed diff/checklist/surface>
     reviewer_question: <question from plan, if any>
     affected_path_family: <path family from plan, if any>
     manifest_required_skill: <skill from context-routing-manifest required_skills, if any>
     required_skills: <skills required by plan/checklist, if any>
-    verdict: PASS|BLOCKING|WARNING|NIT
+    verdict: PASS|BLOCKING|WARNING|NIT|NO_FINDINGS|INVALID_CONTEXT|DEGRADED
+    confidence: high|medium|low
     finding: <short finding>
-    file_line: <path:line>
+    file_line: <path:line|null>
     route_to: execute|plan|design|follow-up|none
     evidence_required: <command/snippet/artifact required by plan, if any>
     evidence: <command/snippet/reference>
+    disposition: accepted|discarded|deferred|not-applicable
+    disposition_reason: <verifier-owned reason before PASS>
 ```
+
+`NO_FINDINGS` is not a blank pass: every NO_FINDINGS row must name lens, source, scope, route_to: none, and evidence identifying the reviewed diff, checklist, or surface. `file_line` may be null only for NO_FINDINGS, INVALID_CONTEXT, and DEGRADED rows; verdict-bearing BLOCKING, WARNING, and NIT rows require `file_line: <path:line>`.
+
+Return `INVALID_CONTEXT` when the self-check repo path, branch, base/head, or changed files mismatch the verifier bundle; INVALID_CONTEXT rows are discarded by ship-verify and cannot count as coverage. Return `DEGRADED` only when a required reviewer could not run and the row names the attempted reviewer, reason, substitute evidence, and risk acceptance.
 
 Verifier owns final aggregation. Critical and Important domain findings map to `BLOCKING` unless the verifier records a concrete deferral reason. Minor findings map to `NIT` or `WARNING` depending on user impact.
