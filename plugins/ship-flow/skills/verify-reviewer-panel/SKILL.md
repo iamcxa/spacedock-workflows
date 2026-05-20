@@ -114,6 +114,8 @@ reviewer_output_matrix:
     affected_path_family: <path family from plan, if any>
     manifest_required_skill: <skill from context-routing-manifest required_skills, if any>
     required_skills: <skills required by plan/checklist, if any>
+    dimension_key: type_design|silent_failure|test_adequacy|security|api_contract|ui_design|domain_intent|null
+    primary_owner: <reviewer lane or verifier|null>
     verdict: PASS|BLOCKING|WARNING|NIT|NO_FINDINGS|INVALID_CONTEXT|DEGRADED
     confidence: 1-10|null
     finding: <short finding>
@@ -130,3 +132,22 @@ reviewer_output_matrix:
 Return `INVALID_CONTEXT` when the self-check repo path, branch, base/head, or changed files mismatch the verifier bundle; INVALID_CONTEXT rows are discarded by ship-verify and cannot count as coverage. Return `DEGRADED` only when a required reviewer could not run and the row names the attempted reviewer, reason, substitute evidence, and risk acceptance.
 
 Verifier owns final aggregation. Critical and Important domain findings map to `BLOCKING` unless the verifier records a concrete deferral reason. Minor findings map to `NIT` or `WARNING` depending on user impact.
+
+## Ownership Handoff
+
+Reviewer rows must be easy for ship-verify to merge into the verifier-owned aggregation
+and semantic review packet. Include `dimension_key` and
+`primary_owner` when the lens maps to a pass ownership row:
+
+- `general-external-reviewer` -> `type_design`
+- `silent-failure-reviewer` -> `silent_failure`
+- testing lens -> `test_adequacy`
+- security lens -> `security`
+- api-contract lens -> `api_contract`
+- design/ui lens -> `ui_design`
+- domain-expert lens -> `domain_intent`
+
+Reviewers may report findings, but they do not own the stage verdict. Use
+`primary_owner` to name the owning reviewer lane or `verifier` for local-only
+runtime/UAT rows. The verifier keeps final disposition authority and records the
+Panel Coverage verdict.

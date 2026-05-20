@@ -147,6 +147,9 @@ export async function runAutoMerge(options = {}) {
   const mergeMethod = options.mergeMethod ?? "SQUASH";
   const ghRunner = options.ghRunner ?? defaultGhRunner;
   const collect = options.collect ?? runAutoMergeReadinessCollect;
+  if (options.mode === "off") {
+    throw new Error("auto-merge-run requires semantic review mode required or auto");
+  }
   const readiness = await collect({
     cwd,
     prNumber,

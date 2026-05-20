@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -30,9 +30,21 @@ const policy = {
   required_dimensions: ["workflow_ci", "runtime_path"],
 };
 const dimensionEvidence = {
+  security: "Reviewed auth, permission, and secret handling paths.",
+  type_design: "Reviewed schema and API type boundaries.",
+  test_adequacy: "Reviewed automated test coverage for changed behavior.",
+  silent_failure: "Reviewed failure paths and stale evidence behavior.",
   workflow_ci: "Reviewed required checks and auto-merge ruleset interaction.",
+  verify_agent_worker_ownership: "Reviewed verify pass ownership and coverage verdicts.",
+  cross_model_challenge: "Reviewed host-aware external reviewer challenge evidence.",
   runtime_path: "Reviewed runtime path and break-point probe evidence.",
 };
+
+const panelCoverage = `## Panel Coverage
+- Tier: A (full cross-model)
+- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; type_design PASS; silent_failure PASS; test_adequacy PASS; security PASS; cross_model_challenge PASS; runtime_uat PASS
+- Semantic packet dimensions: security, type_design, test_adequacy, silent_failure, workflow_ci, verify_agent_worker_ownership, cross_model_challenge
+`;
 
 function commandRunnerFor(commands) {
   return async (command) => {
@@ -80,7 +92,13 @@ test("builds a validator-compatible semantic review packet from an adopter polic
     assert.deepEqual(Object.keys(packet.reviewers).sort(), ["codex_local", "domain_reviewer"]);
     assert.equal(packet.local_review.kc_pr_review.artifact, validOptions().localReviewArtifact);
     assert.deepEqual(Object.keys(packet.local_review.dimensions).sort(), [
+      "cross_model_challenge",
       "runtime_path",
+      "security",
+      "silent_failure",
+      "test_adequacy",
+      "type_design",
+      "verify_agent_worker_ownership",
       "workflow_ci",
     ]);
     assert.match(packet.changed_files_hash, /^sha256:[0-9a-f]{64}$/);
@@ -119,6 +137,181 @@ test("writes packet and marked PR comment body that validate against the current
   });
 });
 
+test("can derive default semantic dimensions from verify Panel Coverage", async () => {
+  await withFixture(async (root) => {
+    await writeFile(path.join(root, "verify.md"), panelCoverage);
+
+    const packet = await buildSemanticReviewPacket({
+      cwd: root,
+      options: validOptions({
+        verifyPath: "verify.md",
+        dimensionEvidence: {
+          runtime_path: "Reviewed runtime path and break-point probe evidence.",
+        },
+      }),
+      generatedAt: "2026-05-20T00:00:00.000Z",
+      commandRunner: commandRunnerFor({
+        "git rev-parse HEAD": `${headSha}\n`,
+        "git merge-base HEAD origin/main": `${baseSha}\n`,
+        "git diff --name-only bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "plugins/ship-flow/bin/semantic-review-prepare.mjs\n",
+      }),
+    });
+
+    assert.match(
+      packet.local_review.dimensions.verify_agent_worker_ownership.evidence,
+      /Panel Coverage Pass ownership/,
+    );
+    assert.match(
+      packet.local_review.dimensions.cross_model_challenge.evidence,
+      /cross_model_challenge PASS/,
+    );
+  });
+});
+
+test("rejects verify Panel Coverage missing a default semantic dimension", async () => {
+  await withFixture(async (root) => {
+    await writeFile(
+      path.join(root, "verify.md"),
+      panelCoverage.replace(", cross_model_challenge", ""),
+    );
+
+    await assert.rejects(
+      () =>
+        buildSemanticReviewPacket({
+          cwd: root,
+          options: validOptions({
+            verifyPath: "verify.md",
+            dimensionEvidence: {
+              runtime_path: "Reviewed runtime path and break-point probe evidence.",
+            },
+          }),
+          commandRunner: commandRunnerFor({
+            "git rev-parse HEAD": `${headSha}\n`,
+            "git merge-base HEAD origin/main": `${baseSha}\n`,
+            "git diff --name-only bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "",
+          }),
+        }),
+      /verify Panel Coverage is missing semantic packet dimension cross_model_challenge/,
+    );
+  });
+});
+
+test("rejects blocking verify Panel Coverage verdicts for default dimensions", async () => {
+  await withFixture(async (root) => {
+    await writeFile(
+      path.join(root, "verify.md"),
+      panelCoverage.replace("cross_model_challenge PASS", "cross_model_challenge BLOCKING"),
+    );
+
+    await assert.rejects(
+      () =>
+        buildSemanticReviewPacket({
+          cwd: root,
+          options: validOptions({
+            verifyPath: "verify.md",
+            dimensionEvidence: {
+              runtime_path: "Reviewed runtime path and break-point probe evidence.",
+            },
+          }),
+          commandRunner: commandRunnerFor({
+            "git rev-parse HEAD": `${headSha}\n`,
+            "git merge-base HEAD origin/main": `${baseSha}\n`,
+            "git diff --name-only bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "",
+          }),
+        }),
+      /verify Panel Coverage dimension cross_model_challenge has blocking verdict BLOCKING/,
+    );
+  });
+});
+
+test("does not let explicit evidence bypass default verify Panel Coverage verdicts", async () => {
+  await withFixture(async (root) => {
+    await writeFile(
+      path.join(root, "verify.md"),
+      panelCoverage.replace("cross_model_challenge PASS", "cross_model_challenge WARNING"),
+    );
+
+    await assert.rejects(
+      () =>
+        buildSemanticReviewPacket({
+          cwd: root,
+          options: validOptions({
+            verifyPath: "verify.md",
+            dimensionEvidence: {
+              cross_model_challenge: "Manual evidence should not bypass verify verdict.",
+              runtime_path: "Reviewed runtime path and break-point probe evidence.",
+            },
+          }),
+          commandRunner: commandRunnerFor({
+            "git rev-parse HEAD": `${headSha}\n`,
+            "git merge-base HEAD origin/main": `${baseSha}\n`,
+            "git diff --name-only bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "",
+          }),
+        }),
+      /verify Panel Coverage dimension cross_model_challenge has blocking verdict WARNING/,
+    );
+  });
+});
+
+test("rejects degraded verify Panel Coverage verdicts for default dimensions", async () => {
+  await withFixture(async (root) => {
+    await writeFile(
+      path.join(root, "verify.md"),
+      panelCoverage.replace("cross_model_challenge PASS", "cross_model_challenge DEGRADED"),
+    );
+
+    await assert.rejects(
+      () =>
+        buildSemanticReviewPacket({
+          cwd: root,
+          options: validOptions({
+            verifyPath: "verify.md",
+            dimensionEvidence: {
+              runtime_path: "Reviewed runtime path and break-point probe evidence.",
+            },
+          }),
+          commandRunner: commandRunnerFor({
+            "git rev-parse HEAD": `${headSha}\n`,
+            "git merge-base HEAD origin/main": `${baseSha}\n`,
+            "git diff --name-only bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "",
+          }),
+        }),
+      /verify Panel Coverage dimension cross_model_challenge has blocking verdict DEGRADED/,
+    );
+  });
+});
+
+test("rejects placeholder verdict lists in verify Panel Coverage", async () => {
+  await withFixture(async (root) => {
+    await writeFile(
+      path.join(root, "verify.md"),
+      panelCoverage.replace(
+        "verify_agent_worker_ownership PASS",
+        "verify_agent_worker_ownership PASS|NO_FINDINGS|BLOCKING|WARNING|NIT|DEGRADED",
+      ),
+    );
+
+    await assert.rejects(
+      () =>
+        buildSemanticReviewPacket({
+          cwd: root,
+          options: validOptions({
+            verifyPath: "verify.md",
+            dimensionEvidence: {
+              runtime_path: "Reviewed runtime path and break-point probe evidence.",
+            },
+          }),
+          commandRunner: commandRunnerFor({
+            "git rev-parse HEAD": `${headSha}\n`,
+            "git merge-base HEAD origin/main": `${baseSha}\n`,
+            "git diff --name-only bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "",
+          }),
+        }),
+      /verify Panel Coverage is missing pass ownership dimension verify_agent_worker_ownership/,
+    );
+  });
+});
+
 test("formats marked PR comment with a readable summary and folded packet JSON", () => {
   const packet = {
     schema_version: "ship-flow.semantic-review-packet.v1",
@@ -145,6 +338,7 @@ test("rejects preparation when adopter-required dimension evidence is missing", 
           cwd: root,
           options: validOptions({
             dimensionEvidence: {
+              ...dimensionEvidence,
               workflow_ci: "Reviewed CI.",
               runtime_path: "",
             },
@@ -171,6 +365,8 @@ test("parses policy and generic local review flags", () => {
     "https://github.example/review/742",
     "--local-review-evidence",
     "Structured review passed.",
+    "--verify-md",
+    "docs/ship-flow/123/verify.md",
     "--dimension-evidence",
     "workflow_ci=Reviewed CI gate interaction.",
     "--command-evidence",
@@ -180,6 +376,7 @@ test("parses policy and generic local review flags", () => {
   assert.equal(options.policyPath, ".context/policy.json");
   assert.equal(options.localReviewCommand, "kc-pr-flow:kc-pr-review --pr 742");
   assert.equal(options.dimensionEvidence.workflow_ci, "Reviewed CI gate interaction.");
+  assert.equal(options.verifyPath, "docs/ship-flow/123/verify.md");
   assert.deepEqual(options.commands, [
     {
       name: "semantic review tests",

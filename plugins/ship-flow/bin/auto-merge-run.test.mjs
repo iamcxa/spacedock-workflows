@@ -233,3 +233,24 @@ test("does not mutate GitHub when readiness collector reports blockers", async (
     assert.equal(result.nextAction, "fix_required_check:ci-gate");
   });
 });
+
+test("rejects mutating auto-merge when semantic review mode is off", async () => {
+  await withTempDir(async (cwd) => {
+    await assert.rejects(
+      () =>
+        runAutoMerge({
+          cwd,
+          prNumber: 746,
+          repo: "duckbase-co/qnow",
+          mode: "off",
+          collect: async () => {
+            throw new Error("collector should not run when semantic review is disabled");
+          },
+          ghRunner: async () => {
+            throw new Error("gh should not run when semantic review is disabled");
+          },
+        }),
+      /auto-merge-run requires semantic review mode/,
+    );
+  });
+});

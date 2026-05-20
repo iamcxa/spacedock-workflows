@@ -10,6 +10,8 @@ export const DEFAULT_SEMANTIC_REVIEW_POLICY = Object.freeze({
     "test_adequacy",
     "silent_failure",
     "workflow_ci",
+    "verify_agent_worker_ownership",
+    "cross_model_challenge",
   ],
   required_label: "ship-flow:semantic-review-required",
 });
@@ -20,6 +22,11 @@ function stringArray(value, fallback) {
     .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
     .filter(Boolean);
   return normalized.length > 0 ? normalized : [...fallback];
+}
+
+function extendedStringArray(value, fallback) {
+  const normalized = stringArray(value, []);
+  return [...new Set([...fallback, ...normalized])];
 }
 
 function nonEmptyString(value, fallback) {
@@ -36,7 +43,7 @@ export function normalizeSemanticReviewPolicy(policy = {}) {
       policy.local_review_key,
       DEFAULT_SEMANTIC_REVIEW_POLICY.local_review_key,
     ),
-    required_dimensions: stringArray(
+    required_dimensions: extendedStringArray(
       policy.required_dimensions,
       DEFAULT_SEMANTIC_REVIEW_POLICY.required_dimensions,
     ),

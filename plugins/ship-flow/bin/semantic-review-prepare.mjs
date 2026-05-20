@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { exec, execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -10,7 +10,10 @@ import {
   SEMANTIC_REVIEW_PACKET_MARKER,
   runSemanticReviewPacketValidation,
 } from "./semantic-review-packet.mjs";
-import { readSemanticReviewPolicy } from "./semantic-review-policy.mjs";
+import {
+  DEFAULT_SEMANTIC_REVIEW_POLICY,
+  readSemanticReviewPolicy,
+} from "./semantic-review-policy.mjs";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -90,6 +93,70 @@ function dimensionPacket({ dimensionName, evidence, headSha }) {
   };
 }
 
+function panelCoverageBlock(markdown) {
+  const lines = markdown.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim() === "## Panel Coverage");
+  if (startIndex === -1) {
+    throw new Error("verify.md must include ## Panel Coverage");
+  }
+  const block = [];
+  for (const line of lines.slice(startIndex + 1)) {
+    if (/^##\s+/.test(line)) break;
+    block.push(line.trim());
+  }
+  return block;
+}
+
+function parsePassOwnership(passOwnershipLine) {
+  const entries = new Map();
+  const rawEntries = passOwnershipLine.replace(/^- Pass ownership:\s*/, "").split(";");
+  for (const rawEntry of rawEntries) {
+    const match = rawEntry
+      .trim()
+      .match(/^`?([a-z0-9_]+)`?\s+(PASS|NO_FINDINGS|BLOCKING|WARNING|NIT|DEGRADED)(?:\s|$)/);
+    if (match) entries.set(match[1], match[2]);
+  }
+  return entries;
+}
+
+async function panelCoverageDimensionEvidence({ cwd, verifyPath, policy, suppliedEvidence = {} }) {
+  if (!verifyPath) return {};
+  const markdown = await readFile(path.resolve(cwd, verifyPath), "utf8");
+  const block = panelCoverageBlock(markdown);
+  const passOwnershipLine = block.find((line) => line.startsWith("- Pass ownership:"));
+  const semanticDimensionsLine = block.find((line) => line.startsWith("- Semantic packet dimensions:"));
+  if (!passOwnershipLine) {
+    throw new Error("verify Panel Coverage is missing Pass ownership");
+  }
+  if (!semanticDimensionsLine) {
+    throw new Error("verify Panel Coverage is missing Semantic packet dimensions");
+  }
+
+  const evidence = {};
+  const passOwnership = parsePassOwnership(passOwnershipLine);
+  const defaultDimensions = new Set(DEFAULT_SEMANTIC_REVIEW_POLICY.required_dimensions);
+  for (const dimensionName of policy.required_dimensions) {
+    if (isNonEmptyString(suppliedEvidence[dimensionName]) && !defaultDimensions.has(dimensionName)) {
+      continue;
+    }
+    if (!semanticDimensionsLine.includes(dimensionName)) {
+      throw new Error(`verify Panel Coverage is missing semantic packet dimension ${dimensionName}`);
+    }
+    const passVerdict = passOwnership.get(dimensionName);
+    if (!passVerdict) {
+      throw new Error(`verify Panel Coverage is missing pass ownership dimension ${dimensionName}`);
+    }
+    if (!["PASS", "NO_FINDINGS"].includes(passVerdict)) {
+      throw new Error(
+        `verify Panel Coverage dimension ${dimensionName} has blocking verdict ${passVerdict}`,
+      );
+    }
+    evidence[dimensionName] =
+      `Panel Coverage Pass ownership: ${passOwnershipLine}; ${semanticDimensionsLine}`;
+  }
+  return evidence;
+}
+
 function reviewerPacket(headSha) {
   return {
     verdict: "pass",
@@ -120,6 +187,12 @@ export async function buildSemanticReviewPacket({
     `git diff --name-only ${baseSha} ${headSha}`,
     cwd,
   );
+  const panelCoverageEvidence = await panelCoverageDimensionEvidence({
+    cwd,
+    verifyPath: options.verifyPath,
+    policy,
+    suppliedEvidence: options.dimensionEvidence,
+  });
 
   const reviewers = {};
   for (const reviewerName of policy.required_reviewers) {
@@ -130,7 +203,7 @@ export async function buildSemanticReviewPacket({
   for (const dimensionName of policy.required_dimensions) {
     dimensions[dimensionName] = dimensionPacket({
       dimensionName,
-      evidence: options.dimensionEvidence?.[dimensionName],
+      evidence: options.dimensionEvidence?.[dimensionName] ?? panelCoverageEvidence[dimensionName],
       headSha,
     });
   }
@@ -263,6 +336,8 @@ export function parseArgs(argv) {
     } else if (arg === "--dimension-evidence") {
       const [key, value] = parseKeyValue(normalizedArgv[++index], "--dimension-evidence");
       options.dimensionEvidence[key] = value;
+    } else if (arg === "--verify-md") {
+      options.verifyPath = normalizedArgv[++index];
     } else if (arg === "--command-evidence") {
       options.commands.push(parseCommandEvidence(normalizedArgv[++index]));
     } else if (arg === "--packet") {

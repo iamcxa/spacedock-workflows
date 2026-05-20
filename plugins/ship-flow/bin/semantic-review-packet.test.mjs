@@ -29,6 +29,8 @@ const defaultDimensions = {
   test_adequacy: reviewDimension("Reviewed automated test coverage for changed behavior."),
   silent_failure: reviewDimension("Reviewed failure paths and stale evidence behavior."),
   workflow_ci: reviewDimension("Reviewed CI and auto-merge gate interaction."),
+  verify_agent_worker_ownership: reviewDimension("Reviewed verify pass ownership, primary owners, and coverage verdicts."),
+  cross_model_challenge: reviewDimension("Reviewed host-aware external reviewer challenge evidence."),
 };
 
 function reviewDimension(evidence, overrides = {}) {
@@ -125,16 +127,18 @@ test("accepts a valid packet using the default Ship-Flow semantic review policy"
   assert.deepEqual(result.issues, []);
   assert.deepEqual(result.metadata.reviewers, ["break_point_probe", "codex_local"]);
   assert.deepEqual(result.metadata.localReviewDimensions, [
+    "cross_model_challenge",
     "security",
     "silent_failure",
     "test_adequacy",
     "type_design",
+    "verify_agent_worker_ownership",
     "workflow_ci",
   ]);
   assert.equal(result.metadata.localReviewKey, "structured_review");
 });
 
-test("accepts adopter policy overrides for reviewers, local review key, and dimensions", async () => {
+test("accepts adopter policy overrides for reviewers and local review key while extending dimensions", async () => {
   const policy = {
     required_reviewers: ["codex_local", "domain_reviewer"],
     local_review_key: "kc_pr_review",
@@ -148,6 +152,7 @@ test("accepts adopter policy overrides for reviewers, local review key, and dime
     local_review: localReview({
       key: "kc_pr_review",
       dimensions: {
+        ...defaultDimensions,
         workflow_ci: reviewDimension("Reviewed required checks and rulesets."),
         runtime_path: reviewDimension("Reviewed runtime path and break-point evidence."),
       },
@@ -160,7 +165,16 @@ test("accepts adopter policy overrides for reviewers, local review key, and dime
   assert.deepEqual(result.issues, []);
   assert.deepEqual(result.metadata.reviewers, ["codex_local", "domain_reviewer"]);
   assert.equal(result.metadata.localReviewKey, "kc_pr_review");
-  assert.deepEqual(result.metadata.localReviewDimensions, ["runtime_path", "workflow_ci"]);
+  assert.deepEqual(result.metadata.localReviewDimensions, [
+    "cross_model_challenge",
+    "runtime_path",
+    "security",
+    "silent_failure",
+    "test_adequacy",
+    "type_design",
+    "verify_agent_worker_ownership",
+    "workflow_ci",
+  ]);
 });
 
 test("rejects packets missing adopter-required reviewers and dimensions", async () => {

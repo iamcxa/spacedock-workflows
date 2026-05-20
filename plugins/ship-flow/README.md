@@ -511,19 +511,25 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 **New primitives**:
 
 - `bin/semantic-review-packet.mjs` — validates a structured PR semantic-review packet against current head and adopter policy. Checks schema, head freshness, required reviewer verdicts, required local review dimensions, and traceable evidence fields.
-- `bin/semantic-review-prepare.mjs` — builds the packet JSON plus a marked PR comment body from local review evidence and command evidence. Generated packet comments fold the long JSON body in `<details>` so PR timelines show a short verdict first.
+- `bin/semantic-review-prepare.mjs` — builds the packet JSON plus a marked PR comment body from local review evidence and command evidence. Pass `--verify-md <path>` to derive default semantic dimension evidence from ship-verify `## Panel Coverage`; default dimensions must be `PASS` or `NO_FINDINGS`, and adopter-only dimensions still need explicit `--dimension-evidence key=value`. Generated packet comments fold the long JSON body in `<details>` so PR timelines show a short verdict first.
 - `bin/semantic-review-gate.mjs` — validates the newest marked PR packet comment when semantic review is required. Reads from PR comments via `gh`; fails if the packet is absent, stale, or missing required verdicts.
 - `bin/review-thread-gate.mjs` — separate mechanical gate for GitHub review threads. Fails when an unresolved, non-outdated thread remains on the PR head; allows Copilot or another reviewer to produce actionable comments without requiring human approval as the branch protection primitive.
 - `bin/auto-merge-readiness.mjs` (extended) — report-only readiness reporter. Consumes PR/check snapshots plus semantic-review and review-thread gate outputs; returns `ready`, `blocked`, or `unknown` with `nextAction`. Does not call `gh pr merge`, enable auto-merge, or mutate remote state.
 - `bin/auto-merge-readiness-collect.mjs` — evidence collector for GitHub-backed PRs. Gathers PR snapshot, labels, issue comments, review threads, semantic gate output, review-thread gate output, and readiness output under `.context/ship-flow-auto-merge/`. Pass `--policy-json` when an adopter repo uses a project-specific semantic review key or dimensions.
-- `bin/auto-merge-run.mjs` — optional mutating executor. Runs the collector; when readiness is clean, tries GitHub native auto-merge with `expectedHeadOid`. Falls back to direct-merge when the PR is already `clean`. If GitHub reports `unstable`, direct merge requires adopter opt-in via `--allow-direct-merge-unstable`; otherwise returns `blocked`. Also accepts `--policy-json` and forwards it to the collector.
+- `bin/auto-merge-run.mjs` — optional mutating executor. Runs the collector; when readiness is clean, tries GitHub native auto-merge with `expectedHeadOid`. Falls back to direct-merge when the PR is already `clean`. If GitHub reports `unstable`, direct merge requires adopter opt-in via `--allow-direct-merge-unstable`; otherwise returns `blocked`. Semantic review mode cannot be `off` for this mutating path. Also accepts `--policy-json` and forwards it to the collector.
 
 **Repo-local Claude challenge gate** (adjacent merge-flow hardening):
 
 - `docs/ship-flow/_mods/pr-merge.md` updated with a Claude challenge gate for the Spacebridge dogfood merge flow. It requires a structured merge-recommendation receipt and binds that receipt to the PR head SHA so stale receipts from prior pushes are rejected.
 - `lib/__tests__/test-pr-merge-claude-challenge-gate.sh` added with integration tests for that repo-local gate protocol. This is separate from `bin/auto-merge-run.mjs`, whose mechanical inputs remain the collector/readiness outputs and adopter policy.
 
-**Adopter policy stays outside plugin defaults**: repos pass `--policy-json` with `required_reviewers`, `local_review_key`, `required_dimensions`, and optional `required_label`. This keeps Carlove-style `kc_pr_review` or domain-specific dimensions as project policy rather than plugin law.
+**Adopter policy extends plugin defaults**: the plugin default dimensions now
+include `verify_agent_worker_ownership` and `cross_model_challenge` so
+ship-verify `## Panel Coverage` can feed auto-merge readiness through
+`semantic-review-prepare --verify-md` without prose-only claims. Repos still pass `--policy-json` with `required_reviewers`,
+`local_review_key`, additional `required_dimensions`, and optional
+`required_label` when they need Carlove-style `kc_pr_review` or domain-specific
+dimensions.
 
 **Queued (not shipped in 0.6.0)**:
 
@@ -607,12 +613,21 @@ Incremental additions after the 0.5.0 release that were fully shipped on main be
 - Project-specific seed, migration, generated SQL, env, and deployment checks stay in adopter commands and are wired by config; they do not belong in the generic plugin.
 
 **Semantic PR review primitives**:
-- `bin/semantic-review-packet.mjs`, `bin/semantic-review-prepare.mjs`, and `bin/semantic-review-gate.mjs` provide the reusable mechanism layer for structured PR review evidence. The plugin validates schema, current-head freshness, required reviewer verdicts, required local review dimensions, traceable evidence fields, and command exit evidence. Generated packet comments keep the marker and fenced JSON for the gate, but fold the long JSON body in `<details>` so PR timelines show a short verdict first.
-- Adopter policy stays outside the plugin default: repos pass `--policy-json` with `required_reviewers`, `local_review_key`, `required_dimensions`, and optional `required_label`. This keeps Carlove-style `kc_pr_review` or domain-specific dimensions as project policy rather than plugin law.
+- `bin/semantic-review-packet.mjs`, `bin/semantic-review-prepare.mjs`, and `bin/semantic-review-gate.mjs` provide the reusable mechanism layer for structured PR review evidence. The plugin validates schema, current-head freshness, required reviewer verdicts, required local review dimensions, traceable evidence fields, and command exit evidence. `semantic-review-prepare --verify-md <path>` reads ship-verify `## Panel Coverage` and derives default dimension evidence from its `Pass ownership` and `Semantic packet dimensions` rows only when the default dimension verdict is `PASS` or `NO_FINDINGS`. Generated packet comments keep the marker and fenced JSON for the gate, but fold the long JSON body in `<details>` so PR timelines show a short verdict first.
+- Adopter policy extends the plugin default. The built-in semantic packet
+  dimensions include `security`, `type_design`, `test_adequacy`,
+  `silent_failure`, `workflow_ci`, `verify_agent_worker_ownership`, and
+  `cross_model_challenge`. The last two connect verify-stage agent/worker
+  ownership and host-aware external challenge evidence to auto-merge readiness
+  when the packet is prepared from verify output.
+  Repos can still pass `--policy-json` with `required_reviewers`,
+  `local_review_key`, additional `required_dimensions`, and optional
+  `required_label` when they need Carlove-style `kc_pr_review` or domain-specific
+  dimensions.
 - `bin/review-thread-gate.mjs` is a separate mechanical gate for GitHub review threads. It fails when an unresolved, non-outdated thread remains on the PR head, which lets Copilot or another reviewer produce actionable comments without requiring human approval as the branch protection primitive.
 - `bin/auto-merge-readiness.mjs` is report-only. It consumes PR/check snapshots plus semantic-review and review-thread gate outputs, then returns `ready`, `blocked`, or `unknown` with `nextAction`. It does not call `gh pr merge`, enable auto-merge, or mutate remote state.
 - `bin/auto-merge-readiness-collect.mjs` is the evidence collector for GitHub-backed PRs. It gathers PR snapshot, labels, issue comments, review threads, semantic gate output, review-thread gate output, and readiness output under `.context/ship-flow-auto-merge/` so the merge decision is inspectable. Pass `--policy-json` when an adopter repo uses a project-specific semantic review key or dimensions.
-- `bin/auto-merge-run.mjs` is the optional mutating executor. It first runs the collector; when readiness is clean, it tries GitHub native auto-merge with `expectedHeadOid`. If GitHub reports the PR is already `clean`, it direct-merges with the same expected head. If GitHub reports `unstable`, direct merge requires adopter opt-in via `--allow-direct-merge-unstable`; otherwise the runner returns `blocked` and asks the operator to wait or opt in explicitly. The runner also accepts `--policy-json` and forwards it to the collector.
+- `bin/auto-merge-run.mjs` is the optional mutating executor. It first runs the collector; when readiness is clean, it tries GitHub native auto-merge with `expectedHeadOid`. If GitHub reports the PR is already `clean`, it direct-merges with the same expected head. If GitHub reports `unstable`, direct merge requires adopter opt-in via `--allow-direct-merge-unstable`; otherwise the runner returns `blocked` and asks the operator to wait or opt in explicitly. The runner rejects semantic review `--mode off`, and also accepts `--policy-json` for forwarding to the collector.
 
 ---
 

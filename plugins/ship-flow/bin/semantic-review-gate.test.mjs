@@ -101,7 +101,13 @@ function validPacket(overrides = {}) {
         high_findings: 0,
       },
       dimensions: {
+        security: dimension("Reviewed auth, permission, and secret handling paths."),
+        type_design: dimension("Reviewed schema and API type boundaries."),
+        test_adequacy: dimension("Reviewed automated test coverage for changed behavior."),
+        silent_failure: dimension("Reviewed failure paths and stale evidence behavior."),
         workflow_ci: dimension("Reviewed CI gate interaction."),
+        verify_agent_worker_ownership: dimension("Reviewed verify pass ownership and coverage verdicts."),
+        cross_model_challenge: dimension("Reviewed host-aware external reviewer challenge evidence."),
         runtime_path: dimension("Reviewed runtime path."),
       },
     },

@@ -75,6 +75,20 @@ function validLocalReviewWithKey(localReviewKey) {
         blocking_findings: 0,
         high_findings: 0,
       },
+      verify_agent_worker_ownership: {
+        status: "pass",
+        evidence: "Reviewed verify pass ownership, primary owners, and coverage verdicts.",
+        reviewed_head: headSha,
+        blocking_findings: 0,
+        high_findings: 0,
+      },
+      cross_model_challenge: {
+        status: "pass",
+        evidence: "Reviewed host-aware external reviewer challenge evidence.",
+        reviewed_head: headSha,
+        blocking_findings: 0,
+        high_findings: 0,
+      },
     },
   };
 }

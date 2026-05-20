@@ -127,6 +127,70 @@ PASS prerequisites: mandatory or triggered lens coverage is valid only when repr
 
 Every verdict-bearing BLOCKING, WARNING, and NIT reviewer row must have verifier-owned disposition before PASS. Verdict-changing findings must link to Verification Claim records, and panel_coverage plus cross_model must remain visible in verify.md before the verifier can write a PASS verdict.
 
+### Agent/worker ownership contract
+
+The verifier is the single integrator. Parallel agents, teammate workers, CLI
+tools, and browser/runtime primitives gather evidence, but they do not own the
+stage verdict. Every triggered pass has exactly one primary owner; other agents
+may contribute findings but cannot silently replace the primary owner's verdict.
+
+**Local verifier primitives** — run in the verifier context because they are
+deterministic evidence collection:
+- scoped test / lint / typecheck / build commands
+- `git diff --stat` vs `plan.md` files_modified
+- stale-reference grep, CLAUDE.md/AGENTS.md walks, folder guidance receipt checks
+- per-error blame attribution
+- runtime preflight, API curl smoke, UAT spot-check commands
+- invoking `ship-flow:ui-verify`, browser, or e2e primitives and recording output
+
+**Agent-owned judgment reviews** — must use a reviewer/worker because they need
+independent judgment or domain perspective:
+- general external review and silent-failure review
+- testing, maintainability, security, api-contract, performance, design, and
+  data-migration specialists
+- domain-expert reviewers and intent-match-verifier lanes
+- designer semantic parity review
+- host-aware external cross-model challenge
+- red-team follow-up when triggered
+
+**Mixed ownership rule**: local commands can support any pass, but one primary
+owner still produces the pass verdict. Example: the verifier may run curl smoke
+for `api_contract`, but the `api-contract` reviewer owns the API judgment row;
+the verifier may run screenshot comparison for `ui_design`, but designer +
+ui-verify own semantic/rendered parity rows. If multiple agents look at the same
+dimension, findings merge through Phase D; missing owner output is a coverage gap, not a clean pass.
+
+Pass ownership rows use stable semantic-review dimension keys so verify output,
+PR semantic-review packets, and auto-merge readiness policy speak the same
+language:
+
+| Dimension key | Primary owner | When triggered | Local verifier role |
+|---|---|---|---|
+| `verify_agent_worker_ownership` | verifier | always | prove manifest rows, owner routing, and coverage verdicts exist |
+| `workflow_ci` | verifier | always | scoped commands, required checks, merge/readiness interaction |
+| `type_design` | general-external-reviewer + type/design specialist when available | source diff | classify contract/type/design drift |
+| `silent_failure` | silent-failure-reviewer | source diff | verify failure-path and stale-evidence claims |
+| `test_adequacy` | testing specialist | source diff or TDD tasks | audit RED/GREEN and coverage adequacy |
+| `security` | security specialist | source diff | run supporting grep/checks; route findings |
+| `cross_model_challenge` | external host reviewer (`/codex` from Claude Code, `/claude` from Codex) | source diff; degraded when unavailable | record external reviewer result or DEGRADED reason |
+| `runtime_uat` | verifier | api/ui/e2e/cli DCs | live preflight, curl/browser/e2e probes, claim records |
+| `api_contract` | api-contract specialist | API surface touched | run curl smoke and compare to reviewer finding |
+| `ui_design` | designer teammate + ui-verify | UI/design touched | browser/runtime evidence and route ownership |
+| `domain_intent` | domain-expert reviewer / intent-match-verifier | registry or file-signal match | validate reviewer context and citations |
+
+Every triggered row must end in one of:
+`PASS | NO_FINDINGS | BLOCKING | WARNING | NIT | DEGRADED`.
+`NO_FINDINGS` must cite the reviewed scope and evidence. `DEGRADED` must explain
+why the primary owner could not run, what fallback ran, and whether the
+degradation is allowed for this entity. Invalid context, uncited findings,
+mutating reviewers, or stale head evidence are discarded and do not satisfy
+coverage.
+
+Pass ownership rows are PASS-blocking when the required owner output is missing,
+invalid, stale, mutating, or `DEGRADED` without an accepted captain/verifier risk
+decision. Tier, score, and summary rows remain informational; ownership coverage
+is a verdict prerequisite.
+
 Domain expert panel checks are read-only and findings-only. For each matched domain or adopter file-signal lane, dispatch a low-model reviewer with the correct worktree path, base/head diff range, touched files, domain lens, and required skills/knowledge modules. The prompt MUST say "do not edit files" and require `file:line` citations. Discard outputs from the wrong worktree, wrong base/head, or uncited claims before classification.
 
 Every low-model domain reviewer must self-check repo path, branch, base/head, and changed files before reviewing. If any value does not match the verifier's
@@ -874,7 +938,7 @@ Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before�
 - `## High-Confidence-Pending` — present only when Phase G ASK CRITICAL+confidence<8 entries exist.
 - `## Deferred to TODO` — **mandatory H2 footer at tail of verify.md** (last H2; missing header is a violation). Lists findings deferred to `ship-flow:add-todos` per Phase G routing rules. N=0 case must still print the section with explicit zero count.
 
-**`## Panel Coverage` template** (mandatory; informational, never blocks):
+**`## Panel Coverage` template** (mandatory; tier/score informational, pass ownership rows gate PASS):
 
 ```markdown
 ## Panel Coverage
@@ -882,8 +946,16 @@ Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before�
 - Specialists run: testing PASS/WARN/FAIL=<n>/<n>/<n>, maintainability …, security … (NEVER_GATE), performance …, api-contract …, design …
 - Adversarial: Claude ✓, Codex ✓|✗ (<reason if ✗>)
 - Structured Codex review: ran (DIFF <N> ≥ 200) | not applicable (DIFF <N> < 200) | skipped (Tier B/C)
+- Pass ownership: verify_agent_worker_ownership <verdict>; workflow_ci <verdict>; type_design <verdict>; silent_failure <verdict>; test_adequacy <verdict>; security <verdict>; cross_model_challenge <verdict>; runtime_uat <verdict>
+- Semantic packet dimensions: security, type_design, test_adequacy, silent_failure, workflow_ci, verify_agent_worker_ownership, cross_model_challenge
 - PR Quality Score: <score>/10
 - Cross-model: YES | NO — captain may want manual /codex review pass before ship
+```
+
+Concrete PASS-ready example:
+
+```markdown
+- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; type_design NO_FINDINGS; silent_failure PASS; test_adequacy PASS; security NO_FINDINGS; cross_model_challenge PASS; runtime_uat PASS
 ```
 
 **`## Deferred to TODO` template** (mandatory tail H2; print even when empty):
