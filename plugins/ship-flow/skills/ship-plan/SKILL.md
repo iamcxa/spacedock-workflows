@@ -348,6 +348,15 @@ Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-a
 
 Plan.md sections: `## Research Summary` (findings + open questions if contradictions + reviewer verdict), `## Size Re-evaluation`, `## Verification Spec` (table from Step 3.5), `## Plan` (TDD tasks from Step 3), `## Plan Report` (status, stage_cost: dispatches×model, iterations, dimensions pass/fail, reviewer verdict, scope anchoring, task count, model split, started/completed/duration), `## Context Manifest` (mandatory — see Step 1.7 and dimension 11).
 
+Require a `### Metrics` subsection in `## Plan Report`.
+Use grep-friendly `key: value` lines:
+- `status:` passed | gaps-noted | blocked | partial
+- `duration_minutes:` wall-clock minutes for planning
+- `iteration_count:` self-review + reviewer loop count
+- `task_count:` implementation task count
+- `verification_spec_count:` DC rows in Verification Spec
+- `model_split:` dispatch model breakdown
+
 **`## Context Manifest` section format** (mandatory output, entity 110, 2026-04-29):
 
 ```markdown

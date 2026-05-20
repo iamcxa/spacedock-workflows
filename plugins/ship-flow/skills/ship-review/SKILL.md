@@ -279,6 +279,15 @@ Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=review --e
 
 Review.md sections: `## PR Draft`, `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (status / stage_cost / planner dispatch cost / Verify results / canonical sync status / timestamps / duration).
 
+Require a `### Metrics` subsection in `## Review Report`.
+Use grep-friendly `key: value` lines:
+- `status:` passed | blocked
+- `duration_minutes:` wall-clock minutes for review
+- `iteration_count:` PR draft/canonical sync review loop count
+- `canonical_docs_updated_count:` canonical docs committed
+- `canonical_docs_skipped_count:` canonical docs skipped with rationale
+- `pr_number:` PR number or `not-created`
+
 Return to /ship; advance to ship-final stage (PR creation + captain merge gate).
 
 **Frontmatter write scope — ONLY `token_actual`.** Do NOT write `status`, `completed`, `verdict`, `pr`, `worktree` — these are FO-owned at terminal transition or pr-merge mod's concern.

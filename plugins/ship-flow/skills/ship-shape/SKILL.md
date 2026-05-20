@@ -559,6 +559,17 @@ Plan stage consumes the latest resolved registry result only when this resolutio
 Multi-domain match disambiguation v1: pick `matched[0]` (first registered domain name). v2 multi-domain dispatch is out of 113.1 scope.
 <!-- /section:hand_off_to_design -->
 
+### Metrics
+
+Require a `### Metrics` subsection in `## Sharp Report` / shape-stage report output.
+Use grep-friendly `key: value` lines:
+- `status:` passed | rejected | blocked
+- `duration_minutes:` wall-clock minutes for shape/sharp
+- `iteration_count:` captain Q-loop or refine iterations
+- `path:` shape+sharp | sharp-only | escape-hatch
+- `open_contract_decisions_count:` unresolved contract choices handed to design
+- `domain_matches_count:` registry domains matched at shape time
+
 ---
 
 ## References

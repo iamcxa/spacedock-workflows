@@ -320,6 +320,14 @@ If ALL of the following hold:
    ```
    ## Design Report
    status: trivial-pass
+   stage_cost: $0.00 (trivial-pass)
+
+   ### Metrics
+   status: trivial-pass
+   duration_minutes: 0
+   iteration_count: 0
+   captain_decisions_count: 0
+   reviewer_verdict: PROCEED
    ```
    Plus a `### Hand-off to Plan` block:
 
@@ -579,6 +587,14 @@ creates typed intent for later comparison.
    - `## Design Output / ### Captain Decisions` — list all `D{N}|Captain decision` entries with file:line contradiction cite. (Captain-readable narrative; rationale source for plan/verify cross-references via `D{N}`.)
    - `## Design Output / ### Artifact Bundle Manifest` — table (Path / Type / Purpose) of all emitted files.
    - `## Design Report` — status / stage_cost / iterations / contradictions_resolved / captain_decisions / reviewer_verdict.
+
+2. Require a `### Metrics` subsection in `## Design Report`.
+   Use grep-friendly `key: value` lines:
+   - `status:` passed | gaps-noted | blocked | partial | trivial-pass
+   - `duration_minutes:` wall-clock minutes for design
+   - `iteration_count:` Q-loop + review iterations
+   - `captain_decisions_count:` number of accepted captain decisions
+   - `reviewer_verdict:` PROCEED | VETO | PROMPT_CAPTAIN
 
 **Single-source-of-truth rule** (G8 dedup, 2026-04-29): `### Hand-off to Plan` (Phase 9 hand-off block) is the **only** structured contract plan stage reads. Do NOT duplicate `design_constraints` / `render_fidelity_targets` here in `## Design Output`. Phase 8 holds captain-readable narrative + audit trail (Decisions, Manifest, Report); Phase 9 holds machine-readable contract (constraints, render-fidelity targets, artifact paths, open decisions). Plan Step 1.6 reads Phase 9 hand-off; cross-references back to Phase 8 Captain Decisions via `D{N}` markers when rationale needed.
 

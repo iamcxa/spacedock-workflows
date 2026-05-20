@@ -1295,6 +1295,43 @@ check_entity_status_via_advance_stage_only() {
   return 0
 }
 
+check_stage_metrics_contract() {
+  # Stage reports must keep a lightweight metrics envelope for later aggregation.
+  # This prose-level check prevents silent SKILL contract drift without adding an
+  # artifact parser or metrics aggregator in this slice.
+  local skills_dir="${ROOT}/plugins/ship-flow/skills"
+  [ -d "$skills_dir" ] || return 0
+  local stage_skills=(ship-shape ship-design ship-plan ship-execute ship-verify ship-review)
+  local fail=0 sk f
+
+  for sk in "${stage_skills[@]}"; do
+    f="${skills_dir}/${sk}/SKILL.md"
+    if [ ! -f "$f" ]; then
+      echo "ERROR [stage-metrics-contract]: missing stage skill ${sk}/SKILL.md" >&2
+      fail=1
+      continue
+    fi
+    if ! grep -qF "Require a \`### Metrics\` subsection" "$f"; then
+      echo "ERROR [stage-metrics-contract]: ${sk}/SKILL.md missing required ### Metrics subsection contract" >&2
+      fail=1
+    fi
+    if ! grep -qF "\`duration_minutes:\`" "$f"; then
+      echo "ERROR [stage-metrics-contract]: ${sk}/SKILL.md missing duration_minutes metric" >&2
+      fail=1
+    fi
+    if ! grep -qF "\`iteration_count:\`" "$f"; then
+      echo "ERROR [stage-metrics-contract]: ${sk}/SKILL.md missing iteration_count metric" >&2
+      fail=1
+    fi
+    if ! grep -qF "\`status:\`" "$f"; then
+      echo "ERROR [stage-metrics-contract]: ${sk}/SKILL.md missing status metric" >&2
+      fail=1
+    fi
+  done
+
+  return "$fail"
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -1334,6 +1371,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     deferred-to-todo-footer) check_deferred_to_todo_footer; exit $? ;;
     fo-receipt-on-proceed) check_fo_receipt_on_proceed; exit $? ;;
     entity-status-via-advance-stage-only) check_entity_status_via_advance_stage_only; exit $? ;;
+    stage-metrics-contract) check_stage_metrics_contract; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -1394,5 +1432,6 @@ check_fo_receipt_on_proceed || FAIL=1
 # C14: entity-status mutation must go through lib/advance-stage.sh
 # Source: pitch enforce-advance-stage-primitive-only (sharp 2026-05-15)
 check_entity_status_via_advance_stage_only || FAIL=1
+check_stage_metrics_contract || FAIL=1
 
 exit $FAIL

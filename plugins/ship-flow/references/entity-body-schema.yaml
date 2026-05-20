@@ -6,6 +6,7 @@
 #   - Each stage writes up to 3 standard blocks: Output, Report, UAT
 #   - Section headers use: ## {Stage} {Block}  (e.g., ## Sharp Output, ## Plan Report)
 #   - Report block always contains: status, stage_cost (grepable by FO)
+#   - Sharp through review Report/Verdict blocks contain a lightweight ### Metrics subsection for later aggregation
 #   - UAT block uses the Verification Spec table format (typed DC)
 #   - Sections are append-only within a stage; later stages never modify earlier sections
 #
@@ -349,6 +350,19 @@ stages:
         - { name: status, type: enum, values: [passed, rejected, blocked], grepable: true }
         - { name: stage_cost, type: string, format: "$X.XX (description)", grepable: true }
         - { name: path, type: enum, values: [shape+sharp, sharp-only, escape-hatch] }
+      subsections:
+        metrics:
+          section: "### Metrics"
+          section_tag: sharp-report-metrics
+          layer: implementation
+          description: "Lightweight grep-able stage metrics for future aggregation."
+          fields:
+            - { name: status, type: enum, values: [passed, rejected, blocked], grepable: true }
+            - { name: duration_minutes, type: number }
+            - { name: iteration_count, type: number, description: "Captain Q-loop or refine iterations." }
+            - { name: path, type: enum, values: [shape+sharp, sharp-only, escape-hatch] }
+            - { name: open_contract_decisions_count, type: number }
+            - { name: domain_matches_count, type: number }
     uat: null  # sharp defines DC, doesn't verify
     hand_off_to_design:
       section: "### Hand-off to Design"
@@ -411,12 +425,24 @@ stages:
       section_tag: design-report
       layer: design
       fields:
-        - { name: status, type: enum, values: [passed, gaps-noted, blocked, partial], grepable: true }
+        - { name: status, type: enum, values: [passed, gaps-noted, blocked, partial, trivial-pass], grepable: true }
         - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
         - { name: iterations, type: string, description: "N (Q-loop iterations) + 1 (cross-review)" }
         - { name: contradictions_resolved, type: number }
         - { name: captain_decisions, type: number }
         - { name: reviewer_verdict, type: enum, values: [PROCEED, VETO, PROMPT_CAPTAIN] }
+      subsections:
+        metrics:
+          section: "### Metrics"
+          section_tag: design-report-metrics
+          layer: design
+          description: "Lightweight grep-able stage metrics for future aggregation."
+          fields:
+            - { name: status, type: enum, values: [passed, gaps-noted, blocked, partial, trivial-pass], grepable: true }
+            - { name: duration_minutes, type: number }
+            - { name: iteration_count, type: number, description: "Q-loop plus review iterations." }
+            - { name: captain_decisions_count, type: number }
+            - { name: reviewer_verdict, type: enum, values: [PROCEED, VETO, PROMPT_CAPTAIN] }
     uat: null  # design defines visual contract, does not verify
     hand_off_to_plan:
       section: "### Hand-off to Plan"
@@ -615,7 +641,7 @@ stages:
       section_tag: plan-report
       layer: implementation
       fields:
-        - { name: status, type: enum, values: [passed, gaps-noted, blocked], grepable: true }
+        - { name: status, type: enum, values: [passed, gaps-noted, blocked, partial], grepable: true }
         - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
         - { name: iterations, type: string, description: "N (self-review) + 1 (reviewer)" }
         - { name: dimensions, type: string, description: "8 dimensions, which passed/failed" }
@@ -623,6 +649,19 @@ stages:
         - { name: scope_anchoring, type: string }
         - { name: task_count, type: number }
         - { name: model_split, type: string, description: "N haiku, M sonnet" }
+      subsections:
+        metrics:
+          section: "### Metrics"
+          section_tag: plan-report-metrics
+          layer: implementation
+          description: "Lightweight grep-able stage metrics for future aggregation."
+          fields:
+            - { name: status, type: enum, values: [passed, gaps-noted, blocked, partial], grepable: true }
+            - { name: duration_minutes, type: number }
+            - { name: iteration_count, type: number, description: "Self-review plus reviewer loop count." }
+            - { name: task_count, type: number }
+            - { name: verification_spec_count, type: number }
+            - { name: model_split, type: string }
     uat: null  # plan defines procedures, doesn't verify
     hand_off_to_execute:
       section: "### Hand-off to Execute"
@@ -697,10 +736,24 @@ stages:
       section_tag: execute-report
       layer: implementation
       fields:
-        - { name: status, type: enum, values: [passed, failed, blocked], grepable: true }
+        - { name: status, type: enum, values: [passed, failed, blocked, partial], grepable: true }
         - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
         - { name: tasks_summary, type: string, description: "N done, M blocked, K needs-context-rounds" }
         - { name: knowledge_capture, type: string, description: "D1: N, D2: M | skipped" }
+      subsections:
+        metrics:
+          section: "### Metrics"
+          section_tag: execute-report-metrics
+          layer: implementation
+          description: "Lightweight grep-able stage metrics for future aggregation."
+          fields:
+            - { name: status, type: enum, values: [passed, failed, blocked, partial], grepable: true }
+            - { name: duration_minutes, type: number }
+            - { name: iteration_count, type: number, description: "Review/fix loop count across tasks." }
+            - { name: task_count, type: number }
+            - { name: tasks_done, type: number }
+            - { name: tasks_blocked, type: number }
+            - { name: commit_count, type: number }
     uat:
       section: "## Execute UAT"
       section_tag: execute-uat
@@ -807,7 +860,7 @@ stages:
           layer: implementation
           description: "Authoritative outcome — replaces legacy ## Verify Report. FO grep-reads `status:` line."
           fields:
-            - { name: status, type: enum, values: [passed, failed], grepable: true }
+            - { name: status, type: enum, values: [passed, failed, blocked], grepable: true }
             - { name: stage_cost, type: string, format: "$X.XX (N dispatches: breakdown)", grepable: true }
             - { name: quality, type: string, description: "5/5 pass" }
             - { name: review, type: string, description: "verdict from review findings" }
@@ -817,6 +870,20 @@ stages:
             - { name: started_at, type: string, format: "ISO 8601" }
             - { name: completed_at, type: string, format: "ISO 8601" }
             - { name: duration_minutes, type: number }
+          subsections:
+            metrics:
+              section: "### Metrics"
+              section_tag: verify-verdict-metrics
+              layer: implementation
+              description: "Lightweight grep-able stage metrics for future aggregation."
+              fields:
+                - { name: status, type: enum, values: [passed, failed, blocked], grepable: true }
+                - { name: duration_minutes, type: number }
+                - { name: iteration_count, type: number, description: "Verify review/fix loop count." }
+                - { name: claim_records_required_not_verified, type: number }
+                - { name: blocking_findings_count, type: number }
+                - { name: warning_findings_count, type: number }
+                - { name: runtime_checks_count, type: number }
         render_fidelity:
           section: "### Render Fidelity"
           section_tag: render-fidelity
@@ -1082,6 +1149,19 @@ stages:
             - { name: started_at, type: string, format: "ISO 8601" }
             - { name: completed_at, type: string, format: "ISO 8601" }
             - { name: duration_minutes, type: number }
+          subsections:
+            metrics:
+              section: "### Metrics"
+              section_tag: review-report-metrics
+              layer: implementation
+              description: "Lightweight grep-able stage metrics for future aggregation."
+              fields:
+                - { name: status, type: enum, values: [passed, blocked], grepable: true }
+                - { name: duration_minutes, type: number }
+                - { name: iteration_count, type: number, description: "PR draft/canonical sync review loop count." }
+                - { name: canonical_docs_updated_count, type: number }
+                - { name: canonical_docs_skipped_count, type: number }
+                - { name: pr_number, type: string }
     uat: null  # review does not re-run UAT; verify already passed
 
 # --- PR Feedback (re-entry) ---

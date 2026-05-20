@@ -200,6 +200,37 @@ dc7_preamble_regrowth() {
 if dc7_preamble_regrowth 2>/dev/null; then echo "OK DC-7 preamble regrowth fails at 2 copies"
 else echo "FAIL DC-7 preamble regrowth fails at 2 copies"; FAIL=1; fi
 
+# ========== Stage metrics contract: stage skills require grep-able ### Metrics blocks ==========
+dc_stage_metrics_contract_present() {
+  bash "$CHECK_SCRIPT" --check stage-metrics-contract >/dev/null 2>&1
+}
+if dc_stage_metrics_contract_present 2>/dev/null; then echo "OK stage metrics contract present"
+else echo "FAIL stage metrics contract present"; FAIL=1; fi
+
+dc_stage_metrics_contract_missing_skill_fails() {
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  for sk in ship-shape ship-design ship-plan ship-execute ship-verify ship-review; do
+    mkdir -p "$d/plugins/ship-flow/skills/$sk"
+    cat > "$d/plugins/ship-flow/skills/$sk/SKILL.md" <<'EOF'
+# Mock stage skill
+
+## Report
+
+Require a `### Metrics` subsection.
+- `duration_minutes:`
+- `iteration_count:`
+- `status:`
+EOF
+  done
+  perl -0pi -e 's/Require a `### Metrics` subsection\.\n- `duration_minutes:`\n- `iteration_count:`\n- `status:`/No metrics contract here./' "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check stage-metrics-contract >/dev/null 2>&1; rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if dc_stage_metrics_contract_missing_skill_fails 2>/dev/null; then echo "OK stage metrics contract missing skill fails"
+else echo "FAIL stage metrics contract missing skill fails"; FAIL=1; fi
+
 # ========== DC-8: section-tag coverage — mixed-mode entity with orphan H2 triggers fail ==========
 # Grandfather rule: entities with ZERO section tags are skipped (pre-049 baseline).
 # Violation scenario is "entity has tags (adopted convention) but some H2/H3 is orphan".

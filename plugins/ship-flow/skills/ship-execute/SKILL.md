@@ -302,6 +302,16 @@ Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=execute --
 
 Execute.md sections: `## Execution Log` (per-task table), `## Issues Found`, `## Knowledge Captures` (D1/D2), `## Execute UAT` (first-pass AC), `## Execute Report` (status / stage_cost: Σ dispatches×model / tasks summary / knowledge capture counts / started/completed/duration).
 
+Require a `### Metrics` subsection in `## Execute Report`.
+Use grep-friendly `key: value` lines:
+- `status:` passed | failed | blocked | partial
+- `duration_minutes:` wall-clock minutes for execute
+- `iteration_count:` review/fix loop count across tasks
+- `task_count:` planned tasks attempted
+- `tasks_done:` tasks completed
+- `tasks_blocked:` tasks blocked or failed
+- `commit_count:` execute commits landed
+
 Return to /ship; advance to verify.
 
 ### Step 7.1 — Advance entity status (frontmatter wiring)

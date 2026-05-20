@@ -930,6 +930,7 @@ Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before�
 - `### Review Findings` — pre-scan + classified specialist findings (file:line, severity, confidence, specialist, FO class, route, status) + sub-sections `#### TDD Evidence Audit`, `#### Design Parity`, `#### Mechanical UI Parity`, `#### Whole-page Visual Parity` as triggered
 - `### Knowledge Captures` — `[D1]` / `[D2-candidate]` / `[inlined]` tags
 - `### Verdict` — `status:` (grep gate — `passed` | `failed` | `blocked`), `stage_cost:`, `claim_records: required VERIFIED=<n> NOT VERIFIED=<n> INCONCLUSIVE=<n>; advisory VERIFIED=<n> NOT VERIFIED=<n> INCONCLUSIVE=<n>`, `auto_fixes:`, `started_at:` / `completed_at:` / `duration_minutes:`
+- `### Metrics` — Require a `### Metrics` subsection. Use grep-friendly `key: value` lines: `status:`, `duration_minutes:`, `iteration_count:`, `claim_records_required_not_verified:`, `blocking_findings_count:`, `warning_findings_count:`, and `runtime_checks_count:`.
 - `## Panel Coverage` — **mandatory H2 after `### Verdict`, before `### Runtime Verification`.** Lists specialists dispatched per scope detection with PASS/WARN/FAIL counts; see template below.
 - `### Runtime Verification` — Step 4.0 preflight + per-DC runtime probes (template below). **Mandatory** if entity has any `api`/`ui`/`e2e`-type DC.
 - `### UAT` — mode line + results table with `Verify` column. Per-DC entry MUST be `DC-X PASS (runtime: <command> → <result excerpt>)`; legacy `conditional (artifact-only)` / `API offline` shorthand is rejected.
