@@ -70,6 +70,9 @@ check "schema reviewer output matrix includes source scope confidence dispositio
 check "reviewer panel output matrix matches D3 source route confidence and disposition value domains" \
   "grep -q 'source: baseline|reviewer_questions|domain_acceptance_checklist|context-routing-manifest|scope-detection|inline-critical-pass' '${PANEL_SKILL}' && grep -q 'route_to: execute|plan|design|review|follow-up|captain|none' '${PANEL_SKILL}' && grep -q 'confidence: 1-10|null' '${PANEL_SKILL}' && grep -q 'disposition: pending|accepted|bounced|deferred|discarded|not-applicable' '${PANEL_SKILL}' && grep -q 'allowed_source_values:.*baseline.*reviewer_questions.*domain_acceptance_checklist.*context-routing-manifest.*scope-detection.*inline-critical-pass' '${SCHEMA}' && grep -q 'allowed_route_to_values:.*execute.*plan.*design.*review.*follow-up.*captain.*none' '${SCHEMA}' && grep -q 'allowed_confidence_values:.*1-10.*null' '${SCHEMA}' && grep -q 'allowed_disposition_values:.*pending.*accepted.*bounced.*deferred.*discarded.*not-applicable' '${SCHEMA}'"
 
+check "ship-verify normalizes task reviewer question sources to D3 reviewer_questions" \
+  "grep -q 'source \`reviewer_questions\`' '${VERIFY_SKILL}' && ! grep -q 'source \`task\\.reviewer_questions\`' '${VERIFY_SKILL}'"
+
 check "README documents general external reviewer baseline and domain specialization" \
   "grep -q 'general external reviewer' '${README}' && grep -q 'ship-flow:verify-reviewer-panel' '${README}' && grep -q 'domain expert panel.*specialization' '${README}'"
 
