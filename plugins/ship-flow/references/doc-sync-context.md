@@ -1,7 +1,7 @@
 ---
 plugin: ship-flow
-version: 0.5.0
-last_sync: 2026-05-07 (initial doc-sync context)
+version: 0.6.0
+last_sync: 2026-05-20 (0.6.0 release metadata sync)
 ---
 
 # Ship Flow Doc-Sync Context

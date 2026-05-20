@@ -1,4 +1,4 @@
-# Ship-Flow — Auditable Autonomous Workflow for Claude 4.7 (v0.5.0)
+# Ship-Flow — Auditable Autonomous Workflow for Claude 4.7 (v0.6.0)
 
 A scaffolding plugin for captain-directed autonomous work across multi-stage pipelines. This README is written from claude 4.7's perspective — explaining **why** the flow is shaped this way, not how to use each skill (SKILL.md files document the how).
 
@@ -504,6 +504,38 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 
 ## Release Notes
 
+### 0.6.0 — 2026-05-20
+
+**Theme**: Auto-merge readiness layer + semantic review primitives.
+
+**New primitives**:
+
+- `bin/semantic-review-packet.mjs` — validates a structured PR semantic-review packet against current head and adopter policy. Checks schema, head freshness, required reviewer verdicts, required local review dimensions, and traceable evidence fields.
+- `bin/semantic-review-prepare.mjs` — builds the packet JSON plus a marked PR comment body from local review evidence and command evidence. Generated packet comments fold the long JSON body in `<details>` so PR timelines show a short verdict first.
+- `bin/semantic-review-gate.mjs` — validates the newest marked PR packet comment when semantic review is required. Reads from PR comments via `gh`; fails if the packet is absent, stale, or missing required verdicts.
+- `bin/review-thread-gate.mjs` — separate mechanical gate for GitHub review threads. Fails when an unresolved, non-outdated thread remains on the PR head; allows Copilot or another reviewer to produce actionable comments without requiring human approval as the branch protection primitive.
+- `bin/auto-merge-readiness.mjs` (extended) — report-only readiness reporter. Consumes PR/check snapshots plus semantic-review and review-thread gate outputs; returns `ready`, `blocked`, or `unknown` with `nextAction`. Does not call `gh pr merge`, enable auto-merge, or mutate remote state.
+- `bin/auto-merge-readiness-collect.mjs` — evidence collector for GitHub-backed PRs. Gathers PR snapshot, labels, issue comments, review threads, semantic gate output, review-thread gate output, and readiness output under `.context/ship-flow-auto-merge/`. Pass `--policy-json` when an adopter repo uses a project-specific semantic review key or dimensions.
+- `bin/auto-merge-run.mjs` — optional mutating executor. Runs the collector; when readiness is clean, tries GitHub native auto-merge with `expectedHeadOid`. Falls back to direct-merge when the PR is already `clean`. If GitHub reports `unstable`, direct merge requires adopter opt-in via `--allow-direct-merge-unstable`; otherwise returns `blocked`. Also accepts `--policy-json` and forwards it to the collector.
+
+**Repo-local Claude challenge gate** (adjacent merge-flow hardening):
+
+- `docs/ship-flow/_mods/pr-merge.md` updated with a Claude challenge gate for the Spacebridge dogfood merge flow. It requires a structured merge-recommendation receipt and binds that receipt to the PR head SHA so stale receipts from prior pushes are rejected.
+- `lib/__tests__/test-pr-merge-claude-challenge-gate.sh` added with integration tests for that repo-local gate protocol. This is separate from `bin/auto-merge-run.mjs`, whose mechanical inputs remain the collector/readiness outputs and adopter policy.
+
+**Adopter policy stays outside plugin defaults**: repos pass `--policy-json` with `required_reviewers`, `local_review_key`, `required_dimensions`, and optional `required_label`. This keeps Carlove-style `kc_pr_review` or domain-specific dimensions as project policy rather than plugin law.
+
+**Queued (not shipped in 0.6.0)**:
+
+- Public `ship-flow` repository creation and migration — Spacebridge is private on a free GitHub plan, so repository rulesets, required checks, and native auto-merge cannot be fully configured there. See `_plans/ship-flow-public-repo-queue-2026-05-20.md` for the migration checklist. Dogfooding `bin/auto-merge-run.mjs` on Spacebridge itself resumes after the public repo exists or the GitHub plan/visibility supports required rulesets.
+
+**Unchanged**:
+
+- All Layer C primitives (`shape-confirm.sh`, `write-stage-artifact.sh`, `extract-section.sh`, `patch-map.sh`, `advance-stage.sh`, etc.) are unchanged.
+- `bin/semantic-review-policy.mjs` (shared policy normalizer) is not a public CLI entry point — it is a shared module used by the `semantic-review-*` scripts.
+
+---
+
 ### 0.5.0 — 2026-04-24
 
 **Theme**: Ship-flow 2.0 — formalized captain-in-loop autonomous pipeline for Claude 4.7.
@@ -542,9 +574,9 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 
 ---
 
-### Post-0.5.0 hardening (pitch-106 + pitch-107)
+### Post-0.5.0 hardening now carried by 0.6.0
 
-Incremental additions after the 0.5.0 release that are not yet a named version but are fully shipped on main:
+Incremental additions after the 0.5.0 release that were fully shipped on main before the 0.6.0 release. The semantic PR review and auto-merge readiness items below are now part of the named 0.6.0 surface; the rest remain historical hardening notes.
 
 **Workflow SOT sync**:
 - `docs/ship-flow/README.md` is the dogfood workflow SOT. Run `bash plugins/ship-flow/lib/sync-workflow-sot.sh --check` in CI or before review to detect drift, and `bash plugins/ship-flow/lib/sync-workflow-sot.sh --write` after changing the SOT to refresh derived files (`workflow-template.yaml` and this README's managed design-stage summary).
@@ -586,6 +618,7 @@ Incremental additions after the 0.5.0 release that are not yet a named version b
 
 ## Revision
 
+- **2026-05-20** — 0.6.0 plugin release: auto-merge readiness layer, semantic review primitives, Claude challenge gate (see §Release Notes 0.6.0 above).
 - **2026-04-28** — Post-0.5.0 hardening updates: design stage, Principle 8, pitch-106/107 capability additions (see §Post-0.5.0 hardening above).
 - **2026-04-24** — 0.5.0 plugin release (see §Release Notes above).
 - **2026-04-23** — Ship-flow 2.0 landed via pitch #085 (merge commit `d8934761`). This README authored post-ship as the canonical plugin-level design doc.
