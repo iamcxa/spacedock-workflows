@@ -74,6 +74,9 @@ check "origin main fetch failure blocks with clear error" \
 check "PR diff command exit status is checked" \
   "grep -q 'if ! gh pr diff' '${PR_MERGE_MOD}' && grep -q 'Unable to read PR diff' '${PR_MERGE_MOD}'"
 
+check "prompt injection scan excludes only explicit self-test fixtures" \
+  "grep -q 'test-pr-merge-claude-challenge-gate.sh' '${PR_MERGE_MOD}' && ! grep -q 'test-pr-merge-\\*.sh' '${PR_MERGE_MOD}'"
+
 check "temporary challenge files are cleaned up" \
   "grep -q \"trap 'rm -f\" '${PR_MERGE_MOD}' && grep -q 'EXIT INT TERM' '${PR_MERGE_MOD}'"
 
@@ -88,6 +91,9 @@ check "receipt records durable Claude response artifact and requires entity fold
 
 check "receipt uses generated timestamp/id and escaped recommendation" \
   "grep -q 'RECEIPT_TS' '${PR_MERGE_MOD}' && grep -q 'RECEIPT_ID' '${PR_MERGE_MOD}' && grep -q 'CLAUDE_RECOMMENDATION_YAML' '${PR_MERGE_MOD}'"
+
+check "clean Claude verdict also requires merge recommendation" \
+  "grep -q 'CLAUDE_RECOMMENDATION_ACTION' '${PR_MERGE_MOD}' && grep -q '!= \"merge\"' '${PR_MERGE_MOD}' && grep -q 'valid nonce-bound clean merge recommendation' '${PR_MERGE_MOD}'"
 
 check "receipt helper failures block the clean path" \
   "grep -q 'Failed to write Claude challenge receipt' '${PR_MERGE_MOD}'"
