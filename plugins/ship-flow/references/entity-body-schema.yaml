@@ -852,7 +852,8 @@ stages:
               description: "Schema-backed output from pr-review-toolkit or ship-flow:verify-reviewer-panel."
               columns: ["Lens", "Source", "Scope", "Reviewer Question", "Affected Path Family", "Required Skills", "Verdict", "Finding", "file_line", "route_to", "Evidence Required", "Evidence", "confidence", "disposition", "disposition_reason"]
               column_formats:
-                file_line: "<path:line>"
+                file_line: "<path:line|null>"
+              file_line_nullable_for: ["NO_FINDINGS", "INVALID_CONTEXT", "DEGRADED"]
               allowed_verdict_values: ["PASS", "BLOCKING", "WARNING", "NIT", "NO_FINDINGS", "INVALID_CONTEXT", "DEGRADED"]
               allowed_source_values: ["baseline", "reviewer_questions", "domain_acceptance_checklist", "context-routing-manifest", "scope-detection", "inline-critical-pass"]
               allowed_route_to_values: ["execute", "plan", "design", "review", "follow-up", "captain", "none"]

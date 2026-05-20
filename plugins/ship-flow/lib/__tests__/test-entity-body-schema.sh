@@ -69,6 +69,9 @@ check "hand_off_to_ship block present" \
 check "at least 6 hand_off_to definitions total" \
   "[ \$(grep -c 'hand_off_to_' \"$SCHEMA_PATH\" || echo 0) -ge 6 ]"
 
+check "reviewer_output_matrix file_line documents nullable contract for non-findings invalid context and degraded rows" \
+  "grep -q 'file_line: \"<path:line|null>\"' \"$SCHEMA_PATH\" && grep -q 'file_line_nullable_for.*NO_FINDINGS.*INVALID_CONTEXT.*DEGRADED' \"$SCHEMA_PATH\""
+
 # --- Summary ---
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

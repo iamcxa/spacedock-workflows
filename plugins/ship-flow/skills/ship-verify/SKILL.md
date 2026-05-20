@@ -121,7 +121,7 @@ The silent failure reviewer baseline always runs alongside the general external 
 
 ### Reviewer Output Matrix and PASS Gate
 
-For any source diff, `general-external-reviewer` and `silent-failure-reviewer` are mandatory coverage rows. For `DIFF_LINES >= 50`, testing, maintainability, and security are mandatory coverage rows; performance, API, migration, design, threat-surface, and concrete domain lenses are trigger-based according to the changed surfaces and D1/D2 reviewer manifest.
+For any source diff, `general-external-reviewer` and `silent-failure-reviewer` are mandatory coverage rows. For `DIFF_LINES >= 50`, testing, maintainability, and security are mandatory coverage rows; performance, api-contract, data-migration, design, threat-surface, and concrete domain lenses are trigger-based according to the changed surfaces and D1/D2 reviewer manifest.
 
 PASS prerequisites: mandatory or triggered lens coverage is valid only when represented by PASS, NO_FINDINGS, accepted non-blocking findings, or allowed DEGRADED rows. NO_FINDINGS rows are required for mandatory lenses with no findings and must name reviewed scope and evidence. The discarded reviewer output is excluded from coverage, including INVALID_CONTEXT, wrong-worktree, uncited, hallucinated, mutating, or schema-invalid output; re-run it, replace it with allowed DEGRADED coverage, or return non-PASS.
 

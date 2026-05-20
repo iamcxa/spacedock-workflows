@@ -43,8 +43,8 @@ check "reviewer panel defines general external and silent failure fallback lense
 check "reviewer panel enforces read-only path base head changed-files self-check" \
   "grep -q 'read-only' '${PANEL_SKILL}' && grep -q 'repo path' '${PANEL_SKILL}' && grep -q 'base/head' '${PANEL_SKILL}' && grep -q 'changed files' '${PANEL_SKILL}' && grep -q 'file:line' '${PANEL_SKILL}'"
 
-check "reviewer panel standardizes YAML key file_line with path line value format" \
-  "grep -q 'file_line' '${PANEL_SKILL}' && grep -q '<path:line>' '${PANEL_SKILL}' && grep -q 'file_line' '${SCHEMA}' && ! grep -q '\"file:line\"' '${SCHEMA}'"
+check "reviewer panel standardizes YAML key file_line with nullable path line value format" \
+  "grep -q 'file_line' '${PANEL_SKILL}' && grep -q '<path:line|null>' '${PANEL_SKILL}' && grep -q 'file_line: \"<path:line|null>\"' '${SCHEMA}' && ! grep -q '\"file:line\"' '${SCHEMA}'"
 
 check "ship-verify uses reviewer panel as general external reviewer baseline" \
   "grep -q 'ship-flow:verify-reviewer-panel' '${VERIFY_SKILL}' && grep -q 'general external reviewer' '${VERIFY_SKILL}' && grep -q 'verify-check-manifest' '${VERIFY_SKILL}'"
