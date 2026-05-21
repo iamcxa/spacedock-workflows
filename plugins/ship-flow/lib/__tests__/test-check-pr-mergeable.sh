@@ -68,6 +68,54 @@ EOF
   chmod +x "${dir}/gh"
 }
 
+write_conflicting_diff_gh() {
+  local dir="$1" calls="$2" mode="$3"
+  mkdir -p "$dir"
+  cat > "${dir}/gh" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$calls"
+if [ "\$1" = "pr" ] && [ "\$2" = "view" ]; then
+  printf 'CONFLICTING\n'
+  exit 0
+fi
+if [ "\$1" = "pr" ] && [ "\$2" = "diff" ] && [ "\$4" = "--name-only" ]; then
+  case "$mode" in
+    server-files)
+      printf 'server/a.txt\nserver/b.txt\n'
+      exit 0
+      ;;
+    union-files)
+      printf 'conflict.txt\nserver/other.txt\n'
+      exit 0
+      ;;
+    diff-fails)
+      printf 'rate limit hit\ntry later\n' >&2
+      exit 44
+      ;;
+  esac
+fi
+printf 'unexpected gh invocation: %s\n' "\$*" >&2
+exit 98
+EOF
+  chmod +x "${dir}/gh"
+}
+
+write_failing_view_gh() {
+  local dir="$1" calls="$2"
+  mkdir -p "$dir"
+  cat > "${dir}/gh" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$calls"
+if [ "\$1" = "pr" ] && [ "\$2" = "view" ]; then
+  printf 'auth failed\tmissing token\001\nretry after login\n' >&2
+  exit 7
+fi
+printf 'unexpected gh invocation: %s\n' "\$*" >&2
+exit 98
+EOF
+  chmod +x "${dir}/gh"
+}
+
 run_helper_capture() {
   local out="$1"
   shift
@@ -247,6 +295,89 @@ case_conflict_files() {
   assert_contains "conflict files reported" '^conflict_files=conflict\.txt$' "$out"
 }
 
+case_server_conflict_files() {
+  local tmp out fakebin calls
+  tmp="$(mktemp -d)"
+  out="${tmp}/out"
+  fakebin="${tmp}/bin"
+  calls="${tmp}/gh-calls"
+  write_conflicting_diff_gh "$fakebin" "$calls" server-files
+
+  run_helper_capture_no_gh "$out" "$fakebin" --pr '#123' --interval-seconds 0
+  assert_exit "server conflicting files exits 10" 10 "$HELPER_RC"
+  assert_key_order "server conflicting files key order" "$out"
+  assert_contains "server conflicting files state" '^state_class=conflicting$' "$out"
+  assert_contains "server conflicting files reason" '^reason=merge-state-conflicting$' "$out"
+  assert_contains "server conflicting files reported" '^conflict_files=server/a\.txt,server/b\.txt$' "$out"
+  assert_contains "server conflicting files diff call" '^pr diff 123 --name-only$' "$calls"
+}
+
+case_conflict_files_union() {
+  local tmp out fakebin calls
+  tmp="$(mktemp -d)"
+  out="${tmp}/out"
+  fakebin="${tmp}/bin"
+  calls="${tmp}/gh-calls"
+  write_conflicting_diff_gh "$fakebin" "$calls" union-files
+  git -C "$tmp" init -q
+  git -C "$tmp" config user.email test@example.com
+  git -C "$tmp" config user.name "Ship Flow Test"
+  printf 'base\n' > "${tmp}/conflict.txt"
+  git -C "$tmp" add conflict.txt
+  git -C "$tmp" commit -qm base
+  git -C "$tmp" checkout -qb side
+  printf 'side\n' > "${tmp}/conflict.txt"
+  git -C "$tmp" commit -am side -q
+  git -C "$tmp" checkout -q -
+  printf 'main\n' > "${tmp}/conflict.txt"
+  git -C "$tmp" commit -am main -q
+  git -C "$tmp" merge side >/dev/null 2>&1 || true
+
+  set +e
+  (cd "$tmp" && PATH="${fakebin}:$PATH" bash "$HELPER" --pr 123 --interval-seconds 0) > "$out" 2>&1
+  HELPER_RC=$?
+  set -e
+  assert_exit "local and server conflict files exit 10" 10 "$HELPER_RC"
+  assert_key_order "local and server conflict files key order" "$out"
+  assert_contains "local and server conflict files union" '^conflict_files=conflict\.txt,server/other\.txt$' "$out"
+}
+
+case_conflict_diff_failure_diagnostic() {
+  local tmp out fakebin calls
+  tmp="$(mktemp -d)"
+  out="${tmp}/out"
+  fakebin="${tmp}/bin"
+  calls="${tmp}/gh-calls"
+  write_conflicting_diff_gh "$fakebin" "$calls" diff-fails
+
+  run_helper_capture_no_gh "$out" "$fakebin" --pr 123 --interval-seconds 0
+  assert_exit "diff failure keeps conflicting exit" 10 "$HELPER_RC"
+  assert_key_order "diff failure preserves key order" "$out"
+  assert_contains "diff failure keeps block verdict" '^verdict=BLOCK$' "$out"
+  assert_contains "diff failure keeps conflicting state" '^state_class=conflicting$' "$out"
+  assert_contains "diff failure keeps reason" '^reason=merge-state-conflicting$' "$out"
+  assert_contains "diff failure emits warning" "^check-pr-mergeable: warning: unable to enumerate server conflict files via 'gh pr diff 123 --name-only': rate limit hit try later$" "$out"
+  assert_not_contains "diff warning does not add key-value diagnostic" '^warning=' "$out"
+}
+
+case_gh_view_failure_diagnostic() {
+  local tmp out fakebin calls
+  tmp="$(mktemp -d)"
+  out="${tmp}/out"
+  fakebin="${tmp}/bin"
+  calls="${tmp}/gh-calls"
+  write_failing_view_gh "$fakebin" "$calls"
+
+  run_helper_capture_no_gh "$out" "$fakebin" --pr 321 --interval-seconds 0
+  assert_exit "gh view failure exits 30" 30 "$HELPER_RC"
+  assert_key_order "gh view failure preserves key order" "$out"
+  assert_contains "gh view failure state" '^state_class=gh-failure$' "$out"
+  assert_contains "gh view failure action" '^action=surface-to-captain$' "$out"
+  assert_contains "gh view failure reason" '^reason=gh-pr-view-failed$' "$out"
+  assert_contains "gh view failure diagnostic" "^check-pr-mergeable: error: gh pr view failed for #321 via 'gh pr view 321 --json mergeStateStatus --jq \\.mergeStateStatus' \\(exit 7\\): auth failed missing token retry after login$" "$out"
+  assert_not_contains "gh view diagnostic does not add key-value diagnostic" '^error=' "$out"
+}
+
 case_helper_contracts() {
   case_usage_error
   case_live_gh_pr_argument
@@ -259,6 +390,10 @@ case_helper_contracts() {
   case_gh_failure_fixture
   case_sequence_fixture
   case_conflict_files
+  case_server_conflict_files
+  case_conflict_files_union
+  case_conflict_diff_failure_diagnostic
+  case_gh_view_failure_diagnostic
 }
 
 first_line() {

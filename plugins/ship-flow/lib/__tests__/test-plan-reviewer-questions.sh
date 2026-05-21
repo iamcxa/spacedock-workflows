@@ -31,6 +31,11 @@ check() {
 echo "=== test-plan-reviewer-questions.sh ==="
 echo ""
 
+VERIFY_STEP2_BLOCK="$(mktemp)"
+trap 'rm -f "${VERIFY_STEP2_BLOCK}"' EXIT
+
+awk '/^## Step 2 — Quality gate/{in_block=1} in_block && /^\*\*Per-surface commit count\*\*/{exit} in_block {print}' "${VERIFY_SKILL}" > "${VERIFY_STEP2_BLOCK}"
+
 check "plan task schema exposes reviewer_questions derived from skills_needed" \
   "awk '/task_fields:/{in_block=1} in_block && /^    report:/{exit} in_block {print}' '${SCHEMA}' | grep -q 'name: reviewer_questions' && awk '/task_fields:/{in_block=1} in_block && /^    report:/{exit} in_block {print}' '${SCHEMA}' | grep -q 'Derived from skills_needed' && awk '/task_fields:/{in_block=1} in_block && /^    report:/{exit} in_block {print}' '${SCHEMA}' | grep -q 'domain lens'"
 
@@ -53,7 +58,7 @@ check "ship-plan final handoff emit list includes domain acceptance checklist" \
   "awk '/^\\*\\*Emit\\*\\* `### Hand-off to Execute`/{in_emit=1; next} in_emit && /^<!-- \\/section:hand_off_to_execute -->/{exit} in_emit {print}' '${PLAN_SKILL}' | grep -q 'domain_acceptance_checklist'"
 
 check "ship-verify consumes plan reviewer_questions into verify-check-manifest" \
-  "awk '/^## Step 2 — Quality gate/{in_block=1} in_block && /^\\*\\*Per-surface commit count\\*\\*/{exit} in_block {print}' '${VERIFY_SKILL}' | grep -q 'reviewer_questions' && awk '/^## Step 2 — Quality gate/{in_block=1} in_block && /^\\*\\*Per-surface commit count\\*\\*/{exit} in_block {print}' '${VERIFY_SKILL}' | grep -q 'domain_acceptance_checklist' && awk '/^## Step 2 — Quality gate/{in_block=1} in_block && /^\\*\\*Per-surface commit count\\*\\*/{exit} in_block {print}' '${VERIFY_SKILL}' | grep -q 'verify-check-manifest'"
+  "grep -q 'reviewer_questions' '${VERIFY_STEP2_BLOCK}' && grep -q 'domain_acceptance_checklist' '${VERIFY_STEP2_BLOCK}' && grep -q 'verify-check-manifest' '${VERIFY_STEP2_BLOCK}'"
 
 check "README documents plan-to-verify reviewer question handoff" \
   "grep -q 'reviewer_questions' '${README}' && grep -q 'domain_acceptance_checklist' '${README}' && grep -qi 'verify reviewer panel' '${README}' && ! grep -q 'plan-parallelization-manifest.*reviewer_questions' '${README}'"
@@ -80,7 +85,7 @@ check "concrete prompts augment domain reviewers without replacing baseline lens
   "awk '/When the input bundle includes .*reviewer_questions/{in_block=1} in_block && /^Concrete lens names/{exit} in_block {print}' '${REPO_ROOT}/plugins/ship-flow/skills/verify-reviewer-panel/SKILL.md' | grep -q 'augment domain-expert-reviewer lenses' && awk '/When the input bundle includes .*reviewer_questions/{in_block=1} in_block && /^Concrete lens names/{exit} in_block {print}' '${REPO_ROOT}/plugins/ship-flow/skills/verify-reviewer-panel/SKILL.md' | grep -q 'general-external-reviewer and silent-failure-reviewer still run their baseline questions'"
 
 check "ship-verify materializes task reviewer questions that are not in checklist" \
-  "awk '/^## Step 2 — Quality gate/{in_block=1} in_block && /^\\*\\*Per-surface commit count\\*\\*/{exit} in_block {print}' '${VERIFY_SKILL}' | grep -q 'task-level reviewer_questions that are not already represented' && awk '/^## Step 2 — Quality gate/{in_block=1} in_block && /^\\*\\*Per-surface commit count\\*\\*/{exit} in_block {print}' '${VERIFY_SKILL}' | grep -q 'framework-only prompts'"
+  "grep -q 'task-level reviewer_questions that are not already represented' '${VERIFY_STEP2_BLOCK}' && grep -q 'framework-only prompts' '${VERIFY_STEP2_BLOCK}'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

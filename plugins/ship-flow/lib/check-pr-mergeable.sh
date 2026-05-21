@@ -33,6 +33,43 @@ conflict_files() {
   git diff --name-only --diff-filter=U 2>/dev/null | paste -sd, - 2>/dev/null || true
 }
 
+sanitize_diagnostic() {
+  printf '%s' "$1" | tr '\n\r\t' '   ' | tr -d '[:cntrl:]' | awk '{$1=$1; print}' | cut -c1-240
+}
+
+server_conflict_files() {
+  local gh_pr="$1" stderr_file files rc context
+  [ -z "$GH_VIEW_JSON_FIXTURE" ] || return 0
+  [ -z "$STATE_SEQUENCE_FIXTURE" ] || return 0
+
+  stderr_file="$(mktemp)"
+  files="$(gh pr diff "$gh_pr" --name-only 2>"$stderr_file")"
+  rc=$?
+  context="$(sanitize_diagnostic "$(cat "$stderr_file" 2>/dev/null || true)")"
+  rm -f "$stderr_file"
+
+  if [ "$rc" -ne 0 ]; then
+    [ -n "$context" ] || context="no stderr captured"
+    printf "check-pr-mergeable: warning: unable to enumerate server conflict files via 'gh pr diff %s --name-only': %s\n" "$gh_pr" "$context" >&2
+    return 0
+  fi
+
+  if [ -z "$files" ]; then
+    printf "check-pr-mergeable: warning: unable to enumerate server conflict files via 'gh pr diff %s --name-only': no files returned\n" "$gh_pr" >&2
+    return 0
+  fi
+
+  printf '%s\n' "$files" | awk 'NF { print }'
+}
+
+combine_conflict_files() {
+  local local_files="$1" server_files="$2"
+  {
+    printf '%s\n' "$local_files" | tr ',' '\n'
+    printf '%s\n' "$server_files"
+  } | awk 'NF && !seen[$0]++ { out = out ? out "," $0 : $0 } END { print out }'
+}
+
 emit_report() {
   local verdict="$1" state_class="$2" pr="$3" status="$4" attempts="$5" started="$6" files="$7" action="$8" reason="$9"
   local now elapsed
@@ -151,9 +188,16 @@ GH_PR_NUMBER="${NORMALIZED_PR#\#}"
 attempt=1
 last_status=""
 while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
-  status="$(read_merge_state "$attempt" "$GH_PR_NUMBER" 2>/dev/null)"
+  merge_stderr_file="$(mktemp)"
+  status="$(read_merge_state "$attempt" "$GH_PR_NUMBER" 2>"$merge_stderr_file")"
   rc=$?
+  merge_error="$(sanitize_diagnostic "$(cat "$merge_stderr_file" 2>/dev/null || true)")"
+  rm -f "$merge_stderr_file"
   if [ "$rc" -ne 0 ]; then
+    if [ -z "$STATE_SEQUENCE_FIXTURE" ] && [ -z "$GH_VIEW_JSON_FIXTURE" ]; then
+      [ -n "$merge_error" ] || merge_error="no stderr captured"
+      printf "check-pr-mergeable: error: gh pr view failed for %s via 'gh pr view %s --json mergeStateStatus --jq .mergeStateStatus' (exit %s): %s\n" "$NORMALIZED_PR" "$GH_PR_NUMBER" "$rc" "$merge_error" >&2
+    fi
     emit_report "PROMPT_CAPTAIN" "gh-failure" "$NORMALIZED_PR" "$last_status" "$attempt" "$STARTED" "" "surface-to-captain" "gh-pr-view-failed"
     exit 30
   fi
@@ -165,7 +209,9 @@ while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
       exit 0
       ;;
     CONFLICTING)
-      emit_report "BLOCK" "conflicting" "$NORMALIZED_PR" "$status" "$attempt" "$STARTED" "$(conflict_files)" "branch-update-required" "merge-state-conflicting"
+      local_files="$(conflict_files)"
+      server_files="$(server_conflict_files "$GH_PR_NUMBER")"
+      emit_report "BLOCK" "conflicting" "$NORMALIZED_PR" "$status" "$attempt" "$STARTED" "$(combine_conflict_files "$local_files" "$server_files")" "branch-update-required" "merge-state-conflicting"
       exit 10
       ;;
     DIRTY)
