@@ -141,6 +141,80 @@ echo "$HANDOFF" | awk -v expected="$DC_SOURCE_COUNT" '
 '
 
 echo ""
+echo "### Imported visible_surface_map"
+echo ""
+echo "| # | ID | Type | Route | Selector Hint | Visible When | Coverage | Mapped By | Rationale (D{N}) | N/A Rationale |"
+echo "|---|---|---|---|---|---|---|---|---|---|"
+
+echo "$HANDOFF" | awk '
+  function clean(value, q) {
+    sub(/^[[:space:]]+/, "", value)
+    sub(/[[:space:]]+$/, "", value)
+    q=sprintf("%c", 39)
+    if ((substr(value, 1, 1) == "\"" && substr(value, length(value), 1) == "\"") ||
+        (substr(value, 1, 1) == q && substr(value, length(value), 1) == q)) {
+      value=substr(value, 2, length(value) - 2)
+    }
+    return value
+  }
+  function set_field(key, value) {
+    value=clean(value)
+    if (key == "id") id=value
+    else if (key == "surface_type") surface_type=value
+    else if (key == "route") route=value
+    else if (key == "selector_hint") selector_hint=value
+    else if (key == "visible_when") visible_when=value
+    else if (key == "intent_summary") intent_summary=value
+    else if (key == "coverage") coverage=value
+    else if (key == "mapped_by") mapped_by=value
+    else if (key == "rationale_decision") rd=value
+    else if (key == "na_rationale") na=value
+  }
+  function parse_field(line) {
+    sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+    sub(/^[[:space:]]+/, "", line)
+    key=line
+    sub(/:.*/, "", key)
+    value=line
+    sub(/^[^:]+:[[:space:]]*/, "", value)
+    set_field(key, value)
+  }
+  function fail(msg) {
+    print "ERROR: malformed visible_surface_map[] item: " msg > "/dev/stderr"
+    bad=1
+  }
+  function emit() {
+    if (!started) return
+    if (id == "") fail("missing id")
+    if (id != "" && id !~ /^[a-z0-9][a-z0-9-]*$/) fail(id " invalid id")
+    if (surface_type !~ /^(region|control|state_indicator|semantic_badge)$/) fail(id " invalid or missing surface_type")
+    if (route == "") fail(id " missing route")
+    if (selector_hint == "") fail(id " missing selector_hint")
+    if (visible_when == "") fail(id " missing visible_when")
+    if (intent_summary == "") fail(id " missing intent_summary")
+    if (coverage !~ /^(mapped|explicit_na|deferred_blocker)$/) fail(id " invalid or missing coverage")
+    if (rd !~ /^D[0-9]+$/) fail(id " missing rationale_decision")
+    if (coverage == "mapped" && mapped_by == "") fail(id " coverage:mapped missing mapped_by")
+    if (coverage == "explicit_na" && na == "") fail(id " coverage:explicit_na missing na_rationale")
+    if (!bad) print "| " (++n) " | `" id "` | " surface_type " | `" route "` | `" selector_hint "` | " visible_when " | " coverage " | " mapped_by " | " rd " | " na " |"
+  }
+  /^[[:space:]]*visible_surface_map:/ { in_vsm=1; next }
+  in_vsm && /^[[:space:]]*(render_fidelity_targets:|whole_page_visual_targets:|storyboard_frames:|open_decisions:|artifact_paths:|---|### )/ { in_vsm=0 }
+  in_vsm && /^[[:space:]]*-[[:space:]]*[A-Za-z_]+:/ {
+    emit()
+    started=1
+    id=surface_type=route=selector_hint=visible_when=intent_summary=coverage=mapped_by=rd=na=""
+    parse_field($0)
+    next
+  }
+  in_vsm && started && /^[[:space:]]+[A-Za-z_]+:/ { parse_field($0) }
+  END {
+    emit()
+    exit bad
+  }
+'
+
+echo ""
 echo "### Imported render_fidelity_targets"
 echo ""
 echo "| # | Selector | CSS Property | Expected Value | Rationale (D{N}) |"

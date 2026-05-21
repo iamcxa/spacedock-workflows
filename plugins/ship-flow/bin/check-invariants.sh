@@ -1154,9 +1154,10 @@ check_deferred_to_todo_footer() {
 
 check_fo_receipt_on_proceed() {
   # C13 — Principle 13: every verify.md with status: passed MUST have a sibling
-  # fo-receipts.md whose mtime >= verify.md mtime AND whose latest ## ledger
-  # entry contains `decision: self-approved`. Grace filter skips pre-2026-05-13
-  # entities (pre-Step 6.0 era).
+  # fo-receipts.md whose mtime >= verify.md mtime AND whose ## ledger entries
+  # contain a suitable self-approved verify/proceed/PR-ready receipt. Later
+  # merge-gate receipts may be blocked without invalidating the earlier proceed
+  # receipt. Grace filter skips pre-2026-05-13 entities (pre-Step 6.0 era).
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || { echo "OK C13 fo-receipt-on-proceed (docs dir absent — skip)"; return 0; }
   local fail=0 d verify receipt entity started
@@ -1179,24 +1180,64 @@ check_fo_receipt_on_proceed() {
     fi
     # mtime check: receipt must be at or after verify.md.
     local v_mtime r_mtime
-    v_mtime=$(stat -f %m "$verify" 2>/dev/null || stat -c %Y "$verify" 2>/dev/null || echo 0)
-    r_mtime=$(stat -f %m "$receipt" 2>/dev/null || stat -c %Y "$receipt" 2>/dev/null || echo 0)
+    v_mtime=$(_file_mtime_epoch "$verify")
+    r_mtime=$(_file_mtime_epoch "$receipt")
     if [ "${r_mtime:-0}" -lt "${v_mtime:-0}" ]; then
       echo "FAIL C13 fo-receipt-on-proceed: '$entity' fo-receipts.md mtime ($r_mtime) predates verify.md mtime ($v_mtime) — receipt staged before verdict finalized. See INVARIANTS.md#principle-13 failure mode 4." >&2
       fail=1
       continue
     fi
-    # Latest ledger entry (last `^## ` heading) must contain `decision: self-approved`.
-    # ledger entries are appended as ## blocks; extract content after the last ## heading.
-    local latest_entry
-    latest_entry=$(awk '/^## / {buf=""; next} {buf=buf $0 ORS} END {printf "%s", buf}' "$receipt" 2>/dev/null || true)
-    if ! echo "$latest_entry" | grep -qE '^[[:space:]]*decision:[[:space:]]*self-approved'; then
-      echo "FAIL C13 fo-receipt-on-proceed: '$entity' latest fo-receipts.md ledger entry missing 'decision: self-approved' (verify status passed → Phase G PROCEED → receipt must be self-approved). See INVARIANTS.md#principle-13." >&2
+    if ! _fo_receipts_has_self_approved_proceed "$receipt"; then
+      echo "FAIL C13 fo-receipt-on-proceed: '$entity' fo-receipts.md missing a self-approved verify/proceed/PR-ready ledger entry (verify status passed → Phase G PROCEED → receipt must be self-approved). See INVARIANTS.md#principle-13." >&2
       fail=1
     fi
   done
   [ "$fail" = "0" ] && echo "OK C13 fo-receipt-on-proceed"
   return "$fail"
+}
+
+_file_mtime_epoch() {
+  local path="$1" out
+  out="$(stat -c %Y "$path" 2>/dev/null || true)"
+  case "$out" in
+    ''|*[!0-9]*) ;;
+    *) printf '%s\n' "$out"; return 0 ;;
+  esac
+  out="$(stat -f %m "$path" 2>/dev/null || true)"
+  case "$out" in
+    ''|*[!0-9]*) printf '0\n' ;;
+    *) printf '%s\n' "$out" ;;
+  esac
+}
+
+_fo_receipts_has_self_approved_proceed() {
+  local receipt="$1"
+  awk '
+    function finish_entry() {
+      if (entry_has_decision && entry_has_signal) {
+        found = 1
+      }
+    }
+    /^## / {
+      finish_entry()
+      entry_has_decision = 0
+      entry_has_signal = 0
+      next
+    }
+    /^[[:space:]]*decision:[[:space:]]*self-approved[[:space:]]*$/ {
+      entry_has_decision = 1
+    }
+    /^[[:space:]]*trigger:/ && ($0 ~ /verify-proceed|pr-creation-autonomy|pr-ready/) {
+      entry_has_signal = 1
+    }
+    /^[[:space:]]*verdict:/ && ($0 ~ /PR_READY|PROCEED|VERIFY_PROCEED|READY_FOR_PR/) {
+      entry_has_signal = 1
+    }
+    END {
+      finish_entry()
+      exit(found ? 0 : 1)
+    }
+  ' "$receipt" 2>/dev/null
 }
 
 _frontmatter_status_at_rev_path() {
@@ -1332,6 +1373,58 @@ check_stage_metrics_contract() {
   return "$fail"
 }
 
+check_visible_surface_map_contract() {
+  local fail=0
+  local schema="${ROOT}/plugins/ship-flow/references/entity-body-schema.yaml"
+  local importer="${ROOT}/plugins/ship-flow/lib/import-design-dcs.sh"
+  local validator="${ROOT}/plugins/ship-flow/lib/validate-handoff-schema.sh"
+  local helper="${ROOT}/plugins/ship-flow/lib/check-visible-surface-coverage.sh"
+  local design_skill="${ROOT}/plugins/ship-flow/skills/ship-design/SKILL.md"
+  local plan_skill="${ROOT}/plugins/ship-flow/skills/ship-plan/SKILL.md"
+  local verify_skill="${ROOT}/plugins/ship-flow/skills/ship-verify/SKILL.md"
+  local import_test="${ROOT}/plugins/ship-flow/lib/__tests__/test-import-design-dcs.sh"
+  local contract_test="${ROOT}/plugins/ship-flow/lib/__tests__/test-visible-surface-map-contract.sh"
+  local coverage_test="${ROOT}/plugins/ship-flow/lib/__tests__/test-visible-surface-coverage.sh"
+
+  require_grep() {
+    local path="$1" pattern="$2" label="$3"
+    if [ ! -f "$path" ]; then
+      echo "ERROR [visible-surface-map-contract]: missing ${label}: ${path}" >&2
+      fail=1
+      return
+    fi
+    if ! grep -qE "$pattern" "$path"; then
+      echo "ERROR [visible-surface-map-contract]: ${label} missing pattern: ${pattern}" >&2
+      fail=1
+    fi
+  }
+
+  require_grep "$schema" 'name: visible_surface_map' "entity-body-schema"
+  require_grep "$schema" 'region, control, state_indicator, semantic_badge' "visible surface type enum"
+  require_grep "$validator" 'visible_surface_map\[\]' "handoff validator"
+  require_grep "$importer" 'Imported visible_surface_map' "design DC importer"
+  require_grep "$helper" 'render_fidelity_targets_passed=true' "visible surface coverage helper"
+  require_grep "$design_skill" 'visible_surface_map\[\].*id.*surface_type.*selector_hint' "ship-design handoff contract"
+  require_grep "$plan_skill" 'visible_surface_map\[\].*structural/mockup-parity' "ship-plan import contract"
+  require_grep "$verify_skill" 'Visible surface coverage audit' "ship-verify coverage step"
+  require_grep "$verify_skill" 'implementation-only extra UI' "ship-verify route contract"
+  require_grep "$contract_test" 'test-visible-surface-map-contract' "contract grep test"
+  require_grep "$coverage_test" 'render_fidelity_targets_passed=true' "closed-list coverage fixture"
+
+  if [ "$fail" = "0" ]; then
+    if ! bash "$import_test" >/dev/null; then
+      echo "ERROR [visible-surface-map-contract]: import/validator behavior fixture failed" >&2
+      fail=1
+    fi
+    if ! bash "$coverage_test" >/dev/null; then
+      echo "ERROR [visible-surface-map-contract]: visible surface coverage behavior fixture failed" >&2
+      fail=1
+    fi
+  fi
+
+  return "$fail"
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -1372,6 +1465,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     fo-receipt-on-proceed) check_fo_receipt_on_proceed; exit $? ;;
     entity-status-via-advance-stage-only) check_entity_status_via_advance_stage_only; exit $? ;;
     stage-metrics-contract) check_stage_metrics_contract; exit $? ;;
+    visible-surface-map-contract) check_visible_surface_map_contract; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -1433,5 +1527,6 @@ check_fo_receipt_on_proceed || FAIL=1
 # Source: pitch enforce-advance-stage-primitive-only (sharp 2026-05-15)
 check_entity_status_via_advance_stage_only || FAIL=1
 check_stage_metrics_contract || FAIL=1
+check_visible_surface_map_contract || FAIL=1
 
 exit $FAIL

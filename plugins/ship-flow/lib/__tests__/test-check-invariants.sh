@@ -968,6 +968,140 @@ assert_stderr_contains "duplicate '### Principle 7:'" \
 
 rm -f "$TMP_INV"
 
+# ========== C13: fo-receipt-on-proceed accepts PR-ready receipts before later merge gates ==========
+c13_write_passed_entity() {
+  local entity_dir="$1"
+  mkdir -p "$entity_dir"
+  cat > "$entity_dir/index.md" <<'EOF'
+---
+id: c13-fixture
+title: "C13 fixture"
+status: ship
+started: 2026-05-21T00:00:00Z
+---
+EOF
+  cat > "$entity_dir/verify.md" <<'EOF'
+status: passed
+EOF
+}
+
+c13_append_receipt() {
+  local receipt="$1" id="$2" trigger="$3" decision="$4" verdict="$5"
+  cat >> "$receipt" <<EOF
+## ${id}
+
+\`\`\`yaml receipt
+receipt_id: ${id}
+created_at: "2026-05-21T00:00:00Z"
+actor: "first-officer"
+transition:
+  from: review
+  to: pr
+  trigger: ${trigger}
+decision: ${decision}
+verdict: ${verdict}
+rule_source: docs/ship-flow/_mods/pr-merge.md v0.11.4
+evidence:
+  verify_artifact: verify.md
+preconditions:
+  - name: verify complete and passed
+    status: pass
+blocker_scan:
+  missing_or_ambiguous_evidence: none
+open_decisions: []
+next_action: "fixture"
+
+\`\`\`
+
+EOF
+}
+
+c13_pr_ready_receipt_before_blocked_merge_gate_passes() {
+  local d entity
+  d="$(create_mock_plugin_dir)" || return 1
+  entity="$d/docs/ship-flow/c13-pr-ready-before-blocked"
+  c13_write_passed_entity "$entity"
+  printf '# FO Receipts\n\n' > "$entity/fo-receipts.md"
+  c13_append_receipt "$entity/fo-receipts.md" "fo-20260521T000000Z-pr-creation-autonomy" "pr-creation-autonomy" "self-approved" "PR_READY"
+  c13_append_receipt "$entity/fo-receipts.md" "fo-20260521T001000Z-pre-merge-claude-challenge" "pre-merge-claude-challenge" "blocked" "CLAUDE_CHALLENGE_BLOCKING"
+  touch -t 202605210001 "$entity/verify.md"
+  touch -t 202605210002 "$entity/fo-receipts.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check fo-receipt-on-proceed >/dev/null 2>&1
+  rc=$?
+  rm -rf "$d"
+  [ "$rc" = "0" ]
+}
+if c13_pr_ready_receipt_before_blocked_merge_gate_passes 2>/dev/null; then
+  echo "OK C13a fo-receipt-on-proceed accepts earlier PR-ready receipt before blocked merge-gate receipt"
+else
+  echo "FAIL C13a fo-receipt-on-proceed should accept earlier PR-ready receipt before blocked merge-gate receipt"; FAIL=1
+fi
+
+c13_missing_self_approved_proceed_receipt_fails() {
+  local d entity
+  d="$(create_mock_plugin_dir)" || return 1
+  entity="$d/docs/ship-flow/c13-missing-proceed"
+  c13_write_passed_entity "$entity"
+  printf '# FO Receipts\n\n' > "$entity/fo-receipts.md"
+  c13_append_receipt "$entity/fo-receipts.md" "fo-20260521T001000Z-pre-merge-claude-challenge" "pre-merge-claude-challenge" "blocked" "CLAUDE_CHALLENGE_BLOCKING"
+  touch -t 202605210001 "$entity/verify.md"
+  touch -t 202605210002 "$entity/fo-receipts.md"
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check fo-receipt-on-proceed >/dev/null 2>&1
+  rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ]
+}
+if c13_missing_self_approved_proceed_receipt_fails 2>/dev/null; then
+  echo "OK C13b fo-receipt-on-proceed fails without a self-approved PR-ready/proceed receipt"
+else
+  echo "FAIL C13b fo-receipt-on-proceed should fail without a self-approved PR-ready/proceed receipt"; FAIL=1
+fi
+
+c13_portable_mtime_ignores_failed_bsd_stat_output() {
+  local d entity fakebin out rc
+  d="$(create_mock_plugin_dir)" || return 1
+  entity="$d/docs/ship-flow/c13-portable-mtime"
+  c13_write_passed_entity "$entity"
+  printf '# FO Receipts\n\n' > "$entity/fo-receipts.md"
+  c13_append_receipt "$entity/fo-receipts.md" "fo-20260521T000000Z-pr-creation-autonomy" "pr-creation-autonomy" "self-approved" "PR_READY"
+  touch -t 202605210003 "$entity/verify.md"
+  touch -t 202605210001 "$entity/fo-receipts.md"
+  fakebin="$d/fakebin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/stat" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "-f" ]; then
+  echo "stat: cannot read file system information for '%m': No such file or directory"
+  exit 1
+fi
+if [ "$1" = "-c" ] && [ "$2" = "%Y" ]; then
+  case "$3" in
+    */verify.md) echo 1779342180 ;;
+    */fo-receipts.md) echo 1779342060 ;;
+    *) echo 1779342000 ;;
+  esac
+  exit 0
+fi
+echo "unexpected stat invocation: $*" >&2
+exit 2
+EOF
+  chmod +x "$fakebin/stat"
+  out="$(PATH="$fakebin:$PATH" bash "$CHECK_SCRIPT" --test-fixture "$d" --check fo-receipt-on-proceed 2>&1)"
+  rc=$?
+  rm -rf "$d"
+  [ "$rc" = "1" ] \
+    && echo "$out" | grep -q 'fo-receipts.md mtime' \
+    && ! echo "$out" | grep -q 'integer expression expected' \
+    && ! echo "$out" | grep -q 'No such file or directory.*[0-9]'
+}
+if c13_portable_mtime_ignores_failed_bsd_stat_output 2>/dev/null; then
+  echo "OK C13c fo-receipt-on-proceed mtime check remains meaningful with GNU stat"
+else
+  echo "FAIL C13c fo-receipt-on-proceed mtime check should remain meaningful with GNU stat"; FAIL=1
+fi
+
 # ========== DC-107: named PM-skill receipt invariant validates receipt-bearing shapes ==========
 pm_receipt_fixture_shape() {
   local path="$1" status="${2:-invoked}"
@@ -1053,6 +1187,15 @@ if dc107_pm_receipt_named_check_invalid_fails 2>/dev/null; then
   echo "OK DC-107b pm-skill-receipts named check fails invalid receipt fixture"
 else
   echo "FAIL DC-107b pm-skill-receipts named check should fail invalid receipt fixture"; FAIL=1
+fi
+
+dc_visible_surface_map_contract_present() {
+  bash "$CHECK_SCRIPT" --check visible-surface-map-contract >/dev/null 2>&1
+}
+if dc_visible_surface_map_contract_present 2>/dev/null; then
+  echo "OK visible surface map contract present"
+else
+  echo "FAIL visible surface map contract present"; FAIL=1
 fi
 
 exit $FAIL

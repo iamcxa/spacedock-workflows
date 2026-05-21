@@ -103,12 +103,14 @@ Pre-import validation (run in this order):
 If the readiness checker blocks → BLOCKER (status: blocked, reason from checker stdout; bounce to design/FO).
 If either hand-off validator fails → BLOCKER (status: blocked, reason: hand-off schema invalid; details from script stderr).
 If importer fails or imported row count is lower than source `design_constraints[]`, write `## Plan Report status: blocked, reason: design DC import mismatch` and bounce to design/stage tooling. Do not proceed with a partial `## Plan Imported Design DCs` table.
+If `visible_surface_map[]` is present and the imported visible-surface row count is lower than the source row count, BLOCK with `reason: visible surface map import mismatch`; row count preservation is required because a dropped surface recreates the closed-list false-positive failure mode.
 
 **Mechanical mapping** (each item becomes a DC anchored to a wave):
 
 | Hand-off field | Becomes | Wave |
 |---|---|---|
 | `design_constraints[]` (UI or domain contract types) | `ui`, `e2e`, `contract`, or `api/schema` typed DC per constraint; UI constraints use `ui-verify`, domain constraints use contract/router/schema tests | task wave touching the affected component |
+| `visible_surface_map[]` (captain-visible regions, controls, state indicators, semantic badges) | structural/mockup-parity typed DC seeds per mapped row; explicit N/A rows are imported as visible audit exclusions, not dropped | wave touching the affected route or verify helper |
 | `render_fidelity_targets[]` (computed-style / structural assertions) | `ui`-typed DC, `verified_by: ui-verify` (calls computed-style assertion) | W0 (token-level) or task wave (component-level) |
 | `whole_page_visual_targets[]` (route-level composition parity) | `ui`/`e2e` typed whole-page visual parity DC; verifier captures full-page screenshot and compares against `reference_artifact` | integration wave or affected route wave |
 | `artifact_paths[]` | reference in plan `## Design Source` block; checksum on read | — |

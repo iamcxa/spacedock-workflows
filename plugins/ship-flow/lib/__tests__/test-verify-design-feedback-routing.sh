@@ -42,6 +42,15 @@ check "designer parity BLOCKING no longer always feeds back to execute" \
 check "mechanical UI parity can route missing baseline to design" \
   "awk '/Design Feedback Router/{in_block=1} in_block && /^## Step 4/{in_block=0} in_block && /Baseline screenshot missing/ && /route_to: design/{found=1} END{exit !found}' '${VERIFY_SKILL}'"
 
+check "visible surface coverage routes missing design intent to design" \
+  "awk '/Design Feedback Router/{in_block=1} in_block && /^## Step 4/{in_block=0} in_block && /visible_surface_map/ && /design intent/ && /route_to: design/{found=1} END{exit !found}' '${VERIFY_SKILL}'"
+
+check "visible surface coverage routes implementation-only extra UI to execute" \
+  "awk '/Design Feedback Router/{in_block=1} in_block && /^## Step 4/{in_block=0} in_block && /implementation-only extra UI/ && /route_to: execute/{found=1} END{exit !found}' '${VERIFY_SKILL}'"
+
+check "visible surface coverage audit remains non-screenshot infrastructure" \
+  "awk '/Visible surface coverage audit/{in_block=1} in_block && /^### Step 3\\.6\\.5/{in_block=0} in_block && /not screenshot diff infrastructure/ && /closed-list coverage audit/{found=1} END{exit !found}' '${VERIFY_SKILL}'"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 if [ "${FAIL}" -gt 0 ]; then

@@ -498,6 +498,48 @@ stages:
               path: { type: string, description: "Repo-relative path to artifact" }
               sha256: { type: string, description: "Optional checksum for drift detection (loophole #11, deferred — emit when supported)" }
           description: "Design artifact paths (tokens.css, specimens, mockups). sha256 deferred until lib supports."
+        - name: visible_surface_map
+          type: list
+          items:
+            type: object
+            schema:
+              id:
+                type: string
+                pattern: "^[a-z0-9][a-z0-9-]*$"
+                description: "Stable kebab-case row id, unique within the entity handoff."
+              surface_type:
+                type: enum
+                values: [region, control, state_indicator, semantic_badge]
+                description: "Compact visible-surface class. Audit-eligible means captain-visible regions, controls, state indicators, and semantic badges; not every DOM node."
+              route:
+                type: string
+                description: "Runtime route or surface owner where verify should inspect the live DOM."
+              selector_hint:
+                type: string
+                description: "CSS selector, role, accessible name, text anchor, or component-testid hint sufficient for plan/verify probes."
+              visible_when:
+                type: string
+                description: "State predicate such as default, loading, empty, error, disabled, or a named interaction state."
+              intent_summary:
+                type: string
+                description: "One sentence describing what the captain should understand or do when seeing the surface."
+              coverage:
+                type: enum
+                values: [mapped, explicit_na, deferred_blocker]
+                description: "Mapped rows must reference design evidence; explicit_na rows must explain why the visible surface is intentionally outside audit scope."
+              mapped_by:
+                type: string
+                required_when: "coverage == mapped"
+                description: "Design evidence source such as design_constraints, render_fidelity_targets, whole_page_visual_targets, or ui_quality_contract."
+              rationale_decision:
+                type: string
+                pattern: "^D[0-9]+$"
+                description: "Captain decision backref for audit relevance or N/A rationale."
+              na_rationale:
+                type: string
+                required_when: "coverage == explicit_na"
+                description: "Why a visible live surface is intentionally ignored by this entity."
+          description: "Compact visible UI surface coverage map consumed by ship-plan and ship-verify to prevent closed-list render_fidelity_targets false positives."
         - name: render_fidelity_targets
           type: list
           items:

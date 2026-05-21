@@ -596,11 +596,42 @@ and route_to `design` unless captain explicitly marked the UI as component-only.
   artifact path. Captain visual smoke remains final acceptance, not the first
   whole-page check.
 
+### Step 3.6.2 — Visible surface coverage audit
+
+Fragment and whole-page parity still consume closed lists. After Step 3.6 and
+Step 3.6.1, when `### Hand-off to Plan` contains `visible_surface_map[]`, verify
+MUST compare the live rendered visible surfaces against that map:
+
+```bash
+bash plugins/ship-flow/lib/check-visible-surface-coverage.sh \
+  --design <entity-folder>/design.md \
+  --live-surfaces <visible-surfaces.tsv> \
+  --render-report <mechanical-ui-parity-report.md>
+```
+
+The live surface TSV is a compact rendered DOM inventory with columns
+`id`, `route`, `surface_type`, `selector_hint`, `visible_when`, and
+`evidence_class`. It must be derived from the rendered DOM during verify
+using the same running app/session used for ui-verify or browser QA; a manual
+TSV is valid only as a fixture in helper tests. If verify cannot produce or
+cite a rendered DOM-derived inventory command/artifact, emit a BLOCKING
+`visible-surface inventory unavailable` finding routed to `verify/tooling`.
+rendered DOM inventory is mandatory; manual TSV input without runtime provenance is BLOCKING.
+`evidence_class` is deliberately narrow: `design-intent`,
+`implementation-extra`, or `ambiguous`.
+
+If all named `render_fidelity_targets[]` pass but an audit-eligible live
+surface is absent from `visible_surface_map[]`, emit a BLOCKING finding under
+`#### Visible Surface Coverage`. Route missing design intent to `design`,
+implementation-only extra UI to `execute`, and ambiguous ownership to `design`
+first. This is not screenshot diff infrastructure; it is the closed-list coverage audit for captain-visible regions, controls, state indicators, and semantic badges, not a full mock-intent vocabulary.
+
 ### Step 3.6.5 — Design Feedback Router
 
 Run this router for every BLOCKING or WARN finding from `#### Design Parity`,
-`#### Mechanical UI Parity`, and `## Intent Match Findings` before issuing a
-feedback request. The route is part of the finding record:
+`#### Mechanical UI Parity`, `#### Visible Surface Coverage`, and
+`## Intent Match Findings` before issuing a feedback request. The route is part
+of the finding record:
 
 ```markdown
 | Severity | Finding | Evidence | route_to | route_reason |
@@ -612,8 +643,8 @@ Routing table:
 
 | Finding class | Route |
 |---|---|
-| semantic design gap, information architecture mismatch, unclear affordance, missing state model, contradictory captain decision, incomplete `design_constraints[]`, missing baseline artifact, impossible-to-judge design intent | `route_to: design` |
-| implementation drift from clear design intent, runtime behavior mismatch, computed token mismatch caused by changed code, DOM/a11y role mismatch, API/schema implementation not matching typed design output | `route_to: execute` |
+| semantic design gap, information architecture mismatch, unclear affordance, missing state model, contradictory captain decision, incomplete `design_constraints[]`, missing `visible_surface_map[]` row for design intent, missing baseline artifact, impossible-to-judge design intent | `route_to: design` |
+| implementation drift from clear design intent, implementation-only extra UI, runtime behavior mismatch, computed token mismatch caused by changed code, DOM/a11y role mismatch, API/schema implementation not matching typed design output | `route_to: execute` |
 | ambiguous ownership after reading design + execute evidence | `route_to: design` first, because execute cannot be judged fairly until intent is complete |
 
 Feedback actions:
