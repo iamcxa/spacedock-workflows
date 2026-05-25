@@ -6,7 +6,7 @@
 #   C1 pre-mortem-emitted               — non-trivial pitch must have pre_mortem
 #   C2 pol-probe-invoked                — medium/big-batch pitch must invoke pol-probe-advisor
 #   C3 no-design-constraints-dual-write — design.md must NOT have retired ### Constraints for Plan Stage
-#   C4 plan-imported-design-dcs-emitted — affects_ui=true + handoff non-skipped → plan.md needs ## Plan Imported Design DCs
+#   C4 plan-imported-design-dcs-emitted — design-bearing trigger (affects_ui=true OR domain set OR design_required=true OR contract_decision_required=true) requires (a) '### Hand-off to Plan' at canonical H3, (b) either 'design-skipped: true' or '## Plan Imported Design DCs' in plan.md
 #   C5 verify-mechanical-ui-parity-emitted — affects_ui=true + render_fidelity_targets present → verify.md needs #### Mechanical UI Parity
 
 set -u
@@ -174,7 +174,7 @@ f=$(mk_fixture)
 mkdir -p "$f/docs/ship-flow/992-cli/"
 cat > "$f/docs/ship-flow/992-cli/index.md" <<'EOF'
 ---
-affects_ui: true
+affects_ui: false
 ---
 EOF
 cat > "$f/docs/ship-flow/992-cli/design.md" <<'EOF'
@@ -189,6 +189,225 @@ cat > "$f/docs/ship-flow/992-cli/plan.md" <<'EOF'
 Backend pitch — no UI section needed.
 EOF
 assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.3 design-skipped short-circuits (passes)"
+rm -rf "$f"
+
+# design-bearing entities may only design-skip with an explicit captain bypass.
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/992b-domain-skipped/"
+cat > "$f/docs/ship-flow/992b-domain-skipped/index.md" <<'EOF'
+---
+affects_ui: false
+domain: schema
+contract_decision_required: true
+---
+EOF
+cat > "$f/docs/ship-flow/992b-domain-skipped/design.md" <<'EOF'
+## Design Output
+
+### Hand-off to Plan
+- design-skipped: true
+EOF
+cat > "$f/docs/ship-flow/992b-domain-skipped/plan.md" <<'EOF'
+# Plan
+
+Backend contract pitch — design-skipped without captain bypass is invalid.
+EOF
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.3b design-bearing + design-skipped without captain bypass fails"
+rm -rf "$f"
+
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/992c-domain-skipped-bypass/"
+cat > "$f/docs/ship-flow/992c-domain-skipped-bypass/index.md" <<'EOF'
+---
+affects_ui: false
+domain: schema
+contract_decision_required: true
+---
+EOF
+cat > "$f/docs/ship-flow/992c-domain-skipped-bypass/design.md" <<'EOF'
+## Design Output
+
+### Hand-off to Plan
+- design-skipped: true
+- captain-approved-design-bypass: true
+- bypass_rationale: "Captain chose to skip schema design for this fixture."
+EOF
+cat > "$f/docs/ship-flow/992c-domain-skipped-bypass/plan.md" <<'EOF'
+# Plan
+
+Backend contract pitch — explicit captain bypass permits design-skipped.
+EOF
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.3c design-bearing + design-skipped with captain bypass passes"
+rm -rf "$f"
+
+# Non-UI trigger expansion (SKILL Step 1.6: domain-bearing entities also need import)
+mk_design_bearing_fixture() {
+  local trigger_line="$1" slug="$2"
+  local fx; fx=$(mk_fixture)
+  mkdir -p "$fx/docs/ship-flow/${slug}/"
+  cat > "$fx/docs/ship-flow/${slug}/index.md" <<EOF
+---
+affects_ui: false
+${trigger_line}
+---
+EOF
+  cat > "$fx/docs/ship-flow/${slug}/design.md" <<'EOF'
+## Design Output
+
+### Hand-off to Plan
+design_constraints:
+  - type: contract-shape
+EOF
+  cat > "$fx/docs/ship-flow/${slug}/plan.md" <<'EOF'
+# Plan
+
+Standard plan body with no Imported Design DCs section.
+EOF
+  echo "$fx"
+}
+
+f=$(mk_design_bearing_fixture "domain: ship-flow-pr" "994-domain")
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.4 domain set + missing imported section fails"
+rm -rf "$f"
+
+# C4.4b: quoted domain values (YAML allows both unquoted and quoted strings)
+f=$(mk_design_bearing_fixture 'domain: "ship-flow-pr"' "994b-domain-dq")
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.4b double-quoted domain + missing imported section fails"
+rm -rf "$f"
+
+f=$(mk_design_bearing_fixture "domain: 'ship-flow-pr'" "994c-domain-sq")
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.4c single-quoted domain + missing imported section fails"
+rm -rf "$f"
+
+# C4.4d: empty quoted domain — gate should NOT fire (empty == unset semantically)
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/994d-empty-quoted-domain/"
+cat > "$f/docs/ship-flow/994d-empty-quoted-domain/index.md" <<'EOF'
+---
+affects_ui: false
+domain: ""
+---
+EOF
+cat > "$f/docs/ship-flow/994d-empty-quoted-domain/design.md" <<'EOF'
+## Design Output
+
+### Hand-off to Plan
+- design-skipped: true
+EOF
+cat > "$f/docs/ship-flow/994d-empty-quoted-domain/plan.md" <<'EOF'
+# Plan
+EOF
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.4d empty-quoted domain → gate does not fire (unset semantics)"
+rm -rf "$f"
+
+f=$(mk_design_bearing_fixture "design_required: true" "995-design-req")
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.5 design_required=true + missing imported section fails"
+rm -rf "$f"
+
+f=$(mk_design_bearing_fixture "contract_decision_required: true" "996-contract")
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.6 contract_decision_required=true + missing imported section fails"
+rm -rf "$f"
+
+# Negative trigger: no design-bearing signal — gate should not fire
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/997-pure-cli/"
+cat > "$f/docs/ship-flow/997-pure-cli/index.md" <<'EOF'
+---
+affects_ui: false
+---
+EOF
+cat > "$f/docs/ship-flow/997-pure-cli/design.md" <<'EOF'
+## Design Output
+
+### Hand-off to Plan
+design_constraints:
+  - type: contract-shape
+EOF
+cat > "$f/docs/ship-flow/997-pure-cli/plan.md" <<'EOF'
+# Plan
+
+No imported section, but no trigger either.
+EOF
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.7 no design-bearing trigger → gate does not fire"
+rm -rf "$f"
+
+# Hand-off integrity (header-level + missing-block) — leak classes from 2026-05-24 audit.
+# Helper for these cases: design-bearing entity + handoff in design.md with arbitrary header.
+mk_handoff_integrity_fixture() {
+  local handoff_body="$1" slug="$2"
+  local fx; fx=$(mk_fixture)
+  mkdir -p "$fx/docs/ship-flow/${slug}/"
+  cat > "$fx/docs/ship-flow/${slug}/index.md" <<'EOF'
+---
+contract_decision_required: true
+---
+EOF
+  printf '## Design Output\n\n%s\n' "$handoff_body" > "$fx/docs/ship-flow/${slug}/design.md"
+  cat > "$fx/docs/ship-flow/${slug}/plan.md" <<'EOF'
+# Plan
+
+Standard plan body with no Imported Design DCs section.
+EOF
+  echo "$fx"
+}
+
+# C4.8: handoff exists at H2 (wrong level) — pr-merge-claude-challenge-gate class
+f=$(mk_handoff_integrity_fixture $'## Hand-off to Plan\ndesign_constraints:\n  - type: contract-shape' "988-h2-handoff")
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.8 H2 'Hand-off to Plan' header (canonical is H3) fails"
+rm -rf "$f"
+
+# C4.9: handoff at H1
+f=$(mk_handoff_integrity_fixture $'# Hand-off to Plan\ndesign_constraints:\n  - type: contract-shape' "987-h1-handoff")
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.9 H1 'Hand-off to Plan' header (canonical is H3) fails"
+rm -rf "$f"
+
+# C4.10: design-bearing entity with NO handoff block at all — ship-flow-stage-metrics-standardization class
+f=$(mk_handoff_integrity_fixture $'_design body without any Hand-off block._' "986-no-handoff")
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.10 design-bearing entity with no handoff block fails"
+rm -rf "$f"
+
+# C4.11: NOT design-bearing + wrong-level handoff — gate should NOT fire
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/985-non-bearing-h2/"
+cat > "$f/docs/ship-flow/985-non-bearing-h2/index.md" <<'EOF'
+---
+affects_ui: false
+---
+EOF
+cat > "$f/docs/ship-flow/985-non-bearing-h2/design.md" <<'EOF'
+## Design Output
+
+## Hand-off to Plan
+design_constraints:
+  - type: contract-shape
+EOF
+cat > "$f/docs/ship-flow/985-non-bearing-h2/plan.md" <<'EOF'
+# Plan
+
+No imported section, no trigger.
+EOF
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.11 non-trigger entity + wrong-level handoff → gate does not fire"
+rm -rf "$f"
+
+# C4.12: NOT design-bearing + missing handoff — gate should NOT fire
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/984-non-bearing-no-handoff/"
+cat > "$f/docs/ship-flow/984-non-bearing-no-handoff/index.md" <<'EOF'
+---
+affects_ui: false
+---
+EOF
+cat > "$f/docs/ship-flow/984-non-bearing-no-handoff/design.md" <<'EOF'
+## Design Output
+
+No handoff block.
+EOF
+cat > "$f/docs/ship-flow/984-non-bearing-no-handoff/plan.md" <<'EOF'
+# Plan
+
+No imported section, no trigger.
+EOF
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check plan-imported-design-dcs-emitted" "C4.12 non-trigger entity + missing handoff → gate does not fire"
 rm -rf "$f"
 
 # ---- C5 verify-mechanical-ui-parity-emitted ----

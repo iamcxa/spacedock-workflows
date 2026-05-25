@@ -822,22 +822,58 @@ check_no_design_constraints_dual_write() {
 }
 
 check_plan_imported_design_dcs_emitted() {
-  # C4 — PR #44 G10: when affects_ui=true + hand-off non-skipped, plan.md must have ## Plan Imported Design DCs.
+  # C4 — PR #44 G10 + Step 1.6 trigger expansion + 2026-05-24 handoff integrity:
+  # when entity is design-bearing (affects_ui=true OR domain set OR
+  # design_required=true OR contract_decision_required=true), the handoff block
+  # must exist at canonical level (### Hand-off to Plan), and either be marked
+  # design-skipped or have a matching ## Plan Imported Design DCs section in
+  # plan.md.
   local docs_dir="${ROOT}/docs/ship-flow"
   [ -d "$docs_dir" ] || return 0
-  local fail=0 d plan entity handoff
-  for d in "$docs_dir"/*/; do
+  local fail=0 d plan entity handoff handoff_name
+  local scan_dirs=("$docs_dir"/*/)
+  if [ -n "$FIXTURE" ]; then
+    scan_dirs+=("$docs_dir"/_archive/*/)
+  fi
+  for d in "${scan_dirs[@]}"; do
+    [ -d "$d" ] || continue
     plan="${d}plan.md"
     [ -f "$plan" ] || continue
     entity=$(_entity_index_for_dir "$d")
     [ -n "$entity" ] || continue
+    # Trigger: any design-bearing signal (ship-plan SKILL.md Step 1.6).
+    # Domain regex accepts unquoted (a-z), double-quoted ("x..."), and
+    # single-quoted ('x...') YAML — empty quoted form ("" / '') is rejected
+    # so it stays semantically equivalent to unset.
+    if ! grep -qE '^affects_ui:[[:space:]]*true' "$entity" \
+      && ! grep -qE "^domain:[[:space:]]*([a-zA-Z]|\"[^\"]|'[^'])" "$entity" \
+      && ! grep -qE '^design_required:[[:space:]]*true' "$entity" \
+      && ! grep -qE '^contract_decision_required:[[:space:]]*true' "$entity"; then
+      continue
+    fi
     handoff=$(_handoff_source_for_dir "$d")
     [ -n "$handoff" ] || continue
-    grep -qE '^affects_ui:[[:space:]]*true' "$entity" || continue
-    grep -qE '^### Hand-off to Plan' "$handoff" || continue
-    grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' "$handoff" && continue
+    handoff_name="$(basename "$d")$(basename "$handoff")"
+    # Handoff integrity: must have '### Hand-off to Plan' at canonical H3.
+    if ! grep -qE '^### Hand-off to Plan' "$handoff"; then
+      if grep -qE '^(## |# )Hand-off to Plan' "$handoff"; then
+        echo "FAIL C4 plan-imported-design-dcs-emitted: '$handoff_name' has 'Hand-off to Plan' at wrong header level (canonical is '### Hand-off to Plan' — H3). Design-bearing entity. See ship-plan/SKILL.md ### Step 1.6." >&2
+      else
+        echo "FAIL C4 plan-imported-design-dcs-emitted: '$handoff_name' has no '### Hand-off to Plan' block, but entity is design-bearing. Emit the block (with design-skipped: true if intentionally bypassed). See ship-plan/SKILL.md ### Step 1.6." >&2
+      fi
+      fail=1
+      continue
+    fi
+    if grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' "$handoff"; then
+      if grep -qE '^[[:space:]]*-?[[:space:]]*captain-approved-design-bypass:[[:space:]]*true' "$handoff"; then
+        continue
+      fi
+      echo "FAIL C4 plan-imported-design-dcs-emitted: '$handoff_name' has 'design-skipped: true' without 'captain-approved-design-bypass: true', but entity is design-bearing. See ship-plan/SKILL.md ### Step 1.6." >&2
+      fail=1
+      continue
+    fi
     if ! grep -qE '^## Plan Imported Design DCs' "$plan"; then
-      echo "FAIL C4 plan-imported-design-dcs-emitted: '$(basename "$d")plan.md' missing '## Plan Imported Design DCs' (affects_ui=true + design hand-off non-skipped). See ship-plan/SKILL.md ### Step 1.6." >&2
+      echo "FAIL C4 plan-imported-design-dcs-emitted: '$(basename "$d")plan.md' missing '## Plan Imported Design DCs' (design-bearing entity + hand-off non-skipped). See ship-plan/SKILL.md ### Step 1.6." >&2
       fail=1
     fi
   done
