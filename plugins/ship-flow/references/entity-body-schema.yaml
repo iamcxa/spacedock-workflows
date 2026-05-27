@@ -678,6 +678,26 @@ stages:
               type: table
               description: "Maps context-routing-manifest rows to task skills_needed, reviewer_questions, and domain_acceptance_checklist rows, or records explicit skip rationale for optional rows."
               columns: ["Manifest row", "Plan task skill mapping", "Reviewer questions", "domain_acceptance_checklist row"]
+            - name: tdd_ledger
+              section: "### Hand-off to Execute"
+              type: jsonl
+              description: "Plan-time authoritative RED/GREEN ledger emitted as tdd-ledger.jsonl by validate-tdd-ledger.py. Plan, execute, and verify use --require-ledger-jsonl to reject missing or stale persisted ledgers before accepting TDD evidence."
+              fields:
+                - { name: task_id, type: string }
+                - { name: declared_layer, type: enum, values: [L1, L2, L3, L4, L5, L6, L7, meta] }
+                - { name: inferred_layer, type: enum, values: [L1, L2, L3, L4, L5, L6, L7, ""] }
+                - { name: layer, type: enum, values: [L1, L2, L3, L4, L5, L6, L7] }
+                - { name: layer_drift, type: boolean }
+                - { name: command_quality, type: object, description: "red_command and green_command must be executable for applicable tasks; low_confidence/prose_like/missing are blocking." }
+              rules:
+                - "applicable=true requires executable red_command and green_command plus expected_red_failure and refactor_check."
+                - "code-bearing tasks must not declare layer: meta when inferred_layer is L1-L7."
+                - "TDD: skip -- <reason> remains valid only with a concrete skip_rationale and alternate validation."
+            - name: gate_registry
+              section: "### Hand-off to Execute"
+              type: table
+              description: "Adopter-owned path-to-gate routing resolved from .claude/ship-flow/gates.yaml by resolve-gate-registry.py. Planner carries required_gates into domain_acceptance_checklist; verifier re-runs the resolver and checks evidence_required."
+              columns: ["Task ID", "Matched routes", "Layers", "required_gates", "Reviewer questions", "evidence_required"]
     report:
       section: "## Plan Report"
       section_tag: plan-report
