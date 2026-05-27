@@ -41,7 +41,7 @@ Three layers, each catching a different failure mode:
 **Split counting** (updated 2026-04-23 via entity #085 Wave 5b, commit `d51620e4`): stage-skills and utility-skills are counted SEPARATELY. Stage-skills have a hard cap ≤ 7; utility-skills are uncapped. Current inventory under the split rule:
 
 - **Stage-skills (≤7 cap)**: `ship-shape`, `ship-design`, `ship`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review` — 7 total (at cap).
-- **Utility-skills (uncapped)**: `add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel`, `doc-sync`, `distill-reference` — 9 total. Utility scripts/mods such as `ship-flow-lint` and `debrief-guardrail-harvest` are non-stage, non-skill guardrails and do not count against the stage-skill cap.
+- **Utility-skills (uncapped)**: `add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel`, `doc-sync`, `distill-reference`, `codex-gate` — 10 total. Utility scripts/mods such as `ship-flow-lint` and `debrief-guardrail-harvest` are non-stage, non-skill guardrails and do not count against the stage-skill cap.
 
 The pre-2026-04-23 "temp cap = 10" rule is superseded: `check-invariants.sh --check skill-count` now runs split-counted assertions. Rationale: stage-skills define the workflow's shape and must stay cognitively manageable; utility-skills are on-demand helpers that don't add pipeline surface area.
 

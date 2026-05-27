@@ -347,6 +347,7 @@ Same-message `Agent()` × N. Each fresh-context subagent reads its checklist fro
 - **Claude adversarial subagent** (ALWAYS, all tiers ≥ B): fresh context, prompt is "attacker + chaos engineer mindset". Emits `Recommendation: <action> because <reason>` final line.
 - **Codex adversarial** (Tier A only): `codex exec` with adversarial prompt, 5-min timeout, read-only sandbox.
 - **Codex structured review** (Tier A only, `DIFF_LINES ≥ 200`): `codex review --base <execute_base>`; check for `[P1]` markers → emit as CRITICAL findings into Phase D.
+- **Codex locked-prompt cross-model gate (opt-in)** — verifier or captain MAY additionally invoke `Skill: ship-flow:codex-gate` for a sha256-locked-prompt adversarial review focused on failure classes Claude reviewers historically miss (schema/migration, silent failure, concurrency, regex blind spots). Differs from the auto-fired Codex adversarial + structured review above in three ways: (1) prompt is byte-frozen with sha256 drift-check, (2) findings append to `verify.md` under `<!-- section:codex-gate-findings -->`, (3) every invocation logs to `~/.gstack/analytics/codex-gate-usage.jsonl` for future organic-data harvest. **Opt-in until** `docs/ship-flow/todos/codex-gate-measurement-pilot.md` returns PROMOTE; do NOT auto-fire from this stage. Skill docs: `plugins/ship-flow/skills/codex-gate/SKILL.md`.
 
 ### Phase D — Findings merge (review-merge.sh)
 
