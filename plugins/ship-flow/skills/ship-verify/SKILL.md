@@ -220,11 +220,15 @@ For each verdict-bearing quality result, write or reference a claim record in `#
 
 Invoke `ship-flow:test-driven-development` as the audit contract. `superpowers:test-driven-development` may improve local discipline when available, but verify must not assume adopters have it installed.
 
+First, re-run `python3 plugins/ship-flow/lib/validate-tdd-ledger.py --plan <entity-folder>/plan.md --require-ledger-jsonl <entity-folder>/tdd-ledger.jsonl` and read the plan-time `tdd-ledger.jsonl` from `### Hand-off to Execute`. The validator output is the schema gate for `tdd_contract`, `declared_layer`, `inferred_layer`, `command_quality`, `layer_drift`, and stale/missing persisted ledger detection. If the plan has no ledger on a new non-trivial entity, if the ledger does not match the current plan, or if validation fails, emit a `BLOCKING` finding with `route_to: plan`. If `declared_layer` differs from `inferred_layer`, require a reconciliation note in the TDD Evidence Audit; code-bearing `layer: meta` tasks are blocking, while docs-only recon/finalization false positives may be accepted with rationale.
+
 For every plan task that is not marked `TDD: skip -- <reason>`:
 1. Read the task `tdd_contract` from `plan.md`.
 2. Read execute evidence for `RED command`, `Expected RED failure`, `GREEN command`, and `REFACTOR check` / `refactor_check`.
 3. Confirm RED-before-GREEN ordering: the RED command ran before production edits were accepted, failed for the expected reason, then GREEN passed after implementation.
 4. If RED evidence is absent, RED passed immediately, or GREEN exists without matching RED, emit a `BLOCKING` finding with `route_to: execute` and required fix: rerun/rework the task with valid RED-before-GREEN evidence or bounce to plan if the contract was underspecified.
+
+If `.claude/ship-flow/gates.yaml` exists, re-run `python3 plugins/ship-flow/lib/resolve-gate-registry.py --config .claude/ship-flow/gates.yaml --files <task-owned-paths>` for every implementation task. Compare `required_gates`, `reviewer_questions`, and `evidence_required` against the plan's `domain_acceptance_checklist` and execute evidence. Missing required gate rows are `BLOCKING` with `route_to: plan`; missing `Evidence Required` proof for a present gate is `BLOCKING` with `route_to: execute`. If the gate registry returns `status=no_match` for a code-bearing task in a new multi-layer adopter plan, record a WARNING so the adopter can extend its registry.
 
 Record results inside existing `### Review Findings` in `verify.md` under subsection `#### TDD Evidence Audit`, using the schema-backed severity vocabulary `BLOCKING`, `WARNING`, or `NIT`. Use columns `Task`, `RED evidence`, `GREEN evidence`, `REFACTOR check`, `Severity`, and `route_to`.
 
