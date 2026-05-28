@@ -6,6 +6,7 @@
 
 ## Revision History
 
+- **2026-05-28** — **v1.3.0** (T1-3 of SkillLens-derived MEMORY rubric rollout). Success-mode harvest invariant added (see below). Codex pre-discussed + FO-adjudicated; ship-review Step 4.5 + Step 8 gate added; backward-compatible (BLOCKER applies forward-only to new reviews).
 - **2026-04-21** — **v1 initial** (entity #067, slot 046e). Principle #5 reformulated in-session from "bounded entity file" to "structured docs are section-tagged + script-mediated + direct-Read warn" after captain push-back — the re-read cost assumption was obsoleted by #049 (extract-section.sh) + #053 (write-section.sh) script primitives. Preserves other 5 principles from 2026-04-20 diagnosis verbatim.
 
 ## How enforcement works
@@ -15,7 +16,7 @@ Three layers, each catching a different failure mode:
 1. **CI grep** (`bin/check-invariants.sh`): runs on every PR touching `plugins/ship-flow/**` or `docs/ship-flow/**`. Fails on structural regressions (preamble regrowth, skill count > 7, unwrapped H2/H3, fan-out reviewer bloat, etc.). Green = repo passes its own rules.
 2. **Runtime warn-hooks**:
    - `hooks/warn-direct-read.js`: PreToolUse hook on `Read`/`Edit` tool calls. Fires `systemMessage` warning when an agent attempts direct full-file Read on `docs/ship-flow/*.md` entity files (active, non-archived). **Warn-not-block** — operation still proceeds, but the agent sees the nudge to use `lib/extract-section.sh` instead.
-   - `hooks/warn-state-drift.sh`: SessionStart hook. Scans active entities for the `status: ship` + `pr: #N MERGED` drift pattern observed 4× the week of 2026-04-20 (catch-up commits `f6029c4c`, `f7a8cacb`, plus #030+#037 hanging at session-start 2026-04-22). Injects `additionalContext` listing drifted entities so FO runs the Step 3c `done + archive` sequence before new execute work. `gh` is required only for provider PR state checks; without `gh`, local frontmatter-only validation can still warn for missing or invalid PR values while provider-state drift gracefully no-ops. **v1.2.0 (D1, strengthening-roadmap-2026-05.md)**: optional autonomous fix path — when workflow README declares `auto_fix: execute` (default `off`, backward compat) AND working tree is clean AND status binary discoverable, hook auto-runs `done + archive` for each Rule A entity that passes a re-probe (PR.state == MERGED still holds). Rule B is NEVER auto-fixed. Open, closed, empty, invalid, and other non-Rule-A PR states are warning-only and never terminal-mutated. Output reformats to ✅ auto-fixed / ⚠️ blocked / 🔴 pending / ⚠️ warning-only sections. Atomic per-entity commits with explicit pathspec — MEMORY #14/#25/#37 staging-contamination disciplines preserved.
+   - `hooks/warn-state-drift.sh`: SessionStart hook. Scans active entities for the `status: ship` + `pr: #N MERGED` drift pattern observed 4× the week of 2026-04-20 (catch-up commits `f6029c4c`, `f7a8cacb`, plus #030+#037 hanging at session-start 2026-04-22). Injects `additionalContext` listing drifted entities so FO runs the Step 3c `done + archive` sequence before new execute work. `gh` is required only for provider PR state checks; without `gh`, local frontmatter-only validation can still warn for missing or invalid PR values while provider-state drift gracefully no-ops. **v1.2.0 (D1, strengthening-roadmap-2026-05.md)**: optional autonomous fix path — when workflow README declares `auto_fix: execute` (default `off`, backward compat) AND working tree is clean AND status binary discoverable, hook auto-runs `done + archive` for each Rule A entity that passes a re-probe (PR.state == MERGED still holds). Rule B is NEVER auto-fixed. Open, closed, empty, invalid, and other non-Rule-A PR states are warning-only and never terminal-mutated. Output reformats to ✅ auto-fixed / ⚠️ blocked / 🔴 pending / ⚠️ warning-only sections. Atomic per-entity commits with explicit pathspec — parallel-session staging defense preserved.
 3. **Captain-gate checklist** (§Captain-Gate Checklist below): design-review questions used during PR review for decisions that cannot be grep-enforced reliably (e.g., Principle #4 boolean-vs-enum gate — grep has high false-positive rate on prose skill files).
 
 ---
@@ -555,6 +556,26 @@ The detection signature is the substring `": advance status to "` injected into 
 **v1 limitation — body-forgery false negative**: the substring match runs against the full commit message INCLUDING body, not subject-line-only. A committer aware of the signature can include `": advance status to "` in the body to bypass detection. v1 is calibrated for **accidental** bypass (the motivating evidence at pitch-106 was unintentional, not adversarial); v2 hardening (`docs/ship-flow/todos/enforce-advance-stage-primitive-only-v2-subject-only-match.md`) tightens to subject-line-only OR requires a commit trailer like `Stage-Advance-Tool: advance-stage.sh@<sha>`.
 
 **Source**: source pitch `enforce-advance-stage-primitive-only` (sharp 2026-05-15); source todo `docs/ship-flow/todos/enforce-advance-stage-primitive-only.md`; source evidence pitch-106 verify-stage D1 (commit `898d006c`).
+
+---
+
+## Success-mode Harvest Lifecycle (v1.3.0, T1-3)
+
+**Invariant**: Success-mode candidates emitted by `ship-review` Step 4.5 (`## What Worked` + `## What Almost Failed` structured blocks in `review.md`) are **provisional**. They must be consumed by the T2-4 extractor pass which records exactly one outcome per candidate: `promoted` | `merged-into-canon` | `kept-as-draft-memory` | `discarded`.
+
+**Failure mode without this invariant**: candidates accumulate across shipped entities' `review.md` files, captain stops reviewing them, harvest becomes ceremony with no consumer ("retrospective sediment"). Predicted onset within 60 days of T1-3 rollout if T2-4 not landed.
+
+**Debt tracker**: a future hook (or scan during SessionStart / ship-review Step 1) MUST scan archived entities' `review.md` for unconsumed candidates and emit WARN when count >10, escalating to BLOCKER-unless-captain-defers at >20. Tracker key for `additionalContext` injection: `success_mode_candidates_pending: N`. Once T2-4 is live, "consumed" is recorded by T2-4 writing an outcome stamp.
+
+**T2-4 outcome ledger storage**: T2-4 stamps each candidate's outcome (`promoted` | `merged-into-canon` | `kept-as-draft-memory` | `discarded`) in a dedicated machine-readable ledger: `docs/ship-flow/success-mode-ledger.yaml` (entity-id + candidate-index keyed). T2-4 MUST NOT mutate historical `review.md` files; ledger is append-only and version-controlled separately.
+
+**Adopter without T2-4 advisory**: until T2-4 ships (workflow task #11), the debt tracker WARN is **advisory only** — candidates remain in `provisional` state indefinitely. This is acceptable transitional state; the back-pressure mechanism creates the visible debt that motivates T2-4 to land.
+
+**T2-4 verification-dispatch cross-ref**: when the T2-4 promotion pass batches **≥5 pending candidates** OR proposes **architectural reorganization of MEMORY topic taxonomy**, the verification-dispatch invariant (Captain-Gate Checklist) applies — T2-4 dispatches a fresh-context subagent to verify low-confidence claims BEFORE committing any promotion to canonical `SKILL.md` or topic files. This prevents T2-4 from becoming the new silent-fabrication surface.
+
+**Backward compatibility**: BLOCKER applies forward-only to NEW reviews; archived entities without `## What Worked` / `## What Almost Failed` are not retroactively gated. The debt tracker's "unconsumed candidate count" starts at 0 the day T1-3 ships.
+
+**Source**: T1-3 of SkillLens-derived MEMORY rubric rollout (2026-05-28). Codex pre-discussed + FO-adjudicated. Codex flagged the lifecycle as the design's killer requirement; FO added the debt-tracker back-pressure mechanism + T2-4 verification cross-ref + S-size auto-default escape.
 
 ---
 

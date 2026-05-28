@@ -240,7 +240,7 @@ git add -- {task.files_modified}
 git commit -m "feat(execute): {slug} task-{N} — {one-line action}" -- {task.files_modified}
 ```
 
-**Forbidden staging patterns** (parallel-session contamination defense — MEMORY #14/#25/#37):
+**Forbidden staging patterns** (parallel-session contamination defense):
 
 | Forbidden | Reason |
 |---|---|
@@ -355,7 +355,7 @@ git add -- docs/ship-flow/_archive/<slug>.md
 git commit -m "done + archive: #<NNN> <slug> (verdict=PASSED, inline-on-main)" -- docs/ship-flow/_archive/<slug>.md
 ```
 
-`--force` bypasses `pr: empty` refusal (intentional for no-PR inline). Hazards: parallel-session staging contamination (pathspec-lock is sole defense); MEMORY #14 5069b8ba-class attribution drift (do NOT fall back to `-am`).
+`--force` bypasses `pr: empty` refusal (intentional for no-PR inline). Hazards: parallel-session staging contamination (pathspec-lock is sole defense); commit attribution drift via implicit `-am` staging (5069b8ba-class — do NOT fall back to `-am`).
 
 ---
 

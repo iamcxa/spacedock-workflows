@@ -455,7 +455,7 @@ Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acc
 - Mode B/C re-teaches Layer A procedure → Rule B violation.
 - `--next-id` → `shape-confirm.sh` commit = ONE uninterrupted pair (MEMORY #5).
 - Reject → zero files (verify `git status` clean).
-- Explicit pathspec on manual commit (MEMORY #14/#25/#37): `git add <path> && git commit ... -- <path>`.
+- Explicit pathspec on manual commit (parallel-session staging defense): `git add <path> && git commit ... -- <path>`.
 - **Worktree-first** (MEMORY #25): at `shape-confirm.sh` invocation time, `git rev-parse --absolute-git-dir` MUST resolve under `.claude/worktrees/` (not the repo's main `.git/`). On main tip → HALT, spawn worktree via Claude Code `EnterWorktree` (or `git worktree add .claude/worktrees/shape-<id>-<slug> -b worktree-shape-<id>-<slug>` manually) before running confirm path. Rationale: pathspec-lock is necessary but NOT sufficient under parallel-session contention.
 - Child description >20 words → PLAN creep, trim to title + 1-line vertical-slice note.
 - Compose proposal >500 words → detail creep, re-read fat-marker-sketch rule and delete detail, not scope.

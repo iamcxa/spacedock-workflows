@@ -958,7 +958,7 @@ Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before�
 
 ## Step 6 — Write `verify.md` + cross-review gate
 
-**Atomic write** via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify --entity=<id>-<slug>`. Writer handles atomic commit with explicit pathspec. No `-a`/`-A` (MEMORY #14/#25/#37).
+**Atomic write** via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify --entity=<id>-<slug>`. Writer handles atomic commit with explicit pathspec. No `-a`/`-A` (parallel-session staging defense).
 
 **Section tagging (mandatory)** — every H2/H3 wrapped in paired `<!-- section:tag -->` ... `<!-- /section:tag -->`. Tag list + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.verify`. Required subsections:
 - `### Quality Gate` — per-surface scoping decisions + check results + pre-existing attributions
@@ -1162,7 +1162,7 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - `verify.md` must exist with `### Verdict → status:` before exit — even on blocked pre-check.
 - Pipeline invocation inherits `/ship` team; standalone may CreateTeam. Fresh-subagent only for Rule A exceptions.
 - Cross-review mandatory except `--fast`; VETO feedback capped at 2 rounds per stage. Phase G AUTO-FIX bounce also capped at 2 rounds; round 3 → PROMPT_CAPTAIN. Infra-fail (missing binary / server down) auto-routes; assertion-fail requires specific evidence.
-- Explicit pathspec on every commit (MEMORY #14/#25/#37). No `-a`/`-A`.
+- Explicit pathspec on every commit (parallel-session staging defense). No `-a`/`-A`.
 - Parallel-session diff: scope review to `files_modified` when `git log <execute_base>..HEAD --oneline | grep -v <this-slug>` non-empty.
 - **Hermetic policy**: panel logic depends only on `plugins/ship-flow/lib/*`. Never reach into live GStack skill home paths; those are reference-only.
 - Phase H `review-log.sh` ledger (per-specialist findings) and Step 6.0 `fo-receipts.md` ledger (gate transitions) coexist; do not collapse — they serve different audit trails.
@@ -1198,4 +1198,4 @@ On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.
 - Upstream: `ship-flow:ship-shape` (team spawn), `ship-flow:ship` (pipeline entry).
 - Downstream: `ship-flow:ship-review` (reads `verify.md → status:`).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (Rule A continuity + Rule B 3-layer + Rule C cross-review).
-- MEMORY: #5 (--next-id), #10 (scoped-gate), #14/#25/#37 (pathspec / staging), #30 (verification-dispatch), #35 (dispatch discipline, amended by Principle 6 Rule A), #078 (per-error attribution + 100% spot-check), opus-4.7-naturally-does (2026-04-23 harness diet), nextjs-16-streaming-curl-flag (turbopack `-N` requirement), **carlove-pilot-wave-1 (2026-04-26: SEC-10 #574 + SEC-15 #573 — 4 critical bugs in 4 minutes after artifact-only verify PASS; trigger for Step 4.0 + Runtime Verification subsection)**.
+- MEMORY: #5 (--next-id), #10 (scoped-gate), #14/#25/#37 (pathspec / staging), #30 (verification-dispatch), #35 (dispatch discipline, amended by Principle 6 Rule A), #078 (per-error attribution + 100% spot-check), opus-4.7-naturally-does (2026-04-23 harness diet), nextjs-turbopack-quirks (turbopack `-N` requirement + cache stall + path drift), **carlove-pilot-wave-1 (2026-04-26: SEC-10 #574 + SEC-15 #573 — 4 critical bugs in 4 minutes after artifact-only verify PASS; trigger for Step 4.0 + Runtime Verification subsection)**.
