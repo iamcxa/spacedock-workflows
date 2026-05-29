@@ -39,7 +39,7 @@ Everything else (conflict-grouping, fingerprint dedup, supersede chains, coverag
 Find candidates with `Status: captured` in shipped entities' review.md:
 
 ```bash
-grep -rl '^Status: captured' docs/ship-flow/*/review.md docs/ship-flow/_archive/*/review.md 2>/dev/null
+grep -rl '^Status: captured' "$WORKFLOW_DIR"/*/review.md "$WORKFLOW_DIR"/_archive/*/review.md 2>/dev/null
 ```
 
 Read each `## What Worked` and `## What Almost Failed` block. Each captured candidate has Pattern / Trigger / Action / Evidence / Destination.
@@ -85,7 +85,7 @@ Append one entry per decided candidate to `docs/ship-flow/success-mode-ledger.ya
   rationale: "Canonical DC discipline, low blast radius."
 ```
 
-Use `git add docs/ship-flow/success-mode-ledger.yaml` with explicit pathspec. Append under `entries:` only — never rewrite prior entries, never regenerate or sort the file (sorting would reorder history and break the append-only audit trail).
+Use `git add "$WORKFLOW_DIR/success-mode-ledger.yaml"` with explicit pathspec. Append under `entries:` only — never rewrite prior entries, never regenerate or sort the file (sorting would reorder history and break the append-only audit trail).
 
 ## Verification-dispatch trigger
 
