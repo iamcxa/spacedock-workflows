@@ -561,21 +561,19 @@ The detection signature is the substring `": advance status to "` injected into 
 
 ## Success-mode Harvest Lifecycle (v1.3.0, T1-3)
 
-**Invariant**: Success-mode candidates emitted by `ship-review` Step 4.5 (`## What Worked` + `## What Almost Failed` structured blocks in `review.md`) are **provisional**. They must be consumed by the T2-4 extractor pass which records exactly one outcome per candidate: `promoted` | `merged-into-canon` | `kept-as-draft-memory` | `discarded`.
+**Invariant**: Success-mode candidates emitted by `ship-review` Step 4.5 (`## What Worked` + `## What Almost Failed` structured blocks in `review.md`) are **provisional**. They must be consumed by the `harvest-decide` skill (`/ship-flow:harvest-decide`) which records exactly one outcome per candidate: `promoted` | `merged-into-canon` | `kept-as-draft-memory` | `discarded`.
 
-**Failure mode without this invariant**: candidates accumulate across shipped entities' `review.md` files, captain stops reviewing them, harvest becomes ceremony with no consumer ("retrospective sediment"). Predicted onset within 60 days of T1-3 rollout if T2-4 not landed.
+**Failure mode without this invariant**: candidates accumulate across shipped entities' `review.md` files, captain stops reviewing them, harvest becomes ceremony with no consumer ("retrospective sediment"). Mitigation: run `/ship-flow:harvest-decide --backlog` regularly; the debt tracker below nudges when the queue grows.
 
-**Debt tracker**: a future hook (or scan during SessionStart / ship-review Step 1) MUST scan archived entities' `review.md` for unconsumed candidates and emit WARN when count >10, escalating to BLOCKER-unless-captain-defers at >20. Tracker key for `additionalContext` injection: `success_mode_candidates_pending: N`. Once T2-4 is live, "consumed" is recorded by T2-4 writing an outcome stamp.
+**Debt tracker**: a future hook (or scan during SessionStart / ship-review Step 1) MUST scan archived entities' `review.md` for unconsumed candidates and emit WARN when count >10, escalating to BLOCKER-unless-captain-defers at >20. Tracker key for `additionalContext` injection: `success_mode_candidates_pending: N`. "Consumed" is recorded by `harvest-decide` writing an outcome stamp to the ledger. (The hook itself is deferred — see harvest-decide SKILL "Known future hardening"; until it lands, captain invokes harvest-decide manually.)
 
-**T2-4 outcome ledger storage**: T2-4 stamps each candidate's outcome (`promoted` | `merged-into-canon` | `kept-as-draft-memory` | `discarded`) in a dedicated machine-readable ledger: `docs/ship-flow/success-mode-ledger.yaml` (entity-id + candidate-index keyed). T2-4 MUST NOT mutate historical `review.md` files; ledger is append-only and version-controlled separately.
+**Outcome ledger storage**: `harvest-decide` stamps each candidate's outcome (`promoted` | `merged-into-canon` | `kept-as-draft-memory` | `discarded`) in a dedicated machine-readable ledger: `docs/ship-flow/success-mode-ledger.yaml` (entity-id + candidate-index keyed, append-only). `harvest-decide` MUST NOT mutate historical `review.md` files; canon mutations (promoted / merged) require captain approval BEFORE the ledger entry is stamped.
 
-**Adopter without T2-4 advisory**: until T2-4 ships (workflow task #11), the debt tracker WARN is **advisory only** — candidates remain in `provisional` state indefinitely. This is acceptable transitional state; the back-pressure mechanism creates the visible debt that motivates T2-4 to land.
-
-**T2-4 verification-dispatch cross-ref**: when the T2-4 promotion pass batches **≥5 pending candidates** OR proposes **architectural reorganization of MEMORY topic taxonomy**, the verification-dispatch invariant (Captain-Gate Checklist) applies — T2-4 dispatches a fresh-context subagent to verify low-confidence claims BEFORE committing any promotion to canonical `SKILL.md` or topic files. This prevents T2-4 from becoming the new silent-fabrication surface.
+**Verification-dispatch cross-ref**: when a `harvest-decide` run batches **≥5 pending candidates** OR proposes **architectural reorganization of MEMORY topic taxonomy**, the verification-dispatch invariant (Captain-Gate Checklist) applies — `harvest-decide` dispatches a fresh-context verifier (`spacedock:ensign`, findings-only output) to check low-confidence promote/merge claims BEFORE the captain proposal. This prevents harvest-decide from becoming the new silent-fabrication surface.
 
 **Backward compatibility**: BLOCKER applies forward-only to NEW reviews; archived entities without `## What Worked` / `## What Almost Failed` are not retroactively gated. The debt tracker's "unconsumed candidate count" starts at 0 the day T1-3 ships.
 
-**Source**: T1-3 of SkillLens-derived MEMORY rubric rollout (2026-05-28). Codex pre-discussed + FO-adjudicated. Codex flagged the lifecycle as the design's killer requirement; FO added the debt-tracker back-pressure mechanism + T2-4 verification cross-ref + S-size auto-default escape.
+**Source**: T1-3 + T2-4 of SkillLens-derived MEMORY rubric rollout (2026-05-28/29). Codex pre-discussed + FO-adjudicated each stage. T2-4 (`harvest-decide`) shipped deliberately minimal: append-only ledger + captain-approval-before-canon are load-bearing; conflict-grouping / fingerprint dedup / supersede chain / coverage thresholds are deferred to evidence-gated "Known future hardening" in the skill (pending queue was empty at authoring — building scale machinery for n=0 was rejected as premature).
 
 ---
 

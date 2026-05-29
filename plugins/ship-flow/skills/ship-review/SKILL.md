@@ -222,7 +222,7 @@ Retro discipline:
 
 ### Step 4.5 — Success/Failure-mode harvest (SkillLens-derived)
 
-Write two structured blocks to `review.md` ABOVE the `## PR Draft` section. These are T2-4 extractor pass input — keep them machine-readable. The PR body's `## Per-Feature Retrospective` carries only a compact mirror for human visibility.
+Write two structured blocks to `review.md` ABOVE the `## PR Draft` section. These are `harvest-decide` skill input — keep them machine-readable. The PR body's `## Per-Feature Retrospective` carries only a compact mirror for human visibility.
 
 **S-size auto-default**: if entity frontmatter `size: S`, both blocks render the following auto-default and skip prompting:
 
@@ -265,7 +265,7 @@ Deferred to debrief: noticed pattern not yet ripe for codification — <one-line
 - `Destination: one-off` requires the Evidence field to make non-reusability obvious; no separate justification needed.
 - Captain reviews structured blocks during Step 7 cross-review gate alongside PR body draft.
 
-T2-4 extractor pass (future task #11) reads these blocks via section markers; PR body retrospective gets compact mirror lines (single line per candidate) for human visibility.
+The `harvest-decide` skill (`/ship-flow:harvest-decide`) reads these blocks via section markers and records one outcome per candidate to `docs/ship-flow/success-mode-ledger.yaml`; PR body retrospective gets compact mirror lines (single line per candidate) for human visibility.
 
 ### Step 5 — Token summary
 
