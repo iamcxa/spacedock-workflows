@@ -6,6 +6,7 @@
 
 ## Revision History
 
+- **2026-05-30** — **v1.4.0** Principle 16 (Tier-A Validity: M1 provenance-not-structure + M2 fixture-verified) added from the 19-skill rubric-ification audit. First Tier-A-valid instance: `lib/check-cross-review-threshold.sh` + the meta-rubric frame at `rubrics/_meta-rubric.md`. CI wiring of the cross-review gate is deferred (needs the per-skill contract emission + the forward-only stamp decision).
 - **2026-05-28** — **v1.3.0** (T1-3 of SkillLens-derived MEMORY rubric rollout). Success-mode harvest invariant added (see below). Codex pre-discussed + FO-adjudicated; ship-review Step 4.5 + Step 8 gate added; backward-compatible (BLOCKER applies forward-only to new reviews).
 - **2026-04-21** — **v1 initial** (entity #067, slot 046e). Principle #5 reformulated in-session from "bounded entity file" to "structured docs are section-tagged + script-mediated + direct-Read warn" after captain push-back — the re-read cost assumption was obsoleted by #049 (extract-section.sh) + #053 (write-section.sh) script primitives. Preserves other 5 principles from 2026-04-20 diagnosis verbatim.
 
@@ -558,6 +559,18 @@ The detection signature is the substring `": advance status to "` injected into 
 **v1 limitation — body-forgery false negative**: the substring match runs against the full commit message INCLUDING body, not subject-line-only. A committer aware of the signature can include `": advance status to "` in the body to bypass detection. v1 is calibrated for **accidental** bypass (the motivating evidence at pitch-106 was unintentional, not adversarial); v2 hardening (`docs/ship-flow/todos/enforce-advance-stage-primitive-only-v2-subject-only-match.md`) tightens to subject-line-only OR requires a commit trailer like `Stage-Advance-Tool: advance-stage.sh@<sha>`.
 
 **Source**: source pitch `enforce-advance-stage-primitive-only` (sharp 2026-05-15); source todo `docs/ship-flow/todos/enforce-advance-stage-primitive-only.md`; source evidence pitch-106 verify-stage D1 (commit `898d006c`).
+
+---
+
+### Principle 16: Tier-A Validity — mechanical checks target verifiable, non-self-authored evidence
+
+**Rule**: A criterion may be labelled **Tier-A** (grep/script-enforced) only if (1) its check target is a file the skill under review does NOT write, OR the output of a separately-dispatched agent, OR process evidence (temp-file/tool-call/git object) the skill cannot fabricate via its own prose — **and** (2) the check command is fixture-verified to run (`bash -n` + `which`/`ls` deps + one known-good + one known-bad execution; portable BSD/macOS shell, no `grep -P`). A check whose guarantee depends on the *provenance* of self-written content (not its structure) is reclassified Tier-B-with-named-artifact or given a machine-checkable provenance anchor (turn_id, tool-call log).
+
+**Failure mode**: A grep over a self-written artifact proves structure, not honesty. When the same agent writes both the artifact and its attestation token, no grep distinguishes honest attestation from a self-issued rubber stamp — manufacturing false confidence that a gate is "mechanically enforced" when it is not. Variant: a Tier-A label awarded to a check command that was never run and is mechanically broken (`grep -c` on a list key, a non-existent `--stage` interface, a missing fixture dir, `grep -P` on macOS).
+
+**Grep check** (Tier B / design-review): for each Tier-A criterion a skill declares, the design-review agent confirms its target is non-self-authored (M1 case a/b/c) and that the check command was fixture-run (M2). Future Tier A: a `check-invariants.sh --check tier-a-validity` lint that, for each `rubrics/*.rubric.yaml` dimension marked `tier: A-grep-script`, asserts the `check:` command passes `bash -n` and that its grep target path is not the artifact the skill writes.
+
+**Source**: 19-skill rubric-ification audit (2026-05-30). Adversarial pass surfaced M1 (provenance ≠ structure) across ~13 skills and M2 (unverified check commands) across ~8. Full frame: `plugins/ship-flow/rubrics/_meta-rubric.md`. First Tier-A-valid instance: `lib/check-cross-review-threshold.sh` (cross-review summary line, M1 case b).
 
 ---
 
