@@ -67,7 +67,7 @@ check_skill_count() {
   # DC-6 — Principle 2: stage skill count ≤ 7; utility skills uncapped.
   # Explicit allowlists — catches unclassified additions immediately.
   local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
-  local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect domain-registry ui-verify test-driven-development verify-reviewer-panel doc-sync distill-reference codex-gate)
+  local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect domain-registry ui-verify test-driven-development verify-reviewer-panel doc-sync distill-reference codex-gate harvest-decide memory-cleanup)
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
 
@@ -1292,6 +1292,28 @@ _frontmatter_status_at_rev_path() {
   '
 }
 
+# Returns 0 (true) when the entity at <rev>:<path> has a stage-artifact-links
+# BODY TABLE but NO stage_outputs frontmatter — the shape-confirm.sh format.
+# On such an entity advance-stage.sh / render-stage-links are DESTRUCTIVE (they
+# rebuild the body table FROM stage_outputs, nuking the populated table), so a
+# manual status edit is the SAFE path and is exempt from C14's signature
+# requirement. Once an entity carries stage_outputs, advance-stage.sh is safe
+# and the requirement applies. Principle 15 amendment — #117 dogfood finding.
+_entity_bodytable_no_stage_outputs() {
+  local rev="$1" path="$2" content
+  content="$( { git show "${rev}:${path}" 2>/dev/null || true; } )"
+  printf '%s\n' "$content" | grep -q '<!-- section:stage-artifact-links -->' || return 1
+  if printf '%s\n' "$content" | awk '
+      BEGIN{d=0}
+      /^---[[:space:]]*$/ {d++; next}
+      d==1 && /^stage_outputs:[[:space:]]*$/ {print "y"; exit}
+      d>=2 {exit}
+    ' | grep -q y; then
+    return 1   # has stage_outputs → advance-stage.sh is safe → NOT exempt
+  fi
+  return 0     # table present, no stage_outputs → destructive case → exempt
+}
+
 # C14: Entity status mutation must go through lib/advance-stage.sh
 # ----------------------------------------------------------------
 # Scans commits on the current branch ahead of merge-base with origin/main.
@@ -1337,18 +1359,28 @@ check_entity_status_via_advance_stage_only() {
     # Body-level `status:` examples are ignored; pure additions have no parent
     # frontmatter status and are exempt.
     local has_status_mutation=0
-    local path before_status after_status
+    local path before_status after_status mutated_path=""
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       before_status="$(_frontmatter_status_at_rev_path "${sha}^" "$path")"
       after_status="$(_frontmatter_status_at_rev_path "$sha" "$path")"
       if [ -n "$before_status" ] && [ -n "$after_status" ] && [ "$before_status" != "$after_status" ]; then
         has_status_mutation=1
+        mutated_path="$path"
         break
       fi
     done < <(git diff-tree --no-commit-id --name-only -r "$sha" -- "${entity_status_paths[@]}" 2>/dev/null || true)
 
     if [ "$has_status_mutation" = "0" ]; then
+      continue
+    fi
+
+    # Body-table exemption (Principle 15 amendment, #117 dogfood finding):
+    # shape-confirm.sh creates entities with a stage-artifact-links body table
+    # and no stage_outputs frontmatter; advance-stage.sh is destructive on them,
+    # so a manual status edit is the SAFE path and is exempt. The signature
+    # requirement still applies once the entity carries stage_outputs.
+    if _entity_bodytable_no_stage_outputs "$sha" "$mutated_path"; then
       continue
     fi
 

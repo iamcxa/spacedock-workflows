@@ -134,6 +134,59 @@ EOF
         git add docs/test-wf/flat-entity.md
         git commit -qm "$mutation_msg"
         ;;
+      bodytable)
+        # Folder entity with a stage-artifact-links BODY TABLE but NO
+        # stage_outputs frontmatter (the shape-confirm.sh format). advance-stage.sh
+        # / render-stage-links rebuild that table FROM stage_outputs, so on such
+        # an entity advance-stage.sh is DESTRUCTIVE — a manual status edit is the
+        # SAFE path and must be EXEMPT from the signature requirement (#117).
+        mkdir -p docs/test-wf/bodytable-entity
+        cat > docs/test-wf/bodytable-entity/index.md <<'EOF'
+---
+id: "bodytable-entity"
+title: "Body Table"
+status: sharp
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+        git add docs/test-wf/bodytable-entity/index.md
+        git commit -qm "baseline: add body-table entity"
+        sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/bodytable-entity/index.md
+        rm -f docs/test-wf/bodytable-entity/index.md.bak
+        git add docs/test-wf/bodytable-entity/index.md
+        git commit -qm "$mutation_msg"
+        ;;
+      stageoutputs)
+        # Folder entity WITH stage_outputs frontmatter — advance-stage.sh is safe
+        # here, so a manual status edit MUST still be flagged (narrow exemption).
+        mkdir -p docs/test-wf/stageoutputs-entity
+        cat > docs/test-wf/stageoutputs-entity/index.md <<'EOF'
+---
+id: "stageoutputs-entity"
+title: "Stage Outputs"
+status: sharp
+stage_outputs:
+  shape: shape.md
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+        git add docs/test-wf/stageoutputs-entity/index.md
+        git commit -qm "baseline: add stage_outputs entity"
+        sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/stageoutputs-entity/index.md
+        rm -f docs/test-wf/stageoutputs-entity/index.md.bak
+        git add docs/test-wf/stageoutputs-entity/index.md
+        git commit -qm "$mutation_msg"
+        ;;
     esac
   )
   echo "$dir"
@@ -191,6 +244,18 @@ echo
 echo "--- Case 7: BODY status line changes → PASS (not entity frontmatter) ---"
 TMP="$(setup_fixture "docs(flat-entity): update body status example" "flatbody" "edit")"
 assert_exit 0 "run_check_only '$TMP'" "Case-7 body status no false positive (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 8: BODY-TABLE entity (stage-artifact-links table, no stage_outputs) manual status edit → PASS (exempt; advance-stage destructive here) [#117] ---"
+TMP="$(setup_fixture "execute(bodytable-entity): correct status to plan" "bodytable" "edit")"
+assert_exit 0 "run_check_only '$TMP'" "Case-8 body-table manual edit exempt (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 9: STAGE_OUTPUTS entity manual status edit (no signature) → FAIL (advance-stage safe; exemption is narrow) [#117] ---"
+TMP="$(setup_fixture "manual hand-edit status to plan" "stageoutputs" "edit")"
+assert_exit 1 "run_check_only '$TMP'" "Case-9 stage_outputs manual edit still flagged (exit 1)"
 rm -rf "$TMP"
 
 echo
