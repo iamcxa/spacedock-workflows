@@ -74,7 +74,7 @@ SendMessage to `planner` teammate with a structured prompt. Planner already has 
 > - **README.md** — per `readme-impact` block: Edit tool with before/after matching (README is prose-heavy, typically NO section tags → DO NOT use patch-map.sh). Commit via explicit pathspec: `git add -- README.md && git commit -m "docs(readme): #<id> — <summary>" -- README.md`. If block has `entry_critical: true`, note it in commit body.
 > - **ROADMAP.md** — status flip: `patch-map.sh --if-hash=<sha> --mode=remove-row --match=<slug> --section=now --commit-as="ship: remove #<id> from Now" ROADMAP.md` then `--mode=append --section=shipped --commit-as="ship: record #<id> in Shipped"` with new row.
 >
-> Discipline: read-first CAS via `--if-hash` on patch-map.sh invocations. Exit 6 (stale hash) → re-read + retry, max 3 rounds per doc. Explicit pathspec at commit-time (MEMORY #14/#25/#37). No `-a`/`-A`. Commit each doc separately.
+> Discipline: read-first CAS via `--if-hash` on patch-map.sh invocations. Exit 6 (stale hash) → re-read + retry, max 3 rounds per doc. Explicit pathspec at commit-time (parallel-session staging defense). No `-a`/`-A`. Commit each doc separately.
 >
 > Report back with: 4 commit SHAs (or skip-rationale per doc if no matching impact block) + per-doc diff summary.
 
@@ -203,6 +203,12 @@ Body:
 - Specialists run: {comma-separated list with ✓/✗}
 - Adversarial: Claude {✓/✗}, Codex {✓/✗}
 
+**What Worked**: {compact mirror — one line per captured pattern with destination tag, or "none — <reason>" or "deferred-to-debrief"}
+
+**What Almost Failed**: {same shape — failure-mode candidates with destination tag, or "none — <reason>" or "deferred-to-debrief"}
+
+**Reusable failure-mode sources** (incident-level findings handled elsewhere): verify findings, deferred findings, risks accepted, MEMORY incidents. `## What Almost Failed` (above, in review.md source) captures the SkillLens `[avoid]` half — reusable failure PATTERNS, not incident records.
+
 Entity: #{entity-id}
 Ship-flow: shape → plan → execute → verify → review → ship-final (autonomous)
 Tracker: {tracker + issue, if set}
@@ -213,6 +219,53 @@ Retro discipline:
 - **No separate `<entity>/retro.md` file.** The PR body IS the retro. Future readers (captain, Copilot, sibling-PR reviewers) read it inline with the diff.
 - **No repo `TODOS.md` path assumption.** `ship-flow:add-todos` skill owns deferred-finding storage internally; this section only emits the query pointer.
 - Risks-accepted block populates only when verify panel triggered CRITICAL escape AND captain chose accept-as-is; otherwise the single-line "none" rendering applies.
+
+### Step 4.5 — Success/Failure-mode harvest (SkillLens-derived)
+
+Write two structured blocks to `review.md` ABOVE the `## PR Draft` section. These are `harvest-decide` skill input — keep them machine-readable. The PR body's `## Per-Feature Retrospective` carries only a compact mirror for human visibility.
+
+**S-size auto-default**: if entity frontmatter `size: S`, both blocks render the following auto-default and skip prompting:
+
+```
+Status: none
+
+No success-mode candidates: routine S-size change; reusability-anchored capture not expected for this size class. Harvest auto-defaulted per Step 4.5.
+```
+
+The reason is ≥50 chars + reusability-anchored, so it passes Step 8 WARN gate cleanly. M/L entities require explicit captain consideration (no auto-default).
+
+**Block format** (apply identically to `## What Worked` and `## What Almost Failed`):
+
+````
+## What Worked
+
+Status: captured | none | deferred-to-debrief
+
+[if Status: captured — at most 3 candidates in "What Worked", 2 in "What Almost Failed"]
+
+1. Pattern: <short noun phrase, e.g. "early fixture parity check">
+   Trigger: <when this applies, e.g. "feature changes behavior shared by multiple existing fixtures">
+   Action: <executable step the future agent can perform>
+   Evidence: <concrete proof — behavior preserved, artifact produced, decision shifted; cite commit SHA / DC name / file:line>
+   Destination: draft-memory | promote-to-<skill>.md | one-off
+
+[if Status: none — single line, reusability-anchored reason]
+
+No success-mode candidates: <mechanical | one-off domain | already covered by existing canon | other reusability-anchored reason>
+
+[if Status: deferred-to-debrief — single line]
+
+Deferred to debrief: noticed pattern not yet ripe for codification — <one-line context>
+````
+
+`## What Almost Failed` captures **reusable failure patterns as lessons**, distinct from the incident-level findings already in verify.md / deferred-findings / risks-accepted (those are failure incidents; this is the SkillLens `[avoid]` half — pattern → trigger → action-to-take-next-time).
+
+**Anti-garbage rules** (enforced at Step 8 gate):
+- Evidence MUST cite a concrete artifact (commit SHA / DC name / file:line / failure-prevented description). Generic claims like "tests passed" fail WARN gate.
+- `Destination: one-off` requires the Evidence field to make non-reusability obvious; no separate justification needed.
+- Captain reviews structured blocks during Step 7 cross-review gate alongside PR body draft.
+
+The `harvest-decide` skill (`/ship-flow:harvest-decide`) reads these blocks via section markers and records one outcome per candidate to `docs/ship-flow/success-mode-ledger.yaml`; PR body retrospective gets compact mirror lines (single line per candidate) for human visibility.
 
 ### Step 5 — Token summary
 
@@ -288,6 +341,31 @@ Use grep-friendly `key: value` lines:
 - `canonical_docs_skipped_count:` canonical docs skipped with rationale
 - `pr_number:` PR number or `not-created`
 
+**Success-mode harvest gate** (BLOCKER / WARN per Step 4.5 schema):
+
+**Forward-only exemption check (run FIRST, before BLOCKER/WARN).** The harvest gate applies forward-only — entities created before the gate shipped (pre-0.7.0) carry no harvest blocks and MUST NOT be retroactively gated. This is enforced deterministically, not by prose. Run:
+
+```bash
+bash plugins/ship-flow/lib/check-harvest-exempt.sh <entity-folder>/index.md
+```
+
+- Exit 0 / prints `exempt` → the entity lacks `harvest_required: true` (a pre-gate entity) → **SKIP the BLOCKER and WARN checks entirely** for this review. Record `harvest_gate: exempt (forward-only)` in `## Review Report` and proceed to PR draft.
+- Exit 1 / prints `not-exempt` → the entity carries `harvest_required: true` (shaped under the gate regime; `shape-confirm.sh` stamps it at creation) → **apply the BLOCKER/WARN checks below.**
+
+New entities are stamped automatically by `shape-confirm.sh`; the exemption needs no manual marking and no per-repo migration. (Pass the entity's `index.md` path, not the entity id/slug.)
+
+BLOCKER on emit if (entity is `not-exempt`):
+- review.md missing `## What Worked` or `## What Almost Failed` section
+- Either section missing `Status:` field with one of {captured, none, deferred-to-debrief}
+- `Status: captured` with >3 candidates in `## What Worked` or >2 in `## What Almost Failed`
+- Any captured candidate missing one of Pattern / Trigger / Action / Evidence / Destination
+- Destination not one of {draft-memory, promote-to-<skill>.md, one-off}
+
+WARN on emit if:
+- `Status: none` reason <50 chars OR effort-anchored ("ran out of time") instead of reusability-anchored
+- Captured candidate Evidence is generic (no commit SHA / DC name / file:line / artifact description)
+- >2 captured candidates in `## What Worked` (3 is absolute max; >2 nudges toward synthesis)
+
 Return to /ship; advance to ship-final stage (PR creation + captain merge gate).
 
 **Frontmatter write scope — ONLY `token_actual`.** Do NOT write `status`, `completed`, `verdict`, `pr`, `worktree` — these are FO-owned at terminal transition or pr-merge mod's concern.
@@ -318,7 +396,7 @@ On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.m
 - Canonical docs update is dispatched to `planner` teammate — ship-review does NOT patch docs directly. Planner holds hot context; patches are mechanical + prose-sensitive for README.
 - patch-map.sh `--if-hash` read-first CAS is the only safe concurrent-write pattern for ARCHITECTURE / PRODUCT / ROADMAP. Exit 6 (stale) → re-read + retry, max 3.
 - README.md uses Edit tool (prose-heavy, no section tags typically); DO NOT patch-map.sh on README.
-- Explicit pathspec at commit-time on every doc commit (MEMORY #14/#25/#37). No `-a`/`-A`.
+- Explicit pathspec at commit-time on every doc commit (parallel-session staging defense). No `-a`/`-A`.
 - Do NOT push or `gh pr create` here — ship-final owns PR creation. Only draft PR body to review.md.
 - Frontmatter write scope strict: only `token_actual`.
 - Layer A delegation (`pr-review-toolkit:*`) owns PR review agent personas — re-teaching = Principle 6 Rule B violation.

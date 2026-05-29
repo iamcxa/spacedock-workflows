@@ -186,6 +186,7 @@ status: sharp
 pattern: pitch
 appetite: "${PITCH_APPETITE}"
 layout: folder
+harvest_required: true
 $([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
 ---
 
@@ -250,6 +251,7 @@ title: "${PITCH_TITLE}"
 status: sharp
 pattern: pitch
 appetite: "${PITCH_APPETITE}"
+harvest_required: true
 $([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
 ---
 
@@ -283,6 +285,7 @@ title: "${c_title}"
 status: sharp
 pattern: shaped-child
 parent_pitch: "${PITCH_ID}"
+harvest_required: true
 $([ "$LAYOUT" = "folder" ] && echo "layout: folder" || true)
 ---
 

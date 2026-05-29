@@ -179,6 +179,11 @@ Update entity frontmatter `size:` if changed.
 - Extract (1 source → N callers with refs): `extraction_net_loc ≈ -(source_loc × 0.55-0.70)` where source = summed preamble LOC across callers.
 - Picking: ≤50 LOC + one parent → fold. ≥100 LOC + N≥3 callers → extract. 50-100 LOC + N=2-3 → fold into most natural parent. Extraction adds 1 skill (Principle 2 cap check first).
 
+**Next.js standalone artifact size heuristic** (DC budgets on `ui-dist/` or `.next/standalone/`):
+- Measure `ui/.next/standalone/` SUBTREE, NOT full `ui/.next/`. Full `.next/server/` includes all compiled chunks + source maps (~40MB+); `.next/standalone/` contains only traced runtime deps + subset of maps.
+- Plan estimates based on full `ui/.next/` over-predict `.map` strip reduction by 4-10×.
+- Ground truth methodology: run target bundler locally, then `du -sh ui/.next/standalone/` + `find ui/.next/standalone -name "*.map" | wc -l` before locking size targets.
+
 ### Step 2.7 — Scope anchoring (M/L only)
 
 Every task maps to a spec `Scope In` bullet (if shape ran) OR a `Done Criteria` item. Produce task×mapping table. Unmapped task → drop or flag in `## Plan Report`. Do NOT silently expand scope.
@@ -281,7 +286,7 @@ generated artifacts, source grep, mockup files, or source-only diffs are
 artifact-only claims unless execute and verify can inspect the required runtime
 fields above.
 
-**UI entities MUST have ≥1 structural-parity DC** — grep DCs prove wiring, not rendering. Column/cell count parity / grid-template vs header count / prop-type assertion / class-name presence. MEMORY #048: all grep DCs passed while 3 CSS-grid / prop-mis-wire bugs shipped; captain cycle wasted. Budget one structural DC per UI entity.
+**UI entities MUST have ≥1 structural-parity DC** — grep DCs prove wiring, not rendering. Column/cell count parity / grid-template vs header count / prop-type assertion / class-name presence. Evidence: entity #048 cycle — all grep DCs passed while 3 CSS-grid / prop-mis-wire bugs shipped; captain cycle wasted. Budget one structural DC per UI entity.
 
 Note: `ui` type uses `-sfN` (Next.js 16 Turbopack SSR chunks — MEMORY #073). Backward-compatible.
 
@@ -348,7 +353,7 @@ Verdict: **PROCEED** / **VETO** (max 2 loops back to Step 3 with reviewer feedba
 
 ### Step 6 — Emit plan.md
 
-Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=plan --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive landed at commit `acd73545`). Primitive handles atomic commit with explicit pathspec (MEMORY #14/#25/#37).
+Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=plan --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive landed at commit `acd73545`). Primitive handles atomic commit with explicit pathspec.
 
 Plan.md sections: `## Research Summary` (findings + open questions if contradictions + reviewer verdict), `## Size Re-evaluation`, `## Verification Spec` (table from Step 3.5), `## Plan` (TDD tasks from Step 3), `## Plan Report` (status, stage_cost: dispatches×model, iterations, dimensions pass/fail, reviewer verdict, scope anchoring, task count, model split, started/completed/duration), `## Context Manifest` (mandatory — see Step 1.7 and dimension 11).
 
@@ -463,4 +468,4 @@ After this feature ships, re-read the `## Captain Bet` block in the entity body.
 - Utility: `ship-flow:ship-runtime-detect` (13-ecosystem runtime detection).
 - Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
-- MEMORY: #5 (--next-id atomicity), #14/#25/#37 (explicit pathspec / staging), #35 (dispatch discipline amended by Principle 6), #048 (UI structural-parity), #073 (Next.js 16 `-sfN`), opus-4.7-naturally-does (2026-04-23 harness diet).
+- MEMORY: #5 (--next-id atomicity), #14/#25 (explicit pathspec / staging), #35 (dispatch discipline amended by Principle 6), #073 (Next.js 16 `-sfN`), opus-4.7-naturally-does (2026-04-23 harness diet).

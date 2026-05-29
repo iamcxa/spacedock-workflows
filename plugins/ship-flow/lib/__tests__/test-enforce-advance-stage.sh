@@ -134,6 +134,59 @@ EOF
         git add docs/test-wf/flat-entity.md
         git commit -qm "$mutation_msg"
         ;;
+      bodytable)
+        # Folder entity with a stage-artifact-links BODY TABLE but NO
+        # stage_outputs frontmatter (the shape-confirm.sh format). advance-stage.sh
+        # / render-stage-links rebuild that table FROM stage_outputs, so on such
+        # an entity advance-stage.sh is DESTRUCTIVE — a manual status edit is the
+        # SAFE path and must be EXEMPT from the signature requirement (#117).
+        mkdir -p docs/test-wf/bodytable-entity
+        cat > docs/test-wf/bodytable-entity/index.md <<'EOF'
+---
+id: "bodytable-entity"
+title: "Body Table"
+status: sharp
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+        git add docs/test-wf/bodytable-entity/index.md
+        git commit -qm "baseline: add body-table entity"
+        sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/bodytable-entity/index.md
+        rm -f docs/test-wf/bodytable-entity/index.md.bak
+        git add docs/test-wf/bodytable-entity/index.md
+        git commit -qm "$mutation_msg"
+        ;;
+      stageoutputs)
+        # Folder entity WITH stage_outputs frontmatter — advance-stage.sh is safe
+        # here, so a manual status edit MUST still be flagged (narrow exemption).
+        mkdir -p docs/test-wf/stageoutputs-entity
+        cat > docs/test-wf/stageoutputs-entity/index.md <<'EOF'
+---
+id: "stageoutputs-entity"
+title: "Stage Outputs"
+status: sharp
+stage_outputs:
+  shape: shape.md
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+        git add docs/test-wf/stageoutputs-entity/index.md
+        git commit -qm "baseline: add stage_outputs entity"
+        sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/stageoutputs-entity/index.md
+        rm -f docs/test-wf/stageoutputs-entity/index.md.bak
+        git add docs/test-wf/stageoutputs-entity/index.md
+        git commit -qm "$mutation_msg"
+        ;;
     esac
   )
   echo "$dir"
@@ -191,6 +244,138 @@ echo
 echo "--- Case 7: BODY status line changes → PASS (not entity frontmatter) ---"
 TMP="$(setup_fixture "docs(flat-entity): update body status example" "flatbody" "edit")"
 assert_exit 0 "run_check_only '$TMP'" "Case-7 body status no false positive (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 8: BODY-TABLE entity (stage-artifact-links table, no stage_outputs) manual status edit → PASS (exempt; advance-stage destructive here) [#117] ---"
+TMP="$(setup_fixture "execute(bodytable-entity): correct status to plan" "bodytable" "edit")"
+assert_exit 0 "run_check_only '$TMP'" "Case-8 body-table manual edit exempt (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 9: STAGE_OUTPUTS entity manual status edit (no signature) → FAIL (advance-stage safe; exemption is narrow) [#117] ---"
+TMP="$(setup_fixture "manual hand-edit status to plan" "stageoutputs" "edit")"
+assert_exit 1 "run_check_only '$TMP'" "Case-9 stage_outputs manual edit still flagged (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 10 (BLOCKING repro): ONE commit mutating status: on TWO entities — one exempt bodytable (sorts first), one non-exempt stageoutputs — NO signature → FAIL ---"
+# Build a fixture where a SINGLE commit mutates both:
+#   aaa-bodytable: has body table, NO stage_outputs  (exempt)
+#   zzz-stageoutputs: has body table AND stage_outputs  (NOT exempt)
+# The commit carries NO advance-stage signature.
+# On current code (break after first match → aaa-bodytable, applies single exemption, continues)
+# the check silently PASSES. Correct behaviour: check ALL paths → zzz-stageoutputs is not exempt → FAIL.
+TMP="$(mktemp -d)"
+(
+  cd "$TMP" || exit 1
+  git init -q -b main
+  git config user.email test@test
+  git config user.name test
+
+  # Create both entities on main so parent commit exists for ${sha}^
+  mkdir -p docs/test-wf/aaa-bodytable
+  cat > docs/test-wf/aaa-bodytable/index.md <<'EOF'
+---
+id: "aaa-bodytable"
+title: "Body Table Only"
+status: sharp
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+  mkdir -p docs/test-wf/zzz-stageoutputs
+  cat > docs/test-wf/zzz-stageoutputs/index.md <<'EOF'
+---
+id: "zzz-stageoutputs"
+title: "Has Stage Outputs"
+status: sharp
+stage_outputs:
+  shape: shape.md
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+  git add docs/test-wf/aaa-bodytable/index.md docs/test-wf/zzz-stageoutputs/index.md
+  git commit -qm "baseline: two entities"
+
+  git checkout -q -b feature
+
+  # Mutate BOTH statuses in a single commit, NO signature
+  sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/aaa-bodytable/index.md
+  rm -f docs/test-wf/aaa-bodytable/index.md.bak
+  sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/zzz-stageoutputs/index.md
+  rm -f docs/test-wf/zzz-stageoutputs/index.md.bak
+  git add docs/test-wf/aaa-bodytable/index.md docs/test-wf/zzz-stageoutputs/index.md
+  git commit -qm "manual: edit two entity statuses (no signature)"
+  git update-ref refs/remotes/origin/main "$(git rev-parse main)"
+)
+assert_exit 1 "run_check_only '$TMP'" "Case-10 two-entity commit: non-exempt path leaks through (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 11 (after-state repro): commit strips stage_outputs AND bumps status, NO signature → FAIL ---"
+# Build a fixture where the test commit BOTH removes the stage_outputs: block
+# AND mutates status: — without a signature.
+# On current code _entity_bodytable_no_stage_outputs reads after-state ($sha)
+# and sees no stage_outputs → treats as exempt → PASSES. Correct behaviour:
+# read parent ($sha^) which HAS stage_outputs → not exempt → FAIL.
+TMP="$(mktemp -d)"
+(
+  cd "$TMP" || exit 1
+  git init -q -b main
+  git config user.email test@test
+  git config user.name test
+
+  # Baseline entity WITH stage_outputs (advance-stage safe → signature required)
+  mkdir -p docs/test-wf/strip-entity
+  cat > docs/test-wf/strip-entity/index.md <<'EOF'
+---
+id: "strip-entity"
+title: "Strip Stage Outputs"
+status: sharp
+stage_outputs:
+  shape: shape.md
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+  git add docs/test-wf/strip-entity/index.md
+  git commit -qm "baseline: entity with stage_outputs"
+
+  git checkout -q -b feature
+
+  # Single commit: strip stage_outputs block AND advance status — no signature
+  cat > docs/test-wf/strip-entity/index.md <<'EOF'
+---
+id: "strip-entity"
+title: "Strip Stage Outputs"
+status: plan
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+  git add docs/test-wf/strip-entity/index.md
+  git commit -qm "manual: strip stage_outputs and bump status (no signature)"
+  git update-ref refs/remotes/origin/main "$(git rev-parse main)"
+)
+assert_exit 1 "run_check_only '$TMP'" "Case-11 strip-stage_outputs after-state bypass: correctly flagged (exit 1)"
 rm -rf "$TMP"
 
 echo

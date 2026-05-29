@@ -331,7 +331,7 @@ git add "<entity-folder>/<stage>.md" && \
 git commit -m "<stage>(<id>): ..." -- "<entity-folder>/<stage>.md"
 ```
 
-No `-a`/`-A` staging (MEMORY #14/#25/#37). Sharp-claim → pipeline-start commit is NOT atomically required; only `--next-id` → sharp-claim commit is one uninterrupted pair (MEMORY #5).
+No `-a`/`-A` staging (parallel-session staging defense). Sharp-claim → pipeline-start commit is NOT atomically required; only `--next-id` → sharp-claim commit is one uninterrupted pair (MEMORY #5).
 
 ---
 
@@ -346,7 +346,7 @@ No `-a`/`-A` staging (MEMORY #14/#25/#37). Sharp-claim → pipeline-start commit
 - Entity-id unresolved → EXIT with `entity not found` hint.
 - Within-pitch stage transition via fresh-subagent without (a/b/c/d) exception → Principle 6 Rule A violation.
 - TaskCreate umbrella at THIS skill; each stage skill owns its sub-task list (do not duplicate).
-- Explicit pathspec on every commit (MEMORY #14/#25/#37): `git add <path> && git commit ... -- <path>`.
+- Explicit pathspec on every commit (parallel-session staging defense): `git add <path> && git commit ... -- <path>`.
 - **Worktree-first** (MEMORY #25): at pipeline entry (Step 1 pre-check), `git rev-parse --absolute-git-dir` MUST resolve under `.claude/worktrees/`. On main tip → HALT, prompt captain to spawn worktree (`EnterWorktree` tool) before dispatching any teammate. Stage-artifact commits on main tip contaminate with parallel-session staging per MEMORY #25; worktree isolates completely.
 - No auto-merge. Captain owns merge decision after PR created in ship-final.
 
