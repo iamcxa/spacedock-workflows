@@ -1359,15 +1359,15 @@ check_entity_status_via_advance_stage_only() {
     # Body-level `status:` examples are ignored; pure additions have no parent
     # frontmatter status and are exempt.
     local has_status_mutation=0
-    local path before_status after_status mutated_path=""
+    local path before_status after_status
+    local mutated_paths=()
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       before_status="$(_frontmatter_status_at_rev_path "${sha}^" "$path")"
       after_status="$(_frontmatter_status_at_rev_path "$sha" "$path")"
       if [ -n "$before_status" ] && [ -n "$after_status" ] && [ "$before_status" != "$after_status" ]; then
         has_status_mutation=1
-        mutated_path="$path"
-        break
+        mutated_paths+=("$path")
       fi
     done < <(git diff-tree --no-commit-id --name-only -r "$sha" -- "${entity_status_paths[@]}" 2>/dev/null || true)
 
@@ -1380,9 +1380,23 @@ check_entity_status_via_advance_stage_only() {
     # and no stage_outputs frontmatter; advance-stage.sh is destructive on them,
     # so a manual status edit is the SAFE path and is exempt. The signature
     # requirement still applies once the entity carries stage_outputs.
-    if _entity_bodytable_no_stage_outputs "$sha" "$mutated_path"; then
-      continue
-    fi
+    #
+    # FIX 1 (per-path): check ALL mutated paths — only skip the commit when
+    # EVERY mutated path is exempt.  A single non-exempt path falls through to
+    # the signature check, preventing the break-and-single-representative bypass.
+    #
+    # FIX 2 (parent-state): pass ${sha}^ (parent) so the helper sees the entity
+    # BEFORE the commit.  A commit that BOTH strips stage_outputs AND bumps
+    # status must NOT be read as exempt just because the after-state lacks
+    # stage_outputs.
+    local all_exempt=1 mp
+    for mp in "${mutated_paths[@]}"; do
+      if ! _entity_bodytable_no_stage_outputs "${sha}^" "$mp"; then
+        all_exempt=0
+        break
+      fi
+    done
+    [ "$all_exempt" = "1" ] && continue
 
     # Check commit message for advance-stage.sh signature.
     local msg
