@@ -343,7 +343,18 @@ Use grep-friendly `key: value` lines:
 
 **Success-mode harvest gate** (BLOCKER / WARN per Step 4.5 schema):
 
-BLOCKER on emit if:
+**Forward-only exemption check (run FIRST, before BLOCKER/WARN).** The harvest gate applies forward-only — entities created before the gate shipped (pre-0.7.0) carry no harvest blocks and MUST NOT be retroactively gated. This is enforced deterministically, not by prose. Run:
+
+```bash
+bash plugins/ship-flow/lib/check-harvest-exempt.sh <entity-folder>/index.md
+```
+
+- Exit 0 / prints `exempt` → the entity lacks `harvest_required: true` (a pre-gate entity) → **SKIP the BLOCKER and WARN checks entirely** for this review. Record `harvest_gate: exempt (forward-only)` in `## Review Report` and proceed to PR draft.
+- Exit 1 / prints `not-exempt` → the entity carries `harvest_required: true` (shaped under the gate regime; `shape-confirm.sh` stamps it at creation) → **apply the BLOCKER/WARN checks below.**
+
+New entities are stamped automatically by `shape-confirm.sh`; the exemption needs no manual marking and no per-repo migration. (Pass the entity's `index.md` path, not the entity id/slug.)
+
+BLOCKER on emit if (entity is `not-exempt`):
 - review.md missing `## What Worked` or `## What Almost Failed` section
 - Either section missing `Status:` field with one of {captured, none, deferred-to-debrief}
 - `Status: captured` with >3 candidates in `## What Worked` or >2 in `## What Almost Failed`
