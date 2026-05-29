@@ -155,6 +155,30 @@ check "harvest_required: false entity is treated as exempt" \
 check "harvest_required: false exits 0" \
   "bash '${HELPER}' '${OPTED_OUT_ENTITY}'"
 
+# --- CRLF fixture: Windows-style line endings must NOT be treated as exempt ---
+# A CRLF file whose first line is "---\r" fails the byte-exact "---" comparison,
+# causing the parser to hit the "no frontmatter → exempt" branch even when
+# harvest_required: true is present.  This is fail-OPEN — the worst direction.
+# Fix: strip trailing \r immediately after read.
+
+CRLF_FLAGGED_ENTITY="${TMP_DIR}/crlf-flagged-index.md"
+printf -- '---\r\nid: "crlf-entity"\r\ntitle: "CRLF Entity"\r\nstatus: review\r\nharvest_required: true\r\n---\r\n\r\n## Body\r\n\r\nSome content\r\n' > "$CRLF_FLAGGED_ENTITY"
+
+CRLF_UNFLAGGED_ENTITY="${TMP_DIR}/crlf-unflagged-index.md"
+printf -- '---\r\nid: "crlf-unflagged"\r\ntitle: "CRLF No Flag"\r\nstatus: review\r\n---\r\n\r\n## Body\r\n\r\nSome content\r\n' > "$CRLF_UNFLAGGED_ENTITY"
+
+check_not "CRLF flagged entity exits non-zero (CRLF fail-OPEN bug repro)" \
+  "bash '${HELPER}' '${CRLF_FLAGGED_ENTITY}'"
+
+check "CRLF flagged entity prints 'not-exempt'" \
+  "bash '${HELPER}' '${CRLF_FLAGGED_ENTITY}' > '${TMP_DIR}/crlf-flagged.out' 2>&1; grep -q '^not-exempt$' '${TMP_DIR}/crlf-flagged.out'"
+
+check "CRLF unflagged entity is exempt (LF control passing)" \
+  "bash '${HELPER}' '${CRLF_UNFLAGGED_ENTITY}' | grep -q '^exempt$'"
+
+check "CRLF unflagged entity exits 0" \
+  "bash '${HELPER}' '${CRLF_UNFLAGGED_ENTITY}'"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 

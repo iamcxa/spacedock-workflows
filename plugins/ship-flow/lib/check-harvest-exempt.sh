@@ -36,6 +36,11 @@ frontmatter_done=0
 found_harvest_required_true=0
 
 while IFS= read -r line; do
+  # Strip trailing CR so CRLF files (\r\n) are parsed identically to LF files.
+  # Without this, "---\r" != "---" and the frontmatter delimiter is missed,
+  # causing a harvest_required:true CRLF entity to be treated as exempt (fail-OPEN).
+  line="${line%$'\r'}"
+
   if [ "$frontmatter_done" -eq 1 ]; then
     break
   fi
