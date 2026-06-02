@@ -21,7 +21,10 @@
 #   --layers : one line per wave, space-joined ids, sorted within the wave.
 #   --ready  : one line, space-joined sorted ready ids (empty line if none).
 #
-# Exit: 0 ok · 2 cycle · 3 depends-on closure violation (unknown ref) · 1 usage.
+# Exit: 0 ok · 2 cycle · 3 depends-on closure violation (unknown ref) · 4 duplicate
+#       id (corpus id collision) · 1 usage. Codes 2/3/4 fail CLOSED — a structurally
+#       broken epic is refused, never silently mis-ordered. Accepts both `depends-on`
+#       (hyphen) and `depends_on` (underscore) keys; canonical write form is a list.
 # Portable: POSIX awk only (no gawk asort / no bash assoc arrays). "done" is the
 # terminal status per docs/ship-flow/README.md.
 set -u
@@ -54,10 +57,21 @@ emit_from_workflow() {
       /^id:/                { v=$0; sub(/^id:[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); id=v; next }
       /^status:/            { v=$0; sub(/^status:[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); st=v; next }
       /^(parent_pitch|parent):/ { v=$0; sub(/^[a-z_]+:[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); parent=v; next }
-      # inline-flow depends-on: ["a","b"]
-      /^depends-on:[[:space:]]*\[/ { v=$0; sub(/^depends-on:[[:space:]]*\[/,"",v); sub(/\].*$/,"",v); gsub(/["'\'' ]/,"",v); deps=v; next }
-      # block depends-on: \n  - a \n  - b
-      /^depends-on:[[:space:]]*$/  { indep=1; next }
+      # depends key: accept BOTH depends-on (hyphen) AND depends_on (underscore) —
+      # the real entity corpus mixes them (e.g. 117.x underscore, 118.2 hyphen).
+      # inline-flow: depends[-_]on: ["a","b"]
+      /^depends[-_]on:[[:space:]]*\[/ { v=$0; sub(/^depends[-_]on:[[:space:]]*\[/,"",v); sub(/\].*$/,"",v); gsub(/["'\'' ]/,"",v); deps=v; next }
+      # block: depends[-_]on: \n  - a \n  - b
+      /^depends[-_]on:[[:space:]]*$/  { indep=1; next }
+      # scalar value (not list): `none`/`[]`/`null`/`~` → no deps. Any other scalar
+      # (e.g. legacy prose `depends_on: 117.1 (note)`) is unparseable — capture it raw
+      # so the closure check fails CLOSED (exit 3) instead of silently treating it as
+      # dependency-free. Canonical form is a list: depends-on: ["id", ...].
+      /^depends[-_]on:[[:space:]]*[^[:space:]]/ {
+        v=$0; sub(/^depends[-_]on:[[:space:]]*/,"",v); sub(/[[:space:]]*$/,"",v)
+        if (v=="none" || v=="[]" || v=="null" || v=="~") { deps=""; next }
+        gsub(/["'\'' ]/,"",v); deps=v; next
+      }
       indep==1 && /^[[:space:]]*-[[:space:]]*/ { v=$0; sub(/^[[:space:]]*-[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); deps=(deps=="")?v:(deps","v); next }
       indep==1 { indep=0 }
       END {
@@ -82,9 +96,16 @@ printf '%s' "$TSV" | awk -v mode="$MODE" '
   }
   {
     if ($1=="") next
-    id=$1; ids[++N]=id; EXISTS[id]=1; ST[id]=$2; DEPS[id]=$3
+    id=$1
+    # fail closed on id collision (e.g. a corpus where a folder entity and a flat
+    # entity both claim the same id) rather than silently emitting duplicates /
+    # mis-ordering. Instantiate allocates unique dotted ids, so this never fires
+    # on intake output — it guards running on a pre-existing messy corpus.
+    if (id in EXISTS){ printf "dag-waves: duplicate id %s (id collision in the child set)\n", id > "/dev/stderr"; DUP=1; exit }
+    ids[++N]=id; EXISTS[id]=1; ST[id]=$2; DEPS[id]=$3
   }
   END {
+    if (DUP) exit 4
     # closure: every referenced dep must be a known child
     for (i=1;i<=N;i++){ id=ids[i]
       m=split(DEPS[id], d, ","); for (k=1;k<=m;k++){ if(d[k]=="") continue

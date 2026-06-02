@@ -96,6 +96,69 @@ assert_out "adapter-ready" "118.1" "" --ready --from-workflow "$FX" --epic 118
 assert_out "adapter-layers" "$(printf '118.1\n118.2')" "" --layers --from-workflow "$FX" --epic 118
 rm -rf "$FX"
 
+echo "--- DC-11: adapter accepts BOTH depends-on (hyphen) AND depends_on (underscore) — corpus mixes them ---"
+FX2="$(mktemp -d)"
+mkdir -p "$FX2/e-epic" "$FX2/e.1-core" "$FX2/e.2-under" "$FX2/e.3-block"
+cat > "$FX2/e-epic/index.md" <<'EOF'
+---
+id: "e"
+status: epic
+parent_pitch: ""
+---
+EOF
+cat > "$FX2/e.1-core/index.md" <<'EOF'
+---
+id: "e.1"
+status: plan
+parent_pitch: "e"
+---
+EOF
+cat > "$FX2/e.2-under/index.md" <<'EOF'
+---
+id: "e.2"
+status: plan
+parent_pitch: "e"
+depends_on: ["e.1"]
+---
+EOF
+cat > "$FX2/e.3-block/index.md" <<'EOF'
+---
+id: "e.3"
+status: plan
+parent_pitch: "e"
+depends_on:
+  - "e.1"
+  - "e.2"
+---
+EOF
+# e.2 (underscore inline) depends e.1; e.3 (underscore block) depends e.1+e.2.
+# Wave1 ready = e.1 only (e.2/e.3 must be HELD — proves underscore parsed).
+assert_out "adapter-ready-underscore" "e.1" "" --ready --from-workflow "$FX2" --epic e
+assert_out "adapter-layers-underscore" "$(printf 'e.1\ne.2\ne.3')" "" --layers --from-workflow "$FX2" --epic e
+rm -rf "$FX2"
+
+echo "--- DC-12: scalar 'none' depends → treated as no-deps (benign) ---"
+FX3="$(mktemp -d)"
+mkdir -p "$FX3/n-epic" "$FX3/n.1-a" "$FX3/n.2-b"
+printf -- '---\nid: "n"\nstatus: epic\nparent_pitch: ""\n---\n' > "$FX3/n-epic/index.md"
+printf -- '---\nid: "n.1"\nstatus: plan\nparent_pitch: "n"\ndepends_on: none\n---\n' > "$FX3/n.1-a/index.md"
+printf -- '---\nid: "n.2"\nstatus: plan\nparent_pitch: "n"\ndepends-on: []\n---\n' > "$FX3/n.2-b/index.md"
+assert_out "scalar-none-noop" "n.1 n.2" "" --ready --from-workflow "$FX3" --epic n
+rm -rf "$FX3"
+
+echo "--- DC-13: unparseable prose depends → FAIL CLOSED (closure exit 3), not silent no-deps ---"
+FX4="$(mktemp -d)"
+mkdir -p "$FX4/p-epic" "$FX4/p.1-a" "$FX4/p.2-b"
+printf -- '---\nid: "p"\nstatus: epic\nparent_pitch: ""\n---\n' > "$FX4/p-epic/index.md"
+printf -- '---\nid: "p.1"\nstatus: plan\nparent_pitch: "p"\n---\n' > "$FX4/p.1-a/index.md"
+printf -- '---\nid: "p.2"\nstatus: plan\nparent_pitch: "p"\ndepends_on: p.1 (mechanism-sanity)\n---\n' > "$FX4/p.2-b/index.md"
+assert_exit "prose-fail-closed" 3 "" --layers --from-workflow "$FX4" --epic p
+rm -rf "$FX4"
+
+echo "--- DC-14: duplicate id (corpus collision) → FAIL CLOSED (exit 4), not silent dup output ---"
+DUP_IN="$(printf '108.1\tship\t\n108.1\tplan\t\n108.2\tplan\t108.1\n')"
+assert_exit "dup-id-fail-closed" 4 "$DUP_IN" --layers --stdin
+
 echo
 if [ "$FAIL" = 0 ]; then echo "ALL PASS"; else echo "SOME FAILED"; fi
 exit "$FAIL"
