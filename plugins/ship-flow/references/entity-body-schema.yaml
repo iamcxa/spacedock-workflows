@@ -40,6 +40,7 @@ frontmatter:
     tracker: { type: enum, values: [gh, linear], default: gh }
     issue: { type: string, example: '"#42"' }
     external_id: { type: string, example: '"PROJ-123"' }
+    external_project: { type: string, example: '"linear:team/Project Name"', description: "Tracker project ref carried by an epic parent (pitch 118 project-intake). Convention: epic binds the project, each child binds an issue via external_id — 1:1 child→issue traceability + dedup-safety across entities. Set by the ship-project instantiate helper on the epic only." }
     pr: { type: string }
     token_budget: { type: number, unit: USD }
     token_actual: { type: number, unit: USD, description: "Accumulated by FO across stages" }

@@ -69,6 +69,13 @@ check "hand_off_to_ship block present" \
 check "at least 6 hand_off_to definitions total" \
   "[ \$(grep -c 'hand_off_to_' \"$SCHEMA_PATH\" || echo 0) -ge 6 ]"
 
+# --- Assert external_project field (pitch 118: epic carries the tracker project ref) ---
+check "external_project field present (epic project binding)" \
+  "grep -q 'external_project:' \"$SCHEMA_PATH\""
+
+check "external_project typed string" \
+  "grep -E 'external_project: \{ type: string' \"$SCHEMA_PATH\""
+
 check "reviewer_output_matrix file_line documents nullable contract for non-findings invalid context and degraded rows" \
   "grep -q 'file_line: \"<path:line|null>\"' \"$SCHEMA_PATH\" && grep -q 'file_line_nullable_for.*NO_FINDINGS.*INVALID_CONTEXT.*DEGRADED' \"$SCHEMA_PATH\""
 
