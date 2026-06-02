@@ -118,15 +118,17 @@ Relay to the captain: the allocated **epic id**, the committed children, the pri
 Do NOT continue into plan/execute/PR in this session — that burns the intake session's
 context and the clean-session boundary is deliberate.
 
-## OCD-2 — tracker→child mapping (v1 decision, flag at review)
+## OCD-2 — tracker→child mapping (captain-confirmed 2026-06-02: Option 1)
 
 - **Dependency edges** come from structured `blocked_by` / `blocks` only — the canonical
   Linear dependency relation. `blocked_by` ⟹ `depends_on`; `blocks` ⟹ inverse edge.
-- **Sub-issue `parentId` is NOT a dependency edge in v1.** Parent/child is hierarchy,
-  not execution order; mapping it risks wrong ordering. Under-claiming an edge (two
-  things run in parallel) is recoverable; a wrong edge mis-orders the pipeline. This is
-  the conservative call — **surface it to the captain at review**; if a project's
-  sub-issue structure should drive ordering, that is the OCD-2 decision to revisit.
+- **Sub-issue `parentId` is NOT a dependency edge.** Parent/child is hierarchy, not
+  execution order; mapping it risks wrong ordering. Under-claiming an edge (two things
+  run in parallel) is recoverable; a wrong edge mis-orders the pipeline. Captain-confirmed
+  conservative call (2026-06-02). **Revisit trigger**: a project whose sub-issue hierarchy
+  genuinely drives execution order and is repeatedly mis-ordered by `blocked_by` alone —
+  then reopen OCD-2 (likely "parent depends_on its sub-issues", accepting the empty-shell
+  parent-entity cost, or the nested-epic axis filed as the `automatic-coupling-inference` rabbit hole).
 - **Filter vocabulary**: drop `state_type` completed/canceled (Done/Canceled/Duplicate);
   `label:Bug` → excluded + reported (debug fast-path); existing-`external_id` → deduped.
 

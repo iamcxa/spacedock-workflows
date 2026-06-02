@@ -33,10 +33,10 @@
 #                      (idempotent re-intake; the 118.1 validator is the fail-closed safety net)
 #   - DAG edges      — blocked_by + blocks(inverse) → depends_on, FILTERED to surviving
 #                      children only (closure-safe; dangling edges dropped + reported)
-#   - parent (sub-issue) — NOT a depends_on edge in v1. Hierarchy ≠ execution order;
-#                      mapping it risks wrong ordering. Recorded as a future axis;
-#                      blocked_by/blocks is the canonical dependency signal. (Flagged
-#                      OCD-2 captain decision — see ship-project/SKILL.md.)
+#   - parent (sub-issue) — NOT a depends_on edge. Hierarchy ≠ execution order;
+#                      mapping it risks wrong ordering. blocked_by/blocks is the canonical
+#                      dependency signal. (OCD-2 captain-confirmed 2026-06-02, Option 1 —
+#                      see ship-project/SKILL.md for the revisit trigger.)
 #
 # Usage: issues-to-contract.sh <issues.json> [--workflow-dir <dir>] [--out <contract.yaml>]
 # Exit:  0 success · 1 usage / no intakeable issues after filter · 2 file not found
