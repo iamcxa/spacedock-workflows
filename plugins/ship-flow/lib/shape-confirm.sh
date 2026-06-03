@@ -114,6 +114,12 @@ if [ "$LAYOUT" = "folder" ]; then
   fi
 fi
 
+# --workflow-dir must stay inside the repo: reject absolute paths and any `..`
+# segment so it cannot redirect writes outside the workflow tree.
+case "$WORKFLOW_DIR_ARG" in
+  "")      ;;
+  /*|*..*) echo "Error: --workflow-dir must be a repo-relative path without '..': $WORKFLOW_DIR_ARG" >&2; exit 1 ;;
+esac
 ENTITY_DIR="${WORKFLOW_DIR_ARG:-docs/ship-flow}"
 TODO_DIR="${ENTITY_DIR}/todos"
 

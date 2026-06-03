@@ -107,7 +107,28 @@ fi
 n2="$( cd "$REPO" && allocate_id docs/wf )"
 check_eq "allocate_id: reservation prevents collision (120 reserved, not yet materialized) → 121" "$n2" "121"
 
-rm -rf "$TMP_SCAN" "$TMP_EMPTY" "$TMP_DOT" "$RES" "$RES2" "$BASE" 2>/dev/null
+# ---------------------------------------------------------------------------
+# Integration: dead-holder lock reclaim — a stale lock whose recorded holder PID
+# is dead must be reclaimed (not block, not steal a live lock). Guards the P1 fix.
+# ---------------------------------------------------------------------------
+BASE2="$(mktemp -d)"
+REPO2="$BASE2/repo"
+mkdir -p "$REPO2"
+(
+  cd "$REPO2" || exit 1
+  git init -q; git config user.email t@t; git config user.name t
+  mkdir -p docs/wf/050-x
+  : > docs/wf/050-x/index.md
+  git add -A; git commit -qm init
+) || die "dead-holder fixture setup failed"
+COMMON2="$( cd "$REPO2" && cd "$(git rev-parse --git-common-dir)" && pwd )"
+deadpid="$(bash -c 'echo $$')"   # a PID that has already exited (dead)
+mkdir -p "$COMMON2/ship-flow-id.lock"
+echo "$deadpid" > "$COMMON2/ship-flow-id.lock/pid"
+n3="$( cd "$REPO2" && allocate_id docs/wf )"
+check_eq "allocate_id: reclaims a lock held by a dead PID → 51" "$n3" "51"
+
+rm -rf "$TMP_SCAN" "$TMP_EMPTY" "$TMP_DOT" "$RES" "$RES2" "$BASE" "$BASE2" 2>/dev/null
 if [ $fail -eq 0 ]; then
   echo "ALL PASS: test-allocate-id"
 else

@@ -21,7 +21,9 @@
 # Testability: pure functions are source-able (guarded main does not run on
 # source). No test-only env hooks — the seam is functions + on-disk fixtures +
 # real git worktrees (see lib/__tests__/test-allocate-id.sh).
-set -euo pipefail
+#
+# `set -euo pipefail` is enabled inside main() (when executed), NOT at top level,
+# so sourcing this library does not mutate the caller's shell options.
 
 # collect_prefixes <dir>... — space-separated, sorted-unique top-level integer
 # prefixes across the given workflow dirs. Scans each dir's immediate children
@@ -103,6 +105,31 @@ worktree_workflow_dirs() {
   done
 }
 
+# acquire_lock <lockdir> — portable mkdir lock with dead-holder reclaim.
+# Records the holder PID in <lockdir>/pid. NEVER steals a LIVE lock: it reclaims
+# only when the recorded holder PID is provably dead (handles a crashed/Ctrl-C'd
+# allocation), and against a live/unknown holder it gives up after a bounded wait
+# (returns 3) rather than steal — so two allocations can never both proceed and
+# collide. mkdir atomicity decides the winner if two processes reclaim at once.
+acquire_lock() {
+  local lock="$1" waited=0 holder
+  while ! mkdir "$lock" 2>/dev/null; do
+    holder="$(cat "$lock/pid" 2>/dev/null || true)"
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+      rm -rf "$lock" 2>/dev/null || true     # holder dead → stale → reclaim, retry mkdir
+      continue
+    fi
+    sleep 0.2
+    waited=$(( waited + 1 ))
+    if [ "$waited" -gt 150 ]; then           # ~30s vs a live/unknown holder → do NOT steal
+      echo "ERROR: id-allocation lock busy ($lock); holder pid=${holder:-unknown}. If stale: rm -rf '$lock'" >&2
+      return 3
+    fi
+  done
+  echo "$$" > "$lock/pid" 2>/dev/null || true
+  return 0
+}
+
 # allocate_id <workflow-dir> — atomic, worktree-aware, reservation-based.
 # Echoes the next top-level number.
 allocate_id() {
@@ -120,18 +147,13 @@ allocate_id() {
   lock="$common/ship-flow-id.lock"
   res="$common/ship-flow-id-reservations"
 
-  # Portable atomic lock via mkdir (no flock dependency; macOS-safe). Serializes
-  # concurrent allocations so the read-compute-reserve sequence is uninterrupted.
-  local waited=0
-  while ! mkdir "$lock" 2>/dev/null; do
-    sleep 0.1
-    waited=$(( waited + 1 ))
-    if [ "$waited" -gt 100 ]; then          # ~10s → assume stale lock, take over
-      rm -rf "$lock"
-      mkdir "$lock" 2>/dev/null || true
-      break
-    fi
-  done
+  # Serialize concurrent allocations so the read-compute-reserve sequence is
+  # uninterrupted. Released explicitly after the reservation is written; if the
+  # process aborts mid-section (set -e under main → process exit), the lock is
+  # left behind but its holder PID is now dead, so the NEXT allocation reclaims
+  # it via acquire_lock's dead-holder check (no trap needed — a global RETURN
+  # trap would re-fire on every later function return with $lock out of scope).
+  acquire_lock "$lock" || return 3
 
   local dirs=() d max_existing materialized now max_res next
   while IFS= read -r d; do [ -n "$d" ] && dirs+=("$d"); done < <(worktree_workflow_dirs "$rel")
@@ -144,12 +166,12 @@ allocate_id() {
   max_res="$(reservations_max "$res")"
   next="$(compute_next "$max_existing" "$max_res")"
   printf '%s %s %s\n' "$next" "$now" "$$" >> "$res"
-
-  rmdir "$lock" 2>/dev/null || rm -rf "$lock" 2>/dev/null || true
+  rm -rf "$lock" 2>/dev/null || true   # release
   echo "$next"
 }
 
 main() {
+  set -euo pipefail
   local wf="${1:-}"
   if [ -z "$wf" ]; then
     echo "Usage: allocate-id.sh <workflow-dir>" >&2
