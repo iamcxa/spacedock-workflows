@@ -213,7 +213,7 @@ After `review.md` cross-review PROCEED:
          --if-hash="$H" \
          --commit-as="ship(<id>): advance status to ship"
 
-   Note: `ship→done` flip on PR-merge is **out of scope** for this step — covered by existing `commission/bin/status --set ... status=done` in inline-on-main path; `warn-state-drift` Rule A flags drift if missed.
+   Note: `ship→done` flip on PR-merge is **out of scope** for this step — covered by the existing `spacedock status --set ... status=done` call in the inline-on-main path; `warn-state-drift` Rule A flags drift if missed.
 
    On exit 6 (stale hash): write `## Ship Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 

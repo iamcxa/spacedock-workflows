@@ -49,20 +49,22 @@ if [ -z "$workflow_dir" ]; then
   exit 2
 fi
 
+# --spacedock-plugin-dir is a deprecated no-op (parsed for backward compat
+# with callers/tests that still pass it). The packaged python
+# commission/bin/status was removed in spacedock 0.19.4; the status helper is
+# now the `spacedock` Go binary on PATH, invoked as `spacedock status <args>`.
+: "${spacedock_plugin_dir:=}"  # referenced so set -u / shellcheck stay happy
+
 local_status="$workflow_dir/status"
 if [ -x "$local_status" ]; then
   argv=("$local_status" "${status_args[@]}")
 else
-  if [ -z "$spacedock_plugin_dir" ]; then
-    script_dir="$(cd "$(dirname "$0")" && pwd)"
-    spacedock_plugin_dir="$(cd "$script_dir/../../spacedock" 2>/dev/null && pwd || true)"
-  fi
-  packaged_status="$spacedock_plugin_dir/skills/commission/bin/status"
-  if [ ! -f "$packaged_status" ]; then
-    echo "ERROR: no workflow status helper and packaged status not found: $packaged_status" >&2
+  status_bin="${SHIP_FLOW_STATUS_BIN:-spacedock}"
+  if ! command -v "$status_bin" >/dev/null 2>&1; then
+    echo "ERROR: no workflow status helper and \`$status_bin\` not found on PATH" >&2
     exit 1
   fi
-  argv=("python3" "$packaged_status" "--workflow-dir" "$workflow_dir" "${status_args[@]}")
+  argv=("$status_bin" "status" "--workflow-dir" "$workflow_dir" "${status_args[@]}")
 fi
 
 if [ "$print0" = true ]; then

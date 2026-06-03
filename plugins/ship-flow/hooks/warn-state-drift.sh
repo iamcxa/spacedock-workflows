@@ -70,18 +70,15 @@ if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
 fi
 
 # --- 1d. Locate spacedock status binary (needed for auto-fix) -------------
-# Same discovery path as commission/bin/status — try plugin cache first.
+# The status helper is the `spacedock` Go binary on PATH, invoked as
+# `spacedock status <args>`. SHIP_FLOW_STATUS_BIN overrides for tests.
 status_bin=""
 if [ "$auto_fix" = "execute" ]; then
   if [ -n "${SHIP_FLOW_STATUS_BIN:-}" ] && [ -x "$SHIP_FLOW_STATUS_BIN" ]; then
     status_bin="$SHIP_FLOW_STATUS_BIN"
+  else
+    status_bin="$(command -v spacedock 2>/dev/null || true)"
   fi
-  for candidate in \
-      "$HOME"/.claude/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status \
-      "$HOME"/.codex/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status; do
-    [ -n "$status_bin" ] && break
-    [ -x "$candidate" ] && status_bin="$candidate" && break
-  done
 fi
 
 # Stage order (for Rule B later-stage detection)
@@ -208,7 +205,7 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
   if [ "$git_clean" = "0" ]; then
     auto_fix_reason="working tree has uncommitted changes"
   elif [ -z "$status_bin" ]; then
-    auto_fix_reason="spacedock status binary not found in expected paths"
+    auto_fix_reason="spacedock status binary not found on PATH"
   fi
 
   if [ -z "$auto_fix_reason" ]; then
@@ -227,7 +224,7 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
       ts=$(date -u +%FT%TZ)
 
       # status --set (advance to done + verdict + completed)
-      if ! "$status_bin" --workflow-dir "$workflow_dir" \
+      if ! "$status_bin" status --workflow-dir "$workflow_dir" \
            --set "$slug" status=done verdict=PASSED completed="$ts" \
            >/dev/null 2>&1; then
         auto_fix_blocked_lines+="  - \`$slug\` — status --set failed"$'\n'
@@ -236,7 +233,7 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
       fi
 
       # status --archive (move to _archive/)
-      if ! "$status_bin" --workflow-dir "$workflow_dir" \
+      if ! "$status_bin" status --workflow-dir "$workflow_dir" \
            --archive "$slug" >/dev/null 2>&1; then
         auto_fix_blocked_lines+="  - \`$slug\` — status --archive failed after set"$'\n'
         auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
