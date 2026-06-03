@@ -247,6 +247,8 @@ The captain's gate surface. Structure (present in this order after section-order
 `Bet: when this ships, captain expects [observable outcome] within [time window]. If not, this pitch was wrong about [Layer 1 line].`
 Agent MUST NOT draft and present a filled-in Bet for captain to rubber-stamp. Agent presents the template; captain fills it in. Bet line is always last in Layer 1 (not shuffled). **C7 enforcement**: Layer 1 MUST NOT contain `rubric`, `7-factor`, or `score` tokens or gate hard-blocks.
 
+**`/goal`-ready phrasing (optional)**: when the captain may drive the pipeline under a Claude Code `/goal`, phrase the Bet's `[observable outcome]` as a *verifiable check* (a command + its pass/fail result, e.g. "`bash …/test-X.sh` exits 0 and PR is merged") and append a turn-bound (`or stop after N turns`). A Bet phrased this way drops straight into `/goal <condition>` and stays honest under the transcript-judged evaluator. See INVARIANTS "Evidence discipline under an active `/goal`".
+
 **Section-order randomization**: at compose time, shuffle the order of `### Will get`, `### Won't get`, `### Why this scope` using a per-gate seed (e.g., sha256 of entity-id + gate-timestamp, take last 4 hex digits mod 6 for permutation index). `### Captain Bet` is always last — not shuffled. Purpose: defeats agent-pattern-match templating across gates, where agent learns "Will get always first → approve on structure".
 
 #### Layer 2 — Detail (drill-down on captain `expand <section>` request)

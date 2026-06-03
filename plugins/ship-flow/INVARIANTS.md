@@ -385,6 +385,24 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 
 ---
 
+### Evidence discipline under an active `/goal`
+
+**Context**: Claude Code's `/goal <condition>` (v2.1.139+) keeps the FO working across turns until a small fast model judges the condition met. That evaluator reads ONLY the conversation transcript — it cannot run commands or read files, and it never sees a dispatched subagent's internal work (only the worker's returned summary that lands in the main transcript). codex's `define-goal` is a different model (a tool-backed `get_goal`/`create_goal` object); this rule targets CC `/goal`, the transcript-judged loop.
+
+**Rule**: while a `/goal` is active, the FO's turn-ending message MUST surface goal-condition evidence as the ACTUAL output of verification run THIS turn — real command invocations with their real results (test counts, exit codes, grep counts, `gh` PR/merge state), quoted, not paraphrased. The FO MUST NOT (a) relay a worker's unsubstantiated claim ("all green", "tests pass") as evidence, nor (b) assert or confabulate concrete-looking results it did not actually produce. If the FO cannot run the verification this turn, it states that explicitly rather than declaring progress.
+
+**Failure mode (two-sided; both observed in baseline pressure tests)**:
+- **Gullible-evaluator false-completion** — the evaluator cannot run checks, so a confabulated "142/142 pass, exit 0" in the transcript is believed → the goal clears on fabricated evidence. (Baseline: an FO handed a fictional entity confabulated "PR #33 merged, 5/5 tests PASS".)
+- **Starved-evaluator wasted turns** — a vague worker relay ("done, all green") gives the evaluator nothing concrete → it correctly returns "not met" → `/goal` spawns another turn even though the work may be done, burning tokens until `/goal clear` or the condition's turn-bound clause.
+
+**Why load-bearing, not ceremony**: this is the runtime sibling of Principle 16 (mechanical checks target verifiable, non-self-authored evidence). The evaluator's blindness to anything outside the transcript means the FO's self-authored turn summary IS the gate input — so honesty of surfaced evidence is the only thing between the loop and a self-issued rubber stamp.
+
+**Tier**: judgment (Tier-B). No grep distinguishes genuine from confabulated command output in a transcript; the guard is FO discipline + captain spot-check. Practical anchor: quote the literal command and its raw output, never a summary adjective. Shaped conditions should carry a turn-bound clause (`or stop after N turns`) so a starved evaluator cannot loop unbounded.
+
+**Source**: pitch-128 `/goal`-integration spike (2026-06-03). Proxy-tested the CC `/goal` Haiku evaluator against ship-flow-style transcripts (YES on surfaced concrete worker-return evidence; NO on vague "all green"; NO on partial multi-part conditions), then baseline FO pressure tests surfaced the confabulation failure mode. Direction (locked): leverage native `/goal` + this discipline + shape emitting a `/goal`-ready measurable condition; do NOT build a goal-tracking subsystem.
+
+---
+
 ### Principle 9: Domain Registry — read-as-context, M1-M5 graceful-degradation surface
 
 **Rule**: Cross-stage specialist dispatch (design-stage designer, plan-stage architecture-lens,
