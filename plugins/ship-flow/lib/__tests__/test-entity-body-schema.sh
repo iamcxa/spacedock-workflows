@@ -89,6 +89,9 @@ if command -v ruby >/dev/null 2>&1; then
   check "verify verdict fields retain duration_minutes" \
     "ruby -e 'require \"yaml\"; schema = YAML.safe_load(File.read(ARGV.fetch(0))); fields = schema.fetch(\"stages\").fetch(\"verify\").fetch(\"output\").fetch(\"subsections\").fetch(\"verdict\").fetch(\"fields\"); abort(\"missing duration_minutes\") unless fields.any? { |field| field[\"name\"] == \"duration_minutes\" }' \"$SCHEMA_PATH\""
 
+  check "frontmatter status enum allows epic container status (pitch 118)" \
+    "ruby -e 'require \"yaml\"; schema = YAML.safe_load(File.read(ARGV.fetch(0))); status = schema.fetch(\"frontmatter\").fetch(\"required\").fetch(\"status\"); abort(\"missing epic\") unless status.fetch(\"values\").include?(\"epic\")' \"$SCHEMA_PATH\""
+
   check "execute report status enum allows partial outcome" \
     "ruby -e 'require \"yaml\"; schema = YAML.safe_load(File.read(ARGV.fetch(0))); fields = schema.fetch(\"stages\").fetch(\"execute\").fetch(\"report\").fetch(\"fields\"); status = fields.find { |field| field[\"name\"] == \"status\" }; abort(\"missing status field\") unless status; values = status.fetch(\"values\"); abort(\"missing partial\") unless values.include?(\"partial\")' \"$SCHEMA_PATH\""
 

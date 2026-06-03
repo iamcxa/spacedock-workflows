@@ -26,7 +26,7 @@ frontmatter:
   required:
     id: { type: string, example: '"017"', description: "Sequential zero-padded, unique within workflow" }
     title: { type: string, example: '"DAG + Kanban view components"' }
-    status: { type: enum, values: [draft, sharp, design, plan, execute, verify, ship, done], description: "Current pipeline stage" }
+    status: { type: enum, values: [draft, sharp, design, plan, execute, verify, ship, done, epic], description: "Current pipeline stage. `epic` is a non-stage container status (paired with entity_type: epic) that the FO `--next` dispatch skips permanently (status not in stage_by_name) — an epic / project-intake parent carries it while its children flow through the pipeline independently. See README ## Epic decomposition + pitch 118 project-intake." }
   optional:
     source: { type: string, description: "Where idea came from" }
     started: { type: iso8601, description: "When active work began" }
