@@ -346,16 +346,16 @@ For **ship-flow self-reforming** entities (S/M, pure ship-flow plugin / docs / l
 git add -- <entity-file> ROADMAP.md PRODUCT.md <other-paths>
 git commit -m "ship: <slug> (<NNN>) — <summary>" -- <entity-file> ROADMAP.md PRODUCT.md <other-paths>
 
-python3 <spacedock-plugin>/skills/commission/bin/status --workflow-dir docs/ship-flow/ \
-  --set <slug> status=done verdict=PASSED completed="$(date -u +%FT%TZ)" --force
-python3 <spacedock-plugin>/skills/commission/bin/status --workflow-dir docs/ship-flow/ \
-  --archive <slug> --force
+spacedock status --workflow-dir docs/ship-flow/ \
+  --set <NNN>-<slug> status=done verdict=PASSED completed="$(date -u +%FT%TZ)" --force
+spacedock status --workflow-dir docs/ship-flow/ \
+  --archive <NNN>-<slug> --force
 
 git add -- docs/ship-flow/_archive/<slug>.md
 git commit -m "done + archive: #<NNN> <slug> (verdict=PASSED, inline-on-main)" -- docs/ship-flow/_archive/<slug>.md
 ```
 
-`--force` bypasses `pr: empty` refusal (intentional for no-PR inline). Hazards: parallel-session staging contamination (pathspec-lock is sole defense); commit attribution drift via implicit `-am` staging (5069b8ba-class — do NOT fall back to `-am`).
+The entity key is the basename `<NNN>-<slug>` (the file/folder name), NOT the frontmatter `slug:` field. `spacedock` is the Go binary on PATH (`spacedock status ...`). `--force` bypasses `pr: empty` refusal (intentional for no-PR inline). Hazards: parallel-session staging contamination (pathspec-lock is sole defense); commit attribution drift via implicit `-am` staging (5069b8ba-class — do NOT fall back to `-am`).
 
 ---
 

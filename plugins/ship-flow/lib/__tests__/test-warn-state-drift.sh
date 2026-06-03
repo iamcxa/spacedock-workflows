@@ -284,6 +284,9 @@ workflow_dir=""
 cmd=""
 slug=""
 
+# Repoint: invoked as `spacedock status <args>` — skip leading subcommand.
+[ "${1:-}" = status ] && shift
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --workflow-dir)
@@ -381,7 +384,7 @@ run_hook() {
   (
     cd "$repo"
     env -i \
-      PATH="$PATH" \
+      PATH="${HOOK_PATH:-$PATH}" \
       HOME="${TEST_HOME:-$TMP_DIR/home}" \
       GH_STATE_DIR="${GH_STATE_DIR:-$TMP_DIR/gh-state}" \
       SHIP_FLOW_STATUS_BIN="${SHIP_FLOW_STATUS_BIN:-}" \
@@ -497,7 +500,11 @@ run_missing_helper_case() {
 
   local before after rc
   before="$(hash_tree "${repo}/docs/ship-flow")"
+  # Hermetic PATH: tool symlinks but no spacedock, so `command -v spacedock`
+  # returns empty and the auto-fix is blocked on a missing status binary.
+  HOOK_PATH="$NOSPACEDOCK_BIN"
   rc="$(run_hook "$repo" "$TMP_DIR/missing-helper.out")"
+  unset HOOK_PATH
   after="$(hash_tree "${repo}/docs/ship-flow")"
 
   assert_exit "missing helper exits success" 0 "$rc"
@@ -650,6 +657,18 @@ mkdir -p "$TMP_DIR/bin" "$TMP_DIR/home" "$TMP_DIR/gh-state"
 write_fixture_gh "$TMP_DIR/bin"
 write_fixture_status_bin "$TMP_DIR/status-fixture"
 PATH="$TMP_DIR/bin:$PATH"
+
+# Hermetic "no spacedock" PATH: symlink every tool the hook needs, but
+# deliberately omit `spacedock`, so the auto-fix discovery (`command -v
+# spacedock`) returns empty even on hosts where spacedock is installed.
+NOSPACEDOCK_BIN="$TMP_DIR/nospacedock-bin"
+mkdir -p "$NOSPACEDOCK_BIN"
+for tool in bash sh env git awk grep tr basename dirname find sort tail head timeout date python3 mktemp cat sed; do
+  tool_path="$(command -v "$tool" 2>/dev/null || true)"
+  [ -n "$tool_path" ] && ln -sf "$tool_path" "$NOSPACEDOCK_BIN/$tool"
+done
+# Fake gh from the fixture (no spacedock) so PR re-probe still works.
+ln -sf "$TMP_DIR/bin/gh" "$NOSPACEDOCK_BIN/gh"
 
 echo "=== test-warn-state-drift.sh ==="
 echo ""

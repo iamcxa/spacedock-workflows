@@ -192,6 +192,9 @@ ref=""
 where_expr=""
 slug=""
 
+# Repoint: invoked as `spacedock status <args>` — skip leading subcommand.
+[ "${1:-}" = status ] && shift
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --workflow-dir)
@@ -378,16 +381,6 @@ run_helper() {
   echo "$rc"
 }
 
-run_helper_without_status_override() {
-  local repo="$1"
-  local output="$2"
-  local home_dir="$3"
-  shift 3
-  local rc=0
-  env -u STATUS_BIN -u SHIP_FLOW_STATUS_BIN HOME="$home_dir" "$HELPER" --workflow-dir "${repo}/docs/ship-flow" "$@" > "$output" 2>&1 || rc=$?
-  echo "$rc"
-}
-
 run_helper_with_path() {
   local repo="$1"
   local output="$2"
@@ -399,51 +392,34 @@ run_helper_with_path() {
 }
 
 run_runtime_regression_cases() {
-  local repo="$TMP_DIR/default-status-repo"
-  local fake_home="$TMP_DIR/fake-home"
-  local cache_status="${fake_home}/.codex/plugins/cache/spacedock/spacedock/0.11.2/skills/commission/bin/status"
-  setup_repo "$repo"
-  mkdir -p "$(dirname "$cache_status")"
-  write_fixture_status_bin "$cache_status"
-  write_entity "${repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ""
-  git -C "$repo" add docs/ship-flow/merged-fixture-entity/index.md
-  git -C "$repo" commit -qm "add default status entity"
+  # NOTE: the prior cache-glob version-selection cases ("resolves from active
+  # plugin cache" / "chooses newest spacedock version across cache roots") were
+  # removed in the status-helper repoint. The reconciler no longer discovers a
+  # packaged python `commission/bin/status` from the plugin cache; the status
+  # helper is now the `spacedock` Go binary, discovered via `command -v
+  # spacedock` (with SHIP_FLOW_STATUS_BIN/STATUS_BIN override). The override
+  # path is covered hermetically below; the STATUS_BIN override path is
+  # exercised throughout the rest of this suite via run_helper.
+
+  # SHIP_FLOW_STATUS_BIN override is honored by resolve_status_bin, with no
+  # host dependency. Source the helper's resolver in a sandbox subshell.
+  local resolver_out resolver_rc=0
+  resolver_out="$(
+    SHIP_FLOW_STATUS_BIN="/fixture/path/spacedock" STATUS_BIN="" \
+      bash -c '
+        set -euo pipefail
+        eval "$(sed -n "/^resolve_status_bin()/,/^}/p" "$1")"
+        resolve_status_bin
+      ' _ "$HELPER"
+  )" || resolver_rc=$?
+  assert_exit "resolve_status_bin honors SHIP_FLOW_STATUS_BIN override" 0 "$resolver_rc"
+  if [ "$resolver_out" = "/fixture/path/spacedock" ]; then
+    record_pass "resolve_status_bin returns SHIP_FLOW_STATUS_BIN override path"
+  else
+    record_fail "resolve_status_bin returns SHIP_FLOW_STATUS_BIN override path (got: ${resolver_out})"
+  fi
 
   local rc
-  rc="$(run_helper_without_status_override "$repo" "$TMP_DIR/default-status.out" "$fake_home" \
-    --entity merged-fixture-entity \
-    --pr-provider fixture \
-    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
-    --dry-run)"
-  assert_exit "default status helper resolves from active plugin cache" 0 "$rc"
-  assert_not_contains "default status helper does not report missing helper" '^reason=missing-status-helper$' "$TMP_DIR/default-status.out"
-  assert_not_contains "helper source does not pin stale 0.10.2 cache path" 'spacedock/0\.10\.2/skills/commission/bin/status' "$HELPER"
-
-  local mixed_repo="$TMP_DIR/mixed-cache-root-repo"
-  local mixed_home="$TMP_DIR/mixed-cache-home"
-  local old_codex_status="${mixed_home}/.codex/plugins/cache/spacedock/spacedock/0.1.0/skills/commission/bin/status"
-  local new_claude_status="${mixed_home}/.claude/plugins/cache/spacedock/spacedock/99.0.0/skills/commission/bin/status"
-  setup_repo "$mixed_repo"
-  mkdir -p "$(dirname "$old_codex_status")" "$(dirname "$new_claude_status")"
-  cat > "$old_codex_status" <<'EOF'
-#!/usr/bin/env bash
-exit 42
-EOF
-  chmod +x "$old_codex_status"
-  write_fixture_status_bin "$new_claude_status"
-  write_entity "${mixed_repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ""
-  git -C "$mixed_repo" add docs/ship-flow/merged-fixture-entity/index.md
-  git -C "$mixed_repo" commit -qm "add mixed cache root entity"
-
-  rc="$(run_helper_without_status_override "$mixed_repo" "$TMP_DIR/mixed-cache-root.out" "$mixed_home" \
-    --entity merged-fixture-entity \
-    --pr-provider fixture \
-    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
-    --dry-run)"
-  assert_exit "default status helper chooses newest spacedock version across cache roots" 0 "$rc"
-  assert_contains "mixed cache root dry-run reaches reconciler" '^verdict=PROCEED$' "$TMP_DIR/mixed-cache-root.out"
-  assert_not_contains "mixed cache root does not use older failing codex helper" '^reason=entity-not-found$' "$TMP_DIR/mixed-cache-root.out"
-
   local pipe_repo="$TMP_DIR/pipefail-repo"
   local worktree_path="${pipe_repo}/.worktrees/ship-merged-fixture-entity"
   setup_repo "$pipe_repo"

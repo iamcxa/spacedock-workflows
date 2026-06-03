@@ -15,32 +15,10 @@ resolve_status_bin() {
     return 0
   fi
 
-  local home_dir="${HOME:-}"
-  [ -n "$home_dir" ] || return 1
-
-  local candidate best candidate_version best_version newest_version
-  best=""
-  best_version=""
-  for candidate in \
-      "$home_dir"/.codex/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status \
-      "$home_dir"/.claude/plugins/cache/spacedock/spacedock/*/skills/commission/bin/status; do
-    [ -x "$candidate" ] || continue
-    candidate_version="${candidate#*/plugins/cache/spacedock/spacedock/}"
-    candidate_version="${candidate_version%%/*}"
-    if [ -z "$best" ]; then
-      best="$candidate"
-      best_version="$candidate_version"
-      continue
-    fi
-    newest_version="$(printf '%s\n%s\n' "$best_version" "$candidate_version" | sort -V | tail -n 1)"
-    if [ "$newest_version" = "$candidate_version" ]; then
-      best="$candidate"
-      best_version="$candidate_version"
-    fi
-  done
-
-  [ -n "$best" ] || return 1
-  printf '%s\n' "$best"
+  # The status helper is the `spacedock` Go binary on PATH, invoked as
+  # `spacedock status <args>` (see run_status). Resolve the full path so the
+  # `-x "$STATUS_BIN"` executable check downstream passes.
+  command -v spacedock 2>/dev/null || return 1
 }
 
 usage() {
@@ -140,7 +118,7 @@ coherent_terminal_file() {
 }
 
 run_status() {
-  "$STATUS_BIN" --workflow-dir "$workflow_dir" "$@"
+  "$STATUS_BIN" status --workflow-dir "$workflow_dir" "$@"
 }
 
 resolve_entity() {

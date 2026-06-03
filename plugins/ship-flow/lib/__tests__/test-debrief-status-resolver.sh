@@ -53,10 +53,21 @@ check_argv "local executable status helper is preferred" "$LOCAL_OUT" \
   "$LOCAL_WORKFLOW/status" \
   "--next"
 
-"$RESOLVER" --print0 --workflow-dir "$PACKAGED_WORKFLOW" --spacedock-plugin-dir "$PACKAGED_PLUGIN" -- --resolve "entity one" --fields "status,title" --all-fields > "$PACKAGED_OUT"
-check_argv "packaged commission status fallback preserves argv boundaries" "$PACKAGED_OUT" \
-  "python3" \
-  "$PACKAGED_PLUGIN/skills/commission/bin/status" \
+# Fallback path: no local status helper → invoke the `spacedock` Go binary as
+# `spacedock status <args>`. Hermetic: inject a fake binary via
+# SHIP_FLOW_STATUS_BIN so the resolver's `command -v` check passes regardless
+# of host PATH. --spacedock-plugin-dir is now a deprecated no-op (still parsed).
+FAKE_STATUS_BIN="$TMP_DIR/fake-spacedock"
+cat > "$FAKE_STATUS_BIN" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$FAKE_STATUS_BIN"
+
+SHIP_FLOW_STATUS_BIN="$FAKE_STATUS_BIN" "$RESOLVER" --print0 --workflow-dir "$PACKAGED_WORKFLOW" --spacedock-plugin-dir "$PACKAGED_PLUGIN" -- --resolve "entity one" --fields "status,title" --all-fields > "$PACKAGED_OUT"
+check_argv "spacedock status fallback preserves argv boundaries" "$PACKAGED_OUT" \
+  "$FAKE_STATUS_BIN" \
+  "status" \
   "--workflow-dir" \
   "$PACKAGED_WORKFLOW" \
   "--resolve" \
