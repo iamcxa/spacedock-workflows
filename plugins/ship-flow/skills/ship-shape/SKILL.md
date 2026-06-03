@@ -377,11 +377,11 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
 
 ### Confirm
 
-1. **Allocate IDs** (MEMORY #5 — `--next-id` non-atomic; this → commit = ONE uninterrupted pair):
+1. **Allocate the pitch ID** — ship-flow's native, worktree-aware, reservation-based allocator. Replaces the removed spacedock python `commission/bin/status --next-id` (spacedock v1 makes `--next-id` non-applicable for `id-style: slug`; ship-flow owns its `<N>-<slug>` + `.N`-children numeric scheme):
    ```bash
-   python3 "$SPACEDOCK_PLUGIN_DIR/skills/commission/bin/status" --workflow-dir "$WORKFLOW_DIR" --next-id
+   bash plugins/ship-flow/lib/allocate-id.sh "$WORKFLOW_DIR"
    ```
-   First ID = pitch. Child IDs = `<pitch-id>.N` (dense, no gaps).
+   Echoes the next top-level number → pitch ID. Child IDs = `<pitch-id>.N` (dense, no gaps). The allocator scans all git worktrees + `_archive` + pending reservations and writes a reservation **before** returning, so the allocate → commit gap no longer races (the number is held for up to 2h or until the entity materializes — the old "one uninterrupted pair" discipline is no longer required).
 
 2. **Serialize → temp JSON → invoke atomic writer:**
    ```bash
