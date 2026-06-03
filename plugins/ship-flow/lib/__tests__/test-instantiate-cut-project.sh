@@ -290,6 +290,22 @@ else
   ok "DC-14d injected child passes 5a section-tag-coverage"
 fi
 
+# ============================================================================
+# Scenario H — commit failure rolls back partial writes (P1-3 atomicity)
+# ============================================================================
+echo "--- Scenario H: commit failure → rollback leaves a clean worktree ---"
+setup_repo
+write_valid_contract
+# A pre-commit hook that always fails forces the commit step to fail.
+printf '#!/bin/sh\nexit 1\n' > "$REPO/.git/hooks/pre-commit"; chmod +x "$REPO/.git/hooks/pre-commit"
+( cd "$REPO" && bash "$INST" "$CONTRACT_PATH" --workflow-dir "$WF" ) >/dev/null 2>&1
+assert_eq "DC-15a commit failure → exit 8" "$?" "8"
+H_DIRS=$( cd "$REPO" && ls "$WF" | grep -cE '^121' )
+assert_eq "DC-15b rollback removed the partial epic + child dirs" "$H_DIRS" "0"
+H_STAGED=$( cd "$REPO" && git status --porcelain | grep -cE '121' )
+assert_eq "DC-15c nothing from the failed instantiate left staged/untracked" "$H_STAGED" "0"
+rm -f "$REPO/.git/hooks/pre-commit"
+
 rm -rf "$WORK"
 echo
 if [ "$FAIL" = 0 ]; then echo "ALL PASS"; else echo "SOME FAILED"; fi

@@ -266,8 +266,17 @@ if [ "$DRY_RUN" = "1" ]; then
   exit 0
 fi
 
-# ---- 6. Write the entity set + commit atomically ----
-mkdir -p "$EPIC_DIR"
+# ---- 6. Write the entity set, then commit in ONE explicit-pathspec commit ----
+# The commit is the atomic unit. Track every dir we create so a failed `git add`/commit
+# (missing identity, pre-commit hook, index lock, concurrent op) rolls the partial writes
+# back, leaving the worktree clean — never a half-written epic/children set.
+CREATED_DIRS=()
+rollback_writes() {
+  git reset -q -- "${WRITTEN_FILES[@]}" >/dev/null 2>&1 || true
+  local d
+  for d in "${CREATED_DIRS[@]}"; do rm -rf "$d"; done
+}
+mkdir -p "$EPIC_DIR"; CREATED_DIRS+=("$EPIC_DIR")
 {
   echo "---"
   echo "id: \"${EPIC_ID}\""
@@ -299,7 +308,7 @@ WRITTEN_FILES=("${EPIC_DIR}/index.md")
 i=0
 while [ "$i" -lt "$CHILD_N" ]; do
   cdir="${WF}/${DOTTED[$i]}-${CSLUGS[$i]}"
-  mkdir -p "$cdir"
+  mkdir -p "$cdir"; CREATED_DIRS+=("$cdir")
   # Resolve deps with an explicit rc check — `$(child_dotted_deps ...)` as a bare
   # argument would swallow a failed lookup and emit partial/empty deps (silent
   # mis-ordering). Fail closed instead. (Belt-and-suspenders: build_tsv already
@@ -341,12 +350,18 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 0
 fi
 
-# ONE atomic commit, explicit pathspec (never `git add -A` — a parallel session's
-# staged changes must not be captured). See MEMORY parallel-session-git.
-git add -- "${WRITTEN_FILES[@]}"
+# ONE commit, explicit pathspec (never `git add -A` — a parallel session's staged
+# changes must not be captured). See MEMORY parallel-session-git. Roll back partial
+# writes on any add/commit failure so the commit stays the atomic unit.
+if ! git add -- "${WRITTEN_FILES[@]}"; then
+  rollback_writes
+  echo "instantiate-cut-project: git add failed — rolled back partial entity writes" >&2
+  exit 8
+fi
 COMMIT_MSG="instantiate(${EPIC_ID}): ${CHILD_N} children from cut-project ${EXTERNAL_PROJECT}"
 if ! git commit -q -m "$COMMIT_MSG" -- "${WRITTEN_FILES[@]}"; then
-  echo "instantiate-cut-project: git commit failed" >&2
+  rollback_writes
+  echo "instantiate-cut-project: git commit failed — rolled back partial entity writes" >&2
   exit 8
 fi
 
