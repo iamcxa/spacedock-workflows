@@ -281,8 +281,13 @@ i=0
 while [ "$i" -lt "$CHILD_N" ]; do
   cdir="${WF}/${DOTTED[$i]}-${CSLUGS[$i]}"
   mkdir -p "$cdir"
-  # shellcheck disable=SC2046  # intentional word-split of space-joined dotted deps
-  deps_inline="$(fmt_depends_inline $(child_dotted_deps "$i"))"
+  # Resolve deps with an explicit rc check — `$(child_dotted_deps ...)` as a bare
+  # argument would swallow a failed lookup and emit partial/empty deps (silent
+  # mis-ordering). Fail closed instead. (Belt-and-suspenders: build_tsv already
+  # fail-hards earlier, and the validator now catches block-list closure.)
+  _cdeps="$(child_dotted_deps "$i")" || { echo "instantiate-cut-project: dependency resolution failed for ${DOTTED[$i]} (validator should have caught this)" >&2; exit 3; }
+  # shellcheck disable=SC2086  # intentional word-split of space-joined dotted deps
+  deps_inline="$(fmt_depends_inline $_cdeps)"
   {
     echo "---"
     echo "id: \"${DOTTED[$i]}\""

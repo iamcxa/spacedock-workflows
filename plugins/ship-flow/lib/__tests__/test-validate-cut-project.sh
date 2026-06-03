@@ -129,6 +129,49 @@ children:
 EOF
 assert_exit "underscore-ok" 0 "$WORK/under.yaml"
 
+echo "--- DC-12: BLOCK-style depends_on cycle → exit 1 (parser must not silently drop block lists) ---"
+cat > "$WORK/blk-cycle.yaml" <<'EOF'
+external_project: "linear:x/y"
+children:
+  - external_id: "A"
+    depends_on:
+      - "B"
+  - external_id: "B"
+    depends_on:
+      - "A"
+EOF
+assert_exit "block-cycle" 1 "$WORK/blk-cycle.yaml"
+
+echo "--- DC-13: BLOCK-style depends_on unknown ref → exit 1 (closure) ---"
+cat > "$WORK/blk-unknown.yaml" <<'EOF'
+external_project: "linear:x/y"
+children:
+  - external_id: "A"
+    depends_on:
+      - "GHOST"
+EOF
+assert_exit "block-unknown-ref" 1 "$WORK/blk-unknown.yaml"
+
+echo "--- DC-14: valid BLOCK-style depends_on (closure holds, acyclic) → exit 0 ---"
+cat > "$WORK/blk-valid.yaml" <<'EOF'
+external_project: "linear:x/y"
+children:
+  - external_id: "A"
+    depends_on: []
+  - external_id: "B"
+    depends_on:
+      - "A"
+    body_source: |
+      Body content with a decoy list that must NOT be read as deps:
+      - "NOPE"
+EOF
+assert_exit "block-valid" 0 "$WORK/blk-valid.yaml"
+
+echo "--- DC-15: block-list deps then body_source decoy dash must not leak into deps (closure stays valid) ---"
+# Same as DC-14 but assert the decoy '- \"NOPE\"' under body_source does not create
+# an unknown-ref closure failure (would exit 1 if the parser leaked body dashes).
+assert_exit "block-then-body-decoy" 0 "$WORK/blk-valid.yaml"
+
 rm -rf "$WORK"
 echo
 if [ "$FAIL" = 0 ]; then echo "ALL PASS"; else echo "SOME FAILED"; fi

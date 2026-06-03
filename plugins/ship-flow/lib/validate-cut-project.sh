@@ -61,6 +61,7 @@ in_children = False
 item_indent = None
 field_indent = None
 cur = None
+deps_block = False      # True while collecting a YAML block-list depends_on for cur
 
 for raw in lines:
     line = raw.rstrip("\n")
@@ -83,14 +84,22 @@ for raw in lines:
             cur = {"eid": None, "deps": []}
             children.append(cur)
             field_indent = ind + 2
+            deps_block = False
             after = stripped[2:].strip()
             if after.startswith("external_id:"):
                 cur["eid"] = unquote(after.split(":", 1)[1])
             continue
-        # dash deeper than item indent → block-scalar body content → ignore
+        # dash deeper than item indent: a block-list depends_on item, else block-scalar body.
+        # Block-list deps MUST be parsed here — the writer (instantiate, via yq) sees them, so
+        # if the validator silently dropped them the cycle/closure gate would be bypassed.
+        if deps_block and cur is not None and ind > field_indent:
+            cur["deps"].append(unquote(stripped[2:]))
+            continue
+        deps_block = False            # deeper dash that isn't a dep → body content; end any block
         continue
     # sibling fields only at the child-field indent (block-scalar body sits deeper → ignored)
     if cur is not None and field_indent is not None and ind == field_indent:
+        deps_block = False            # any sibling field ends a prior block-list depends_on
         key = line.lstrip()
         if key.startswith("external_id:"):
             cur["eid"] = unquote(key.split(":", 1)[1])
@@ -99,8 +108,12 @@ for raw in lines:
             if v.startswith("["):
                 inner = v[1:v.rfind("]")] if "]" in v else v[1:]
                 cur["deps"] = [unquote(x) for x in inner.split(",") if x.strip()]
-            # scalar/none/empty → no deps (block-list deps unsupported in contract: use inline)
-    # deeper indent (body content) or other keys → ignored
+            elif v == "":
+                deps_block = True     # YAML block list follows on subsequent deeper `- ` lines
+            # else scalar none/[]/null/~/prose → no deps (inline list is the canonical form)
+        continue
+    # any other line (deeper non-dash body, or a shallower line) ends a block-list depends_on
+    deps_block = False
 
 errs = []
 if not external_project:
