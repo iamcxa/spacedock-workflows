@@ -188,8 +188,10 @@ if dropped:
     sys.stderr.write("issues-to-contract: %d non-intakeable (done/canceled): %s\n"
                      % (len(dropped), ", ".join(dropped)))
 if dropped_edges:
-    sys.stderr.write("issues-to-contract: %d depends_on edge(s) dropped "
-                     "(ref outside intake set): %s\n"
+    sys.stderr.write("issues-to-contract: %d depends_on edge(s) dropped — ref is outside the "
+                     "intake set (filtered, or an ALREADY-INTAKEN issue). These are real "
+                     "dependencies the wave plan will NOT enforce; sequence them manually or "
+                     "re-run after the prerequisite ships: %s\n"
                      % (len(dropped_edges), ", ".join("%s->%s" % (a, b) for a, b in dropped_edges)))
 
 sys.stdout.write("\n".join(out) + "\n")

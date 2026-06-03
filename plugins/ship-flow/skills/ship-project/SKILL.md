@@ -138,6 +138,21 @@ Pass `--dry-run` through to `instantiate-cut-project.sh` to preview the epic id,
 status stamping, and wave plan without writing or committing. Use to confirm the contract
 expands as expected before the real run.
 
+## Known v1 limitations (codex review PR #190 — deferred, not bugs)
+
+- **Cross-batch dependencies are dropped, not preserved.** If a surviving issue is
+  `blocked_by` an already-intaken (deduped) issue, the adapter drops that edge and reports
+  it to stderr (`N depends_on edge(s) dropped`). The wave plan will NOT enforce it. v1-narrow
+  is single-shot intake; **relay the dropped-edge report to the captain** so they sequence
+  those manually (or re-intake after the prerequisite ships). Full cross-batch dependency
+  support (referencing existing entity ids as deps) is a v2 axis — it breaks the in-batch
+  closure model the validator relies on.
+- **ID allocation assumes a single intake session.** `instantiate-cut-project.sh` allocates
+  the epic id as `max(active ∪ _archive) + 1` with a pre-write collision refuse, but no lock —
+  two concurrent intake sessions could race to the same id. Intake is a deliberate captain
+  action, so v1 accepts this; the `spacedock-next-id-archive-awareness` rabbit-hole tracks
+  switching to spacedock's atomic `--next-id` if concurrent intake ever becomes real.
+
 ## Common mistakes
 
 | Mistake | Reality |

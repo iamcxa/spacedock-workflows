@@ -98,6 +98,10 @@ CHILD_N="$(yq '.children | length' "$CONTRACT" | head -1 | tr -dc '0-9')"
 [ -n "$CHILD_N" ] || CHILD_N=0
 
 # ---- 3. Allocate epic id (_archive-aware) ----
+# v1 assumes a single intake session: max(active ∪ _archive)+1 with a pre-write collision
+# refuse (id_in_use), but no lock — concurrent intake could race the same id. Intake is a
+# deliberate captain action; the spacedock-next-id-archive-awareness rabbit-hole tracks
+# switching to spacedock's atomic --next-id if concurrent intake becomes real (codex PR #190 P1-5).
 allocate_epic_id() {
   local maxid=0 p name n
   for p in "$WF"/* "$WF"/_archive/*; do
