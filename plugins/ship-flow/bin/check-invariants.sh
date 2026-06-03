@@ -67,7 +67,7 @@ check_skill_count() {
   # DC-6 — Principle 2: stage skill count ≤ 7; utility skills uncapped.
   # Explicit allowlists — catches unclassified additions immediately.
   local STAGE_SKILLS=(ship-shape ship-design ship ship-plan ship-execute ship-verify ship-review)
-  local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect domain-registry ui-verify test-driven-development verify-reviewer-panel doc-sync distill-reference codex-gate harvest-decide memory-cleanup)
+  local UTILITY_SKILLS=(add-todos ship-onboard ship-runtime-detect domain-registry ui-verify test-driven-development verify-reviewer-panel doc-sync distill-reference codex-gate harvest-decide memory-cleanup ship-epic ship-project)
   local skills_dir="${ROOT}/plugins/ship-flow/skills"
   [ -d "$skills_dir" ] || return 0
 

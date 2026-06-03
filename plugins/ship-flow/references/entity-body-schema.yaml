@@ -26,7 +26,7 @@ frontmatter:
   required:
     id: { type: string, example: '"017"', description: "Sequential zero-padded, unique within workflow" }
     title: { type: string, example: '"DAG + Kanban view components"' }
-    status: { type: enum, values: [draft, sharp, design, plan, execute, verify, ship, done], description: "Current pipeline stage" }
+    status: { type: enum, values: [draft, sharp, design, plan, execute, verify, ship, done, epic], description: "Current pipeline stage. `epic` is a non-stage container status (paired with entity_type: epic) that the FO `--next` dispatch skips permanently (status not in stage_by_name) — an epic / project-intake parent carries it while its children flow through the pipeline independently. See README ## Epic decomposition + pitch 118 project-intake." }
   optional:
     source: { type: string, description: "Where idea came from" }
     started: { type: iso8601, description: "When active work began" }
@@ -40,6 +40,7 @@ frontmatter:
     tracker: { type: enum, values: [gh, linear], default: gh }
     issue: { type: string, example: '"#42"' }
     external_id: { type: string, example: '"PROJ-123"' }
+    external_project: { type: string, example: '"linear:team/Project Name"', description: "Tracker project ref carried by an epic parent (pitch 118 project-intake). Convention: epic binds the project, each child binds an issue via external_id — 1:1 child→issue traceability + dedup-safety across entities. Set by the ship-project instantiate helper on the epic only." }
     pr: { type: string }
     token_budget: { type: number, unit: USD }
     token_actual: { type: number, unit: USD, description: "Accumulated by FO across stages" }
