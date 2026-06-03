@@ -106,7 +106,38 @@ check_eq "red gate left plugin.json unmutated"   "$(jq -r '.version' "$PJB")"   
 check_eq "red gate left marketplace unmutated"   "$(jq -r '.plugins[] | select(.name=="ship-flow") | .version' "$MPB")" "0.0.1"
 check_grep "red gate left README unmutated" '^# Ship-Flow .*\(v0\.0\.1\)$' "$RDB"
 
-rm -rf "$TMPA" "$TMPB"
+# ---------------------------------------------------------------------------
+# Test C — transactional bump: a selector that silently no-ops (marketplace
+# missing the ship-flow entry) aborts WITHOUT half-bumping any file.
+# Regression for PR #191 codex finding: gate-before-mutation is not enough; the
+# three-file bump itself must be all-or-nothing or a failed release leaves a
+# half-bumped working tree.
+# ---------------------------------------------------------------------------
+TMPC="$(mktemp -d)"
+mkdir -p "$TMPC/.claude-plugin"
+cat >"$TMPC/.claude-plugin/plugin.json" <<EOF
+{ "name": "ship-flow", "version": "0.0.1" }
+EOF
+# marketplace has NO ship-flow entry — the jq select-assign silently no-ops (exit 0).
+cat >"$TMPC/.claude-plugin/marketplace.json" <<EOF
+{ "plugins": [ { "name": "spacebridge", "version": "0.0.1" } ] }
+EOF
+cat >"$TMPC/README.md" <<EOF
+# Ship-Flow — Auditable Autonomous Workflow for Claude 4.7 (v0.0.1)
+EOF
+PJC="$TMPC/.claude-plugin/plugin.json"
+MPC="$TMPC/.claude-plugin/marketplace.json"
+RDC="$TMPC/README.md"
+
+if bump_all_versions "$PJC" "$MPC" "$RDC" "9.9.9"; then
+  die "bump_all_versions succeeded despite a no-op marketplace selector"
+else
+  pass "bump_all_versions aborts when the ship-flow marketplace entry is absent"
+fi
+check_eq "aborted bump left plugin.json unmutated" "$(jq -r '.version' "$PJC")" "0.0.1"
+check_grep "aborted bump left README unmutated" '^# Ship-Flow .*\(v0\.0\.1\)$' "$RDC"
+
+rm -rf "$TMPA" "$TMPB" "$TMPC"
 if [ $fail -eq 0 ]; then
   echo "ALL PASS: test-bump-version"
 else

@@ -23,28 +23,42 @@ validate_semver() {  # <version>
   echo "$1" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$'
 }
 
-bump_plugin_json() {  # <plugin.json> <version> — atomic via tmp + mv
-  local f="$1" v="$2" t
-  t=$(mktemp)
-  jq --arg v "$v" '.version = $v' "$f" > "$t" && mv "$t" "$f"
+# Pure renderers: read <src>, write the bumped content to stdout. No mutation —
+# the transactional bump_all_versions builds all three to temp files first, so a
+# selector that silently no-ops (missing/renamed marketplace entry, drifted H1
+# token) is caught BEFORE any file is swapped, never half-bumping the tree.
+render_plugin_json() {  # <plugin.json> <version>
+  jq --arg v "$2" '.version = $v' "$1"
 }
 
-bump_marketplace() {  # <marketplace.json> <version> — only the ship-flow entry
-  local f="$1" v="$2" t
-  t=$(mktemp)
-  jq --arg v "$v" '(.plugins[] | select(.name == "ship-flow") | .version) = $v' "$f" > "$t" && mv "$t" "$f"
+render_marketplace() {  # <marketplace.json> <version> — only the ship-flow entry
+  jq --arg v "$2" '(.plugins[] | select(.name == "ship-flow") | .version) = $v' "$1"
 }
 
-bump_readme_h1() {  # <README.md> <version> — only the H1 "(vX.Y.Z)" token
-  local f="$1" v="$2" t
-  t=$(mktemp)
-  sed -E "/^# Ship-Flow/ s/\(v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?\)/(v$v)/" "$f" > "$t" && mv "$t" "$f"
+render_readme_h1() {  # <README.md> <version> — only the H1 "(vX.Y.Z)" token
+  sed -E "/^# Ship-Flow/ s/\(v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?\)/(v$2)/" "$1"
 }
 
 bump_all_versions() {  # <plugin.json> <marketplace.json> <README.md> <version>
-  bump_plugin_json "$1" "$4"
-  bump_marketplace "$2" "$4"
-  bump_readme_h1  "$3" "$4"
+  local pj="$1" mp="$2" rd="$3" v="$4" pj_tmp mp_tmp rd_tmp
+  pj_tmp=$(mktemp); mp_tmp=$(mktemp); rd_tmp=$(mktemp)
+
+  render_plugin_json "$pj" "$v" > "$pj_tmp"
+  render_marketplace "$mp" "$v" > "$mp_tmp"
+  render_readme_h1  "$rd" "$v" > "$rd_tmp"
+
+  # Pre-swap gate: every rendered copy MUST carry the new version. plugin.json is a
+  # direct assignment (always lands), so assert_versions_match passing means the
+  # marketplace ship-flow entry and the README H1 token both resolved to $v too.
+  # Any silent no-op fails here → remove all temps → zero files changed.
+  if [ "$(jq -r '.version' "$pj_tmp")" != "$v" ] || ! assert_versions_match "$pj_tmp" "$mp_tmp" "$rd_tmp"; then
+    rm -f "$pj_tmp" "$mp_tmp" "$rd_tmp"
+    echo "ERROR: version $v did not apply to all of plugin.json / marketplace.json (ship-flow entry) / README H1 — no files changed." >&2
+    return 1
+  fi
+
+  # All three known-good — swap in place (each mv is atomic).
+  mv "$pj_tmp" "$pj" && mv "$mp_tmp" "$mp" && mv "$rd_tmp" "$rd"
 }
 
 assert_versions_match() {  # <plugin.json> <marketplace.json> <README.md>
@@ -81,7 +95,12 @@ run_release() {  # <plugin root> <plugin.json> <marketplace.json> <README.md> <v
     echo "ERROR: release gate failed — aborting before any version mutation." >&2
     return 1
   fi
-  bump_all_versions "$pj" "$mp" "$rd" "$v"
+  # bump_all_versions is transactional: it validates all three rendered copies
+  # before swapping any in, so a failure here leaves zero files changed.
+  if ! bump_all_versions "$pj" "$mp" "$rd" "$v"; then
+    return 1
+  fi
+  # Post-swap sanity re-check on the on-disk files (defense in depth).
   if ! assert_versions_match "$pj" "$mp" "$rd"; then
     echo "ERROR: post-bump version mismatch across plugin.json / marketplace.json / README H1." >&2
     return 1
