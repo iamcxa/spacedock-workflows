@@ -24,13 +24,15 @@ source "${SCRIPT_DIR}/map-helpers.sh"
 PROPOSAL=""
 DRY_RUN=0
 LAYOUT="flat"
+WORKFLOW_DIR_ARG=""
 
 for arg in "$@"; do
   case "$arg" in
-    --proposal=*)    PROPOSAL="${arg#--proposal=}" ;;
-    --dry-run)       DRY_RUN=1 ;;
-    --layout=folder) LAYOUT="folder" ;;
-    --layout=flat)   LAYOUT="flat" ;;
+    --proposal=*)     PROPOSAL="${arg#--proposal=}" ;;
+    --dry-run)        DRY_RUN=1 ;;
+    --layout=folder)  LAYOUT="folder" ;;
+    --layout=flat)    LAYOUT="flat" ;;
+    --workflow-dir=*) WORKFLOW_DIR_ARG="${arg#--workflow-dir=}" ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -112,7 +114,13 @@ if [ "$LAYOUT" = "folder" ]; then
   fi
 fi
 
-ENTITY_DIR="docs/ship-flow"
+# --workflow-dir must stay inside the repo: reject absolute paths and any `..`
+# segment so it cannot redirect writes outside the workflow tree.
+case "$WORKFLOW_DIR_ARG" in
+  "")      ;;
+  /*|*..*) echo "Error: --workflow-dir must be a repo-relative path without '..': $WORKFLOW_DIR_ARG" >&2; exit 1 ;;
+esac
+ENTITY_DIR="${WORKFLOW_DIR_ARG:-docs/ship-flow}"
 TODO_DIR="${ENTITY_DIR}/todos"
 
 # Layout-aware path computation
