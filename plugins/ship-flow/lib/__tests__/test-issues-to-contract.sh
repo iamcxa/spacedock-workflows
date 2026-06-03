@@ -34,6 +34,9 @@ WORK="$(mktemp -d)"
 WF="$WORK/wf"
 mkdir -p "$WF/116-bound"
 printf -- '---\nid: "116"\nstatus: done\nexternal_id: "SC-813"\n---\n' > "$WF/116-bound/index.md"
+# An ARCHIVED entity binding SC-ARCH — dedup must scan _archive too (P2-1).
+mkdir -p "$WF/_archive/arch-bound"
+printf -- '---\nid: "070"\nstatus: done\nexternal_id: "SC-ARCH"\n---\n' > "$WF/_archive/arch-bound/index.md"
 
 write_issues() {
   cat > "$WORK/issues.json" <<'EOF'
@@ -45,7 +48,8 @@ write_issues() {
     {"external_id":"SC-810","title":"Schema core","state_type":"backlog","labels":["schema"],"body":"Schema + decider. Blocks everything.","blocked_by":["SC-800"],"domain":"schema"},
     {"external_id":"SC-811","title":"API layer","state_type":"unstarted","labels":[],"body":"Builds on the schema core.","blocked_by":["SC-810"],"affects_ui":true},
     {"external_id":"SC-812","title":"Login crash","state_type":"backlog","labels":["Bug"],"body":"crashes on login","blocked_by":[]},
-    {"external_id":"SC-813","title":"Already intaken","state_type":"backlog","labels":[],"body":"dup","blocked_by":[]}
+    {"external_id":"SC-813","title":"Already intaken","state_type":"backlog","labels":[],"body":"dup","blocked_by":[]},
+    {"external_id":"SC-ARCH","title":"Already shipped + archived","state_type":"backlog","labels":[],"body":"arch","blocked_by":[]}
   ]
 }
 EOF
@@ -68,9 +72,11 @@ assert_nogrep "DC-A2 completed SC-800 not a child" "$OUT" 'external_id:[[:space:
 # DC-A3 Bug-labeled dropped + reported as a bug (debug fast-path)
 assert_nogrep "DC-A3a Bug SC-812 not a child"  "$OUT" 'external_id:[[:space:]]*"?SC-812'
 assert_grep   "DC-A3b Bug SC-812 reported"     "$WORK/err-A.txt" 'SC-812'
-# DC-A4 deduped issue dropped
+# DC-A4 deduped issue dropped (active + archived)
 assert_nogrep "DC-A4a deduped SC-813 not a child" "$OUT" 'external_id:[[:space:]]*"?SC-813'
 assert_grep   "DC-A4b deduped SC-813 reported"    "$WORK/err-A.txt" 'SC-813'
+assert_nogrep "DC-A4c archived SC-ARCH not a child (archive dedup)" "$OUT" 'external_id:[[:space:]]*"?SC-ARCH'
+assert_grep   "DC-A4d archived SC-ARCH reported"  "$WORK/err-A.txt" 'SC-ARCH'
 # DC-A1d only the two intakeable issues survive (SC-810, SC-811)
 NCHILD=$(grep -cE '^[[:space:]]*-[[:space:]]*external_id:' "$OUT")
 assert_eq   "DC-A1d exactly 2 children survive" "$NCHILD" "2"

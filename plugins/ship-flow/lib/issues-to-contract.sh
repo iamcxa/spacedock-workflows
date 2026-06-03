@@ -79,7 +79,11 @@ if not external_project:
 # Existing external_ids bound by entities under the workflow dir (dedup source).
 existing = set()
 if wf and os.path.isdir(wf):
-    for f in glob.glob(os.path.join(wf, "*", "index.md")) + glob.glob(os.path.join(wf, "*.md")):
+    # Scan active AND _archive entities — dedup must be archive-aware (P2-1), matching the
+    # _archive-aware id allocator; else a shipped+archived tracker issue is re-intaken twice.
+    for f in (glob.glob(os.path.join(wf, "*", "index.md")) + glob.glob(os.path.join(wf, "*.md"))
+              + glob.glob(os.path.join(wf, "_archive", "*", "index.md"))
+              + glob.glob(os.path.join(wf, "_archive", "*.md"))):
         try:
             lines = open(f, encoding="utf-8").read().splitlines()
         except OSError:

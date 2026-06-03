@@ -20,6 +20,10 @@ WORK="$(mktemp -d)"   # scratch dir for contract files + a fake workflow dir
 mkdir -p "$WORK/wf/existing-entity"
 # An existing entity that already binds external_id SC-999 (for the dedup test)
 printf -- '---\nid: "099"\nstatus: plan\nexternal_id: "SC-999"\n---\n' > "$WORK/wf/existing-entity/index.md"
+# An ARCHIVED (shipped) entity binding SC-ARCH — dedup must scan _archive too, else
+# re-intaking a shipped tracker issue silently creates a duplicate binding (P2-1).
+mkdir -p "$WORK/wf/_archive/old-shipped"
+printf -- '---\nid: "050"\nstatus: done\nexternal_id: "SC-ARCH"\n---\n' > "$WORK/wf/_archive/old-shipped/index.md"
 
 write_valid() {
   cat > "$WORK/valid.yaml" <<'EOF'
@@ -128,6 +132,15 @@ children:
     depends_on: ["A"]
 EOF
 assert_exit "underscore-ok" 0 "$WORK/under.yaml"
+
+echo "--- DC-16: dedup against ARCHIVED entity external_id → exit 1 (P2-1 archive-aware) ---"
+cat > "$WORK/arch-dup.yaml" <<'EOF'
+external_project: "linear:x/y"
+children:
+  - external_id: "SC-ARCH"
+    depends_on: []
+EOF
+assert_exit "dedup-archived" 1 "$WORK/arch-dup.yaml" --workflow-dir "$WORK/wf"
 
 echo "--- DC-12: BLOCK-style depends_on cycle → exit 1 (parser must not silently drop block lists) ---"
 cat > "$WORK/blk-cycle.yaml" <<'EOF'

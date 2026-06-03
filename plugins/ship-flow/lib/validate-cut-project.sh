@@ -136,7 +136,7 @@ PYEXIT=$?
 
 # --- Dedup: no external_id may already be bound by an existing entity ---
 if [ -n "$WF" ] && [ -d "$WF" ]; then
-  EXISTING="$(for f in "$WF"/*/index.md "$WF"/*.md; do
+  EXISTING="$(for f in "$WF"/*/index.md "$WF"/*.md "$WF"/_archive/*/index.md "$WF"/_archive/*.md; do
     [ -f "$f" ] || continue
     awk '/^---[[:space:]]*$/{fm++; if(fm==2)exit; next} fm==1 && /^external_id:/{v=$0; sub(/^external_id:[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); print v}' "$f"
   done)"
