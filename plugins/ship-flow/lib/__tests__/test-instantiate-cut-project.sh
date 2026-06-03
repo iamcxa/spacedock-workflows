@@ -222,6 +222,38 @@ E_NCOMMITS=$( cd "$REPO" && git rev-list --count HEAD )
 assert_eq "DC-12a --epic-id collides with existing 118 → exit 4 (refuse)" "$E_EXIT" "4"
 assert_eq "DC-12b no commit on refuse" "$E_NCOMMITS" "1"
 
+# ============================================================================
+# Scenario F — quotes/colons/ampersands in titles → valid ESCAPED frontmatter
+# (codex review P2-2: unescaped values produced malformed index.md)
+# ============================================================================
+echo "--- Scenario F: special chars in titles → yq round-trips generated frontmatter ---"
+setup_repo
+cat > "$WORK/q.yaml" <<'EOF'
+external_project: 'linear:duckbase/Proj "X"'
+title: 'Backend: intake "v1" & more'
+children:
+  - external_id: "SC-900"
+    title: 'Schema "core": decider'
+    depends_on: []
+    body_source: |
+      body
+EOF
+( cd "$REPO" && bash "$INST" "$WORK/q.yaml" --workflow-dir "$WF" ) >/dev/null 2>&1
+assert_eq "DC-13a quote/colon title instantiate → exit 0" "$?" "0"
+EPICF=$(ls "$REPO/$WF"/121-*/index.md 2>/dev/null | head -1)
+CF=$(ls "$REPO/$WF"/121.1-*/index.md 2>/dev/null | head -1)
+# Extract just the frontmatter then yq it (real consumers parse frontmatter, NOT the whole
+# file — the epic body's mermaid block is intentionally not valid YAML). This proves the
+# generated frontmatter is well-formed escaped YAML.
+fm_yq() { awk '/^---[[:space:]]*$/{c++; if(c==2)exit; next} c==1{print}' "$1" | yq "$2" 2>/dev/null; }
+assert_eq "DC-13b epic title round-trips via yq"          "$(fm_yq "$EPICF" '.title')"            'Backend: intake "v1" & more'
+assert_eq "DC-13c epic external_project round-trips"      "$(fm_yq "$EPICF" '.external_project')" 'linear:duckbase/Proj "X"'
+assert_eq "DC-13d epic status still parseable (valid YAML)" "$(fm_yq "$EPICF" '.status')"         'epic'
+assert_eq "DC-13e child title round-trips via yq"        "$(fm_yq "$CF" '.title')"               'Schema "core": decider'
+assert_eq "DC-13f child external_id intact"              "$(fm_yq "$CF" '.external_id')"         'SC-900'
+# mermaid label must not contain a raw double-quote that breaks the node label
+assert_nogrep "DC-13g mermaid node label has no raw double-quote in title" "$EPICF" '\["121\.1[^"]*"[^]]*"'
+
 rm -rf "$WORK"
 echo
 if [ "$FAIL" = 0 ]; then echo "ALL PASS"; else echo "SOME FAILED"; fi

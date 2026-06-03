@@ -72,6 +72,25 @@ slugify() {
     | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-60
 }
 
+# Escape a value for a YAML double-quoted scalar: `\` and `"` escaped, and control
+# whitespace collapsed to spaces so a quote/newline in a tracker title (e.g. a Linear
+# project name) cannot produce malformed frontmatter or inject extra lines.
+yaml_dq() {
+  local s="$1"
+  s="${s//\\/\\\\}"; s="${s//\"/\\\"}"
+  s="${s//$'\n'/ }"; s="${s//$'\r'/ }"; s="${s//$'\t'/ }"
+  printf '%s' "$s"
+}
+
+# Sanitize a value for a mermaid `["..."]` node label (lossy, display-only): a raw
+# double-quote or square bracket breaks the node-label syntax.
+mermaid_label() {
+  local s="$1"
+  s="${s//\"/\'}"; s="${s//\[/(}"; s="${s//\]/)}"
+  s="${s//$'\n'/ }"; s="${s//$'\r'/ }"; s="${s//$'\t'/ }"
+  printf '%s' "$s"
+}
+
 EXTERNAL_PROJECT="$(yq '.external_project' "$CONTRACT" | head -1)"
 PROJECT_TITLE="$(yq '.title // ""' "$CONTRACT" | head -1)"
 { [ -n "$PROJECT_TITLE" ] && [ "$PROJECT_TITLE" != "null" ]; } || PROJECT_TITLE="$EXTERNAL_PROJECT"
@@ -202,7 +221,7 @@ render_mermaid() {
   local idx dep deps
   idx=0
   while [ "$idx" -lt "$CHILD_N" ]; do
-    printf '  n%s["%s %s"]\n' "${DOTTED[$idx]//./_}" "${DOTTED[$idx]}" "${CTITLES[$idx]}"
+    printf '  n%s["%s"]\n' "${DOTTED[$idx]//./_}" "$(mermaid_label "${DOTTED[$idx]} ${CTITLES[$idx]}")"
     idx=$((idx + 1))
   done
   idx=0
@@ -252,11 +271,11 @@ mkdir -p "$EPIC_DIR"
 {
   echo "---"
   echo "id: \"${EPIC_ID}\""
-  echo "title: \"${PROJECT_TITLE}\""
+  echo "title: \"$(yaml_dq "${PROJECT_TITLE}")\""
   echo "status: epic"
   echo "entity_type: epic"
   echo "pattern: epic"
-  echo "external_project: \"${EXTERNAL_PROJECT}\""
+  echo "external_project: \"$(yaml_dq "${EXTERNAL_PROJECT}")\""
   echo "layout: folder"
   echo "children:"
   for j in "${!DOTTED[@]}"; do
@@ -291,11 +310,11 @@ while [ "$i" -lt "$CHILD_N" ]; do
   {
     echo "---"
     echo "id: \"${DOTTED[$i]}\""
-    echo "title: \"${CTITLES[$i]}\""
+    echo "title: \"$(yaml_dq "${CTITLES[$i]}")\""
     echo "status: ${CSTATUS[$i]}"
     echo "pattern: shaped-child"
     echo "parent_pitch: \"${EPIC_ID}\""
-    echo "external_id: \"${EIDS[$i]}\""
+    echo "external_id: \"$(yaml_dq "${EIDS[$i]}")\""
     echo "depends-on: ${deps_inline}"
     echo "affects_ui: ${CAFFECTS[$i]}"
     [ -n "${CDOMAIN[$i]}" ] && echo "domain: ${CDOMAIN[$i]}"
