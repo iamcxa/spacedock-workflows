@@ -325,7 +325,11 @@ while [ "$i" -lt "$CHILD_N" ]; do
     # Issue body as plain intro-zone content (no ship-flow section tags → the
     # check_section_tag_coverage grandfather rule skips it; later design/plan
     # stages append their own tagged sections after this intro).
-    yq ".children[$i].body_source // \"\"" "$CONTRACT"
+    # Defang any section-marker line a tracker body might carry (e.g. a Linear
+    # description containing `<!-- section:x -->`) — left live it would make the
+    # entity "tagged" and trip the 5a walker (orphan / unclosed). Escaping the
+    # opener keeps it human-readable while removing the false section boundary.
+    yq ".children[$i].body_source // \"\"" "$CONTRACT" | sed -E 's/^<!-- (\/?section:)/\&lt;!-- \1/'
   } > "${cdir}/index.md"
   WRITTEN_FILES+=("${cdir}/index.md")
   i=$((i + 1))

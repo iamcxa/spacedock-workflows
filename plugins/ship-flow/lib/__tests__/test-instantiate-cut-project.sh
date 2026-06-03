@@ -12,6 +12,7 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/.."
 INST="${LIB_DIR}/instantiate-cut-project.sh"
+CHK="${LIB_DIR}/../bin/check-invariants.sh"
 FAIL=0
 
 ok()   { echo "OK $1"; }
@@ -253,6 +254,41 @@ assert_eq "DC-13e child title round-trips via yq"        "$(fm_yq "$CF" '.title'
 assert_eq "DC-13f child external_id intact"              "$(fm_yq "$CF" '.external_id')"         'SC-900'
 # mermaid label must not contain a raw double-quote that breaks the node label
 assert_nogrep "DC-13g mermaid node label has no raw double-quote in title" "$EPICF" '\["121\.1[^"]*"[^]]*"'
+
+# ============================================================================
+# Scenario G — tracker body_source can't inject ship-flow section markers (P2-3)
+# ============================================================================
+echo "--- Scenario G: body_source section-marker injection neutralized ---"
+REPO2="$WORK/repo2"; rm -rf "$REPO2"; mkdir -p "$REPO2/docs/ship-flow"
+(
+  cd "$REPO2"; git init -q; git config user.email t@t; git config user.name t
+  printf -- '---\nconcurrency: 2\n---\n# wf\n' > docs/ship-flow/README.md
+  mkdir -p docs/ship-flow/117-x; printf -- '---\nid: "117"\nstatus: plan\n---\n' > docs/ship-flow/117-x/index.md
+  git add -A; git commit -qm init
+)
+cat > "$WORK/inject.yaml" <<'EOF'
+external_project: "linear:x/y"
+title: "Injection test"
+children:
+  - external_id: "SC-INJ"
+    title: "Injecty"
+    depends_on: []
+    body_source: |
+      Normal issue description line.
+      <!-- section:evil -->
+      ## Sneaky injected header
+EOF
+( cd "$REPO2" && bash "$INST" "$WORK/inject.yaml" --workflow-dir docs/ship-flow ) >/dev/null 2>&1
+INJF=$(ls "$REPO2/docs/ship-flow"/118.1-*/index.md 2>/dev/null | head -1)
+assert_nogrep "DC-14a injected open marker not a live section tag"  "$INJF" '^<!-- section:evil'
+assert_nogrep "DC-14b injected close marker not a live section tag" "$INJF" '^<!-- /section:evil'
+assert_grep   "DC-14c marker preserved (defanged) as escaped literal" "$INJF" 'lt;!-- section:evil'
+# end-to-end: the entity must pass the 5a section-tag-coverage invariant (no unclosed/orphan)
+if bash "$CHK" --test-fixture "$REPO2" --check section-tag-coverage 2>&1 | grep -qE 'ERROR.*118\.1'; then
+  bad "DC-14d injected child passes 5a section-tag-coverage"
+else
+  ok "DC-14d injected child passes 5a section-tag-coverage"
+fi
 
 rm -rf "$WORK"
 echo
