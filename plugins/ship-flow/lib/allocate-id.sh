@@ -29,14 +29,18 @@
 # prefixes across the given workflow dirs. Scans each dir's immediate children
 # AND its `_archive/` children; a name's leading digits (stopping at `-` or `.`)
 # are the prefix, so `118.1-child` contributes `118`. Non-numeric names ignored.
+# Pure parameter-expansion, NO per-entry fork: `$(basename)` + `$(printf|grep)`
+# forked ~3 processes per entry, which on macOS cost ~45s over ~2000 entries ×
+# N worktrees. `${entry##*/}` (basename) and `${base%%[!0-9]*}` (leading digit
+# run) do the same extraction in-process — ~200x faster, byte-identical output.
 collect_prefixes() {
   local dir entry base num out=""
   for dir in "$@"; do
     [ -d "$dir" ] || continue
     for entry in "$dir"/* "$dir"/_archive/*; do
       [ -e "$entry" ] || continue
-      base="$(basename "$entry")"
-      num="$(printf '%s' "$base" | grep -oE '^[0-9]+' || true)"
+      base="${entry##*/}"          # basename, no fork
+      num="${base%%[!0-9]*}"       # leading digit run; "" when name starts non-digit
       [ -n "$num" ] || continue
       out="$out $((10#$num))"
     done
@@ -46,14 +50,17 @@ collect_prefixes() {
   printf '%s\n' $out | sort -un | tr '\n' ' '
 }
 
+# max_in_list <space-separated-ints> — highest value (0 if none/empty).
+max_in_list() {
+  local max=0 n
+  # shellcheck disable=SC2086  # intentional word-split of the space list
+  for n in $1; do [ "$n" -gt "$max" ] && max="$n"; done
+  echo "$max"
+}
+
 # scan_max_prefix <dir>... — highest top-level integer prefix (0 if none).
 scan_max_prefix() {
-  local prefixes max=0 n
-  prefixes="$(collect_prefixes "$@")"
-  for n in $prefixes; do
-    [ "$n" -gt "$max" ] && max="$n"
-  done
-  echo "$max"
+  max_in_list "$(collect_prefixes "$@")"
 }
 
 # reservations_max <file> — highest number in column 1 (0 if missing/empty).
@@ -159,8 +166,10 @@ allocate_id() {
   while IFS= read -r d; do [ -n "$d" ] && dirs+=("$d"); done < <(worktree_workflow_dirs "$rel")
   [ ${#dirs[@]} -gt 0 ] || dirs=("$wf")
 
-  max_existing="$(scan_max_prefix "${dirs[@]}")"
+  # collect_prefixes once, derive max from that list (was: scan_max_prefix +
+  # collect_prefixes = two full worktree scans per allocation).
   materialized="$(collect_prefixes "${dirs[@]}")"
+  max_existing="$(max_in_list "$materialized")"
   now="$(date +%s)"
   prune_reservations "$res" 7200 "$now" "$materialized"
   max_res="$(reservations_max "$res")"
