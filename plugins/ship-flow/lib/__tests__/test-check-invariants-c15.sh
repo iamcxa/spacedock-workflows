@@ -165,6 +165,83 @@ assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" 
 rm -rf "$f"
 
 echo
+echo "=== C15 cross-review cycle 1: <details> bypass hardening + scope exclusion ==="
+
+# ---- Case 11: UNTERMINATED <details> bypass → must FAIL (caught) ----
+# A standalone <details> open with NO matching </details> previously swallowed
+# to EOF, smuggling ~2x body budget under the 2x raw backstop. Now the swallowed
+# lines must be COUNTED (err toward RED). 10 real body + an unterminated
+# <details> holding 200 smuggled lines → body must measure 211 (> 120 cap).
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/911-unterm/"
+{
+  for ((i = 1; i <= 10; i++)); do printf 'body line %d\n' "$i"; done
+  printf '<details>\n'                          # opens, never closed
+  for ((i = 1; i <= 200; i++)); do printf 'smuggled line %d\n' "$i"; done
+} > "$f/docs/ship-flow/911-unterm/verify.md"
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.11 unterminated <details> over-cap body → FAILS (smuggle caught)"
+assert_stderr_contains "body content is 211 lines" \
+  "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.11b unterminated <details> lines are COUNTED (10 body + tag + 200 = 211)"
+rm -rf "$f"
+
+# ---- Case 12: MID-LINE <details> mention → must NOT enter details-mode ----
+# Prose like "see the <details> below" must count as normal body and must NOT
+# drop the following lines. 130 body lines (one of which mentions <details>
+# mid-line) → body = 130 > 120 cap → FAIL. If mid-line wrongly triggered
+# details-mode, the trailing lines would be dropped and it would false-GREEN.
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/912-midline/"
+{
+  printf 'see the <details> below for raw output\n'   # mid-line mention (body)
+  for ((i = 1; i <= 129; i++)); do printf 'body line %d\n' "$i"; done
+} > "$f/docs/ship-flow/912-midline/verify.md"
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.12 mid-line <details> mention + over-cap body → FAILS (no accidental drop)"
+assert_stderr_contains "body content is 130 lines" \
+  "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.12b mid-line <details> counted as body (130, not dropped)"
+rm -rf "$f"
+
+# ---- Case 13: BALANCED standalone <details> still EXCLUDED (regression guard) ----
+# A properly-balanced standalone <details>…</details> must still be excluded so
+# the legitimate escape hatch keeps working: 100 body + a 500-line balanced
+# <details> → body = 100 ≤ 120, raw 602 > 240 backstop... so for the body-only
+# exclusion to be observable WITHOUT tripping the 2x backstop, keep raw under
+# 240: 100 body + a 100-line balanced <details> (raw ~202 < 240) → PASS.
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/913-balanced/"
+{
+  for ((i = 1; i <= 100; i++)); do printf 'body line %d\n' "$i"; done
+  printf '<details>\n'
+  for ((i = 1; i <= 98; i++)); do printf 'collapsed evidence %d\n' "$i"; done
+  printf '</details>\n'
+} > "$f/docs/ship-flow/913-balanced/verify.md"
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.13 balanced standalone <details> still excluded (escape hatch works) → PASS"
+rm -rf "$f"
+
+# ---- Case 14: over-cap stage artifacts under _archive/_debriefs/_mods → NOT red ----
+# design.md:87 scope table marks these trees NOT capped. Both modes must skip.
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/_archive/914-arch/" \
+         "$f/docs/ship-flow/_debriefs/914-deb/" \
+         "$f/docs/ship-flow/_mods/914-mod/"
+write_body_lines "$f/docs/ship-flow/_archive/914-arch/plan.md"  500
+write_body_lines "$f/docs/ship-flow/_debriefs/914-deb/verify.md" 500
+write_body_lines "$f/docs/ship-flow/_mods/914-mod/review.md"     500
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.14 over-cap files under _archive/_debriefs/_mods → NOT scanned (exit 0)"
+# And confirm a LIVE over-cap file alongside them DOES still red (exclusion is
+# scoped to the terminal trees, not a blanket skip).
+mkdir -p "$f/docs/ship-flow/914-live/"
+write_body_lines "$f/docs/ship-flow/914-live/plan.md" 500
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.14b live over-cap alongside excluded trees → still FAILS"
+rm -rf "$f"
+
+echo
 echo "=== C15 artifact-verbosity — git branch-scope grandfather (real merge-base..HEAD path) ==="
 
 # Build a real git repo: an over-cap stage artifact committed ON main (the
@@ -240,6 +317,30 @@ TMP="$(mktemp -d)"
 )
 assert_exit 0 "( cd '$TMP' && bash '${BIN_DIR}/check-invariants.sh' --check artifact-verbosity )" \
   "C15.10 no origin/main → PASS with skip (no false red)"
+rm -rf "$TMP"
+
+# ---- Case 15: git-mode — touched over-cap file under _archive/ → NOT scanned ----
+# The **/plan.md glob also matches docs/ship-flow/_archive/**; the negative
+# pathspecs must drop it. Branch ADDS an over-cap plan.md under _archive/ → must
+# NOT red (design.md:87 scope). Mirrors Case 14 for the git path.
+TMP="$(mktemp -d)"
+(
+  cd "$TMP" || exit 1
+  git init -q -b main
+  git config user.email test@test
+  git config user.name test
+  mkdir -p docs/ship-flow/820-seed
+  printf 'seed\n' > docs/ship-flow/820-seed/index.md
+  git add docs/ship-flow/820-seed/index.md
+  git commit -qm "baseline"
+  git checkout -q -b feature
+  mkdir -p docs/ship-flow/_archive/820-old
+  { for ((i = 1; i <= 400; i++)); do printf 'archived over-cap %d\n' "$i"; done; } > docs/ship-flow/_archive/820-old/plan.md
+  git add docs/ship-flow/_archive/820-old/plan.md
+  git commit -qm "archive: move old over-cap plan.md"
+)
+assert_exit 0 "run_check_in_repo '$TMP'" \
+  "C15.15 git-mode: touched over-cap _archive/ plan.md → NOT scanned (exit 0)"
 rm -rf "$TMP"
 
 exit $FAIL

@@ -1546,10 +1546,22 @@ _artifact_body_cap() {
 # Reads the file from $1, prints the body line count.
 _artifact_body_line_count() {
   local file="$1"
-  # awk: strip CR; skip a single leading ---…--- frontmatter block; skip
-  # ^<!-- /?section: marker lines; skip lines inside <details>…</details>.
+  # awk body-content measurement. Excludes:
+  #   (1) a single leading ---…--- YAML frontmatter block,
+  #   (2) ^<!-- /?section: marker lines,
+  #   (3) BALANCED <details>…</details> blocks whose open/close tags are each on
+  #       their OWN line (anchored at line start, ignoring leading whitespace).
+  # Hardening (cross-review cycle 1):
+  #   - ANCHORING: only a standalone `<details>` tag line opens a block. A
+  #     mid-line mention ("see the <details> below") is ordinary body — it does
+  #     NOT enter details-mode (closes the accidental-bypass hole).
+  #   - BALANCE: lines inside a candidate block are BUFFERED, not dropped. They
+  #     are only excluded once a matching standalone `</details>` close is seen.
+  #     If EOF is reached with a block still open (unterminated/unbalanced), the
+  #     buffered lines are COUNTED — an unterminated <details> cannot smuggle
+  #     body under the budget (err toward RED).
   awk '
-    BEGIN { in_fm = 0; in_details = 0; count = 0 }
+    BEGIN { in_fm = 0; in_details = 0; count = 0; pending = 0 }
     {
       sub(/\r$/, "")          # normalise CRLF
     }
@@ -1559,16 +1571,32 @@ _artifact_body_line_count() {
       if ($0 == "---") { in_fm = 0 }
       next
     }
-    # section markers (open or close) are excluded
-    /^<!--[[:space:]]*\/?section:/ { next }
-    # <details> content excluded (the <details>/</details> tag lines too)
-    /<details/ { in_details = 1; next }
+    # While buffering a candidate <details> block:
     in_details == 1 {
-      if ($0 ~ /<\/details>/) { in_details = 0 }
+      # A standalone </details> close line balances the block → drop buffered.
+      if ($0 ~ /^[[:space:]]*<\/details>[[:space:]]*$/) {
+        in_details = 0
+        pending = 0          # discard buffered (excluded) lines
+        next
+      }
+      # Nested standalone <details> open inside an open block: keep depth simple
+      # — still buffering, just accumulate (a nested open does not re-balance).
+      pending++
       next
     }
+    # section markers (open or close) are excluded
+    /^<!--[[:space:]]*\/?section:/ { next }
+    # Standalone <details> open tag (anchored, own line) → start buffering.
+    # The tag line itself is part of the candidate block (buffered).
+    /^[[:space:]]*<details/ { in_details = 1; pending = 1; next }
+    # Ordinary body line.
     { count++ }
-    END { print count }
+    END {
+      # Unbalanced/unterminated block left open at EOF: count the buffered lines
+      # (including the opening tag line) so smuggled content cannot hide.
+      if (in_details == 1) { count += pending }
+      print count
+    }
   ' "$file"
 }
 
@@ -1589,13 +1617,17 @@ check_artifact_verbosity() {
   if [ -n "$FIXTURE" ]; then
     # Fixture mode: scan all stage artifacts under the fixture dir directly
     # (git history is absent in fixtures — same dual-path as other checks).
+    # Prune _archive/ _debriefs/ _mods/ — terminal/non-stage trees that the
+    # approved scope table (design.md:87) marks NOT capped.
     local f
     while IFS= read -r f; do
       [ -n "$f" ] || continue
       candidates+=("$f")
-    done < <(find "${ROOT}/docs/ship-flow" -type f \
+    done < <(find "${ROOT}/docs/ship-flow" \
+               \( -path '*/_archive/*' -o -path '*/_debriefs/*' -o -path '*/_mods/*' \) -prune \
+               -o -type f \
                \( -name plan.md -o -name execute.md -o -name verify.md \
-                  -o -name review.md -o -name ship.md \) 2>/dev/null | sort)
+                  -o -name review.md -o -name ship.md \) -print 2>/dev/null | sort)
   else
     # Branch-scope grandfather (mirror C14): scan only stage artifacts that the
     # current branch's commits add or modify (merge_base..HEAD).
@@ -1621,12 +1653,18 @@ check_artifact_verbosity() {
       # the AM set may still be missing if later removed in the working tree —
       # guard for that.
       [ -f "${git_top}/${rel}" ] && candidates+=("${git_top}/${rel}")
+    # Negative pathspecs exclude _archive/ _debriefs/ _mods/ (terminal/non-stage
+    # trees, NOT capped per design.md:87 scope table) — the **/plan.md glob would
+    # otherwise also match docs/ship-flow/_archive/<id>/plan.md.
     done < <(git diff --name-only --diff-filter=AM "$merge_base" HEAD -- \
                ':(glob)docs/ship-flow/**/plan.md' \
                ':(glob)docs/ship-flow/**/execute.md' \
                ':(glob)docs/ship-flow/**/verify.md' \
                ':(glob)docs/ship-flow/**/review.md' \
-               ':(glob)docs/ship-flow/**/ship.md' 2>/dev/null)
+               ':(glob)docs/ship-flow/**/ship.md' \
+               ':(glob,exclude)docs/ship-flow/_archive/**' \
+               ':(glob,exclude)docs/ship-flow/_debriefs/**' \
+               ':(glob,exclude)docs/ship-flow/_mods/**' 2>/dev/null)
   fi
 
   local file base cap rel_display body_lines raw_lines raw_cap
