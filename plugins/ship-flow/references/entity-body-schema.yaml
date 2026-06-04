@@ -202,12 +202,20 @@ stages:
           section: "### Done Criteria"
           section_tag: done-criteria
           layer: decision
+          # 129.1 CD-1: DC-N is the stable, immutable reference key. Assigned once
+          # here at sharp (sequential integer, never zero-padded), append-only,
+          # retire-never-reuse — a dropped DC's number is never recycled, so DC-3
+          # means the same DC in every downstream stage. This block is the
+          # canonical home of the assertion + type; downstream stages cite DC-N
+          # and do NOT restate the assertion or type (see conventions →
+          # reference_not_restate). New DCs discovered post-shape take the next
+          # free integer with a note (added: {stage}).
           fields:
             - name: items
               type: list
               format: "- [ ] `{type}` — DC-{N}: {assertion} (journey step {M})"
               types: [cli, api, ui, skill, e2e]
-              description: "Typed, observable, traceable to journey step"
+              description: "Typed, observable, traceable to journey step. DC-N is the stable, immutable reference key (retire-never-reuse) and the canonical home of the assertion + type — downstream stages cite DC-N, never restate."
         user_journey:
           section: "### User Journey"
           section_tag: user-journey
@@ -382,8 +390,11 @@ stages:
   # ===== DESIGN =====
   design:
     reads:
-      - "## Sharp Output → Problem (exploration cite, contradictions)"
-      - "## Sharp Output → Done Criteria (UI-typed, design-affected)"
+      # 129.1 CD-3: shape.md is canonical for problem / journey / DC. These are
+      # citations, not copy-targets — resolve via lib/extract-section.sh, never
+      # re-emit the prose into the design body.
+      - "## Sharp Output → Problem (exploration cite, contradictions) [cite, do not restate]"
+      - "## Sharp Output → Done Criteria (UI-typed, design-affected) [cite, do not restate]"
     output:
       section: "## Design Output"
       section_tag: design-output
@@ -588,7 +599,9 @@ stages:
 
   plan:
     reads:
-      - "## Sharp Output (all subsections)"
+      # 129.1 CD-3: shape.md is canonical for problem / journey / DC — cite via
+      # lib/extract-section.sh, do not copy the prose into plan.md.
+      - "## Sharp Output (all subsections) [cite, do not restate]"
       - "PRODUCT.md ## Architecture and ## Constraints"
     output:
       section: "## Plan Output"
@@ -616,15 +629,15 @@ stages:
           section: "### Verification Spec"
           section_tag: verification-spec
           layer: implementation
-          description: "Exact verify procedure per Done Criterion. Consumed by execute and verify."
+          description: "Exact verify procedure per Done Criterion. Consumed by execute and verify. 129.1 CD-2: key rows by DC-N; assertion + type are canonical in shape.md → ### Done Criteria and are NOT restated here. Verify Procedure + Expected are the genuinely-new columns this stage produces."
           fields:
             - name: spec
               type: table
-              columns: ["DC", "Type", "Assertion", "Verify Procedure", "Expected"]
+              columns: ["DC", "Verify Procedure", "Expected"]
               rules:
-                - "Every DC from ## Done Criteria must have a row"
+                - "Every DC from ## Done Criteria must have a row, keyed by DC-N"
                 - "Verify Procedure must be a runnable command (no 'manual check')"
-                - "Type must match the DC's type"
+                - "Do not restate assertion or type — both are canonical in shape.md → ### Done Criteria (cite by DC-N)"
         canonical_doc_actions:
           section: "### Canonical Doc Actions"
           section_tag: canonical-doc-actions
@@ -821,11 +834,11 @@ stages:
       section: "## Execute UAT"
       section_tag: execute-uat
       layer: implementation
-      description: "First-pass AC verification. Not authoritative — verify stage re-runs independently."
+      description: "First-pass AC verification. Not authoritative — verify stage re-runs independently. 129.1 CD-2: key rows by DC-N; assertion + type are canonical in shape.md → ### Done Criteria and are NOT restated. 129.1 T2 guardrail: Verify Procedure STAYS inline (the operative command actually run, which execute may have deviated — not cheaply reconstructable at audit); Result + Evidence are the genuinely-new columns."
       fields:
         - name: results
           type: table
-          columns: ["DC", "Type", "Assertion", "Verify Procedure", "Result", "Evidence"]
+          columns: ["DC", "Verify Procedure", "Result", "Evidence"]
     hand_off_to_verify:
       section: "### Hand-off to Verify"
       section_tag: hand-off-to-verify
@@ -846,11 +859,14 @@ stages:
   # for entities written before 2026-04-19 (no migration needed — old entities are terminal).
   verify:
     reads:
+      # 129.1 CD-2/CD-3: verify cites the procedure from plan's Verification Spec
+      # and the DC assertions from shape.md — it does not recopy either into the
+      # verify body. Only the per-DC Result + Evidence are written locally.
       - "## Execute Output (all subsections)"
-      - "## Plan Output → Verification Spec"
+      - "## Plan Output → Verification Spec [cite, do not restate — procedure source]"
       - "## Plan Output → task reviewer_questions"
       - "### Hand-off to Execute → domain_acceptance_checklist"
-      - "## Sharp Output → Done Criteria"
+      - "## Sharp Output → Done Criteria [cite, do not restate — assertion/type by DC-N]"
       - "PRODUCT.md ## Constraints"
     output:
       section: "## Verify"
@@ -910,12 +926,12 @@ stages:
           section: "### UAT"
           section_tag: uat
           layer: implementation
-          description: "Evidence review + spot-check (D1 2026-04). Falls back to full re-run if execute evidence is unreliable."
+          description: "Evidence review + spot-check (D1 2026-04). Falls back to full re-run if execute evidence is unreliable. 129.1 CD-2: key rows by DC-N; assertion + type are canonical in shape.md → ### Done Criteria and are NOT restated. 129.1 T2 guardrail: Verify Procedure STAYS inline (the operative command actually re-run, possibly deviated — not cheaply reconstructable at audit); Execute 1st + Verify + Evidence are the genuinely-new columns."
           fields:
             - { name: mode, type: enum, values: [spot-check, "full-rerun"], description: "spot-check is default; full-rerun is fallback" }
             - name: results
               type: table
-              columns: ["DC", "Type", "Assertion", "Verify Procedure", "Execute 1st", "Verify", "Evidence"]
+              columns: ["DC", "Verify Procedure", "Execute 1st", "Verify", "Evidence"]
               verify_column_values: ["spot-checked", "trust (evidence: <ref>)", "re-run (fallback)"]
         verdict:
           section: "### Verdict"
@@ -1036,10 +1052,14 @@ stages:
             - { name: title, type: string }
             - name: body
               type: prose
+              # 129.1 CD-3: the PR body is the SINGLE sanctioned full-prose
+              # materialization point. A GitHub PR is read outside the repo by
+              # humans/auditors who cannot resolve shape.md → section, so the
+              # problem / journey / DC prose IS re-stated here on purpose.
               includes:
-                - "## Problem (from Sharp Output)"
-                - "## User Journey (from Sharp Output)"
-                - "## Done Criteria + Verification (full UAT table from Verify → ### UAT, or legacy ## Verify UAT)"
+                - "## Problem (materialized from shape.md — sole restate point; external-reader audience)"
+                - "## User Journey (materialized from shape.md — sole restate point; external-reader audience)"
+                - "## Done Criteria + Verification (full UAT table from Verify → ### UAT, or legacy ## Verify UAT; assertions materialized from shape.md — sole restate point)"
                 - "## Changes (from Execute Output → Execution Log)"
                 - "## Quality Gate (from Verify → ### Quality Gate, or legacy ## Verify Output → ### Quality Gate)"
                 - "Entity ID, tracker, cost footer"
@@ -1128,9 +1148,12 @@ stages:
             - { name: title, type: string }
             - name: body
               type: prose
+              # 129.1 CD-3: the PR body is the SINGLE sanctioned full-prose
+              # materialization point (external-reader audience cannot resolve
+              # shape.md → section). Problem / DC prose IS re-stated here on purpose.
               includes:
-                - "## Problem (from Sharp Output)"
-                - "## Done Criteria + Verification (from Verify UAT)"
+                - "## Problem (materialized from shape.md — sole restate point; external-reader audience)"
+                - "## Done Criteria + Verification (from Verify UAT; assertions materialized from shape.md — sole restate point)"
                 - "## Changes (from Execute Output → Execution Log)"
                 - "## Quality Gate (from Verify → ### Quality Gate)"
                 - "Entity ID, tracker, cost footer"
@@ -1317,6 +1340,11 @@ conventions:
   section_naming: "## {Stage} {Block} — e.g., ## Sharp Output, ## Plan Report, ## Verify UAT"
   section_tag_convention: "kebab-case matching section header with stage prefix for disambiguation (e.g., verify-verdict not verdict, ship-verdict not verdict). Extract via: bash plugins/ship-flow/lib/extract-section.sh {entity-file} {section-tag}"
   layer_convention: "decision = problem/journey/criteria/ADR/scoring (stable 'what/why'); implementation = plan/execute/verify/ship artifacts (derivative 'how')"
+  # 129.1 CD-1/CD-2/CD-3 — necessary-output principle: keep only what the next
+  # stage / human / audit cannot cheaply reconstruct from the prior canonical
+  # artifact, git, PR, or logs.
+  dc_stable_id: "DC-N (sequential integer, never zero-padded) is the stable, immutable reference key for a Done Criterion. Assigned once at sharp in ### Done Criteria, append-only, retire-never-reuse — a dropped DC's number is never recycled, so DC-3 means the same DC in every stage. ### Done Criteria is the canonical home of the assertion + type. New DCs discovered post-shape take the next free integer with a note (added: {stage})."
+  reference_not_restate: "Cite the canonical artifact by anchor + DC-N; restate a field only if you also write a new column for that row that cannot be reconstructed from the cited artifact. Downstream UAT/spec tables drop the Type + Assertion columns (canonical in shape.md → ### Done Criteria) and key every row by DC-N. Exceptions: (1) Verify Procedure stays inline in execute/verify UAT — it is the operative command actually run and may have deviated, so it is not cheaply reconstructable at audit (drop only Assertion + Type there); (2) the PR body is the single sanctioned full-prose materialization point — external readers cannot resolve shape.md → section, so problem / journey / DC prose IS materialized there."
   vertical_slice_principle: "Entities are always vertical slices — each entity is an independently deliverable and testable E2E journey, never a horizontal layer (never 'all API routes', 'all models', 'frontend only'). A vertical slice has a clear entry point, crosses all required layers, and produces an observable outcome a captain can verify."
   grepable_fields:
     - "status: — present in every Report block, FO reads for dispatch decisions"
