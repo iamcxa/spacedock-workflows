@@ -242,6 +242,45 @@ assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" 
 rm -rf "$f"
 
 echo
+echo "=== C15 cross-review cycle 2: unterminated frontmatter bypass ==="
+
+# ---- Case 16: UNTERMINATED frontmatter bypass → must FAIL (caught) ----
+# First line --- with NO closing --- previously left in_fm=1 to EOF, so every
+# body line was skipped → over-cap passed under the 2x backstop. Same class as
+# the cycle-1 <details> fix: buffer the candidate frontmatter; if no closing ---
+# is found, COUNT those lines (err toward RED). 1 open `---` + 1 fm line + 200
+# body, never closed → body must measure 202 (> 120 cap).
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/916-unterm-fm/"
+{
+  printf -- '---\n'                              # opens frontmatter, never closed
+  printf 'id: "916"\n'
+  for ((i = 1; i <= 200; i++)); do printf 'body line %d\n' "$i"; done
+} > "$f/docs/ship-flow/916-unterm-fm/verify.md"
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.16 unterminated frontmatter over-cap body → FAILS (smuggle caught)"
+assert_stderr_contains "body content is 202 lines" \
+  "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.16b unterminated frontmatter lines are COUNTED (--- + id + 200 = 202)"
+rm -rf "$f"
+
+# ---- Case 17: BALANCED frontmatter still EXCLUDED (regression guard) ----
+# A properly closed ---…--- block must still be stripped: 4 frontmatter lines
+# + 100 body → body = 100 ≤ 120 → PASS. Guards against over-counting balanced fm.
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/917-bal-fm/"
+{
+  printf -- '---\n'
+  printf 'id: "917"\n'
+  printf 'title: "balanced fm"\n'
+  printf -- '---\n'
+  for ((i = 1; i <= 100; i++)); do printf 'body line %d\n' "$i"; done
+} > "$f/docs/ship-flow/917-bal-fm/verify.md"
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.17 balanced frontmatter still excluded (100 body ≤ 120) → PASS"
+rm -rf "$f"
+
+echo
 echo "=== C15 artifact-verbosity — git branch-scope grandfather (real merge-base..HEAD path) ==="
 
 # Build a real git repo: an over-cap stage artifact committed ON main (the
@@ -341,6 +380,60 @@ TMP="$(mktemp -d)"
 )
 assert_exit 0 "run_check_in_repo '$TMP'" \
   "C15.15 git-mode: touched over-cap _archive/ plan.md → NOT scanned (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "=== C15 cross-review cycle 2: rename-into-active bypass (R records) ==="
+
+# ---- Case 18: git mv over-cap artifact INTO an active stage path → must FAIL ----
+# --diff-filter=AM --name-only never sees a rename (R record), so `git mv` of an
+# over-cap stage artifact into an active path was a clean bypass. The fix scans
+# --name-status -M --diff-filter=AMR and measures the rename DESTINATION.
+# Source is itself a stage artifact (plan.md) so BOTH ends match the stage globs
+# — the exact case where the old AM/name-only filter returned empty.
+TMP="$(mktemp -d)"
+(
+  cd "$TMP" || exit 1
+  git init -q -b main
+  git config user.email test@test
+  git config user.name test
+  mkdir -p docs/ship-flow/700-src docs/ship-flow/800-act
+  { for ((i = 1; i <= 250; i++)); do printf 'over-cap %d\n' "$i"; done; } > docs/ship-flow/700-src/plan.md
+  printf 'seed\n' > docs/ship-flow/800-act/index.md
+  git add -A
+  git commit -qm "baseline: over-cap plan.md + active entity"
+  git checkout -q -b feature
+  git mv docs/ship-flow/700-src/plan.md docs/ship-flow/800-act/verify.md
+  git commit -qm "mv over-cap stage artifact into active path"
+)
+assert_exit 1 "run_check_in_repo '$TMP'" \
+  "C15.18 git mv over-cap artifact into active path → FAILS (R-dest measured)"
+assert_stderr_contains "800-act/verify.md" \
+  "( cd '$TMP' && git update-ref refs/remotes/origin/main \"\$(git rev-parse main)\" && bash '${BIN_DIR}/check-invariants.sh' --check artifact-verbosity )" \
+  "C15.18b rename DESTINATION is the measured/reported path"
+rm -rf "$TMP"
+
+# ---- Case 19: git mv over-cap active artifact INTO _archive/ → must NOT red ----
+# Archiving an over-cap entity (rename DEST under _archive/) stays excluded —
+# scope exclusion applies to the destination. Mirror of Case 15 via the R path.
+TMP="$(mktemp -d)"
+(
+  cd "$TMP" || exit 1
+  git init -q -b main
+  git config user.email test@test
+  git config user.name test
+  mkdir -p docs/ship-flow/800-act docs/ship-flow/seed
+  { for ((i = 1; i <= 250; i++)); do printf 'over-cap %d\n' "$i"; done; } > docs/ship-flow/800-act/plan.md
+  printf 'seed\n' > docs/ship-flow/seed/index.md
+  git add -A
+  git commit -qm "baseline: active over-cap plan.md"
+  git checkout -q -b feature
+  mkdir -p docs/ship-flow/_archive/800-act
+  git mv docs/ship-flow/800-act/plan.md docs/ship-flow/_archive/800-act/plan.md
+  git commit -qm "archive: move over-cap entity into _archive"
+)
+assert_exit 0 "run_check_in_repo '$TMP'" \
+  "C15.19 git mv over-cap artifact into _archive/ → NOT scanned (dest excluded, exit 0)"
 rm -rf "$TMP"
 
 exit $FAIL

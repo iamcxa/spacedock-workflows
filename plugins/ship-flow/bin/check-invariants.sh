@@ -1560,15 +1560,23 @@ _artifact_body_line_count() {
   #     If EOF is reached with a block still open (unterminated/unbalanced), the
   #     buffered lines are COUNTED — an unterminated <details> cannot smuggle
   #     body under the budget (err toward RED).
+  # Hardening (cross-review cycle 2):
+  #   - FRONTMATTER BALANCE: the leading ---…--- block is also BUFFERED, not
+  #     skipped. It is excluded only when a closing --- is found; if EOF is
+  #     reached with frontmatter still open (first line --- but no close), the
+  #     buffered lines are COUNTED — an unterminated frontmatter cannot smuggle
+  #     the whole body under the budget (err toward RED). Same class as <details>.
   awk '
-    BEGIN { in_fm = 0; in_details = 0; count = 0; pending = 0 }
+    BEGIN { in_fm = 0; in_details = 0; count = 0; pending = 0; fm_pending = 0 }
     {
       sub(/\r$/, "")          # normalise CRLF
     }
-    # Leading frontmatter: only if the very first line is exactly ---
-    NR == 1 && $0 == "---" { in_fm = 1; next }
+    # Leading frontmatter: only if the very first line is exactly ---.
+    # BUFFER it (fm_pending) rather than drop, so an unterminated block counts.
+    NR == 1 && $0 == "---" { in_fm = 1; fm_pending = 1; next }
     in_fm == 1 {
-      if ($0 == "---") { in_fm = 0 }
+      if ($0 == "---") { in_fm = 0; fm_pending = 0; next }  # balanced → exclude
+      fm_pending++
       next
     }
     # While buffering a candidate <details> block:
@@ -1595,6 +1603,9 @@ _artifact_body_line_count() {
       # Unbalanced/unterminated block left open at EOF: count the buffered lines
       # (including the opening tag line) so smuggled content cannot hide.
       if (in_details == 1) { count += pending }
+      # Unterminated frontmatter (first line --- but never closed): same — count
+      # the buffered lines so the whole body cannot be smuggled into a fake block.
+      if (in_fm == 1) { count += fm_pending }
       print count
     }
   ' "$file"
@@ -1645,18 +1656,47 @@ check_artifact_verbosity() {
     local git_top
     git_top="$(git rev-parse --show-toplevel 2>/dev/null)" || git_top=""
     [ -n "$git_top" ] && strip_prefix="${git_top}/"
-    local rel
-    while IFS= read -r rel; do
+    # --name-status -M --diff-filter=AMR (not --name-only AM): rename records
+    # carry the moved content. For A/M the candidate is the path; for R the
+    # candidate is the DESTINATION (the file as it now lives). This closes the
+    # rename-into-active bypass: `git mv` of an over-cap stage artifact into an
+    # active stage path is an R record that --diff-filter=AM never measures.
+    # Scope exclusion is applied to the DESTINATION:
+    #   - the negative :(glob,exclude) pathspecs already drop records whose dest
+    #     is under _archive/_debriefs/_mods/ (archiving an over-cap entity stays
+    #     excluded — verified: git suppresses the record when dest is excluded),
+    #   - we ALSO re-check the dest in shell (belt-and-suspenders, legible) so a
+    #     dest under a terminal tree can never be measured even if the rename
+    #     pathspec semantics shift across git versions.
+    local status rest rel
+    while IFS=$'\t' read -r status rest; do
+      [ -n "$status" ] || continue
+      case "$status" in
+        R*)
+          # R<score>\t<src>\t<dst> — rest holds "<src>\t<dst>".
+          # The candidate is the DESTINATION (the file as it now lives).
+          rel="${rest##*$'\t'}"
+          ;;
+        A|M)
+          rel="$rest"
+          ;;
+        *)
+          continue ;;
+      esac
       [ -n "$rel" ] || continue
-      # Measure the file at its current working-tree HEAD state (the file as it
-      # now is). Deleted files are out of the diff (--diff-filter=AM); a path in
-      # the AM set may still be missing if later removed in the working tree —
+      # Shell-side scope exclusion on the resolved (destination) path.
+      case "$rel" in
+        docs/ship-flow/_archive/*|docs/ship-flow/_debriefs/*|docs/ship-flow/_mods/*)
+          continue ;;
+      esac
+      # Measure the file at its current working-tree HEAD state. A path in the
+      # AMR set may still be missing in the working tree (e.g. later removed) —
       # guard for that.
       [ -f "${git_top}/${rel}" ] && candidates+=("${git_top}/${rel}")
     # Negative pathspecs exclude _archive/ _debriefs/ _mods/ (terminal/non-stage
     # trees, NOT capped per design.md:87 scope table) — the **/plan.md glob would
     # otherwise also match docs/ship-flow/_archive/<id>/plan.md.
-    done < <(git diff --name-only --diff-filter=AM "$merge_base" HEAD -- \
+    done < <(git diff --name-status -M --diff-filter=AMR "$merge_base" HEAD -- \
                ':(glob)docs/ship-flow/**/plan.md' \
                ':(glob)docs/ship-flow/**/execute.md' \
                ':(glob)docs/ship-flow/**/verify.md' \
