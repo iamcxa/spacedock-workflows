@@ -64,6 +64,18 @@ PITCH_PROBLEM=$(yq --input-format=json '.pitch.problem' "$PROPOSAL" | tr -d '"')
 PITCH_ACCEPTANCE_OUTCOME=$(yq --input-format=json '.pitch.acceptance_outcome' "$PROPOSAL" | tr -d '"')
 PITCH_ANSWERS_DENSITY=$(yq --input-format=json '.pitch.answers_density // ""' "$PROPOSAL" | tr -d '"')
 
+# pre_mortem block (entity 129.4): render the already-validated proposal.pitch.pre_mortem
+# into the pitch frontmatter so non-trivial pitches pass check-invariants.sh C1
+# (pre-mortem-emitted) with zero manual lift. category/one_liner are validated by the
+# proposal contract — we only render. Absent (trivial pitch) → PITCH_PRE_MORTEM_YAML="".
+# Pitch-only scope: this block is injected ONLY into the pitch entity heredocs, never
+# into shaped-child entities, mirroring C1's `^pattern:[[:space:]]*pitch` filter.
+PITCH_PRE_MORTEM_YAML=""
+if yq --input-format=json -e '.pitch.pre_mortem != null' "$PROPOSAL" >/dev/null 2>&1; then
+  PITCH_PRE_MORTEM_YAML=$(printf 'pre_mortem:\n%s\n' \
+    "$(yq --input-format=json -o=yaml '.pitch.pre_mortem' "$PROPOSAL" | sed 's/^/  /')")
+fi
+
 [ -n "$PITCH_ID" ] && [ -n "$PITCH_SLUG" ] && [ -n "$PITCH_TITLE" ] || {
   echo "Error: proposal missing pitch.id / pitch.slug / pitch.title" >&2
   exit 10
@@ -196,6 +208,7 @@ appetite: "${PITCH_APPETITE}"
 layout: folder
 harvest_required: true
 $([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
+$([ -n "${PITCH_PRE_MORTEM_YAML}" ] && printf '%s' "${PITCH_PRE_MORTEM_YAML}" || true)
 ---
 
 <!-- section:stage-artifact-links -->
@@ -261,6 +274,7 @@ pattern: pitch
 appetite: "${PITCH_APPETITE}"
 harvest_required: true
 $([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
+$([ -n "${PITCH_PRE_MORTEM_YAML}" ] && printf '%s' "${PITCH_PRE_MORTEM_YAML}" || true)
 ---
 
 ### Problem
