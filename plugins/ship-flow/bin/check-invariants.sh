@@ -1616,6 +1616,18 @@ _artifact_raw_line_count() {
   awk 'END { print NR }' "$1"
 }
 
+# Known limitations (accepted — pitch 129.2, captain-approved 2026-06-04). C15 is a
+# verbosity LINT (discipline nudge), not a security boundary; the awk body-count
+# heuristic is intentionally not a markdown-grade tokenizer. Two residual edge cases:
+#   1. A standalone `<details>`/`</details>` line INSIDE a fenced code block (```) is
+#      treated as a real collapsible block and excluded from the body count. Exploiting
+#      it requires deliberately fencing collapsible markers, and the content stays
+#      VISIBLE in the rendered artifact — so it can dodge the line cap but not hide text.
+#   2. Nested `<details>` close is not depth-aware (first standalone `</details>` ends
+#      the block), so a legitimately nested block is only partially excluded and may
+#      OVER-count toward RED. This errs SAFE (false-RED, never a bypass).
+# Closing either would need a real Markdown parser — out of scope for a bash verbosity
+# gate. Honest-author artifacts are fully covered; see docs/ship-flow/129.2-* stage report.
 check_artifact_verbosity() {
   local violations=0
   local candidates=()
