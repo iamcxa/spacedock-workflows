@@ -1507,6 +1507,156 @@ check_visible_surface_map_contract() {
   return "$fail"
 }
 
+# C15: artifact-verbosity — Principle 8 stage-report line caps as a CI BLOCKER.
+# Source: 129.2-wire-artifact-verbosity-blocker (design.md, CAPTAIN-APPROVED).
+# Sibling: plugins/ship-flow/INVARIANTS.md Principle 8 (cap table @ :290-298).
+#
+# Appended as an ISOLATED function (entity 129.1 edits this file in parallel —
+# minimize conflict surface: pure append + two registration lines, no reorg).
+#
+# Scope: the 5 stage-report artifacts only — plan/execute/verify/review/ship.md.
+# shape.md, design.md, index.md are NOT capped (Principle 8 omits them).
+#
+# Measurement = BODY content: count lines AFTER (1) stripping a leading
+# ---…--- YAML frontmatter block, (2) dropping ^<!-- /?section: marker lines,
+# (3) excluding lines inside <details>…</details> blocks. Blank lines are
+# counted (real body whitespace; trimming invites gaming). CRLF is normalised
+# (CR stripped) so endings do not mis-count.
+# Backstop: raw total is ALSO capped at 2x the body cap, so a single giant
+# <details> cannot defeat the cap.
+#
+# Grandfather = branch-scope: only stage artifacts ADDED or MODIFIED in
+# merge_base(origin/main, HEAD)..HEAD are scanned (exact C14 mechanism).
+# Pre-existing over-cap files on main are never scanned. Fixture mode
+# ($FIXTURE set) bypasses the git-range gate and scans the fixture dir directly.
+
+# Return the body cap for a stage artifact basename; empty string = not capped.
+_artifact_body_cap() {
+  case "$1" in
+    plan.md) echo 200 ;;
+    execute.md) echo 150 ;;
+    verify.md) echo 120 ;;
+    review.md) echo 100 ;;
+    ship.md) echo 60 ;;
+    *) echo "" ;;
+  esac
+}
+
+# Measure body-content line count of a stage artifact.
+# Reads the file from $1, prints the body line count.
+_artifact_body_line_count() {
+  local file="$1"
+  # awk: strip CR; skip a single leading ---…--- frontmatter block; skip
+  # ^<!-- /?section: marker lines; skip lines inside <details>…</details>.
+  awk '
+    BEGIN { in_fm = 0; in_details = 0; count = 0 }
+    {
+      sub(/\r$/, "")          # normalise CRLF
+    }
+    # Leading frontmatter: only if the very first line is exactly ---
+    NR == 1 && $0 == "---" { in_fm = 1; next }
+    in_fm == 1 {
+      if ($0 == "---") { in_fm = 0 }
+      next
+    }
+    # section markers (open or close) are excluded
+    /^<!--[[:space:]]*\/?section:/ { next }
+    # <details> content excluded (the <details>/</details> tag lines too)
+    /<details/ { in_details = 1; next }
+    in_details == 1 {
+      if ($0 ~ /<\/details>/) { in_details = 0 }
+      next
+    }
+    { count++ }
+    END { print count }
+  ' "$file"
+}
+
+# Raw total line count, CR-normalised (so CRLF files count the same as LF).
+_artifact_raw_line_count() {
+  awk 'END { print NR }' "$1"
+}
+
+check_artifact_verbosity() {
+  local violations=0
+  local candidates=()
+  # Path prefix to strip from absolute file paths when printing the failure
+  # message. Fixture mode strips $ROOT; git mode strips the git top-level
+  # (which is where `git diff` paths are rooted — NOT $ROOT, which points at the
+  # installed plugin location and would be the wrong repo under test fixtures).
+  local strip_prefix="${ROOT}/"
+
+  if [ -n "$FIXTURE" ]; then
+    # Fixture mode: scan all stage artifacts under the fixture dir directly
+    # (git history is absent in fixtures — same dual-path as other checks).
+    local f
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      candidates+=("$f")
+    done < <(find "${ROOT}/docs/ship-flow" -type f \
+               \( -name plan.md -o -name execute.md -o -name verify.md \
+                  -o -name review.md -o -name ship.md \) 2>/dev/null | sort)
+  else
+    # Branch-scope grandfather (mirror C14): scan only stage artifacts that the
+    # current branch's commits add or modify (merge_base..HEAD).
+    local merge_base
+    if ! merge_base="$(git merge-base origin/main HEAD 2>/dev/null)"; then
+      echo "OK C15 artifact-verbosity (no origin/main; skipping)"
+      return 0
+    fi
+    if [ "$merge_base" = "$(git rev-parse HEAD)" ]; then
+      echo "OK C15 artifact-verbosity (no branch commits to scan)"
+      return 0
+    fi
+    # git diff paths are relative to the repo top-level; resolve files against
+    # it (not $ROOT) so working-tree reads hit the repo actually under check.
+    local git_top
+    git_top="$(git rev-parse --show-toplevel 2>/dev/null)" || git_top=""
+    [ -n "$git_top" ] && strip_prefix="${git_top}/"
+    local rel
+    while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
+      # Measure the file at its current working-tree HEAD state (the file as it
+      # now is). Deleted files are out of the diff (--diff-filter=AM); a path in
+      # the AM set may still be missing if later removed in the working tree —
+      # guard for that.
+      [ -f "${git_top}/${rel}" ] && candidates+=("${git_top}/${rel}")
+    done < <(git diff --name-only --diff-filter=AM "$merge_base" HEAD -- \
+               ':(glob)docs/ship-flow/**/plan.md' \
+               ':(glob)docs/ship-flow/**/execute.md' \
+               ':(glob)docs/ship-flow/**/verify.md' \
+               ':(glob)docs/ship-flow/**/review.md' \
+               ':(glob)docs/ship-flow/**/ship.md' 2>/dev/null)
+  fi
+
+  local file base cap rel_display body_lines raw_lines raw_cap
+  for file in "${candidates[@]}"; do
+    [ -f "$file" ] || continue
+    base="$(basename "$file")"
+    cap="$(_artifact_body_cap "$base")"
+    [ -n "$cap" ] || continue
+    rel_display="${file#"$strip_prefix"}"
+
+    body_lines="$(_artifact_body_line_count "$file")"
+    raw_lines="$(_artifact_raw_line_count "$file")"
+    raw_cap=$((cap * 2))
+
+    if [ "$body_lines" -gt "$cap" ]; then
+      violations=$((violations + 1))
+      echo "FAIL C15 artifact-verbosity: '${rel_display}' body content is ${body_lines} lines (cap ${cap} for ${base}). Move raw evidence into <details> or link to commits/PR. See plugins/ship-flow/INVARIANTS.md#principle-8." >&2
+    elif [ "$raw_lines" -gt "$raw_cap" ]; then
+      violations=$((violations + 1))
+      echo "FAIL C15 artifact-verbosity: '${rel_display}' raw total is ${raw_lines} lines (raw cap ${raw_cap} = 2x ${cap} body cap for ${base}); body is under cap but a single oversized <details> defeats the budget. Link out instead of inlining. See plugins/ship-flow/INVARIANTS.md#principle-8." >&2
+    fi
+  done
+
+  if [ "$violations" -gt 0 ]; then
+    return 1
+  fi
+  echo "OK C15 artifact-verbosity"
+  return 0
+}
+
 # ---- Dispatcher ----
 
 # Single-check mode
@@ -1548,6 +1698,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     entity-status-via-advance-stage-only) check_entity_status_via_advance_stage_only; exit $? ;;
     stage-metrics-contract) check_stage_metrics_contract; exit $? ;;
     visible-surface-map-contract) check_visible_surface_map_contract; exit $? ;;
+    artifact-verbosity) check_artifact_verbosity; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -1610,5 +1761,8 @@ check_fo_receipt_on_proceed || FAIL=1
 check_entity_status_via_advance_stage_only || FAIL=1
 check_stage_metrics_contract || FAIL=1
 check_visible_surface_map_contract || FAIL=1
+# C15: Principle 8 stage-report verbosity caps (branch-scope grandfather)
+# Source: 129.2-wire-artifact-verbosity-blocker (2026-06-04)
+check_artifact_verbosity || FAIL=1
 
 exit $FAIL
