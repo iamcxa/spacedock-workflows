@@ -281,6 +281,67 @@ assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" 
 rm -rf "$f"
 
 echo
+echo "=== C15 cross-review cycle 3: <details> open-anchor tightening (gemini) ==="
+
+# ---- Case 20: single-line <details>x</details> open + later standalone close ----
+# The OLD open anchor (/^[[:space:]]*<details/) matched a single-line
+# <details>marker</details>, opening a block with no anchored close ON that line;
+# a LATER standalone </details> then closed it, swallowing the lines between →
+# bypass. The tightened symmetric anchor requires the open tag ALONE on its line,
+# so a single-line <details>…</details> is NOT an opener. Nothing is excluded →
+# every line counts. 1 (single-line) + 200 smuggled + 1 (</details>) + 5 tail =
+# 207 body > 120 cap → FAIL.
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/920-inline-open/"
+{
+  printf '<details>marker</details>\n'
+  for ((i = 1; i <= 200; i++)); do printf 'smuggled %d\n' "$i"; done
+  printf '</details>\n'
+  for ((i = 1; i <= 5; i++)); do printf 'tail %d\n' "$i"; done
+} > "$f/docs/ship-flow/920-inline-open/verify.md"
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.20 single-line <details>x</details> open + later close → FAILS (no swallow)"
+assert_stderr_contains "body content is 207 lines" \
+  "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.20b single-line <details> not an opener — all 207 lines counted"
+rm -rf "$f"
+
+# ---- Case 21: <details-list> custom element + over-cap body → must FAIL ----
+# The OLD anchor matched <details-list> (char after `details` was unconstrained),
+# wrongly entering details-mode and dropping the body. The tightened anchor needs
+# `>` or whitespace after `details`, never `-`, so <details-list> is ordinary
+# body. 1 + 200 = 201 body > 120 → FAIL.
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/921-custom-el/"
+{
+  printf '<details-list>\n'
+  for ((i = 1; i <= 200; i++)); do printf 'body %d\n' "$i"; done
+} > "$f/docs/ship-flow/921-custom-el/verify.md"
+assert_exit 1 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.21 <details-list> custom element + over-cap body → FAILS (not mis-excluded)"
+assert_stderr_contains "body content is 201 lines" \
+  "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.21b <details-list> counted as body (not a <details> opener)"
+rm -rf "$f"
+
+# ---- Case 22: real standalone <details>/<details open> STILL excluded (guard) ----
+# Tightening the open anchor must not break the legitimate escape hatch. A real
+# standalone <details open> block (balanced) must still be excluded: 100 body +
+# balanced 50-line <details open>…</details> (raw 152 < 240 backstop) → body =
+# 100 ≤ 120 → PASS.
+f=$(mk_fixture)
+mkdir -p "$f/docs/ship-flow/922-real-open/"
+{
+  for ((i = 1; i <= 100; i++)); do printf 'body line %d\n' "$i"; done
+  printf '<details open>\n'
+  for ((i = 1; i <= 48; i++)); do printf 'collapsed %d\n' "$i"; done
+  printf '</details>\n'
+} > "$f/docs/ship-flow/922-real-open/verify.md"
+assert_exit 0 "bash $CHECK_SCRIPT --test-fixture $f --check artifact-verbosity" \
+  "C15.22 real standalone <details open> still excluded (escape hatch intact) → PASS"
+rm -rf "$f"
+
+echo
 echo "=== C15 artifact-verbosity — git branch-scope grandfather (real merge-base..HEAD path) ==="
 
 # Build a real git repo: an over-cap stage artifact committed ON main (the
@@ -434,6 +495,39 @@ TMP="$(mktemp -d)"
 )
 assert_exit 0 "run_check_in_repo '$TMP'" \
   "C15.19 git mv over-cap artifact into _archive/ → NOT scanned (dest excluded, exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "=== C15 cross-review cycle 3: subdir invocation — :(top) pathspec (gemini) ==="
+
+# ---- Case 23: run the gate FROM A SUBDIRECTORY → over-cap changed file still RED ----
+# Without :(top) on the pathspecs, git resolves them relative to CWD, so running
+# check-invariants from a subdir matched no files → silent false-PASS (local /
+# pre-commit hazard; CI runs from repo root so CI was unaffected). The :(top)
+# magic roots them at the repo top regardless of cwd. Prove an over-cap changed
+# file in the branch diff is still detected when the check runs from a nested dir.
+TMP="$(mktemp -d)"
+(
+  cd "$TMP" || exit 1
+  git init -q -b main
+  git config user.email test@test
+  git config user.name test
+  mkdir -p docs/ship-flow/800-act nested/deeper/sub
+  printf 'seed\n' > docs/ship-flow/800-act/index.md
+  git add -A
+  git commit -qm "baseline"
+  git checkout -q -b feature
+  { for ((i = 1; i <= 250; i++)); do printf 'over-cap %d\n' "$i"; done; } > docs/ship-flow/800-act/verify.md
+  git add docs/ship-flow/800-act/verify.md
+  git commit -qm "add over-cap verify.md"
+)
+# Run the check from the deepest subdirectory.
+assert_exit 1 \
+  "( cd '$TMP/nested/deeper/sub' && git update-ref refs/remotes/origin/main \"\$(git rev-parse main)\" && bash '${BIN_DIR}/check-invariants.sh' --check artifact-verbosity )" \
+  "C15.23 gate run FROM subdir → over-cap changed file still detected (:(top) fix, exit 1)"
+assert_stderr_contains "docs/ship-flow/800-act/verify.md" \
+  "( cd '$TMP/nested/deeper/sub' && git update-ref refs/remotes/origin/main \"\$(git rev-parse main)\" && bash '${BIN_DIR}/check-invariants.sh' --check artifact-verbosity )" \
+  "C15.23b subdir-run reports the top-relative path (git_top resolution holds)"
 rm -rf "$TMP"
 
 exit $FAIL

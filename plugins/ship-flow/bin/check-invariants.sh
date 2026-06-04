@@ -1594,9 +1594,17 @@ _artifact_body_line_count() {
     }
     # section markers (open or close) are excluded
     /^<!--[[:space:]]*\/?section:/ { next }
-    # Standalone <details> open tag (anchored, own line) → start buffering.
-    # The tag line itself is part of the candidate block (buffered).
-    /^[[:space:]]*<details/ { in_details = 1; pending = 1; next }
+    # Standalone <details> open tag → start buffering. The open anchor is
+    # SYMMETRIC with the close anchor: the tag must be alone on its line —
+    # `<details` followed by optional attributes then `>` with nothing after.
+    # This rejects (cross-review cycle 3, gemini):
+    #   - single-line `<details>text</details>` (content after `>` → no match;
+    #     would otherwise open a block that a LATER standalone </details> closes,
+    #     swallowing the lines between),
+    #   - custom elements like `<details-list>` (char after `details` must be `>`
+    #     or whitespace, never `-`).
+    # A real standalone `<details>` / `<details open>` on its own line still matches.
+    /^[[:space:]]*<details([[:space:]][^>]*)?>[[:space:]]*$/ { in_details = 1; pending = 1; next }
     # Ordinary body line.
     { count++ }
     END {
@@ -1703,20 +1711,27 @@ check_artifact_verbosity() {
       esac
       # Measure the file at its current working-tree HEAD state. A path in the
       # AMR set may still be missing in the working tree (e.g. later removed) —
-      # guard for that.
-      [ -f "${git_top}/${rel}" ] && candidates+=("${git_top}/${rel}")
+      # guard for that. Also guard empty git_top (cross-review cycle 3, gemini):
+      # without it `[ -f "/${rel}" ]` would query the filesystem ROOT, a
+      # spurious path. An empty git_top means we can't resolve the file safely.
+      [ -n "$git_top" ] && [ -f "${git_top}/${rel}" ] && candidates+=("${git_top}/${rel}")
     # Negative pathspecs exclude _archive/ _debriefs/ _mods/ (terminal/non-stage
     # trees, NOT capped per design.md:87 scope table) — the **/plan.md glob would
     # otherwise also match docs/ship-flow/_archive/<id>/plan.md.
+    # `top` magic (cross-review cycle 3, gemini): without it git resolves the
+    # pathspecs relative to CWD, so running the gate from a subdirectory (local
+    # / pre-commit) matches no files → silent false-PASS. `top` roots them at the
+    # repo top, matching where --show-toplevel-relative reads expect them. Output
+    # paths stay top-relative regardless of cwd, so ${git_top}/${rel} holds.
     done < <(git diff --name-status -M --diff-filter=AMR "$merge_base" HEAD -- \
-               ':(glob)docs/ship-flow/**/plan.md' \
-               ':(glob)docs/ship-flow/**/execute.md' \
-               ':(glob)docs/ship-flow/**/verify.md' \
-               ':(glob)docs/ship-flow/**/review.md' \
-               ':(glob)docs/ship-flow/**/ship.md' \
-               ':(glob,exclude)docs/ship-flow/_archive/**' \
-               ':(glob,exclude)docs/ship-flow/_debriefs/**' \
-               ':(glob,exclude)docs/ship-flow/_mods/**' 2>/dev/null)
+               ':(top,glob)docs/ship-flow/**/plan.md' \
+               ':(top,glob)docs/ship-flow/**/execute.md' \
+               ':(top,glob)docs/ship-flow/**/verify.md' \
+               ':(top,glob)docs/ship-flow/**/review.md' \
+               ':(top,glob)docs/ship-flow/**/ship.md' \
+               ':(top,glob,exclude)docs/ship-flow/_archive/**' \
+               ':(top,glob,exclude)docs/ship-flow/_debriefs/**' \
+               ':(top,glob,exclude)docs/ship-flow/_mods/**' 2>/dev/null)
   fi
 
   local file base cap rel_display body_lines raw_lines raw_cap
