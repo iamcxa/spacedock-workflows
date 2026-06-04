@@ -566,4 +566,135 @@ fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
+# ── DC-129.4: pitch.pre_mortem emitted into pitch frontmatter (entity 129.4) ──
+# Stop the recurring C1 (pre-mortem-emitted) fail: shape-confirm.sh must render
+# proposal.pitch.pre_mortem into the pitch index.md/.md frontmatter so a freshly
+# shaped non-trivial pitch passes check-invariants.sh C1 with zero manual lift.
+proposal_with_pre_mortem() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing pre_mortem emission into pitch frontmatter",
+    "acceptance_outcome": "shape-confirm.sh emits pitch.pre_mortem into the pitch frontmatter so a freshly shaped non-trivial pitch passes C1.",
+    "pre_mortem": {
+      "category": "wrong-dcs",
+      "one_liner": "We render pre_mortem with wrong indentation so C1 grep still fails on the freshly shaped pitch."
+    },
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B",
+    "pm_skill_receipts": {
+      "stage": "ship-shape",
+      "mode": "mode-a",
+      "appetite": "small-batch",
+      "compose_guard": "passed",
+      "receipts": [
+        {"phase": "intake-problem", "delegate": "problem-framing-canvas", "required": true, "status": "invoked", "evidence": "Skill: problem-framing-canvas", "fallback": null, "rationale": "Feeds the Problem block."},
+        {"phase": "scope-decompose", "delegate": "opportunity-solution-tree", "required": true, "status": "unavailable", "evidence": null, "fallback": "inline", "rationale": "Skill unavailable; inline fallback recorded before compose."},
+        {"phase": "assumption-extract", "delegate": "pol-probe-advisor", "required": true, "status": "invoked", "evidence": "Skill: pol-probe-advisor", "fallback": null, "rationale": "Filters critical assumptions."},
+        {"phase": "acceptance-outcome", "delegate": "press-release", "required": true, "status": "skipped", "evidence": null, "fallback": null, "rationale": "Small-scope skip rule matched before compose."}
+      ]
+    }
+  },
+  "children": [
+    {"id": "090.1", "slug": "child-a", "title": "Child A", "depends_on": []}
+  ],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+echo
+echo "--- DC-129.4-1: pitch.pre_mortem emitted into folder-layout index.md ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-pre-mortem.json"
+proposal_with_pre_mortem > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1
+PITCH_INDEX="docs/ship-flow/090-test-pitch/index.md"
+if grep -qE '^pre_mortem:' "$PITCH_INDEX" 2>/dev/null; then
+  echo "OK DC-129.4-1a folder index.md has pre_mortem: at column 0 (C1 grep target)"
+else
+  echo "FAIL DC-129.4-1a folder index.md missing ^pre_mortem: block"
+  FAIL=1
+fi
+if grep -qE '^[[:space:]]+category:[[:space:]]*wrong-dcs' "$PITCH_INDEX" 2>/dev/null; then
+  echo "OK DC-129.4-1b folder index.md pre_mortem.category rendered"
+else
+  echo "FAIL DC-129.4-1b folder index.md missing pre_mortem.category"
+  FAIL=1
+fi
+if grep -qF 'We render pre_mortem with wrong indentation' "$PITCH_INDEX" 2>/dev/null; then
+  echo "OK DC-129.4-1c folder index.md pre_mortem.one_liner rendered"
+else
+  echo "FAIL DC-129.4-1c folder index.md missing pre_mortem.one_liner"
+  FAIL=1
+fi
+# DC2: check-invariants C1 passes on the freshly shaped pitch with zero manual edits
+if bash "${LIB_DIR}/../bin/check-invariants.sh" --test-fixture "$(pwd)" --check pre-mortem-emitted >/dev/null 2>&1; then
+  echo "OK DC-129.4-1d check-invariants C1 passes on freshly shaped pitch (no manual lift)"
+else
+  echo "FAIL DC-129.4-1d check-invariants C1 fails on freshly shaped pitch"
+  FAIL=1
+fi
+# Child (shaped-child) must NOT carry pre_mortem — emission mirrors C1 pitch-only scope
+if ! grep -qE '^pre_mortem:' docs/ship-flow/090.1-child-a/index.md 2>/dev/null; then
+  echo "OK DC-129.4-1e shaped-child index.md does NOT carry pre_mortem (pitch-only scope)"
+else
+  echo "FAIL DC-129.4-1e shaped-child index.md wrongly stamped with pre_mortem"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-129.4-2: pitch.pre_mortem emitted into flat-layout .md ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-pre-mortem-flat.json"
+proposal_with_pre_mortem > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=flat >/dev/null 2>&1
+PITCH_FLAT="docs/ship-flow/090-test-pitch.md"
+if grep -qE '^pre_mortem:' "$PITCH_FLAT" 2>/dev/null; then
+  echo "OK DC-129.4-2a flat .md has pre_mortem: at column 0"
+else
+  echo "FAIL DC-129.4-2a flat .md missing ^pre_mortem: block"
+  FAIL=1
+fi
+if grep -qE '^[[:space:]]+category:[[:space:]]*wrong-dcs' "$PITCH_FLAT" 2>/dev/null && \
+   grep -qF 'We render pre_mortem with wrong indentation' "$PITCH_FLAT" 2>/dev/null; then
+  echo "OK DC-129.4-2b flat .md pre_mortem.category + one_liner rendered"
+else
+  echo "FAIL DC-129.4-2b flat .md missing pre_mortem.category or one_liner"
+  FAIL=1
+fi
+if bash "${LIB_DIR}/../bin/check-invariants.sh" --test-fixture "$(pwd)" --check pre-mortem-emitted >/dev/null 2>&1; then
+  echo "OK DC-129.4-2c check-invariants C1 passes on freshly shaped flat pitch"
+else
+  echo "FAIL DC-129.4-2c check-invariants C1 fails on freshly shaped flat pitch"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-129.4-3: trivial pitch (no pre_mortem in proposal) emits nothing ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-no-pre-mortem.json"
+sample_proposal > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1
+if ! grep -qE '^pre_mortem:' docs/ship-flow/090-test-pitch/index.md 2>/dev/null; then
+  echo "OK DC-129.4-3 proposal without pre_mortem emits no pre_mortem block"
+else
+  echo "FAIL DC-129.4-3 emitted pre_mortem block when proposal had none"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
 exit "$FAIL"
