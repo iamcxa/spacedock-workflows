@@ -104,6 +104,73 @@ fi
 check "stage metrics subsections documented for shape through review" \
   "grep -q 'metrics:' \"$SCHEMA_PATH\" && grep -q 'section: \"### Metrics\"' \"$SCHEMA_PATH\" && grep -q 'open_contract_decisions_count' \"$SCHEMA_PATH\" && grep -q 'captain_decisions_count' \"$SCHEMA_PATH\" && grep -q 'verification_spec_count' \"$SCHEMA_PATH\" && grep -q 'tasks_done' \"$SCHEMA_PATH\" && grep -q 'runtime_checks_count' \"$SCHEMA_PATH\" && grep -q 'canonical_docs_updated_count' \"$SCHEMA_PATH\""
 
+# ============================================================================
+# 129.1 — schema de-dup contract (DC stable-IDs + reference-not-restate +
+# shape.md canonical). Asserts the CAPTAIN-APPROVED design.md contract is
+# encoded in the schema reference doc.
+# ============================================================================
+echo ""
+echo "=== 129.1 schema de-dup contract assertions ==="
+
+# CD-1 — DC-N stable-ID scheme ratified + frozen in done_criteria.
+check "done_criteria ratifies DC-N as stable immutable reference key (retire-never-reuse)" \
+  "grep -q 'stable, immutable reference key' \"$SCHEMA_PATH\" && grep -q 'retire-never-reuse' \"$SCHEMA_PATH\""
+
+check "done_criteria states it is the canonical home of assertion + type" \
+  "grep -q 'canonical home of the assertion + type' \"$SCHEMA_PATH\""
+
+# CD-2 — reference-not-restate: downstream tables drop Type + Assertion columns,
+# key by DC-N, add only genuinely-new columns.
+check "plan verification_spec columns drop Type + Assertion (key by DC-N)" \
+  "grep -qF 'columns: [\"DC\", \"Verify Procedure\", \"Expected\"]' \"$SCHEMA_PATH\""
+
+check "execute uat columns drop Type + Assertion (DC + Procedure + Result + Evidence)" \
+  "grep -qF 'columns: [\"DC\", \"Verify Procedure\", \"Result\", \"Evidence\"]' \"$SCHEMA_PATH\""
+
+check "verify uat results columns drop Type + Assertion" \
+  "grep -qF 'columns: [\"DC\", \"Verify Procedure\", \"Execute 1st\", \"Verify\", \"Evidence\"]' \"$SCHEMA_PATH\""
+
+# T2 over-cut guardrail — Verify Procedure stays inline (NOT reference-only) in
+# execute + verify UAT. Its column MUST still be present in both tables.
+check "T2 guardrail: Verify Procedure stays inline in execute uat (not reference-only)" \
+  "grep -A4 'section_tag: execute-uat' \"$SCHEMA_PATH\" | grep -q 'Verify Procedure'"
+
+check "T2 guardrail: Verify Procedure stays inline in verify uat (not reference-only)" \
+  "grep -A6 'section_tag: uat' \"$SCHEMA_PATH\" | grep -q 'Verify Procedure'"
+
+# Assertion + Type columns are fully retired from all three downstream UAT tables.
+check "no downstream UAT/spec table retains an Assertion column" \
+  "! grep -qE 'columns: \\[.*\"Assertion\".*\\]' \"$SCHEMA_PATH\""
+
+# CD-3 — shape.md canonical: downstream reads cite, do not restate.
+check "downstream reads cite the canonical artifact (cite, do not restate)" \
+  "[ \$(grep -c 'cite, do not restate' \"$SCHEMA_PATH\" || echo 0) -ge 3 ]"
+
+# CD-3 — PR body is the single sanctioned materialization point.
+check "PR body includes annotated as the sole sanctioned materialization point" \
+  "[ \$(grep -c 'sole restate point' \"$SCHEMA_PATH\" || echo 0) -ge 2 ]"
+
+# conventions — reference_not_restate + dc_stable_id rules present.
+check "conventions document reference_not_restate rule" \
+  "grep -q 'reference_not_restate:' \"$SCHEMA_PATH\""
+
+check "conventions document dc_stable_id rule" \
+  "grep -q 'dc_stable_id:' \"$SCHEMA_PATH\""
+
+if command -v ruby >/dev/null 2>&1; then
+  check "plan verification_spec columns parse as exactly [DC, Verify Procedure, Expected]" \
+    "ruby -e 'require \"yaml\"; s = YAML.safe_load(File.read(ARGV.fetch(0))); spec = s.fetch(\"stages\").fetch(\"plan\").fetch(\"output\").fetch(\"subsections\").fetch(\"verification_spec\"); field = spec.fetch(\"fields\").find { |f| f[\"name\"] == \"spec\" }; cols = field.fetch(\"columns\"); abort(\"got #{cols.inspect}\") unless cols == [\"DC\", \"Verify Procedure\", \"Expected\"]' \"$SCHEMA_PATH\""
+
+  check "execute uat results columns parse as exactly [DC, Verify Procedure, Result, Evidence]" \
+    "ruby -e 'require \"yaml\"; s = YAML.safe_load(File.read(ARGV.fetch(0))); field = s.fetch(\"stages\").fetch(\"execute\").fetch(\"uat\").fetch(\"fields\").find { |f| f[\"name\"] == \"results\" }; cols = field.fetch(\"columns\"); abort(\"got #{cols.inspect}\") unless cols == [\"DC\", \"Verify Procedure\", \"Result\", \"Evidence\"]' \"$SCHEMA_PATH\""
+
+  check "verify uat results columns parse as exactly [DC, Verify Procedure, Execute 1st, Verify, Evidence]" \
+    "ruby -e 'require \"yaml\"; s = YAML.safe_load(File.read(ARGV.fetch(0))); field = s.fetch(\"stages\").fetch(\"verify\").fetch(\"output\").fetch(\"subsections\").fetch(\"uat\").fetch(\"fields\").find { |f| f[\"name\"] == \"results\" }; cols = field.fetch(\"columns\"); abort(\"got #{cols.inspect}\") unless cols == [\"DC\", \"Verify Procedure\", \"Execute 1st\", \"Verify\", \"Evidence\"]' \"$SCHEMA_PATH\""
+
+  check "conventions reference_not_restate + dc_stable_id parse under conventions key" \
+    "ruby -e 'require \"yaml\"; s = YAML.safe_load(File.read(ARGV.fetch(0))); c = s.fetch(\"conventions\"); abort(\"missing reference_not_restate\") unless c.key?(\"reference_not_restate\"); abort(\"missing dc_stable_id\") unless c.key?(\"dc_stable_id\")' \"$SCHEMA_PATH\""
+fi
+
 # --- Summary ---
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
