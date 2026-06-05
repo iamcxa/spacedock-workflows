@@ -151,7 +151,7 @@ dc6c_utility_uncapped_pass() {
     mkdir -p "$d/plugins/ship-flow/skills/$sk"
     echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
   done
-  for sk in add-todos ship-onboard ship-runtime-detect domain-registry ui-verify; do
+  for sk in add-todos ship-onboard ship-runtime-detect domain-registry ui-verify science-officer-em; do
     mkdir -p "$d/plugins/ship-flow/skills/$sk"
     echo "# $sk" > "$d/plugins/ship-flow/skills/$sk/SKILL.md"
   done

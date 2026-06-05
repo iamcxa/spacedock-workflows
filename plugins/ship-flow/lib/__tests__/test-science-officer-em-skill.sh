@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Regression guard for the captain-invocable Science Officer (EM) thin skill.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+SKILL="${ROOT}/plugins/ship-flow/skills/science-officer-em/SKILL.md"
+AGENT="${ROOT}/plugins/ship-flow/agents/science-officer-em.md"
+PROFILE="${ROOT}/plugins/ship-flow/_mods/science-officer-em.md"
+
+PASS=0
+FAIL=0
+
+check() {
+  local desc="$1"
+  local cmd="$2"
+  if eval "$cmd" >/dev/null 2>&1; then
+    echo "PASS: ${desc}"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL: ${desc}"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+echo "=== Science Officer (EM) thin skill contract ==="
+
+check "profile exists" "test -f '$PROFILE'"
+check "skill exists" "test -f '$SKILL'"
+check "skill has canonical frontmatter name" "grep -q '^name: science-officer-em$' '$SKILL'"
+check "skill description is trigger-only" \
+  "grep -q '^description: Use when' '$SKILL' && ! grep -Eiq '^description:.*(write|render|follow|output)' '$SKILL'"
+check "skill is captain-invocable" "grep -q '^user-invocable: true$' '$SKILL'"
+check "skill references standing profile" "grep -q 'plugins/ship-flow/_mods/science-officer-em.md' '$SKILL'"
+check "skill supports conductor/general-prompt aliases" \
+  "grep -q 'science-officer' '$SKILL' && grep -q '科學官' '$SKILL' && grep -q 'EM' '$SKILL'"
+check "skill requires independent synthesis, not relay" \
+  "grep -qi 'anti-relay' '$SKILL' && grep -qi 'independent synthesis' '$SKILL' && grep -qi 'status-only relay' '$SKILL'"
+check "skill requires upward report shape fields" \
+  "grep -q 'science_officer_em_upward_report' '$SKILL' && grep -q 'em_judgment' '$SKILL' && grep -q 'evidence_synthesis' '$SKILL' && grep -q 'risk_tradeoff_call' '$SKILL' && grep -q 'recommendation' '$SKILL' && grep -q 'route' '$SKILL' && grep -q 'confidence' '$SKILL' && grep -q 'fo_boundary' '$SKILL'"
+check "skill includes route enum" \
+  "grep -q 'proceed' '$SKILL' && grep -q 'narrow' '$SKILL' && grep -q 'return' '$SKILL' && grep -q 'block' '$SKILL' && grep -q 'costly_no' '$SKILL'"
+check "skill preserves FO/EM boundary" \
+  "grep -qi 'FO owns workflow' '$SKILL' && grep -qi 'EM owns engineering judgment' '$SKILL'"
+check "skill forbids replacing FO mechanics" \
+  "grep -qi 'Do not advance stages' '$SKILL' && grep -qi 'Do not.*mutate.*frontmatter' '$SKILL' && grep -qi 'Do not.*own.*worktree' '$SKILL' && grep -qi 'Do not.*replace.*First Officer' '$SKILL'"
+check "skill gives direct invocation examples" \
+  "grep -q 'Use science-officer' '$SKILL' && grep -q '請科學官' '$SKILL'"
+check "claude agent profile exists" "test -f '$AGENT'"
+check "claude agent profile has canonical name" "grep -q '^name: science-officer-em$' '$AGENT'"
+check "claude agent profile delegates to standing profile" "grep -q 'plugins/ship-flow/_mods/science-officer-em.md' '$AGENT'"
+check "claude agent profile keeps FO boundary" \
+  "grep -qi 'FO owns workflow' '$AGENT' && grep -qi 'EM owns engineering judgment' '$AGENT' && grep -qi 'Do not.*replace.*First Officer' '$AGENT'"
+check "claude agent profile uses upward report shape" \
+  "grep -q 'science_officer_em_upward_report' '$AGENT' && grep -q 'route' '$AGENT' && grep -q 'confidence' '$AGENT'"
+
+echo ""
+echo "Results: ${PASS} passed, ${FAIL} failed"
+if [ "$FAIL" -gt 0 ]; then
+  exit 1
+fi

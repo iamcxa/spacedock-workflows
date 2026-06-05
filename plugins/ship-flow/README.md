@@ -70,6 +70,12 @@ Direct FO-to-stage-worker dispatch is now also the mandatory Science Officer (EM
 
 130.3 adds the judgment-bearing upward report schema through `lib/science-officer-em-upward-report.mjs` and `lib/render-science-officer-em-upward-report-contract.sh`. Verify, review, ship-final, and semantic-review packet comments consume `science_officer_em_upward_report` with `em_judgment`, `evidence_synthesis`, `risk_tradeoff_call`, `recommendation`, `route`, `confidence`, and `fo_boundary`. Valid routes are `proceed`, `narrow`, `return`, `block`, and `costly_no`. Status-only relay, worker transcript summary, checklist digest, FO-owned mechanics, missing route/confidence, and worker self-attestation gates are invalid because upward evidence must be output-shape judgment.
 
+Captain-invoked EM judgment uses the thin `ship-flow:science-officer-em` skill
+and Claude agent profile at `agents/science-officer-em.md`. The aliases
+`science-officer`, `SO`, `EM`, and `科學官` route to the standing EM profile for
+judgment only; they do not replace First Officer orchestration. FO still owns
+workflow clock, stage state, dispatch mechanics, worktrees, PR flow, and closeout.
+
 ### 4. Auditable per-stage `.md` artifacts
 
 Each stage writes its output to `<entity-folder>/{stage}.md` via `lib/write-stage-artifact.sh` (Layer C primitive — atomic commit with explicit pathspec, optional CAS via `--if-hash`). An auditor reads across `shape.md / plan.md / execute.md / verify.md / review.md / ship.md` + entity body to reconstruct decision history. Legacy `spec.md` remains a compatibility alias for older shape artifacts.
