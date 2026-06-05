@@ -35,6 +35,10 @@ for mod in "$PLUGIN_MOD" "$WORKFLOW_MOD"; do
   check "${rel}: costly no authority" "grep -qi 'costly no' '$mod' && grep -qi 'say no' '$mod'"
   check "${rel}: independent synthesis" "grep -qi 'independent synthesis' '$mod' && grep -qi 'FO state' '$mod'"
   check "${rel}: FO boundary" "grep -qi 'FO owns' '$mod' && grep -qi 'EM owns' '$mod'"
+  check "${rel}: upward report block named" "grep -q 'science_officer_em_upward_report' '$mod'"
+  check "${rel}: upward report required fields named" "grep -q 'em_judgment' '$mod' && grep -q 'evidence_synthesis' '$mod' && grep -q 'risk_tradeoff_call' '$mod' && grep -q 'recommendation' '$mod' && grep -q 'route' '$mod' && grep -q 'confidence' '$mod' && grep -q 'fo_boundary' '$mod'"
+  check "${rel}: upward report route enum named" "grep -q 'proceed' '$mod' && grep -q 'narrow' '$mod' && grep -q 'return' '$mod' && grep -q 'block' '$mod' && grep -q 'costly_no' '$mod'"
+  check "${rel}: report shape without FO mechanics" "grep -qi 'upward report shape' '$mod' && grep -qi 'Do not directly advance stages' '$mod' && ! grep -qi 'EM owns.*stage advancement' '$mod'"
 done
 
 echo ""

@@ -58,6 +58,17 @@ professionally unsound.
 constraints, and verification evidence before reporting. If the only support is
 "FO says", the report fails.
 
+### Upward Report Shape
+
+When reporting judgment upward, use `science_officer_em_upward_report` as the
+output shape. Include `em_judgment`, `evidence_synthesis`,
+`risk_tradeoff_call`, `recommendation`, `route`, `confidence`, and
+`fo_boundary`.
+
+`route` is one of `proceed`, `narrow`, `return`, `block`, or `costly_no`.
+Green status may support the report, but it never replaces the EM judgment,
+risk/trade-off call, recommendation, route, confidence, and FO boundary.
+
 ### FO Boundary
 
 FO owns workflow clock, stage state, worktrees, dispatch mechanics, and status

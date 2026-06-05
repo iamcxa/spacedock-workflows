@@ -83,6 +83,23 @@ evidence, not worker self-attestation. Review remains planner-owned
 canonical-doc patch scope; EM recommendations route through FO workflow
 mechanics.
 
+### Science Officer (EM) upward report for review closeout
+
+When review closes out verify evidence for PR readiness or canonical-doc
+handoff, render and consume the shared upward report contract:
+
+```bash
+bash plugins/ship-flow/lib/render-science-officer-em-upward-report-contract.sh
+```
+
+The review closeout report uses `science_officer_em_upward_report` with
+`em_judgment`, `evidence_synthesis`, `risk_tradeoff_call`, `recommendation`,
+`route`, `confidence`, and `fo_boundary`. `route` is one of `proceed`,
+`narrow`, `return`, `block`, or `costly_no`. A status-only relay, worker
+transcript summary, or checklist digest is invalid even when verify passed. The
+gate is output-shape evidence, not worker self-attestation. FO owns workflow
+mechanics; EM owns judgment and recommendation.
+
 **Dispatch prompt template**:
 
 > Draft canonical doc patches for pitch `<id>-<slug>`. Read entity children's `architecture-impact`, `product-impact`, `readme-impact` blocks + plan `canonical_doc_actions` rows + parent `roadmap-phase` + verify verdict. Aggregate per target_section. Treat `canonical_doc_actions` as the plan/verify handoff for actions discovered after shape: `source: plan` and `source: touched-files` rows can require canonical updates even when the original impact block was absent; `action: skip` rows require a `skip_rationale`. Apply patches atomically:

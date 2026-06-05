@@ -122,6 +122,23 @@ and technical recommendations. EM does not mutate entity state, own worktrees,
 dispatch workers, create or merge PRs, or advance stages. Verification is
 output-shape evidence, not worker self-attestation.
 
+### Science Officer (EM) upward report for verify synthesis
+
+When verify synthesizes reviewer evidence upward, render and consume the shared
+upward report contract:
+
+```bash
+bash plugins/ship-flow/lib/render-science-officer-em-upward-report-contract.sh
+```
+
+The verify synthesis report uses `science_officer_em_upward_report` with
+`em_judgment`, `evidence_synthesis`, `risk_tradeoff_call`, `recommendation`,
+`route`, `confidence`, and `fo_boundary`. `route` is one of `proceed`,
+`narrow`, `return`, `block`, or `costly_no`. A status-only relay, worker
+transcript summary, or checklist digest is invalid even when every check is
+green. The gate is output-shape evidence, not worker self-attestation. FO owns
+workflow mechanics; EM owns judgment and recommendation.
+
 When plan contains routed domain context, verify must first run
 `bash plugins/ship-flow/lib/extract-section.sh <plan.md> context-routing-manifest`
 and treat an empty result as BLOCKING with `route_to: execute` or `plan`

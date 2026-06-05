@@ -112,6 +112,24 @@ This mandatory load applies only to direct FO-to-stage-worker dispatch in 130.1.
 Nested worker prompts, stage-internal worker assignments, EM stewardship
 mechanics, and upward-report schema are downstream 130.2/130.3 scope.
 
+### Science Officer (EM) upward report for ship-final summary
+
+When ship-final summarizes review/verify/execute evidence upward for the
+captain-facing ship summary or PR-body composition gate, render and consume the
+shared upward report contract:
+
+```bash
+bash plugins/ship-flow/lib/render-science-officer-em-upward-report-contract.sh
+```
+
+The ship-final summary report uses `science_officer_em_upward_report` with
+`em_judgment`, `evidence_synthesis`, `risk_tradeoff_call`, `recommendation`,
+`route`, `confidence`, and `fo_boundary`. `route` is one of `proceed`,
+`narrow`, `return`, `block`, or `costly_no`. A status-only relay, worker
+transcript summary, or checklist digest is invalid even when all stage checks
+passed. The gate is output-shape evidence, not worker self-attestation. FO owns
+workflow mechanics; EM owns judgment and recommendation.
+
 ```bash
 DISPATCH_BODY="$(bash plugins/ship-flow/lib/build-stage-dispatch-prompt.sh \
   --workflow-dir "$WORKFLOW_DIR" \

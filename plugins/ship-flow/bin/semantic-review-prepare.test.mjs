@@ -5,11 +5,13 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  buildScienceOfficerEmSemanticReviewReport,
   buildSemanticReviewPacket,
   parseArgs,
   packetCommentBody,
   prepareSemanticReviewPacket,
 } from "./semantic-review-prepare.mjs";
+import { validateScienceOfficerEmUpwardReport } from "../lib/science-officer-em-upward-report.mjs";
 import { runSemanticReviewPacketValidation } from "./semantic-review-packet.mjs";
 
 async function withFixture(fn) {
@@ -328,6 +330,37 @@ test("formats marked PR comment with a readable summary and folded packet JSON",
   assert.match(comment, /<details>\n<summary>Semantic review packet JSON<\/summary>/);
   assert.match(comment, /```json\n/);
   assert.match(comment, /<\/details>\n$/);
+});
+
+test("formats marked PR comment with a valid Science Officer upward report block", () => {
+  const packet = {
+    schema_version: "ship-flow.semantic-review-packet.v1",
+    head_sha: headSha,
+    verdict: "pass",
+    local_review: {
+      status: "clean",
+      kc_pr_review: {
+        evidence: "Structured review passed with no blocking or high findings.",
+      },
+    },
+    commands: [{ name: "semantic review tests", command: "node --test", exit_code: 0 }],
+  };
+
+  const report = buildScienceOfficerEmSemanticReviewReport(packet);
+  const validation = validateScienceOfficerEmUpwardReport({
+    science_officer_em_upward_report: report,
+  });
+  assert.equal(validation.valid, true, validation.errors.join("; "));
+
+  const comment = packetCommentBody(packet);
+  assert.match(comment, /science_officer_em_upward_report:/);
+  assert.match(comment, /em_judgment:/);
+  assert.match(comment, /evidence_synthesis:/);
+  assert.match(comment, /risk_tradeoff_call:/);
+  assert.match(comment, /recommendation:/);
+  assert.match(comment, /route: proceed/);
+  assert.match(comment, /confidence: high/);
+  assert.match(comment, /fo_boundary:/);
 });
 
 test("rejects preparation when adopter-required dimension evidence is missing", async () => {

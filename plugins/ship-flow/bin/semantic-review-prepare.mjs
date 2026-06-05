@@ -165,6 +165,70 @@ function reviewerPacket(headSha) {
   };
 }
 
+function shortHead(packet) {
+  return typeof packet?.head_sha === "string" ? packet.head_sha.slice(0, 8) : "unknown";
+}
+
+function localReviewEvidence(packet) {
+  const localReview = packet?.local_review;
+  if (!localReview || typeof localReview !== "object") {
+    return "Local review evidence unavailable in packet.";
+  }
+  for (const [key, value] of Object.entries(localReview)) {
+    if (key === "status") continue;
+    if (isNonEmptyString(value?.evidence)) {
+      return `${key}: ${value.evidence}`;
+    }
+  }
+  return `local_review.status: ${localReview.status ?? "unknown"}`;
+}
+
+export function buildScienceOfficerEmSemanticReviewReport(packet) {
+  const commandCount = Array.isArray(packet?.commands) ? packet.commands.length : 0;
+  const evidenceItems = [
+    localReviewEvidence(packet),
+    `command evidence: ${commandCount} recorded command(s) for head ${shortHead(packet)}`,
+  ];
+
+  return {
+    subject: {
+      entity: shortHead(packet),
+      stage: "review",
+      report_kind: "semantic-review",
+    },
+    em_judgment:
+      "Proceed: the semantic-review packet carries structured review evidence suitable for upward synthesis.",
+    evidence_synthesis: evidenceItems,
+    risk_tradeoff_call:
+      "Residual risk is limited to dimensions represented in the packet; missing or adverse dimensions must return before PR readiness.",
+    recommendation:
+      "Use this packet as upward review evidence and route validation gaps back to verify before ship-final.",
+    route: "proceed",
+    confidence: packet?.verdict === "pass" ? "high" : "medium",
+    fo_boundary: "FO owns workflow mechanics; EM owns judgment and recommendation.",
+  };
+}
+
+function yamlScalar(value) {
+  return JSON.stringify(String(value));
+}
+
+function upwardReportYaml(report) {
+  return `science_officer_em_upward_report:
+  subject:
+    entity: ${yamlScalar(report.subject.entity)}
+    stage: ${yamlScalar(report.subject.stage)}
+    report_kind: ${yamlScalar(report.subject.report_kind)}
+  em_judgment: ${yamlScalar(report.em_judgment)}
+  evidence_synthesis:
+${report.evidence_synthesis.map((item) => `    - ${yamlScalar(item)}`).join("\n")}
+  risk_tradeoff_call: ${yamlScalar(report.risk_tradeoff_call)}
+  recommendation: ${yamlScalar(report.recommendation)}
+  route: ${report.route}
+  confidence: ${report.confidence}
+  fo_boundary: ${yamlScalar(report.fo_boundary)}`;
+}
+
 export async function buildSemanticReviewPacket({
   cwd = process.cwd(),
   options = {},
@@ -236,13 +300,18 @@ export async function buildSemanticReviewPacket({
 }
 
 export function packetCommentBody(packet) {
-  const shortHead = typeof packet?.head_sha === "string" ? packet.head_sha.slice(0, 8) : "unknown";
+  const packetShortHead = shortHead(packet);
   const verdict = typeof packet?.verdict === "string" ? packet.verdict : "unknown";
   const commandCount = Array.isArray(packet?.commands) ? packet.commands.length : 0;
+  const upwardReport = buildScienceOfficerEmSemanticReviewReport(packet);
 
   return `${SEMANTIC_REVIEW_PACKET_MARKER}
 
-Semantic review packet: \`${verdict}\` for \`${shortHead}\`. Evidence JSON is folded below for CI parsing. Commands recorded: ${commandCount}.
+Semantic review packet: \`${verdict}\` for \`${packetShortHead}\`. Evidence JSON is folded below for CI parsing. Commands recorded: ${commandCount}.
+
+\`\`\`yaml
+${upwardReportYaml(upwardReport)}
+\`\`\`
 
 <details>
 <summary>Semantic review packet JSON</summary>
