@@ -644,6 +644,14 @@ Incremental additions after the 0.5.0 release that were fully shipped on main be
 - `bin/auto-merge-readiness-collect.mjs` is the evidence collector for GitHub-backed PRs. It gathers PR snapshot, labels, issue comments, review threads, semantic gate output, review-thread gate output, and readiness output under `.context/ship-flow-auto-merge/` so the merge decision is inspectable. Pass `--policy-json` when an adopter repo uses a project-specific semantic review key or dimensions, and pass `--required-independent-approvals <n>` when branch policy requires independent approval before auto-merge.
 - `bin/auto-merge-run.mjs` is the optional mutating executor. It first runs the collector; when readiness is clean, it tries GitHub native auto-merge with `expectedHeadOid`. If GitHub reports the PR is already `clean`, it direct-merges with the same expected head. If GitHub reports `unstable`, direct merge requires adopter opt-in via `--allow-direct-merge-unstable`; otherwise the runner returns `blocked` and asks the operator to wait or opt in explicitly. The runner rejects semantic review `--mode off`, and also accepts `--policy-json` and `--required-independent-approvals` for forwarding to the collector.
 
+Spacebridge dogfood note: this private repository currently runs on a free
+GitHub organization plan, so repository rulesets, required checks, required
+approval, and native auto-merge cannot be fully enforced by GitHub. The
+`.github/workflows/ship-flow-invariants.yml` CI still runs the shell and bin
+test suites as report gates for every ship-flow PR, but operators must treat
+the green checks and readiness artifacts as a manual merge gate until the repo
+is public or the org plan supports protected branches for private repositories.
+
 ---
 
 ## Revision
