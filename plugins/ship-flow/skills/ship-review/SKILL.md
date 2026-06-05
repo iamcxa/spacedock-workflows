@@ -26,7 +26,7 @@ Run before any review work. Stop and SendMessage(FO) if any check fails.
 ## Entity body contract (schema-as-prose)
 
 - Reads: `verify.md` verdict (PASS required), `execute.md` execution log, resolved shape artifact (`shape.md`; legacy `spec.md` fallback alias) problem / DC / user journey / architecture-impact / product-impact / readme-impact blocks (per child), parent `roadmap-phase`, `PRODUCT.md`, `ARCHITECTURE.md`, `README.md`, `ROADMAP.md`, `references/doc-format.md`, `docs/ship-flow/_mods/canonical-doc-sync.md`.
-- Writes: `<entity-folder>/review.md` sections — `## PR Draft` (title + body), `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (verdict / stage_cost / timestamps).
+- Writes: `<entity-folder>/review.md` sections — `## PR Draft` (title + one-line reference to ship-final composition; NOT full prose — 129.3 CD-2), `## Per-Feature Retrospective` (compact), `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (verdict / stage_cost / timestamps).
 - Side effects: ARCHITECTURE.md / PRODUCT.md / README.md / ROADMAP.md patched (by `planner` dispatch — NOT by this skill directly).
 - Full section-tag + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.review`.
 
@@ -36,15 +36,15 @@ Run before any review work. Stop and SendMessage(FO) if any check fails.
 
 - Verify verdict pre-check (PASS required; block-on-fail).
 - **Canonical docs update**: dispatched to `planner` (named teammate via SendMessage) — leverages Principle 6 Rule A continuity (shape → plan → execute → verify context). Planner holds hot context across the pitch; mechanical patching of 4 docs benefits from that context (cross-section aggregation, prose-varying README judgment).
-- PR body drafting from canonical entity sections (Problem / User Journey / DC+Verification / Changes / Architecture Changes / Quality Gate).
+- PR body composition is deferred to ship-final (129.3 CD-2): review records only the title + a reference. ship-final composes the full body from `shape.md` (canonical) at PR-create.
 - Token cost summary + D2 knowledge candidate surfacing.
 
-**pr-review-toolkit invocation sizing** (captain Q3 answer, Wave 6):
+**pr-review-toolkit invocation sizing** (captain Q3 answer, Wave 6) — this is the multi-persona **code-diff** review (reads `git diff <base>..HEAD`), NOT a PR-body-prose review:
 - `appetite: big-batch` → ALWAYS invoke `pr-review-toolkit:review-pr`
 - `appetite: medium-batch` → OPTIONAL (entity captain-opt-in via frontmatter `pr-review-opt-in: true`)
 - `appetite: small-batch` → SKIP (diff too narrow for multi-persona review to add value)
 
-Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / `silent-failure-hunter` + `ui-verify`) for diff classification during quality gating; ship-review invokes the composite `pr-review-toolkit:review-pr` for PR body quality — different concerns.
+Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / `silent-failure-hunter` + `ui-verify`) for diff classification during quality gating; ship-review invokes the composite `pr-review-toolkit:review-pr` for a final multi-persona **code-diff** review (code-reviewer / silent-failure-hunter / security-reviewer reading the diff `<base>..HEAD`) — a deeper second pass over the same diff, not a review of PR-body prose. The PR body does not exist at review stage (129.3 CD-2: review.md holds only a reference; ship-final composes the body). The composed body's coherence is gated separately at ship-final before `gh pr create` (ship/SKILL.md Step 6.3a).
 
 **Rule A Fallback reminder**: when `SendMessage(planner)` for the canonical doc dispatch is unavailable (phantom team / no response) or the dispatched fresh Agent stalls, fall back per INVARIANTS Principle 6 Rule A Fallback — fresh `Agent(subagent_type: general-purpose)` with captured entity sections + doc pathspecs in the prompt. If canonical doc patches are already partially committed when a subagent stalls, check `git log` before redoing (may have landed pre-stall). Inline patching via `patch-map.sh --if-hash` is the last resort.
 
@@ -154,75 +154,54 @@ Override from `docs/<wf>/README.md` frontmatter `commands:` block if present (pr
 
 Unknown VCS → stop; ask captain to add `commands:` block to workflow README frontmatter.
 
-### Step 4 — Draft PR body (write to review.md)
+### Step 4 — Emit `## PR Draft` reference (NOT full prose) + retrospective
 
-**Do NOT push or `gh pr create` here.** Ship-final stage (in `/ship` skill) creates the PR from this drafted body. Ship-review only writes `## PR Draft` to `review.md`.
+**Do NOT push or `gh pr create` here.** Ship-final (in `/ship` skill, Step 6.3) **composes** the PR body from `shape.md` (canonical) + verify/execute outputs at PR-create time. Ship-review only writes a SLIM `## PR Draft` to `review.md`: the **title** plus a one-line **reference** to that composition — NOT the full Problem / User Journey / DC prose.
 
-PR body template:
+**Why slim** (129.3 CD-2, captain gate): the full PR body changes per requirements and duplicates work ship-final does anyway. Materializing it twice (review.md draft + ship-final compose) is redundant and put review.md's full-prose restate in tension with the C15 ≤100 body cap. The body materializes ONCE, at ship-final, from `shape.md` (the canonical source per 129.1). review.md references it; it does not restate it.
+
+`## PR Draft` template (slim):
 
 ```markdown
+## PR Draft
+
 Title: {entity title}
 
-Body:
-## Problem
-{from shape.md → Problem}
+PR body composed by ship-final (`/ship` Step 6.3) from `shape.md` (canonical Problem / User Journey / Done Criteria) + verify UAT table + Quality Gate + execute Execution Log, materialized as the external GitHub PR body (NOT committed to ship.md). See `stages.ship.pr_payload` in entity-body-schema.yaml. Not restated here.
+```
 
-## User Journey
-{from shape.md → User Journey — end-to-end flow}
+That is the whole `## PR Draft` section. Do NOT inline `## Problem` / `## User Journey` / `## Done Criteria + Verification` / `## Changes` prose — those compose at ship-final.
 
-## Done Criteria + Verification
-{Full UAT table from verify.md → UAT section: DC / Type / Assertion / Verify Procedure / Result}
+**`## Per-Feature Retrospective`** — review.md DOES carry this (it is genuinely-new review-stage synthesis, not reconstructable from shape.md). Keep it concise; a bounded excerpt of raw finding dumps may go in `<details>` (excluded from the ≤100 BODY cap, but the C15 2× raw-total backstop — raw ≤ 200 — still applies, so excerpt-not-dump) or reference the full set via the add-todos pointer. Required fields:
 
-## Changes
-{from execute.md → Execution Log — task summary with commit SHAs}
-
-## Canonical Docs Update
-- ARCHITECTURE.md → {target_section}: {summary} ({ARCH_COMMIT short-SHA})  ← omit line if skipped
-- PRODUCT.md → {target_section}: {summary} ({PRODUCT_COMMIT short-SHA})    ← omit line if skipped
-- README.md → {section}: {summary} ({README_COMMIT short-SHA})             ← omit line if skipped; flag ⚠ entry_critical if applicable
-- ROADMAP.md: status flipped Now → Shipped ({ROADMAP_COMMIT short-SHA})    ← omit line if skipped
-
-## Quality Gate
-{from verify.md → Quality Gate 5-check results}
-
+```markdown
 ## Per-Feature Retrospective
 
 **Shipped this entity**: {link to entity folder / index.md}
 
-**Deferred via `ship-flow:add-todos`** (review with `/ship-flow:add-todos list` or whatever surface the skill exposes):
-- {N} informational findings from verify panel
-- {M} critical findings with confidence < 8
+**Deferred via `ship-flow:add-todos`** ( `/ship-flow:add-todos list` ): {N} informational + {M} critical-confidence<8 findings (counts only — the queue holds the detail).
 
-**Risks accepted** (captain marked "accept-as-is" during verify panel CRITICAL escape, see verify.md `## ⚠️ Captain Attention`):
-- [file:line] {description} → captain reasoning: {captain's accept-as-is rationale}
+**Risks accepted** (captain "accept-as-is" during verify CRITICAL escape, see verify.md `## ⚠️ Captain Attention`):
+- [file:line] {description} → captain reasoning: {rationale}
 
-(If no CRITICAL accept-as-is: render single line "Risks accepted: none — all CRITICAL findings either bounced or fixed.")
+(If none: single line "Risks accepted: none — all CRITICAL findings bounced or fixed.")
 
-**Verify Panel Coverage**: Tier {A|B|C} ({full cross-model | single-model | minimal})
-- PR Quality Score: {N}/10
-- Specialists run: {comma-separated list with ✓/✗}
-- Adversarial: Claude {✓/✗}, Codex {✓/✗}
+**Verify Panel Coverage**: Tier {A|B|C} · PR Quality Score {N}/10 · Adversarial: Claude {✓/✗}, Codex {✓/✗}
 
 **What Worked**: {compact mirror — one line per captured pattern with destination tag, or "none — <reason>" or "deferred-to-debrief"}
 
 **What Almost Failed**: {same shape — failure-mode candidates with destination tag, or "none — <reason>" or "deferred-to-debrief"}
-
-**Reusable failure-mode sources** (incident-level findings handled elsewhere): verify findings, deferred findings, risks accepted, MEMORY incidents. `## What Almost Failed` (above, in review.md source) captures the SkillLens `[avoid]` half — reusable failure PATTERNS, not incident records.
-
-Entity: #{entity-id}
-Ship-flow: shape → plan → execute → verify → review → ship-final (autonomous)
-Tracker: {tracker + issue, if set}
-Cost: ${token_actual} (budget: ${token_budget})
 ```
 
 Retro discipline:
-- **No separate `<entity>/retro.md` file.** The PR body IS the retro. Future readers (captain, Copilot, sibling-PR reviewers) read it inline with the diff.
-- **No repo `TODOS.md` path assumption.** `ship-flow:add-todos` skill owns deferred-finding storage internally; this section only emits the query pointer.
+- **No separate `<entity>/retro.md` file.** The retro lives in review.md (compact) and the PR body's retro section is composed by ship-final.
+- **No repo `TODOS.md` path assumption.** `ship-flow:add-todos` owns deferred-finding storage; this section emits the query pointer + counts only, not the full finding list.
 - Risks-accepted block populates only when verify panel triggered CRITICAL escape AND captain chose accept-as-is; otherwise the single-line "none" rendering applies.
+- `## What Worked` / `## What Almost Failed` (the machine-readable Step 4.5 blocks) remain the SkillLens `[do]`/`[avoid]` source; the lines above are the compact human mirror.
 
 ### Step 4.5 — Success/Failure-mode harvest (SkillLens-derived)
 
-Write two structured blocks to `review.md` ABOVE the `## PR Draft` section. These are `harvest-decide` skill input — keep them machine-readable. The PR body's `## Per-Feature Retrospective` carries only a compact mirror for human visibility.
+Write two structured blocks to `review.md` ABOVE the `## PR Draft` section. These are `harvest-decide` skill input — keep them machine-readable. The `## Per-Feature Retrospective` block (Step 4) carries only a compact mirror for human visibility.
 
 **S-size auto-default**: if entity frontmatter `size: S`, both blocks render the following auto-default and skip prompting:
 
@@ -294,16 +273,16 @@ No candidates → skip silently.
 
 ### Step 7 — Cross-review gate (Principle 6 Rule C)
 
-Dispatch cross-review to `executer` teammate (reviews PR body + canonical-docs dispatch accuracy) or fresh sonnet (no team). Upgrade fresh **opus** when `appetite: big-batch`.
+Dispatch cross-review to `executer` teammate (reviews the slim PR Draft reference + the verify.md UAT table that ship-final will compose from + canonical-docs dispatch accuracy) or fresh sonnet (no team). Upgrade fresh **opus** when `appetite: big-batch`. The full composed PR body is gated at ship-final (Step 6.3a), not here.
 
-**Layer A expansion per sizing rule** (see Layer A delegation section above): `appetite: big-batch` → ALWAYS invoke `Skill: pr-review-toolkit:review-pr` for multi-persona PR body review. `appetite: medium-batch` → invoke only if entity frontmatter `pr-review-opt-in: true`. `appetite: small-batch` → skip.
+**Layer A expansion per sizing rule** (see Layer A delegation section above): `appetite: big-batch` → ALWAYS invoke `Skill: pr-review-toolkit:review-pr` for a final multi-persona **code-diff** review (reads `git diff <base>..HEAD`; NOT a PR-body-prose review — the body composes at ship-final). `appetite: medium-batch` → invoke only if entity frontmatter `pr-review-opt-in: true`. `appetite: small-batch` → skip. The composed PR body's coherence is gated at ship-final (ship/SKILL.md Step 6.3a) before `gh pr create`.
 
 7-factor rubric adapted for review stage (per INVARIANTS Principle 6 Rule C #106 T1.3 + T6.4):
 
 1. **Feasibility** — PR size reasonable; branch ready for captain smoke?
 2. **Executable scope** — review scope matches actual diff (no omitted file / no scope creep)?
 3. **Quality** — no silent failures; every DC verified in UAT table; canonical commits land BEFORE PR body cites them?
-4. **DC adequacy** — PR body's DC+Verification table is reproducible (copy-paste the procedure)?
+4. **DC adequacy** — verify.md `### UAT` table is DC-N-keyed + reproducible (copy-paste the procedure), so ship-final's composed PR body inherits a sound DC+Verification table? (review.md no longer drafts the table — 129.3 CD-2; the source is verify.md.)
 5. **Canonical sync** — 4-doc audit:
    - **ARCHITECTURE.md**: architecture-impact blocks aggregated cleanly per target_section? No section-tag corruption (patch-map.sh CAS held)?
    - **PRODUCT.md**: constraints / user stories align with shape intent?
@@ -330,7 +309,7 @@ Verdict: **PROCEED** / **VETO** (loop to fix sections) / **PROMPT_CAPTAIN**. Eac
 
 Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=review --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; atomic + pathspec-lock).
 
-Review.md sections: `## PR Draft`, `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (status / stage_cost / planner dispatch cost / Verify results / canonical sync status / timestamps / duration).
+Review.md sections: `## PR Draft` (slim — title + ship-final composition reference, NOT full prose per 129.3 CD-2), `## Per-Feature Retrospective` (compact), `## What Worked` / `## What Almost Failed` (Step 4.5 machine-readable harvest blocks), `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (status / stage_cost / planner dispatch cost / Verify results / canonical sync status / timestamps / duration). Verbose finding dumps → a bounded `<details>` excerpt or the add-todos queue (keep body under the C15 ≤100 cap; `<details>` is body-excluded but the 2× raw-total backstop — raw ≤ 200 — still applies, so excerpt-and-link, don't inline-dump).
 
 Require a `### Metrics` subsection in `## Review Report`.
 Use grep-friendly `key: value` lines:
@@ -397,7 +376,7 @@ On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.m
 - patch-map.sh `--if-hash` read-first CAS is the only safe concurrent-write pattern for ARCHITECTURE / PRODUCT / ROADMAP. Exit 6 (stale) → re-read + retry, max 3.
 - README.md uses Edit tool (prose-heavy, no section tags typically); DO NOT patch-map.sh on README.
 - Explicit pathspec at commit-time on every doc commit (parallel-session staging defense). No `-a`/`-A`.
-- Do NOT push or `gh pr create` here — ship-final owns PR creation. Only draft PR body to review.md.
+- Do NOT push or `gh pr create` here — ship-final owns PR creation AND PR-body composition (from shape.md, 129.3 CD-2). review.md writes only the slim `## PR Draft` reference (title + composition pointer), never the full PR-body prose.
 - Frontmatter write scope strict: only `token_actual`.
 - Layer A delegation (`pr-review-toolkit:*`) owns PR review agent personas — re-teaching = Principle 6 Rule B violation.
 - Cross-review VETO cap 2 rounds; round 3 → PROMPT_CAPTAIN.

@@ -40,8 +40,8 @@ first-officer-managed workflow state to `ship-flow:ship-shape` clarification; do
 - `plan.md` — ship-plan output (task breakdown, verification spec, DCs).
 - `execute.md` — ship-execute output (commits, files modified, UAT evidence).
 - `verify.md` — ship-verify output (quality gate, review, UAT, verdict).
-- `review.md` — ship-review output (code review, captain smoke gate).
-- `ship.md` — final stage (PR link, deploy ref, merge status).
+- `review.md` — ship-review output (code review, canonical-sync, slim `## PR Draft` reference — NOT full PR prose, 129.3 CD-2).
+- `ship.md` — final stage (PR link, deploy ref, merge status). Ship-final composes the full PR body from the canonical shape artifact at PR-create (129.3 CD-2; see Step 6.3).
 
 ## When to use
 
@@ -185,69 +185,109 @@ else:
 
 ## Step 6 — Ship-final stage (this skill)
 
-After `review.md` cross-review PROCEED:
+After `review.md` cross-review PROCEED, run the create sequence 6.1 → 6.7 in this exact order (authoritative: `docs/ship-flow/129.3-stage-skill-output-slim/create-flow-design.md`). ship-final OWNS `gh pr create` (captain ownership decision (i)). The PR body is composed ONCE, gated on the materialized file, created bound to that file via `--body-file`, and confirmed-equal before any `pr:` is persisted. Body is never re-typed; `pr:` is never a placeholder.
 
-1. **Compose `ship.md`** inside entity folder. Content: PR URL, deploy reference (if deployed), merge status, customer-visible summary (1-2 sentences drawn from the resolved shape artifact + execute.md), and `## Todo Closeout Digest`. Single atomic commit via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
+### Step 6.1 — Compose `ship.md` SKELETON (no `pr:` yet)
 
-   `## Todo Closeout Digest` MUST summarize:
-   - todos captured during this ship, with todo slug and source stage;
-   - deferred follow-ups explicitly left in ROADMAP later;
-   - rejected alternatives that were recorded but not captured as todos;
-   - todos promoted into shaped entities during this run.
+Compose `ship.md` body EXCEPT the PR ref: customer-visible summary (1-2 sentences from the resolved shape artifact + execute.md), `## Todo Closeout Digest`, `### Token Summary`, `### Verdict` (`status:` / costs / timestamps / tasks / verify) — but **leave `### Verdict → pr:` UNSET** by omitting the line entirely. Single atomic commit via Layer C writer (Wave 5 primitive `acd73545`): `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
 
-   After the digest is written, ask the captain how to handle newly captured
-   todos: sync to task management (for example Linear) through an adapter/mod,
-   shape the next todo now, or leave in ROADMAP later. This is a routing prompt,
-   not a hard dependency on an external tool. Do not hardcode Linear into
-   ship-flow core; task-management sync belongs in a project adapter/mod.
+**ship.md records the PR REF + brief summary only — NEVER the composed PR body.** The full body is an external payload on the GitHub PR (Step 6.2-6.4); it is deliberately NOT written into ship.md, which has the smallest C15 cap (≤60 body lines) — persisting the body would blow the cap (the same tension 129.3 CD-2 removed from review.md). Schema: `stages.ship.pr_payload` (external descriptor) + `### Verdict → pr:` (ship.md's durable ref). Keep ship.md ≤60.
 
-   **After `ship.md` lands, advance sibling `index.md` frontmatter atomically:**
+`## Todo Closeout Digest` MUST summarize:
+- todos captured during this ship, with todo slug and source stage;
+- deferred follow-ups explicitly left in ROADMAP later;
+- rejected alternatives that were recorded but not captured as todos;
+- todos promoted into shaped entities during this run.
 
-       INDEX_MD="<entity-folder>/index.md"
-       H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
-       bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
-         --entity="$INDEX_MD" \
-         --new-status=ship \
-         --stage-name=ship \
-         --stage-file=ship.md \
-         --if-hash="$H" \
-         --commit-as="ship(<id>): advance status to ship"
+After the digest is written, ask the captain how to handle newly captured todos: sync to task management (for example Linear) through an adapter/mod, shape the next todo now, or leave in ROADMAP later. This is a routing prompt, not a hard dependency on an external tool. Do not hardcode Linear into ship-flow core; task-management sync belongs in a project adapter/mod.
 
-   Note: `ship→done` flip on PR-merge is **out of scope** for this step — covered by the existing `spacedock status --set ... status=done` call in the inline-on-main path; `warn-state-drift` Rule A flags drift if missed.
+**Advance status (independent of the PR ref):**
 
-   On exit 6 (stale hash): write `## Ship Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
+    INDEX_MD="<entity-folder>/index.md"
+    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
+      --entity="$INDEX_MD" \
+      --new-status=ship \
+      --stage-name=ship \
+      --stage-file=ship.md \
+      --if-hash="$H" \
+      --commit-as="ship(<id>): advance status to ship"
 
-2. **Mechanical guardrail lint** — if `plugins/ship-flow/bin/ship-flow-lint.mjs`
-   exists, run it before PR creation:
+Do NOT write frontmatter `pr:` here — the frontmatter `pr:` is written ONLY by `persist-pr-metadata.sh` in Step 6.5, after the PR exists and its body is confirmed. The `status=ship` flip is independent of the PR ref. `ship→done` on PR-merge is out of scope (covered by the inline-on-main `status=done` path; `warn-state-drift` Rule A flags drift if missed). On exit 6 (stale hash): write `## Ship Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 
-       node plugins/ship-flow/bin/ship-flow-lint.mjs --workflow-dir docs/ship-flow
+### Step 6.1b — Mechanical guardrail lint
 
-   If the adopter exposes a package script such as `pnpm ship-flow:lint`, prefer
-   the package script. Any failure is a ship-final blocker: fix the deterministic
-   issue before spending PR review cycles. Project-specific seed/migration/env
-   checks stay in adopter config or package scripts; ship-flow core only owns the
-   generic runner.
+If `plugins/ship-flow/bin/ship-flow-lint.mjs` exists, run it before PR creation: `node plugins/ship-flow/bin/ship-flow-lint.mjs --workflow-dir docs/ship-flow`. Prefer an adopter package script (`pnpm ship-flow:lint`) when present. Any failure is a ship-final blocker — fix the deterministic issue before spending PR review cycles. Project-specific seed/migration/env checks stay in adopter config; ship-flow core only owns the generic runner.
 
-3. **Create PR and persist PR metadata** via `gh pr create` with title from entity + body referencing all stage artifacts (plan/execute/verify/review links).
+### Step 6.2 — Compose the PR body ONCE into `$PR_BODY_FILE`
 
-   Capture the exact `gh pr create` stdout/stderr stream before any post-create checks, compute the active entity hash before PR creation, then persist metadata immediately after successful PR creation and confirmation:
+ship-final is the SOLE PR-body composer (129.3 CD-2). The body is an external PR payload (not written to ship.md). Materialize it into a single file — every downstream step (privacy scan, coherence gate, `gh pr create`, body-match confirm) reads THIS file; nothing re-types or re-composes the body.
 
-       INDEX_MD="<entity-folder>/index.md"
-       H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
-       PR_CREATE_OUTPUT="$(mktemp)"
-       gh pr create ... >"$PR_CREATE_OUTPUT" 2>&1
-       bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/persist-pr-metadata.sh" \
-         --entity "$INDEX_MD" \
-         --pr-create-output "$PR_CREATE_OUTPUT" \
-         --if-hash "$H" \
-         ${MAIN_INDEX_MD:+--mirror-entity "$MAIN_INDEX_MD"}
+    PR_BODY_FILE="$(mktemp "${TMPDIR:-/tmp}/ship-flow-pr-body.XXXXXX.md")"
 
-   The helper is the only PR metadata writer for ship-final. It parses the PR number only from the successful `gh pr create` URL, confirms it with `gh pr view "$number" --json number,url,headRefName,headRefOid,state`, and stores exactly `pr: "#N"` in active frontmatter. Do not discover a PR by branch or title as a fallback.
+Compose into `$PR_BODY_FILE` from canonical sources:
+- `## Problem` + `## User Journey` ← resolved shape artifact: `SHAPE="$(bash plugins/ship-flow/lib/resolve-shape-artifact.sh <entity-folder>)"` then `bash plugins/ship-flow/lib/extract-section.sh "$SHAPE" <tag>`. SOLE full-prose materialization point (external readers can't resolve `shape.md → section`).
+- `## Done Criteria + Verification` ← `verify.md → ### UAT` (DC-N-keyed table, verbatim — every row).
+- `## Changes` ← `execute.md → ## Execution Log` task summary; commit SHAs via `git log <base>..HEAD`.
+- `## Canonical Docs Update` ← `review.md → ## Canonical Docs Update` SHAs/skip-rationale.
+- `## Quality Gate` ← `verify.md → ### Quality Gate`.
+- `## Per-Feature Retrospective` (optional, compact) ← `review.md → ## Per-Feature Retrospective`.
+- Footer: Entity ID, tracker, cost. Audit link + `Closes`/`Related` per `docs/<wf>/_mods/pr-merge.md` template (appended only if absent). Schema: `stages.ship.pr_payload`.
 
-   Metadata persistence happens before merge-state polling, Ready/reviewer routing, smoke routing, and any post-create auto-review. Refuse and stop ship-final progression on `missing-pr-number`, `pr-view-unconfirmed`, `stale-entity-hash`, `malformed-frontmatter`, `missing-entity`, or `conflicting-pr`; surface the helper report to the captain. An existing identical `pr: "#N"` is idempotent and may proceed.
+`$PR_BODY_FILE` is now the SINGLE source of truth for the body.
 
-   The active worktree entity is primary. When a same-slug main/startup copy is known, pass it as `--mirror-entity`; the helper may mirror only the `pr` field and must skip the mirror on conflict without blocking the already-safe active write. This step does not add a captain plan gate, PR merge behavior, dashboards, or multi-entity sweeps.
-4. **Post-create merge-state check** — after metadata persistence, run the read-only helper before any post-create auto-review, Ready, reviewer routing, smoke routing, or announce step:
+### Step 6.3 — Privacy + title pre-flight on `$PR_BODY_FILE`
+
+Run the pr-merge mod's privacy primitive (0.11.1) on the materialized file before gate/create:
+
+    grep -nE '/Users/|/home/|~/Project|@gmail|@yahoo|@hotmail|C:\\Users' "$PR_BODY_FILE"
+    # MUST return 0 lines. Any hit → redact in $PR_BODY_FILE before continuing.
+
+Also: `bash plugins/ship-flow/bin/validate-pr-title.sh "$PR_TITLE"`. Non-zero on either → fix `$PR_BODY_FILE` / `$PR_TITLE`, do NOT proceed to gate/create.
+
+### Step 6.3a — PR-body coherence gate ON `$PR_BODY_FILE` (MANDATORY, before create)
+
+The gate runs against the materialized file — the EXACT bytes `gh pr create` will upload (a gate on an in-memory draft is the hole this closes). Because review-stage's `pr-review-toolkit:review-pr` reviews the code DIFF (not this body), without this gate the body would reach the PR un-reviewed. Verify `$PR_BODY_FILE` against its canonical sources (deterministic, FO-inline — not a teammate dispatch):
+- **Section completeness** — `$PR_BODY_FILE` contains `## Problem`, `## User Journey`, `## Done Criteria + Verification`, `## Changes`, `## Quality Gate` + footer (Entity ID / tracker / cost). Missing section composed from a present source → BLOCK.
+- **Source fidelity** — Problem/Journey match the resolved shape artifact (no invented/stale prose); DC+Verification is the verify.md `### UAT` table verbatim (no row dropped); Changes match `git log <base>..HEAD` (no phantom/missing commit); Canonical Docs SHAs match `review.md`.
+- **Citation soundness** — every commit/doc SHA in the body resolves (`git cat-file -e <sha>`); no leaked `shape.md → section` reference in external-reader prose.
+- **Coherence** — no inter-section contradiction; body verdict matches `verify.md → ### Verdict status: passed`.
+
+On BLOCK: re-pull source into `$PR_BODY_FILE`, re-run the gate. If a source itself is missing/inconsistent (e.g. verify.md UAT table absent) → surface to captain (bad-news-early); do NOT ship a degraded body.
+
+### Step 6.4 — Create the PR bound to the gated body
+
+    INDEX_MD="<entity-folder>/index.md"
+    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    PR_CREATE_OUTPUT="$(mktemp)"
+    gh pr create --base main --head "$BRANCH" \
+      --title "$PR_TITLE" --body-file "$PR_BODY_FILE" \
+      >"$PR_CREATE_OUTPUT" 2>&1
+
+**`--body-file "$PR_BODY_FILE"` is NON-NEGOTIABLE** — the gated bytes ARE the created body (a worker cannot pass the gate on `$PR_BODY_FILE` yet upload a different/empty body). NEVER `--body "<inline>"`, never a here-doc retype. If `gh pr create` exits non-zero → STOP, surface `$PR_CREATE_OUTPUT` to captain; do NOT persist, do NOT finalize ship.md.
+
+### Step 6.5 — Persist metadata AFTER number-confirm AND body-confirm
+
+    bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/persist-pr-metadata.sh" \
+      --entity "$INDEX_MD" \
+      --pr-create-output "$PR_CREATE_OUTPUT" \
+      --expect-body-file "$PR_BODY_FILE" \
+      --if-hash "$H" \
+      ${MAIN_INDEX_MD:+--mirror-entity "$MAIN_INDEX_MD"}
+
+The helper is the ONLY frontmatter-`pr:` writer. It parses the PR number from the successful `gh pr create` URL, confirms it with `gh pr view "$number" --json number,url,headRefName,headRefOid,state,body`, AND (via `--expect-body-file`) byte-compares (normalized) the created body against `$PR_BODY_FILE`. It writes `pr: "#N"` ONLY after BOTH number-confirm AND body-confirm pass. Do not discover a PR by branch or title as a fallback.
+
+Refuse and stop ship-final progression on `missing-pr-number`, `pr-view-unconfirmed`, **`pr-body-mismatch`** (created body ≠ gated body — STOP, do not trust the PR), `stale-entity-hash`, `malformed-frontmatter`, `missing-entity`, or `conflicting-pr`; surface the helper report to the captain. An existing identical `pr: "#N"` is idempotent and may proceed. Metadata persistence happens before merge-state polling, Ready/reviewer routing, smoke routing, and any post-create auto-review.
+
+The active worktree entity is primary. When a same-slug main/startup copy is known, pass it as `--mirror-entity`; the helper may mirror only the `pr` field and must skip the mirror on conflict without blocking the already-safe active write. This step does not add a captain plan gate, PR merge behavior, dashboards, or multi-entity sweeps.
+
+### Step 6.6 — Finalize `ship.md → ### Verdict → pr:` (AFTER confirmed persist)
+
+Now that the PR exists and its body is confirmed, write `ship.md → ### Verdict → pr:` with the confirmed `#N` ref + the ≤1-2 line summary (CAS via `--if-hash` on ship.md; atomic `write-stage-artifact.sh`). ship.md still records ONLY the ref + summary — never the full body (≤60 C15 cap; pr_payload contract). The `pr:` ref MUST never be a placeholder. On stale hash (exit 6): write `status: blocked, reason: ship.md/index.md stale hash; parallel session contaminated` and return.
+
+### Step 6.7 — Post-create merge-state check
+
+After metadata persistence, run the read-only helper before any post-create auto-review, Ready, reviewer routing, smoke routing, or announce step:
 
        bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/check-pr-mergeable.sh" --pr "$PR"
 
@@ -264,9 +304,15 @@ After `review.md` cross-review PROCEED:
    - Exit `30` / `gh pr view` failure or exit `2` / usage error → surface the helper report and stop post-create automation.
 
    Additive auto-resolution currently has one known safe surface: `ROADMAP.md` sections `later`, `not-doing`, and `shipped`. Add more surfaces only when repo evidence proves they are append-only and structurally bounded by section markers.
-5. **Post-create auto-review** — invoke the workflow's pr-merge mod `Hook: post-create` (`docs/<wf>/_mods/pr-merge.md`). The FO computes a 5-signal confidence score (verify gate / quality gates / outstanding feedback / rebase clean / token spend); on score ≥90 auto-applies the policy steps (mark Ready via `gh pr ready` + request Copilot review with graceful skip if absent); on 80-89 surfaces breakdown to captain and asks; on <80 surfaces concerns and skips. Tagging `@claude review` is intentionally NOT a default step — adopters who have the Claude Code Action wired can extend in a project-scoped override of the mod. Failure of any post-create step is non-blocking — log + surface, never halt ship-final.
-6. **Announce** to captain: entity shipped + PR URL + stage artifact paths + post-create auto-review outcome (Ready ✓ / Copilot reviewer id or "skipped" / score breakdown if <90).
-7. TaskUpdate ship-final=completed.
+
+### Step 6.8 — Post-create auto-review
+
+Invoke the workflow's pr-merge mod `Hook: post-create` (`docs/<wf>/_mods/pr-merge.md`). The FO computes a 5-signal confidence score (verify gate / quality gates / outstanding feedback / rebase clean / token spend); on score ≥90 auto-applies the policy steps (mark Ready via `gh pr ready` + request Copilot review with graceful skip if absent); on 80-89 surfaces breakdown to captain and asks; on <80 surfaces concerns and skips. Tagging `@claude review` is intentionally NOT a default step — adopters who have the Claude Code Action wired can extend in a project-scoped override of the mod. Failure of any post-create step is non-blocking — log + surface, never halt ship-final.
+
+### Step 6.9 — Announce + close
+
+- **Announce** to captain: entity shipped + PR URL + stage artifact paths + post-create auto-review outcome (Ready ✓ / Copilot reviewer id or "skipped" / score breakdown if <90).
+- TaskUpdate ship-final=completed.
 
 **Merge decision is captain's.** `/ship` does NOT auto-merge. Captain may comment on PR or run `gh pr merge` manually.
 
@@ -349,6 +395,9 @@ No `-a`/`-A` staging (parallel-session staging defense). Sharp-claim → pipelin
 - Explicit pathspec on every commit (parallel-session staging defense): `git add <path> && git commit ... -- <path>`.
 - **Worktree-first** (MEMORY #25): at pipeline entry (Step 1 pre-check), `git rev-parse --absolute-git-dir` MUST resolve under `.claude/worktrees/`. On main tip → HALT, prompt captain to spawn worktree (`EnterWorktree` tool) before dispatching any teammate. Stage-artifact commits on main tip contaminate with parallel-session staging per MEMORY #25; worktree isolates completely.
 - No auto-merge. Captain owns merge decision after PR created in ship-final.
+- **PR-body coherence gate is non-negotiable** (Step 6.3a): the composed PR body MUST pass the section-completeness / source-fidelity / citation-soundness / coherence gate on `$PR_BODY_FILE` BEFORE `gh pr create`. Since 129.3 CD-2 moved body composition to ship-final, review-stage's `review-pr` reviews only the code diff — the composed body would reach the PR un-reviewed without this gate. Skipping it = shipping an un-reviewed PR body.
+- **Body binding + body-confirm are non-negotiable** (Step 6.4-6.5): the PR is created with `gh pr create --body-file "$PR_BODY_FILE"` (the gated bytes ARE the created body — never `--body "<inline>"` / here-doc retype), and `persist-pr-metadata.sh --expect-body-file "$PR_BODY_FILE"` confirms the CREATED body equals the gated body (reject `pr-body-mismatch`) before writing any `pr:`. Gated body == created body, or STOP.
+- **`pr:` is never a placeholder** (Step 6.1 + 6.5 + 6.6): neither `index.md` frontmatter `pr:` nor `ship.md → ### Verdict → pr:` is written until the PR exists AND its body is confirmed. ship.md is SKELETON-only at 6.1 (no `pr:` / `PENDING` sentinel) and finalized at 6.6 after persist. A committed placeholder `pr:` is a violation.
 
 ---
 

@@ -32,8 +32,8 @@ line_no() {
 echo "=== test-pr-merge-fo-receipts.sh ==="
 echo ""
 
-check "pr-merge version remains 0.11.5" \
-  "grep -q '^version: 0.11.5$' '${PR_MERGE_MOD}'"
+check "pr-merge version remains 0.11.6" \
+  "grep -q '^version: 0.11.6$' '${PR_MERGE_MOD}'"
 
 check "merge hook names the shared FO receipt helper" \
   "awk '/^## Hook: merge/{in_hook=1} /^## Hook:/{if(in_hook && \$0 !~ /^## Hook: merge/) in_hook=0} in_hook && /plugins\\/ship-flow\\/lib\\/write-fo-receipt.sh/{found=1} END{exit found ? 0 : 1}' '${PR_MERGE_MOD}'"

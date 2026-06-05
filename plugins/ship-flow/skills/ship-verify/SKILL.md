@@ -961,6 +961,13 @@ Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before�
 
 **Atomic write** via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify --entity=<id>-<slug>`. Writer handles atomic commit with explicit pathspec. No `-a`/`-A` (parallel-session staging defense).
 
+**Verbosity budget (INVARIANTS Principle 8 — verify.md ≤120 body lines; C15 BLOCKER)**: verify is the most evidence-heavy stage. Keep the body lean by the `<details>`-collapse rule (129.3 CD-1, captain gate):
+- **KEEP in body (these are the consumables — never collapse)**: `### Verdict`, `## Panel Coverage`, the `### Runtime Verification` per-DC result table, the `### UAT` results table. Result tables are the genuinely-new evidence Principle 8 names.
+- **COLLAPSE into `<details>` (raw evidence payload that defeats the budget)**: full command stdout/stderr, full preflight transcripts, full diff dumps, full per-specialist finding prose, raw curl bodies. C15 excludes `<details>` body from the BODY-line count — but `<details>` is NOT unbounded: 129.2's C15 ALSO enforces a **2× raw-total backstop** (raw lines ≤ 2× the body cap; verify raw ≤ 240). A large log dumped inline in `<details>` can still FAIL `artifact-verbosity` via the backstop. So keep only a **bounded representative excerpt** inside `<details>` (1 TL;DR + table stays in the body); for a large raw log, truncate to the representative excerpt AND link the full log as a durable artifact (see durability rule below). Each `<details>` block is standalone (open/close tags each on their own line).
+- **Linked evidence MUST be durable** — the stage writer commits ONLY `verify.md`, so a linked `.claude/e2e/reports/<slug>-verify-<ts>.md` (or any external evidence file) is local-only and vanishes for PR reviewers / auditors unless it is durable. A cited evidence artifact counts as audit evidence ONLY when it is either: (a) **committed in-repo** with an explicit pathspec so it rides the PR (`git add -- <report-path> && git commit ... -- <report-path>` — NOT `-a`/`-A`), OR (b) referenced via a **durable URL** (CI artifact link, run log URL, etc.). A bare local path that is neither committed nor a durable URL is NOT evidence. Always keep the bounded excerpt inline for the at-a-glance reader even when the full log is linked.
+- **Do NOT delete any mandatory section header** — `## Panel Coverage`, `## Deferred to TODO`, `#### Mechanical UI Parity` (when triggered), `### Verdict`, `### Runtime Verification` all stay (C5/C11/C12 assert their presence). Collapse the EVIDENCE inside them, not the headers or result tables.
+- Per-phase narration (Phase A-H internal trace) is NOT a body consumable — summarize as the merged findings table; send any raw phase log to `<details>` or omit.
+
 **Section tagging (mandatory)** — every H2/H3 wrapped in paired `<!-- section:tag -->` ... `<!-- /section:tag -->`. Tag list + field semantics: `plugins/ship-flow/references/entity-body-schema.yaml → stages.verify`. Required subsections:
 - `### Quality Gate` — per-surface scoping decisions + check results + pre-existing attributions
 - `### Review Findings` — pre-scan + classified specialist findings (file:line, severity, confidence, specialist, FO class, route, status) + sub-sections `#### TDD Evidence Audit`, `#### Design Parity`, `#### Mechanical UI Parity`, `#### Whole-page Visual Parity` as triggered
@@ -1014,31 +1021,36 @@ N=0 case: print "Deferred to TODO: 0 findings this round" — absence explicit. 
 
 Before emitting final status, count required and advisory claim records by verdict. Apply the claim-record dominance rules first, then existing quality/review/UAT gate rules. `status: passed` is invalid when a required claim record is missing, `NOT VERIFIED`, or unresolved `INCONCLUSIVE`.
 
-**`### Runtime Verification` template** (capture every executed runtime command for audit + replay):
+**`### Runtime Verification` template** (capture every executed runtime command for audit + replay). Per 129.3 CD-1: the **per-DC result table stays in the body** (the consumable); a **bounded excerpt of the raw command output / preflight transcript collapses into `<details>`** — excluded from the ≤120 BODY cap, but the C15 2× raw-total backstop (raw ≤ 240) still applies, so excerpt-not-dump. If the raw transcript is large, write a representative excerpt here and link the full log as a `.claude/e2e/reports/<slug>-verify-<ts>.md` artifact:
 
 ```markdown
 <!-- section:runtime-verification -->
 ### Runtime Verification
 
-Preflight (Step 4.0):
-- dev_server: `Skill: worktree-dev-server` → frontend:<port>, api:<port> @ <ISO ts>
-- api_health: `curl -sfN <api>/<liveness>` → 200, body excerpt
-- ui_shell:   `curl -sfN <route> | head -100` → rendered shell match
+Preflight (Step 4.0): dev_server ✓ (frontend:<port>, api:<port>) · api_health 200 · ui_shell match. Raw transcript below.
 
 Per-DC runtime probes:
 
 | DC | Type | Command | Result | Verdict |
 |---|---|---|---|---|
-| DC-N | api/ui/e2e | `<runtime command>` | `<status / assertion / artifact path>` | PASS/FAIL |
+| DC-N | api/ui/e2e | `<runtime command>` | `<status / assertion excerpt>` | PASS/FAIL |
 
-API smokes (one per NEW api-type DC, per Step 4.2):
-- `<contract surface>`: `curl …` → <status + assertion>
+API smokes (one per NEW api-type DC, per Step 4.2): <count> ran, all PASS (raw bodies below).
 
 Preflight or probe failures: <none | bullets with cause + remediation>
+
+<details>
+<summary>Raw runtime evidence — representative excerpt (full log linked if large)</summary>
+
+```
+<bounded excerpt: preflight key lines (dev_server up, api_health status line, ui_shell head), per-DC assertion-bearing stdout lines, one API-smoke status+assertion. Truncate long bodies; do NOT paste full multi-hundred-line transcripts — the C15 2× raw-total backstop (raw ≤ 240) will FAIL. Full log: link a DURABLE artifact — committed-in-repo .claude/e2e/reports/<slug>-verify-<ts>.md (explicit-pathspec commit so it rides the PR) OR a durable CI-artifact URL; a bare local path is not audit evidence (see durability rule above)>
+```
+
+</details>
 <!-- /section:runtime-verification -->
 ```
 
-FO greps `^status:` for the machine-readable gate. `Verdict:` line is human-facing summary.
+FO greps `^status:` for the machine-readable gate. `Verdict:` line is human-facing summary. Note: `<details>` keeps body lines down but raw total still caps at 2× (240) — excerpt-and-link large logs, never inline-dump.
 
 ### Cross-review gate (Principle 6 Rule C) — skipped on `--fast`
 

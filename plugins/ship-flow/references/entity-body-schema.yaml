@@ -1044,22 +1044,41 @@ stages:
       section_tag: ship
       layer: implementation
       subsections:
-        pr_draft:
-          section: "### PR Draft"
-          section_tag: pr-draft
-          layer: implementation
+        pr_payload:
+          # 129.3 CD-2 + cycle-2 (captain gate): the PR body is an EXTERNAL PR
+          # PAYLOAD, NOT a committed ship.md subsection. It is the SINGLE sanctioned
+          # full-prose materialization point (a GitHub PR is read outside the repo by
+          # humans/auditors who cannot resolve shape.md → section), composed by
+          # ship-final from shape.md (canonical) + verify/execute, gated by ship
+          # Step 6.3a, and materialized as the GitHub PR body via `gh pr create`.
+          # It is DELIBERATELY NOT written into ship.md: ship.md has the smallest
+          # C15 body cap (≤60), and a faithful PR body far exceeds it (the same
+          # cap-tension 129.3 CD-2 removed from review.md). ship.md records only the
+          # PR ref + a ≤1-2 line summary (see ### Verdict → pr:). review.md only
+          # references this contract (see stages.review.pr_draft).
+          #
+          # NOT a `section:` — there is no committed ship.md `### PR Draft`
+          # subsection. This descriptor documents an external artifact (the PR body),
+          # so the schema and the ephemeral compose→gh-pr-create flow agree.
+          materialized_as: "GitHub PR body (external; composed ONCE into $PR_BODY_FILE and created by `gh pr create` in ship/SKILL.md Step 6.2-6.4)"
+          gated_by: "ship/SKILL.md Step 6.3a — PR-body coherence gate runs on $PR_BODY_FILE (the exact bytes uploaded): section-completeness / source-fidelity / citation-soundness / coherence — before `gh pr create`"
+          binding: "Created via `gh pr create --body-file \"$PR_BODY_FILE\"` (ship/SKILL.md Step 6.4) — the gated bytes ARE the created body. NEVER `--body \"<inline>\"` or a here-doc retype."
+          confirmed_by: "persist-pr-metadata.sh `--expect-body-file \"$PR_BODY_FILE\"` (ship/SKILL.md Step 6.5) fetches the created `body` via `gh pr view --json ...,body` and byte-compares (normalized) against the gated file; mismatch → reject `pr-body-mismatch` and STOP. The body-confirm AND number-confirm must both pass before frontmatter `pr:` is written."
+          ship_md_record: "ship.md records ONLY the PR ref + ≤1-2 line summary via ### Verdict → pr: — never the full prose (would blow the ≤60 ship.md cap)."
+          composed_from: "shape.md (Problem / User Journey / Done Criteria assertions — canonical) + verify (UAT table + Quality Gate) + execute (Execution Log changes)"
+          # local-merge adopters with no PR host: the GitHub PR body is the durable
+          # record for this repo's pr-merge flow. A durable-prose path for `merge:
+          # local` adopters (no PR host) is a documented FOLLOW-UP — do NOT solve it
+          # by persisting full prose into the capped ship.md.
           fields:
             - { name: title, type: string }
             - name: body
               type: prose
-              # 129.1 CD-3: the PR body is the SINGLE sanctioned full-prose
-              # materialization point. A GitHub PR is read outside the repo by
-              # humans/auditors who cannot resolve shape.md → section, so the
-              # problem / journey / DC prose IS re-stated here on purpose.
+              location: external-pr-body  # NOT committed to ship.md
               includes:
-                - "## Problem (materialized from shape.md — sole restate point; external-reader audience)"
-                - "## User Journey (materialized from shape.md — sole restate point; external-reader audience)"
-                - "## Done Criteria + Verification (full UAT table from Verify → ### UAT, or legacy ## Verify UAT; assertions materialized from shape.md — sole restate point)"
+                - "## Problem (composed from shape.md — sole restate point; external-reader audience)"
+                - "## User Journey (composed from shape.md — sole restate point; external-reader audience)"
+                - "## Done Criteria + Verification (full UAT table from Verify → ### UAT, or legacy ## Verify UAT; assertions composed from shape.md — sole restate point)"
                 - "## Changes (from Execute Output → Execution Log)"
                 - "## Quality Gate (from Verify → ### Quality Gate, or legacy ## Verify Output → ### Quality Gate)"
                 - "Entity ID, tracker, cost footer"
@@ -1101,7 +1120,7 @@ stages:
           fields:
             - { name: status, type: enum, values: [shipped, blocked], grepable: true }
             - { name: stage_cost, type: string, format: "$X.XX (description)", grepable: true }
-            - { name: pr, type: string }
+            - { name: pr, type: string, description: "PR ref (#N or URL) — ship.md's durable record of the PR. Written ONLY after PR create + body-match confirmation (persist-pr-metadata.sh `--expect-body-file`, ship/SKILL.md Step 6.5-6.6) — NEVER a placeholder / PENDING sentinel in a committed ship.md. The full PR BODY lives on the external GitHub PR (see pr_payload), NOT in ship.md (≤60 cap). ship.md may add a ≤1-2 line summary alongside this ref, never the full prose." }
             - { name: token_budget, type: string }
             - { name: token_actual, type: string }
             - { name: tasks, type: string, description: "done/total (failed, issues)" }
@@ -1144,19 +1163,19 @@ stages:
           section: "### PR Draft"
           section_tag: review-pr-draft
           layer: implementation
+          # 129.3 CD-2 (captain gate): review.md does NOT carry the full PR-body
+          # prose. The body changes per requirements and duplicates work that
+          # ship-final composes anyway. The SINGLE sanctioned full-prose
+          # materialization point is the EXTERNAL GitHub PR body (see
+          # stages.ship.pr_payload), composed by ship-final from shape.md
+          # (canonical) at gh-pr-create time and gated by ship Step 6.3a — it is
+          # NOT a committed ship.md subsection. review.md only REFERENCES that
+          # composition contract so the review ≤100 body cap (C15) is no longer in
+          # tension with full-prose restate.
+          description: "Title + a one-line REFERENCE to the external-PR-body composition (composed from shape.md at PR-create; see stages.ship.pr_payload). Do NOT inline the full Problem / User Journey / Done Criteria prose here — that materializes once, on the GitHub PR at ship-final."
           fields:
             - { name: title, type: string }
-            - name: body
-              type: prose
-              # 129.1 CD-3: the PR body is the SINGLE sanctioned full-prose
-              # materialization point (external-reader audience cannot resolve
-              # shape.md → section). Problem / DC prose IS re-stated here on purpose.
-              includes:
-                - "## Problem (materialized from shape.md — sole restate point; external-reader audience)"
-                - "## Done Criteria + Verification (from Verify UAT; assertions materialized from shape.md — sole restate point)"
-                - "## Changes (from Execute Output → Execution Log)"
-                - "## Quality Gate (from Verify → ### Quality Gate)"
-                - "Entity ID, tracker, cost footer"
+            - { name: pr_body_source, type: string, description: "Reference line: 'PR body composed by ship-final from shape.md (canonical), materialized as the external GitHub PR body — see stages.ship.pr_payload.' Do not restate the prose." }
         roadmap_md_update:
           section: "### ROADMAP.md Update"
           section_tag: review-roadmap-update

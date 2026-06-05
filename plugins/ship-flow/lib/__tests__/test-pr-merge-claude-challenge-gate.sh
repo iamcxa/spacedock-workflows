@@ -32,8 +32,8 @@ line_no() {
 echo "=== test-pr-merge-claude-challenge-gate.sh ==="
 echo ""
 
-check "pr-merge version advances to 0.11.5" \
-  "grep -q '^version: 0.11.5$' '${PR_MERGE_MOD}'"
+check "pr-merge version advances to 0.11.6" \
+  "grep -q '^version: 0.11.6$' '${PR_MERGE_MOD}'"
 
 check "changelog records Claude Code challenge gate" \
   "grep -q '^  0.11.4:' '${PR_MERGE_MOD}' && grep -q 'Claude Code adversarial challenge' '${PR_MERGE_MOD}'"

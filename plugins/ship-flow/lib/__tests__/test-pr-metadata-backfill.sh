@@ -90,10 +90,26 @@ write_pr_output() {
 }
 
 write_gh_view_fixture() {
-  local path="$1" number="${2:-136}"
-  cat > "$path" <<EOF
+  local path="$1" number="${2:-136}" body="${3:-}"
+  if [ -n "$body" ]; then
+    # Emit a fixture WITH a JSON-escaped body field (mirrors `gh pr view --json
+    # ...,body`). python3 does the JSON escaping so embedded newlines / quotes
+    # round-trip correctly.
+    local body_json
+    body_json="$(printf '%s' "$body" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')"
+    cat > "$path" <<EOF
+{"number":${number},"url":"https://github.com/acme/repo/pull/${number}","headRefName":"feature","headRefOid":"abc123","state":"OPEN","body":${body_json}}
+EOF
+  else
+    cat > "$path" <<EOF
 {"number":${number},"url":"https://github.com/acme/repo/pull/${number}","headRefName":"feature","headRefOid":"abc123","state":"OPEN"}
 EOF
+  fi
+}
+
+write_body_file() {
+  local path="$1" content="$2"
+  printf '%s\n' "$content" > "$path"
 }
 
 run_helper_capture() {
@@ -243,10 +259,112 @@ case_mirror_conflict_preserves_main() {
   assert_pr_line_exact "mirror conflict preserves main value" "$mirror" 135
 }
 
+case_body_match_persists() {
+  # --expect-body-file present + created body matches gated body → PASS, writes pr.
+  local tmp active pr_out gh_json body_file out hash
+  tmp="$(mktemp -d)"
+  active="${tmp}/index.md"
+  pr_out="${tmp}/pr.out"
+  gh_json="${tmp}/gh.json"
+  body_file="${tmp}/pr-body.md"
+  out="${tmp}/helper.out"
+  write_entity "$active" "ship-pr-metadata-backfill"
+  write_pr_output "$pr_out" "https://github.com/acme/repo/pull/136"
+  write_body_file "$body_file" "## Problem"$'\n'"x"$'\n'"## Changes"$'\n'"y"
+  # Created PR body (in fixture) matches the gated body (with a benign trailing-newline diff).
+  write_gh_view_fixture "$gh_json" 136 "## Problem"$'\n'"x"$'\n'"## Changes"$'\n'"y"$'\n'
+  hash="$(sha256_of "$active")"
+
+  run_helper_capture "$out" --entity "$active" --pr-create-output "$pr_out" --if-hash "$hash" --expect-body-file "$body_file" --gh-view-json-fixture "$gh_json"
+  local rc="$HELPER_RC"
+
+  assert_exit "body-match helper exits zero" 0 "$rc"
+  assert_contains "body-match report verdict" '^verdict=OK$' "$out"
+  assert_pr_line_exact "body-match writes pr after body confirm" "$active" 136
+}
+
+case_body_mismatch_refuses() {
+  # --expect-body-file present + created body differs → REJECT pr-body-mismatch, no write.
+  local tmp active pr_out gh_json body_file out hash before after
+  tmp="$(mktemp -d)"
+  active="${tmp}/index.md"
+  pr_out="${tmp}/pr.out"
+  gh_json="${tmp}/gh.json"
+  body_file="${tmp}/pr-body.md"
+  out="${tmp}/helper.out"
+  write_entity "$active" "ship-pr-metadata-backfill"
+  write_pr_output "$pr_out" "https://github.com/acme/repo/pull/136"
+  write_body_file "$body_file" "## Problem"$'\n'"GATED body — the bytes that should have uploaded"
+  # Created PR body differs (a worker created a different/empty body post-gate).
+  write_gh_view_fixture "$gh_json" 136 "## Problem"$'\n'"DIFFERENT body actually on the PR"
+  hash="$(sha256_of "$active")"
+  before="$(sha256_of "$active")"
+
+  run_helper_capture "$out" --entity "$active" --pr-create-output "$pr_out" --if-hash "$hash" --expect-body-file "$body_file" --gh-view-json-fixture "$gh_json"
+  local rc="$HELPER_RC"
+  after="$(sha256_of "$active")"
+
+  assert_exit "body-mismatch exits one" 1 "$rc"
+  assert_contains "body-mismatch reason" '^reason=pr-body-mismatch$' "$out"
+  assert_not_contains "body-mismatch does not write pr" '^pr: "#136"$' "$active"
+  if [ "$before" = "$after" ]; then record_pass "body-mismatch leaves entity unchanged"; else record_fail "body-mismatch mutated entity"; fi
+}
+
+case_body_hard_break_mismatch_refuses() {
+  # Markdown hard breaks use two trailing spaces before newline. That whitespace
+  # is meaningful and must not be normalized away.
+  local tmp active pr_out gh_json body_file out hash before after
+  tmp="$(mktemp -d)"
+  active="${tmp}/index.md"
+  pr_out="${tmp}/pr.out"
+  gh_json="${tmp}/gh.json"
+  body_file="${tmp}/pr-body.md"
+  out="${tmp}/helper.out"
+  write_entity "$active" "ship-pr-metadata-backfill"
+  write_pr_output "$pr_out" "https://github.com/acme/repo/pull/136"
+  write_body_file "$body_file" "## Problem"$'\n'"Line with hard break  "$'\n'"next line"
+  write_gh_view_fixture "$gh_json" 136 "## Problem"$'\n'"Line with hard break"$'\n'"next line"
+  hash="$(sha256_of "$active")"
+  before="$(sha256_of "$active")"
+
+  run_helper_capture "$out" --entity "$active" --pr-create-output "$pr_out" --if-hash "$hash" --expect-body-file "$body_file" --gh-view-json-fixture "$gh_json"
+  local rc="$HELPER_RC"
+  after="$(sha256_of "$active")"
+
+  assert_exit "body hard-break mismatch exits one" 1 "$rc"
+  assert_contains "body hard-break mismatch reason" '^reason=pr-body-mismatch$' "$out"
+  assert_not_contains "body hard-break mismatch does not write pr" '^pr: "#136"$' "$active"
+  if [ "$before" = "$after" ]; then record_pass "body hard-break mismatch leaves entity unchanged"; else record_fail "body hard-break mismatch mutated entity"; fi
+}
+
+case_body_check_skipped_when_arg_omitted() {
+  # --expect-body-file ABSENT → body check skipped (back-compat); a mismatching /
+  # absent fixture body must NOT block the write.
+  local tmp active pr_out gh_json out hash
+  tmp="$(mktemp -d)"
+  active="${tmp}/index.md"
+  pr_out="${tmp}/pr.out"
+  gh_json="${tmp}/gh.json"
+  out="${tmp}/helper.out"
+  write_entity "$active" "ship-pr-metadata-backfill"
+  write_pr_output "$pr_out" "https://github.com/acme/repo/pull/136"
+  # Fixture carries a body, but --expect-body-file is omitted → body never compared.
+  write_gh_view_fixture "$gh_json" 136 "some unrelated body content"
+  hash="$(sha256_of "$active")"
+
+  run_helper_capture "$out" --entity "$active" --pr-create-output "$pr_out" --if-hash "$hash" --gh-view-json-fixture "$gh_json"
+  local rc="$HELPER_RC"
+
+  assert_exit "arg-omitted skips body check, exits zero" 0 "$rc"
+  assert_contains "arg-omitted report verdict" '^verdict=OK$' "$out"
+  assert_pr_line_exact "arg-omitted writes pr (body check skipped)" "$active" 136
+}
+
 case_ship_skill_ordering() {
   assert_contains "ship skill references metadata helper" 'persist-pr-metadata\.sh' "$SHIP_SKILL"
   assert_contains "ship skill captures PR create output" 'pr-create-output' "$SHIP_SKILL"
   assert_contains "ship skill names no branch/title fallback" 'branch or title' "$SHIP_SKILL"
+  assert_not_contains "ship skill forbids placeholder PR sentinel" 'pr: PENDING|PENDING sentinel' "$SHIP_SKILL"
 
   local helper_line merge_line
   helper_line="$(grep -n 'persist-pr-metadata\.sh' "$SHIP_SKILL" | head -1 | cut -d: -f1)"
@@ -268,6 +386,10 @@ run_case() {
     idempotent-same-pr) case_idempotent_same_pr ;;
     conflicting-pr-refuses) case_conflicting_pr_refuses ;;
     mirror-conflict-preserves-main) case_mirror_conflict_preserves_main ;;
+    body-match-persists) case_body_match_persists ;;
+    body-mismatch-refuses) case_body_mismatch_refuses ;;
+    body-hard-break-mismatch-refuses) case_body_hard_break_mismatch_refuses ;;
+    body-check-skipped-when-arg-omitted) case_body_check_skipped_when_arg_omitted ;;
     ship-skill-ordering) case_ship_skill_ordering ;;
     *) record_fail "unknown case: ${case_name}" ;;
   esac
@@ -289,6 +411,10 @@ if [ "${#REQUESTED_CASES[@]}" -eq 0 ]; then
     idempotent-same-pr
     conflicting-pr-refuses
     mirror-conflict-preserves-main
+    body-match-persists
+    body-mismatch-refuses
+    body-hard-break-mismatch-refuses
+    body-check-skipped-when-arg-omitted
     ship-skill-ordering
   )
 fi

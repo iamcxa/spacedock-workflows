@@ -357,6 +357,12 @@ Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-a
 
 Plan.md sections: `## Research Summary` (findings + open questions if contradictions + reviewer verdict), `## Size Re-evaluation`, `## Verification Spec` (table from Step 3.5), `## Plan` (TDD tasks from Step 3), `## Plan Report` (status, stage_cost: dispatches×model, iterations, dimensions pass/fail, reviewer verdict, scope anchoring, task count, model split, started/completed/duration), `## Context Manifest` (mandatory — see Step 1.7 and dimension 11).
 
+**Verbosity budget (INVARIANTS Principle 8 — plan.md ≤200 body lines; C15 BLOCKER)**: the plan body is tabular (waves + tasks + DCs). Keep it lean:
+- `## Verification Spec` — key every row by **DC-N** (`### Done Criteria` in shape.md is canonical for assertion + type; cite by DC-N, do NOT restate the assertion/type columns — 129.1 CD-2). Only `Verify Procedure` + `Expected` are the genuinely-new columns this stage produces.
+- Do NOT restate the shape.md Problem / User Journey / DC prose — cite via `extract-section.sh`, per 129.1 `reference_not_restate`.
+- Verbose research → `## Research Summary` stays a findings summary; a bounded excerpt of producer/reviewer transcripts may go in `<details>` (excluded from the ≤200 BODY cap, but the C15 2× raw-total backstop — raw ≤ 400 — still applies, so excerpt-not-dump). Large transcripts → reference a DURABLE artifact (committed-in-repo via explicit pathspec, OR a durable URL — a bare local path is not audit evidence), don't inline.
+- Do NOT enumerate commit SHAs or git-reconstructable file lists in the body — `git log` / `git diff` has them.
+
 Require a `### Metrics` subsection in `## Plan Report`.
 Use grep-friendly `key: value` lines:
 - `status:` passed | gaps-noted | blocked | partial

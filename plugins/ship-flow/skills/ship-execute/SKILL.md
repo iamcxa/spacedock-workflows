@@ -305,6 +305,11 @@ Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=execute --
 
 Execute.md sections: `## Execution Log` (per-task table), `## Issues Found`, `## Knowledge Captures` (D1/D2), `## Execute UAT` (first-pass AC), `## Execute Report` (status / stage_cost: Σ dispatches×model / tasks summary / knowledge capture counts / started/completed/duration).
 
+**Verbosity budget (INVARIANTS Principle 8 — execute.md ≤150 body lines; C15 BLOCKER)**: the per-task DC-results table is the consumable; raw evidence is git-reconstructable or collapses:
+- `## Execution Log` — the per-task table (Task / Wave / Model / Status / Files / Commit) IS the consumable. Do NOT re-emit per-task RAW command output, full diffs, or a separate per-commit SHA narrative in the body — the `Commit` column + `git log <base>..HEAD` reconstruct it. A bounded excerpt of raw build/test output may go in `<details>` (excluded from the ≤150 BODY cap, but the C15 2× raw-total backstop — raw ≤ 300 — still applies, so excerpt-not-dump). Large output → link a DURABLE artifact (committed-in-repo via explicit pathspec so it rides the PR, OR a durable CI-artifact URL — a bare local path is not audit evidence), don't inline.
+- `## Execute UAT` — key rows by **DC-N**; the `Verify Procedure` (operative command actually run, may have deviated — not cheaply reconstructable) STAYS inline, plus `Result` + `Evidence`. Do NOT restate assertion/type — canonical in shape.md `### Done Criteria` (129.1 CD-2).
+- `### Hand-off to Verify → commit_list` — this is git-reconstructable; reduce to a pointer (`commits: git log <base>..HEAD`) plus only the SHAs a `dc_status` row actually cites inline. Do NOT bulk-enumerate every commit.
+
 Require a `### Metrics` subsection in `## Execute Report`.
 Use grep-friendly `key: value` lines:
 - `status:` passed | failed | blocked | partial
