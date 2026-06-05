@@ -99,10 +99,34 @@ Then dispatch each stage to its assigned teammate via SendMessage (hot-context ~
 | review | `planner` | `ship-flow:ship-review` | `<entity-folder>/review.md` |
 | ship-final | ship (this skill) | inline (no stage skill) | `<entity-folder>/ship.md` |
 
-**Per-stage dispatch template** (SendMessage body — adjust per stage):
+**Mandatory Science Officer (EM) charter injection for direct dispatch**:
+Before every direct FO-to-stage-worker dispatch, build the stage assignment body
+with `plugins/ship-flow/lib/build-stage-dispatch-prompt.sh`. The helper must
+resolve the `science-officer-em` profile and include the compact
+`### Science Officer (EM) Charter` block in the prompt body before SendMessage.
+If the helper fails, stop before SendMessage and surface its blocked reason;
+`science-officer-em-profile-not-loaded` is a hard block, not a warning or
+best-effort fallback.
+
+This mandatory load applies only to direct FO-to-stage-worker dispatch in 130.1.
+Nested worker prompts, stage-internal worker assignments, EM stewardship
+mechanics, and upward-report schema are downstream 130.2/130.3 scope.
+
+```bash
+DISPATCH_BODY="$(bash plugins/ship-flow/lib/build-stage-dispatch-prompt.sh \
+  --workflow-dir "$WORKFLOW_DIR" \
+  --stage "<stage>" \
+  --teammate "<teammate>" \
+  --entity-folder "docs/<wf>/<id>-<slug>" \
+  --prior-artifact "<prior-stage>.md" \
+  --output-artifact "<this-stage>.md" \
+  --skill "ship-flow:ship-<stage>")" || return
+```
+
+**Per-stage dispatch template** (SendMessage body comes from helper output — adjust per stage):
 
 ```
-SendMessage(to: "<teammate>", body: "Run /<stage> for pitch-<id>. Entity folder: docs/<wf>/<id>-<slug>/. Read <prior-stage>.md; output <this-stage>.md via Skill: ship-flow:ship-<stage>. Dispatch cross-review counterpart before returning verdict.")
+SendMessage(to: "<teammate>", body: "$DISPATCH_BODY")
 ```
 
 ### Codex dispatch evidence guard
