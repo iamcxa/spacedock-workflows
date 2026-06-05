@@ -234,6 +234,90 @@ function threadGateIssues(threadGate, threadPath) {
   return { blockers: [], nextAction: undefined };
 }
 
+function loginFromActor(actor) {
+  return typeof actor?.login === "string" ? actor.login : "";
+}
+
+function normalizeReviewNodes(pr) {
+  const reviews = pr?.reviews;
+  if (Array.isArray(reviews)) return reviews.filter(isObject);
+  if (Array.isArray(reviews?.nodes)) return reviews.nodes.filter(isObject);
+  if (Array.isArray(pr?.latestReviews)) return pr.latestReviews.filter(isObject);
+  if (Array.isArray(pr?.latestReviews?.nodes)) return pr.latestReviews.nodes.filter(isObject);
+  return [];
+}
+
+function latestReviewByAuthor(pr) {
+  const latest = new Map();
+  for (const review of normalizeReviewNodes(pr)) {
+    const login = loginFromActor(review.author);
+    if (!login) continue;
+    const submittedAt = Date.parse(review.submittedAt ?? review.submitted_at ?? "");
+    const previous = latest.get(login);
+    const previousSubmittedAt = Date.parse(previous?.submittedAt ?? previous?.submitted_at ?? "");
+    if (!previous || Number.isNaN(submittedAt) || Number.isNaN(previousSubmittedAt) || submittedAt >= previousSubmittedAt) {
+      latest.set(login, review);
+    }
+  }
+  return latest;
+}
+
+function reviewDecisionIssues({ pr, prPath, requiredIndependentApprovals }) {
+  const requiredApprovals = Number.isInteger(requiredIndependentApprovals)
+    ? Math.max(0, requiredIndependentApprovals)
+    : 0;
+  const prAuthorLogin = loginFromActor(pr?.author);
+  const latestReviews = latestReviewByAuthor(pr);
+  const activeChangeRequests = [];
+  const independentApprovers = new Set();
+
+  for (const [login, review] of latestReviews.entries()) {
+    const state = String(review?.state ?? "").toUpperCase();
+    if (state === "CHANGES_REQUESTED") {
+      activeChangeRequests.push(login);
+    } else if (state === "APPROVED" && login !== prAuthorLogin) {
+      independentApprovers.add(login);
+    }
+  }
+
+  const blockers = [];
+  if (activeChangeRequests.length > 0) {
+    blockers.push(
+      issue(
+        "review-changes-requested",
+        prPath,
+        "Active change requests must be resolved before auto-merge can be enabled",
+        activeChangeRequests.join(","),
+      ),
+    );
+  }
+  if (independentApprovers.size < requiredApprovals) {
+    blockers.push(
+      issue(
+        "independent-approval-missing",
+        prPath,
+        `Auto-merge requires ${requiredApprovals} independent approval(s); found ${independentApprovers.size}`,
+        JSON.stringify({
+          prAuthorLogin,
+          independentApprovers: [...independentApprovers],
+          requiredIndependentApprovals: requiredApprovals,
+        }),
+      ),
+    );
+  }
+
+  return {
+    blockers,
+    nextAction:
+      activeChangeRequests.length > 0
+        ? "resolve_review_feedback"
+        : independentApprovers.size < requiredApprovals
+          ? "wait_for_independent_review"
+          : undefined,
+    independentApproverCount: independentApprovers.size,
+  };
+}
+
 function firstAction(...actions) {
   return actions.find((action) => typeof action === "string" && action.length > 0);
 }
@@ -241,6 +325,9 @@ function firstAction(...actions) {
 export async function runAutoMergeReadiness(options = {}) {
   const cwd = options.cwd ?? process.cwd();
   const requiredChecks = Array.isArray(options.requiredChecks) ? options.requiredChecks : [];
+  const requiredIndependentApprovals = Number.isInteger(options.requiredIndependentApprovals)
+    ? Math.max(0, options.requiredIndependentApprovals)
+    : 0;
   const prJson = await readJsonFile(cwd, options.prJsonPath, "PR");
   const semanticGateJson = await readJsonFile(cwd, options.semanticGateJsonPath, "semantic gate");
   const threadGateJson = await readJsonFile(cwd, options.threadGateJsonPath, "review thread gate");
@@ -253,6 +340,7 @@ export async function runAutoMergeReadiness(options = {}) {
     semanticGatePath: semanticGateJson.path,
     threadGatePath: threadGateJson.path,
     requiredChecks,
+    requiredIndependentApprovals,
   };
   if (requiredChecks.length === 0) {
     return {
@@ -287,11 +375,17 @@ export async function runAutoMergeReadiness(options = {}) {
   });
   const semanticIssues = semanticGateIssues(semanticGateJson.value, semanticGateJson.path);
   const threadIssues = threadGateIssues(threadGateJson.value, threadGateJson.path);
+  const reviewIssues = reviewDecisionIssues({
+    pr: prJson.value,
+    prPath: prJson.path,
+    requiredIndependentApprovals,
+  });
   const blockers = [
     ...prIssues.blockers,
     ...checkIssues.blockers,
     ...semanticIssues.blockers,
     ...threadIssues.blockers,
+    ...reviewIssues.blockers,
   ];
 
   if (blockers.length > 0) {
@@ -304,10 +398,12 @@ export async function runAutoMergeReadiness(options = {}) {
         checkIssues.nextActions[0],
         semanticIssues.nextAction,
         threadIssues.nextAction,
+        reviewIssues.nextAction,
       ),
       metadata: {
         ...metadata,
         checkCount: checkRollupFromPr(prJson.value).length,
+        independentApproverCount: reviewIssues.independentApproverCount,
       },
     };
   }
@@ -320,6 +416,7 @@ export async function runAutoMergeReadiness(options = {}) {
     metadata: {
       ...metadata,
       checkCount: checkRollupFromPr(prJson.value).length,
+      independentApproverCount: reviewIssues.independentApproverCount,
     },
   };
 }
@@ -336,6 +433,8 @@ function parseArgs(argv) {
       args.threadGateJsonPath = argv[++index];
     } else if (arg === "--required-check") {
       args.requiredChecks.push(argv[++index]);
+    } else if (arg === "--required-independent-approvals") {
+      args.requiredIndependentApprovals = Number(argv[++index]);
     }
   }
   return args;

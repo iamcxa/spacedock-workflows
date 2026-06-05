@@ -80,6 +80,9 @@ export async function runAutoMergeReadinessCollect(options = {}) {
   const { owner, name } = parseRepo(repo);
   const outDir = path.resolve(cwd, options.outDir ?? ".context/ship-flow-auto-merge");
   const requiredChecks = Array.isArray(options.requiredChecks) ? options.requiredChecks : [];
+  const requiredIndependentApprovals = Number.isInteger(options.requiredIndependentApprovals)
+    ? Math.max(0, options.requiredIndependentApprovals)
+    : 0;
   const mode = options.mode ?? "required";
   const policyPath = options.policyPath;
   const commandRunner = options.commandRunner ?? defaultGhRunner;
@@ -105,7 +108,7 @@ export async function runAutoMergeReadinessCollect(options = {}) {
       "--repo",
       repo,
       "--json",
-      "state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,headRefOid,autoMergeRequest",
+      "state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,headRefOid,author,reviews,autoMergeRequest",
     ],
     { cwd, description: "PR snapshot" },
   );
@@ -165,6 +168,7 @@ export async function runAutoMergeReadinessCollect(options = {}) {
     semanticGateJsonPath: paths.semanticGate,
     threadGateJsonPath: paths.reviewThreadGate,
     requiredChecks,
+    requiredIndependentApprovals,
   });
   await writeJson(paths.readiness, readiness);
 
@@ -183,6 +187,15 @@ function cliValue(argv, index, flag) {
     throw new Error(`${flag} requires a value`);
   }
   return value;
+}
+
+function cliIntegerValue(argv, index, flag) {
+  const value = cliValue(argv, index, flag);
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${flag} must be a non-negative integer`);
+  }
+  return parsed;
 }
 
 export function parseAutoMergeReadinessCollectArgs(argv) {
@@ -206,6 +219,9 @@ export function parseAutoMergeReadinessCollectArgs(argv) {
       index += 1;
     } else if (arg === "--required-check") {
       args.requiredChecks.push(cliValue(argv, index, arg));
+      index += 1;
+    } else if (arg === "--required-independent-approvals") {
+      args.requiredIndependentApprovals = cliIntegerValue(argv, index, arg);
       index += 1;
     }
   }

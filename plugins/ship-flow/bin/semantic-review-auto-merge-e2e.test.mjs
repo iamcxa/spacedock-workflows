@@ -146,7 +146,7 @@ test("verify Panel Coverage packet can gate readiness and arm auto-merge", async
       const command = args.join(" ");
       if (
         command.includes(`pr view ${prNumber}`) &&
-        command.includes("--json state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,headRefOid,autoMergeRequest")
+        command.includes("--json state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,headRefOid,author,reviews,autoMergeRequest")
       ) {
         return JSON.stringify(prSnapshot());
       }

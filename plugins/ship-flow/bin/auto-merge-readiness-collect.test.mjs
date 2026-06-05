@@ -142,6 +142,8 @@ function prSnapshot() {
     mergeable: "MERGEABLE",
     mergeStateStatus: "CLEAN",
     headRefOid: headSha,
+    author: { login: "iamcxa" },
+    reviews: [{ author: { login: "ship-flow-reviewer" }, state: "APPROVED" }],
     autoMergeRequest: null,
     statusCheckRollup: [
       {
@@ -181,7 +183,7 @@ test("collects PR evidence, evaluates gates, and writes readiness artifacts", as
       const command = args.join(" ");
       if (
         command.includes("pr view 744") &&
-        command.includes("--json state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,headRefOid,autoMergeRequest")
+        command.includes("--json state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,headRefOid,author,reviews,autoMergeRequest")
       ) {
         return JSON.stringify(prSnapshot());
       }
@@ -203,6 +205,7 @@ test("collects PR evidence, evaluates gates, and writes readiness artifacts", as
       repo: "duckbase-co/qnow",
       outDir,
       requiredChecks: ["ci-gate", "review-thread-gate"],
+      requiredIndependentApprovals: 1,
       mode: "required",
       commandRunner,
     });
@@ -217,6 +220,7 @@ test("collects PR evidence, evaluates gates, and writes readiness artifacts", as
     const readinessArtifact = JSON.parse(await readFile(result.paths.readiness, "utf8"));
     assert.equal(readinessArtifact.ready, true);
     assert.equal(readinessArtifact.metadata.requiredChecks.length, 2);
+    assert.equal(readinessArtifact.metadata.requiredIndependentApprovals, 1);
   });
 });
 
@@ -287,6 +291,38 @@ test("rejects value-taking CLI flags without a value", () => {
   assert.throws(
     () => parseAutoMergeReadinessCollectArgs(["--pr", "--repo", "duckbase-co/qnow"]),
     /--pr requires a value/,
+  );
+  assert.throws(
+    () =>
+      parseAutoMergeReadinessCollectArgs([
+        "--pr",
+        "745",
+        "--repo",
+        "duckbase-co/qnow",
+        "--required-independent-approvals",
+      ]),
+    /--required-independent-approvals requires a value/,
+  );
+});
+
+test("parses required independent approvals for readiness collection", () => {
+  assert.deepEqual(
+    parseAutoMergeReadinessCollectArgs([
+      "--pr",
+      "745",
+      "--repo",
+      "duckbase-co/qnow",
+      "--required-check",
+      "ci-gate",
+      "--required-independent-approvals",
+      "2",
+    ]),
+    {
+      prNumber: "745",
+      repo: "duckbase-co/qnow",
+      requiredChecks: ["ci-gate"],
+      requiredIndependentApprovals: 2,
+    },
   );
 });
 

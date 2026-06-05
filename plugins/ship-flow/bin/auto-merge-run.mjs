@@ -156,6 +156,7 @@ export async function runAutoMerge(options = {}) {
     repo,
     outDir: options.outDir,
     requiredChecks: options.requiredChecks,
+    requiredIndependentApprovals: options.requiredIndependentApprovals,
     mode: options.mode,
     policyPath: options.policyPath,
   });
@@ -246,6 +247,15 @@ function cliValue(argv, index, flag) {
   return value;
 }
 
+function cliIntegerValue(argv, index, flag) {
+  const value = cliValue(argv, index, flag);
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${flag} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
 export function parseAutoMergeRunArgs(argv) {
   const args = { requiredChecks: [] };
   for (let index = 0; index < argv.length; index += 1) {
@@ -270,6 +280,9 @@ export function parseAutoMergeRunArgs(argv) {
       index += 1;
     } else if (arg === "--required-check") {
       args.requiredChecks.push(cliValue(argv, index, arg));
+      index += 1;
+    } else if (arg === "--required-independent-approvals") {
+      args.requiredIndependentApprovals = cliIntegerValue(argv, index, arg);
       index += 1;
     } else if (arg === "--allow-direct-merge-unstable") {
       args.allowDirectMergeUnstable = true;

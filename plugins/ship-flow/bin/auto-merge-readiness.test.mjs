@@ -66,7 +66,13 @@ function threadGate(overrides = {}) {
   };
 }
 
-async function runFixture({ pr = prSnapshot(), semantic = semanticGate(), thread = threadGate(), requiredChecks = ["ci-gate", "review-thread-gate", "semantic-review-gate"] } = {}) {
+async function runFixture({
+  pr = prSnapshot(),
+  semantic = semanticGate(),
+  thread = threadGate(),
+  requiredChecks = ["ci-gate", "review-thread-gate", "semantic-review-gate"],
+  requiredIndependentApprovals,
+} = {}) {
   return await withFixture(
     {
       "pr.json": JSON.stringify(pr, null, 2),
@@ -80,6 +86,7 @@ async function runFixture({ pr = prSnapshot(), semantic = semanticGate(), thread
         semanticGateJsonPath: "semantic.json",
         threadGateJsonPath: "thread.json",
         requiredChecks,
+        requiredIndependentApprovals,
       }),
   );
 }
@@ -146,6 +153,66 @@ test("blocks stale or invalid semantic review packets before auto-merge", async 
   assert.equal(result.status, "blocked");
   assert.equal(result.nextAction, "regenerate_semantic_review_packet");
   assert.match(result.blockers.map((blocker) => blocker.ruleId).join("\n"), /semantic-review-gate-failed/);
+});
+
+test("does not count the PR author's own approval as independent approval", async () => {
+  const result = await runFixture({
+    requiredIndependentApprovals: 1,
+    pr: prSnapshot({
+      author: { login: "iamcxa" },
+      reviews: [
+        {
+          author: { login: "iamcxa" },
+          state: "APPROVED",
+          submittedAt: "2026-05-20T00:00:00Z",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.ready, false);
+  assert.equal(result.nextAction, "wait_for_independent_review");
+  assert.match(result.blockers.map((blocker) => blocker.ruleId).join("\n"), /independent-approval-missing/);
+});
+
+test("accepts independent approval from a reviewer who is not the PR author", async () => {
+  const result = await runFixture({
+    requiredIndependentApprovals: 1,
+    pr: prSnapshot({
+      author: { login: "iamcxa" },
+      reviews: [
+        {
+          author: { login: "ship-flow-reviewer" },
+          state: "APPROVED",
+          submittedAt: "2026-05-20T00:00:00Z",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(result.status, "ready");
+  assert.equal(result.ready, true);
+});
+
+test("blocks active change requests before auto-merge", async () => {
+  const result = await runFixture({
+    pr: prSnapshot({
+      author: { login: "iamcxa" },
+      reviews: [
+        {
+          author: { login: "ship-flow-reviewer" },
+          state: "CHANGES_REQUESTED",
+          submittedAt: "2026-05-20T00:00:00Z",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.ready, false);
+  assert.equal(result.nextAction, "resolve_review_feedback");
+  assert.match(result.blockers.map((blocker) => blocker.ruleId).join("\n"), /review-changes-requested/);
 });
 
 test("blocks non-mergeable PRs before checking auto-merge readiness", async () => {

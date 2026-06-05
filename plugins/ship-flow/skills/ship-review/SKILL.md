@@ -438,7 +438,7 @@ On exit 6 (stale hash): write `## Review Report status: blocked, reason: index.m
 - `roadmap_row_ready`: `true` if ROADMAP.md Now → Shipped row is prepared; `false` + reason if not
 - `umbrella_closeout`: `yes/no` plus parent id or skip rationale
 
-**No auto-merge flag.** ship-review MUST NOT pass `--auto-merge` to `gh pr create` (and the hand-off MUST NOT instruct ship-final to do so either). PR-side gating — Copilot review, branch protection, repo's post-merge automation (release-please / Fly.io / Vercel / manual / none) — owns the merge decision. ship-flow's responsibility ends at PR creation; the repo decides what happens next. Copilot review is allowed as a repo-side reviewer, but ship-flow does not call into Greptile / CodeRabbit / other external review services — verify panel is the self-contained quality gate.
+**No PR-create auto-merge flag.** ship-review MUST NOT pass `--auto-merge` to `gh pr create` (and the hand-off MUST NOT instruct ship-final to do so either). PR-side gating — Copilot review, branch protection, repo's post-merge automation (release-please / Fly.io / Vercel / manual / none) — owns the merge decision. After PR creation, the pr-merge mod may arm GitHub native auto-merge only through its head-bound readiness gate; Ship-Flow self-review evidence is advisory and never substitutes for required independent approval. Copilot review is allowed as a repo-side reviewer, but ship-flow does not call into Greptile / CodeRabbit / other external review services — verify panel is the self-contained quality gate.
 <!-- /section:hand_off_to_ship -->
 
 ---

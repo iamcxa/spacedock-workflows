@@ -356,7 +356,7 @@ Invoke the workflow's pr-merge mod `Hook: post-create` (`docs/<wf>/_mods/pr-merg
 - **Announce** to captain: entity shipped + PR URL + stage artifact paths + post-create auto-review outcome (Ready ✓ / Copilot reviewer id or "skipped" / score breakdown if <90).
 - TaskUpdate ship-final=completed.
 
-**Merge decision is captain's.** `/ship` does NOT auto-merge. Captain may comment on PR or run `gh pr merge` manually.
+**Merge decision remains outside PR creation.** `/ship` does NOT auto-merge at PR creation time. The workflow's pr-merge mod may later arm GitHub native auto-merge only after its head-bound readiness gate passes, including required checks, unresolved-review gates, current semantic-review evidence, and any configured independent-approval requirement. Captain may still comment on PR or run `gh pr merge` manually.
 
 ## Step 6.5 — Verify-stage captain UAT feedback loop
 
@@ -406,7 +406,7 @@ Step 5 is **automated planner↔executer VETO** — max 2 prevents infinite auto
 
 After Step 7 resolves (PROCEED or captain-approved ship-current-state):
 - Push + `gh pr create` proceed **autonomously** — no captain approval needed when all cross-reviews PROCEED. Captain pauses only on: VETO / PROMPT_CAPTAIN verdict, post-PR-create conflict check that fails auto-resolve gate, or BLOCKING captain-smoke finding. Bad-news-early still applies — if anything surfaces during push/PR-create, surface it BEFORE proceeding. Adopter projects wanting stricter default can add a scoped override in their project-level `CLAUDE.md`.
-- Merge decision remains captain's (`gh pr merge` or dashboard). `/ship` does NOT auto-merge.
+- Merge decision remains outside PR creation (`gh pr merge`, dashboard, or the pr-merge mod's gated native auto-merge flow). `/ship` does NOT auto-merge at PR creation time.
 
 ---
 
@@ -436,7 +436,7 @@ No `-a`/`-A` staging (parallel-session staging defense). Sharp-claim → pipelin
 - TaskCreate umbrella at THIS skill; each stage skill owns its sub-task list (do not duplicate).
 - Explicit pathspec on every commit (parallel-session staging defense): `git add <path> && git commit ... -- <path>`.
 - **Worktree-first** (MEMORY #25): at pipeline entry (Step 1 pre-check), `git rev-parse --absolute-git-dir` MUST resolve under `.claude/worktrees/`. On main tip → HALT, prompt captain to spawn worktree (`EnterWorktree` tool) before dispatching any teammate. Stage-artifact commits on main tip contaminate with parallel-session staging per MEMORY #25; worktree isolates completely.
-- No auto-merge. Captain owns merge decision after PR created in ship-final.
+- No auto-merge at PR creation. Any later native auto-merge arming must go through the pr-merge mod readiness gate; Ship-Flow self-review evidence never substitutes for required independent approval.
 - **PR-body coherence gate is non-negotiable** (Step 6.3a): the composed PR body MUST pass the section-completeness / source-fidelity / citation-soundness / coherence gate on `$PR_BODY_FILE` BEFORE `gh pr create`. Since 129.3 CD-2 moved body composition to ship-final, review-stage's `review-pr` reviews only the code diff — the composed body would reach the PR un-reviewed without this gate. Skipping it = shipping an un-reviewed PR body.
 - **Body binding + body-confirm are non-negotiable** (Step 6.4-6.5): the PR is created with `gh pr create --body-file "$PR_BODY_FILE"` (the gated bytes ARE the created body — never `--body "<inline>"` / here-doc retype), and `persist-pr-metadata.sh --expect-body-file "$PR_BODY_FILE"` confirms the CREATED body equals the gated body (reject `pr-body-mismatch`) before writing any `pr:`. Gated body == created body, or STOP.
 - **`pr:` is never a placeholder** (Step 6.1 + 6.5 + 6.6): neither `index.md` frontmatter `pr:` nor `ship.md → ### Verdict → pr:` is written until the PR exists AND its body is confirmed. ship.md is SKELETON-only at 6.1 (no `pr:` / `PENDING` sentinel) and finalized at 6.6 after persist. A committed placeholder `pr:` is a violation.
