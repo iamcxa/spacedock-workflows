@@ -24,6 +24,15 @@ Every reviewer lens receives the same immutable input bundle:
 - extracted `context-routing-manifest` rows when present; reviewers must not
   accept prose-only routing as a substitute for extracted manifest input
 - required skills and knowledge modules for the lens, when derived from domain registry, `skills_needed`, adopter file signals, or touched files
+- `### Science Officer (EM) Stewardship Contract`, rendered by:
+  `bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh`
+  The block carries results, guidelines, resources, accountability,
+  consequences. FO owns workflow clock, state, worktrees, dispatch mechanics,
+  PR lifecycle, and stage advancement. EM owns engineering judgment, delegation
+  quality, worker stewardship quality, risk/scope challenge, and technical
+  recommendations. EM does not mutate entity state, own worktrees, dispatch
+  workers, create or merge PRs, or advance stages. Verification is output-shape
+  evidence, not worker self-attestation.
 
 Reviewers are **read-only** and findings-only. The prompt must say: do not edit files, do not stage files, do not commit, and do not rewrite the plan.
 

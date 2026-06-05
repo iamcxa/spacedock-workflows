@@ -103,6 +103,25 @@ Verdict dominance:
 
 Before dispatching parallel checks, emit `verify-check-manifest` with rows for tests, lint/typecheck/build, `ship-flow:ui-verify`, `ship-flow:verify-reviewer-panel` review lenses, low-model domain reviewers, domain/schema review, and static/security reviewers when applicable. Read plan task `reviewer_questions` and `### Hand-off to Execute → domain_acceptance_checklist`; each checklist row becomes a `review_lenses` row with the same `Verify Lens`, `Reviewer Question`, affected path family, required skills, and evidence requirement. Also materialize any task-level reviewer_questions that are not already represented in `domain_acceptance_checklist`, including framework-only prompts, into `review_lenses` rows with source `reviewer_questions`. Concrete lenses such as `project-db`, `fmodel`, or `refine-gotchas` map to the `domain-expert-reviewer` reviewer kind while preserving the concrete lens name in `Lens`. Each row records input, owner, whether it can run in parallel, and required evidence. The verifier is the single integrator: parallel checks may gather evidence concurrently, but only the verifier classifies findings and writes the final verdict.
 
+### Science Officer (EM) stewardship for verify reviewer assignments
+
+Before dispatching any general external reviewer, silent-failure reviewer,
+domain reviewer, specialist reviewer, adversarial pass, designer handoff, or
+cross-reviewer, render and include the shared worker-facing stewardship section:
+
+```bash
+bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh
+```
+
+The resulting `### Science Officer (EM) Stewardship Contract` block is part of
+the reviewer assignment body. It carries results, guidelines, resources,
+accountability, consequences. FO owns workflow clock, state, worktrees,
+dispatch mechanics, PR lifecycle, and stage advancement. EM owns engineering
+judgment, delegation quality, worker stewardship quality, risk/scope challenge,
+and technical recommendations. EM does not mutate entity state, own worktrees,
+dispatch workers, create or merge PRs, or advance stages. Verification is
+output-shape evidence, not worker self-attestation.
+
 When plan contains routed domain context, verify must first run
 `bash plugins/ship-flow/lib/extract-section.sh <plan.md> context-routing-manifest`
 and treat an empty result as BLOCKING with `route_to: execute` or `plan`

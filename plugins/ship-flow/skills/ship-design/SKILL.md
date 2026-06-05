@@ -183,6 +183,25 @@ design-dispatch-manifest:
     whole_page: whole_page_visual_targets[]
 ```
 
+### Science Officer (EM) stewardship for designer assignments
+
+Before dispatching any stage-internal designer, domain expert panel lane,
+contract/interface worker, or design cross-reviewer, render and include the
+shared worker-facing stewardship section:
+
+```bash
+bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh
+```
+
+The resulting `### Science Officer (EM) Stewardship Contract` block is part of
+the assignment body. It carries results, guidelines, resources, accountability,
+consequences. FO owns workflow clock, state, worktrees, dispatch mechanics, PR
+lifecycle, and stage advancement. EM owns engineering judgment, delegation
+quality, worker stewardship quality, risk/scope challenge, and technical
+recommendations. EM does not mutate entity state, own worktrees, dispatch
+workers, create or merge PRs, or advance stages. Verification is output-shape
+evidence, not worker self-attestation.
+
 Dispatch rules:
 - UI-only small Category C/D work may use `single-designer` mode with one
   `ui-designer`.

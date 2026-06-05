@@ -137,6 +137,16 @@ Before dispatching a wave, write `execute-dispatch-manifest` into `execute.md` d
 **Dispatch prompt anatomy** (ship-execute fills in, Layer A teaches why):
 - Task text from plan (verbatim).
 - Project / entity context.
+- `### Science Officer (EM) Stewardship Contract` block rendered with
+  `bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh`.
+  This stage-internal worker, task-reviewer, and execute cross-reviewer contract
+  carries results, guidelines, resources, accountability, consequences. FO owns
+  workflow clock, state, worktrees, dispatch mechanics, PR lifecycle, and stage
+  advancement. EM owns engineering judgment, delegation quality, worker
+  stewardship quality, risk/scope challenge, and technical recommendations. EM
+  does not mutate entity state, own worktrees, dispatch workers, create or merge
+  PRs, or advance stages. Verification is output-shape evidence, not worker
+  self-attestation.
 - `### Architecture context` block with `$ARCH_SNIPPET` when non-empty.
 - `### Skills required` block with this task's `skills_needed` list. Ask the troop to load/use only those skills first; if the list is empty because the task is docs-only/stage-artifact, say `none — docs-only/stage-artifact`.
 - `### Folder guidance required` block with every `folder_guidance_files` path and parsed `folder_guidance_skills`. Ask the troop to read those files and return a `Context Read Receipt` listing the guidance files, loaded skills, and applied constraints. The receipt is required because PR-feedback re-entry and fresh workers do not reliably inherit app-folder guidance from Codex's root session context.

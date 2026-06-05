@@ -127,6 +127,25 @@ Each imported DC retains `rationale_decision: D{N}` cross-reference back to ship
 
 After spec read + design DC import, check whether the spec touches any known cross-cutting domains and dispatch read-only architecture lens agents before research.
 
+### Science Officer (EM) stewardship for plan-stage assignments
+
+Before dispatching any architecture lens, research producer, research reviewer,
+plan cross-reviewer, or gap-fill worker, render and include the shared
+worker-facing stewardship section:
+
+```bash
+bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh
+```
+
+The resulting `### Science Officer (EM) Stewardship Contract` block is part of
+the assignment body. It carries results, guidelines, resources, accountability,
+consequences. FO owns workflow clock, state, worktrees, dispatch mechanics, PR
+lifecycle, and stage advancement. EM owns engineering judgment, delegation
+quality, worker stewardship quality, risk/scope challenge, and technical
+recommendations. EM does not mutate entity state, own worktrees, dispatch
+workers, create or merge PRs, or advance stages. Verification is output-shape
+evidence, not worker self-attestation.
+
 **Trigger matching** — read `plugins/ship-flow/references/architecture-lens-triggers.yaml`. For each domain entry:
 1. **File-glob match**: check spec `### Artifacts likely touched` paths against `trigger_patterns` (bash glob, case-insensitive). Match if any path matches any pattern.
 2. **Spec-keyword match**: grep spec body (full text) for each `spec_keywords` entry (case-insensitive). Match if any keyword found.

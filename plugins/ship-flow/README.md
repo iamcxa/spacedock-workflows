@@ -66,6 +66,8 @@ Why this matters: opus 4.7 with hot context ramps to work in ~5 min vs ~5K token
 
 Direct FO-to-stage-worker dispatch is now also the mandatory Science Officer (EM) load point. `/ship` must build each stage-worker assignment through `build-stage-dispatch-prompt.sh`, include `### Science Officer (EM) Charter`, and stop with `science-officer-em-profile-not-loaded` if the standing profile cannot be resolved. This is intentionally limited to direct dispatch in 130.1; nested/stage-internal worker prompts and stewardship mechanics are 130.2, while judgment-bearing upward-report schema is 130.3.
 
+130.2 adds a shared `### Science Officer (EM) Stewardship Contract` to nested and stage-internal assignments through `lib/render-science-officer-em-stewardship-contract.sh`. The contract carries results, guidelines, resources, accountability, consequences; it also preserves the FO/EM boundary: FO owns workflow clock/state/worktrees/dispatch/PR/stage advancement, while EM owns engineering judgment, delegation quality, worker stewardship quality, risk/scope challenge, and technical recommendations. This is verified by output-shape tests, not worker self-attestation, and it does not implement the 130.3 upward report schema.
+
 ### 4. Auditable per-stage `.md` artifacts
 
 Each stage writes its output to `<entity-folder>/{stage}.md` via `lib/write-stage-artifact.sh` (Layer C primitive — atomic commit with explicit pathspec, optional CAS via `--if-hash`). An auditor reads across `shape.md / plan.md / execute.md / verify.md / review.md / ship.md` + entity body to reconstruct decision history. Legacy `spec.md` remains a compatibility alias for older shape artifacts.

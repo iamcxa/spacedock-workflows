@@ -65,6 +65,24 @@ Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.
 
 SendMessage to `planner` teammate with a structured prompt. Planner already has hot context from shape + plan stages; this dispatch is the canonical-sync work, not re-discovery.
 
+Before dispatching the planner canonical-doc patch worker or any review
+cross-reviewer, render and include the shared worker-facing stewardship section:
+
+```bash
+bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh
+```
+
+The resulting `### Science Officer (EM) Stewardship Contract` block is part of
+the assignment body. It carries results, guidelines, resources, accountability,
+consequences. FO owns workflow clock, state, worktrees, dispatch mechanics, PR
+lifecycle, and stage advancement. EM owns engineering judgment, delegation
+quality, worker stewardship quality, risk/scope challenge, and technical
+recommendations. EM does not mutate entity state, own worktrees, dispatch
+workers, create or merge PRs, or advance stages. Verification is output-shape
+evidence, not worker self-attestation. Review remains planner-owned
+canonical-doc patch scope; EM recommendations route through FO workflow
+mechanics.
+
 **Dispatch prompt template**:
 
 > Draft canonical doc patches for pitch `<id>-<slug>`. Read entity children's `architecture-impact`, `product-impact`, `readme-impact` blocks + plan `canonical_doc_actions` rows + parent `roadmap-phase` + verify verdict. Aggregate per target_section. Treat `canonical_doc_actions` as the plan/verify handoff for actions discovered after shape: `source: plan` and `source: touched-files` rows can require canonical updates even when the original impact block was absent; `action: skip` rows require a `skip_rationale`. Apply patches atomically:
