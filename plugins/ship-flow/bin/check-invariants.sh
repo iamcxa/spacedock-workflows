@@ -1626,7 +1626,7 @@ _artifact_raw_line_count() {
 
 # Known limitations (accepted — pitch 129.2, captain-approved 2026-06-04). C15 is a
 # verbosity LINT (discipline nudge), not a security boundary; the awk body-count
-# heuristic is intentionally not a markdown-grade tokenizer. Two residual edge cases:
+# heuristic is intentionally not a markdown-grade tokenizer. Residual edge cases:
 #   1. A standalone `<details>`/`</details>` line INSIDE a fenced code block (```) is
 #      treated as a real collapsible block and excluded from the body count. Exploiting
 #      it requires deliberately fencing collapsible markers, and the content stays
@@ -1634,8 +1634,16 @@ _artifact_raw_line_count() {
 #   2. Nested `<details>` close is not depth-aware (first standalone `</details>` ends
 #      the block), so a legitimately nested block is only partially excluded and may
 #      OVER-count toward RED. This errs SAFE (false-RED, never a bypass).
-# Closing either would need a real Markdown parser — out of scope for a bash verbosity
-# gate. Honest-author artifacts are fully covered; see docs/ship-flow/129.2-* stage report.
+#   3. Scans the COMMITTED PR diff (merge-base..HEAD), identical to C14 and every other
+#      check-invariants check — a CI/PR gate, NOT a pre-commit staged linter. An over-cap
+#      stage artifact is caught at CI once committed (which is when it reaches a PR);
+#      staged-but-uncommitted local state is intentionally not scanned (by design).
+#   4. Paths with spaces / non-ASCII are git-quoted in --name-status output and would be
+#      skipped; ship-flow stage artifacts use fixed kebab filenames (plan.md/execute.md/…
+#      under kebab-slug entity dirs) so this does not trigger. Harden with `git diff -z` if needed.
+# 1-2 need a real Markdown parser; 3 is intentional CI-gate scope; 4 is non-triggering for
+# fixed filenames — all out of scope for a bash verbosity LINT. Honest-author path fully
+# covered; see docs/ship-flow/129.2-* stage report.
 check_artifact_verbosity() {
   local violations=0
   local candidates=()
