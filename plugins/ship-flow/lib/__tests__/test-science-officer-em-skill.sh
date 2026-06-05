@@ -7,6 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 SKILL="${ROOT}/plugins/ship-flow/skills/science-officer-em/SKILL.md"
 AGENT="${ROOT}/plugins/ship-flow/agents/science-officer-em.md"
 PROFILE="${ROOT}/plugins/ship-flow/_mods/science-officer-em.md"
+WORKFLOW_PROFILE="${ROOT}/docs/ship-flow/_mods/science-officer-em.md"
 
 PASS=0
 FAIL=0
@@ -48,11 +49,20 @@ check "skill gives direct invocation examples" \
   "grep -q 'Use science-officer' '$SKILL' && grep -q '請科學官' '$SKILL'"
 check "claude agent profile exists" "test -f '$AGENT'"
 check "claude agent profile has canonical name" "grep -q '^name: science-officer-em$' '$AGENT'"
+check "claude agent profile pins opus" "grep -q '^model: opus$' '$AGENT'"
+check "claude agent profile requests xhigh reasoning" "grep -q '^reasoning: xhigh$' '$AGENT'"
 check "claude agent profile delegates to standing profile" "grep -q 'plugins/ship-flow/_mods/science-officer-em.md' '$AGENT'"
+check "claude agent profile invokes thin skill" "grep -q 'ship-flow:science-officer-em' '$AGENT'"
 check "claude agent profile keeps FO boundary" \
   "grep -qi 'FO owns workflow' '$AGENT' && grep -qi 'EM owns engineering judgment' '$AGENT' && grep -qi 'Do not.*replace.*First Officer' '$AGENT'"
 check "claude agent profile uses upward report shape" \
   "grep -q 'science_officer_em_upward_report' '$AGENT' && grep -q 'route' '$AGENT' && grep -q 'confidence' '$AGENT'"
+check "standing profiles pin opus and xhigh" \
+  "grep -q '^- model: opus$' '$PROFILE' && grep -q '^- reasoning: xhigh$' '$PROFILE' && grep -q '^- model: opus$' '$WORKFLOW_PROFILE' && grep -q '^- reasoning: xhigh$' '$WORKFLOW_PROFILE'"
+check "standing profiles point to thin skill" \
+  "grep -q 'ship-flow:science-officer-em' '$PROFILE' && grep -q 'ship-flow:science-officer-em' '$WORKFLOW_PROFILE'"
+check "ship-flow SO surfaces do not reference deprecated spacedock-workflow SO" \
+  "! grep -R 'spacedock-workflow:science-officer' '$SKILL' '$AGENT' '$PROFILE' '$WORKFLOW_PROFILE'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

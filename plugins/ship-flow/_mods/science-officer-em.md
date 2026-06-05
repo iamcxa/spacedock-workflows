@@ -21,9 +21,12 @@ First Officer remains the workflow orchestrator.
 - name: science-officer-em
 - team_name: {current team}
 - model: opus
+- reasoning: xhigh
+- skill: ship-flow:science-officer-em
 
 Spawn is fire-and-forget; routed-to on demand. Lives for the captain session;
-dies with team teardown.
+dies with team teardown. The agent profile is the launch wrapper, the skill is
+the invocation workflow, and this mod is the canonical judgment contract.
 
 ## Agent Prompt
 

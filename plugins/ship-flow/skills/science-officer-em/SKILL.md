@@ -12,11 +12,20 @@ Load `plugins/ship-flow/_mods/science-officer-em.md` before answering; if a
 workflow override exists at `docs/ship-flow/_mods/science-officer-em.md`, read
 that first.
 
+For Claude launches, use the thin `science-officer-em` agent profile with
+`model: opus` and `reasoning: xhigh` when supported. For Codex launches, keep
+this skill as the thin entry and use the highest available reasoning level for
+judgment-heavy calls.
+
 ## When Invoked
 
 Treat these as aliases for this skill in general prompts or direct chat:
 `science-officer-em`, `science-officer`, `Science Officer`, `SO`, `EM`,
 `科學官`.
+
+Do not route these aliases to the deprecated legacy Science Officer profile from
+the spacedock-workflow plugin. Ship-Flow SO/EM is
+`ship-flow:science-officer-em`.
 
 Examples:
 

@@ -73,8 +73,11 @@ Direct FO-to-stage-worker dispatch is now also the mandatory Science Officer (EM
 Captain-invoked EM judgment uses the thin `ship-flow:science-officer-em` skill
 and Claude agent profile at `agents/science-officer-em.md`. The aliases
 `science-officer`, `SO`, `EM`, and `科學官` route to the standing EM profile for
-judgment only; they do not replace First Officer orchestration. FO still owns
-workflow clock, stage state, dispatch mechanics, worktrees, PR flow, and closeout.
+judgment only; they do not replace First Officer orchestration. Claude launches
+must use Opus and request `xhigh` reasoning when the host supports reasoning
+selection. These aliases do not route to the deprecated legacy Science Officer
+profile from the spacedock-workflow plugin. FO still owns workflow clock, stage
+state, dispatch mechanics, worktrees, PR flow, and closeout.
 
 ### 4. Auditable per-stage `.md` artifacts
 
