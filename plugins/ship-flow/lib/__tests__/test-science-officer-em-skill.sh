@@ -43,6 +43,12 @@ check "skill includes route enum" \
   "grep -q 'proceed' '$SKILL' && grep -q 'narrow' '$SKILL' && grep -q 'return' '$SKILL' && grep -q 'block' '$SKILL' && grep -q 'costly_no' '$SKILL'"
 check "skill preserves FO/EM boundary" \
   "grep -qi 'FO owns workflow' '$SKILL' && grep -qi 'EM owns engineering judgment' '$SKILL'"
+check "skill routes AI review adjudication to EM judgment" \
+  "grep -q 'AI / external PR review adjudication' '$SKILL' && grep -q 'accepted' '$SKILL' && grep -q 'false_positive' '$SKILL' && grep -q 'out_of_scope' '$SKILL'"
+check "skill requires evidence-bearing gh api replies for false positives" \
+  "grep -q 'gh api' '$SKILL' && grep -qi 'evidence-bearing' '$SKILL' && grep -qi 'resolve/dismiss' '$SKILL'"
+check "skill forbids author self-approval as review bypass" \
+  "grep -qi 'author self-approval' '$SKILL' && grep -qi 'must not' '$SKILL'"
 check "skill forbids replacing FO mechanics" \
   "grep -qi 'Do not advance stages' '$SKILL' && grep -qi 'Do not.*mutate.*frontmatter' '$SKILL' && grep -qi 'Do not.*own.*worktree' '$SKILL' && grep -qi 'Do not.*replace.*First Officer' '$SKILL'"
 check "skill gives direct invocation examples" \

@@ -211,8 +211,35 @@ test("blocks active change requests before auto-merge", async () => {
 
   assert.equal(result.status, "blocked");
   assert.equal(result.ready, false);
-  assert.equal(result.nextAction, "resolve_review_feedback");
+  assert.equal(result.nextAction, "science_officer_em_adjudicate_review_feedback");
   assert.match(result.blockers.map((blocker) => blocker.ruleId).join("\n"), /review-changes-requested/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /SO\/EM/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /gh api/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /accepted/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /false_positive/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /out_of_scope/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /Do not rely on author self-approval/i);
+});
+
+test("routes unresolved review thread gates to SO/EM adjudication", async () => {
+  const result = await runFixture({
+    thread: threadGate({
+      ok: false,
+      issues: [
+        {
+          ruleId: "review-thread-gate.unresolved-current-head-thread",
+          message: "Unresolved review thread targets the current PR head",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.ready, false);
+  assert.equal(result.nextAction, "science_officer_em_adjudicate_review_threads");
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /SO\/EM/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /evidence-bearing gh api replies/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /resolve\/dismiss/);
 });
 
 test("blocks non-mergeable PRs before checking auto-merge readiness", async () => {

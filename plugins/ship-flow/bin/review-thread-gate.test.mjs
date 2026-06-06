@@ -100,12 +100,73 @@ test("fails when an unresolved non-outdated thread targets the current head", as
   assert.equal(result.metadata.unresolvedCurrentHeadThreadCount, 1);
 });
 
+test("unresolved AI review threads direct FO to SO/EM adjudication instead of author self-approval", async () => {
+  const result = await validate(
+    payload({
+      pullRequest: {
+        reviewThreads: {
+          nodes: [
+            thread({
+              comments: [
+                comment({
+                  author: { login: "copilot-pull-request-reviewer" },
+                  body: "This looks unsafe.",
+                }),
+              ],
+            }),
+          ],
+        },
+      },
+    }),
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.issues[0].message, /SO\/EM adjudication/);
+  assert.match(result.issues[0].message, /accepted/);
+  assert.match(result.issues[0].message, /false_positive/);
+  assert.match(result.issues[0].message, /out_of_scope/);
+  assert.match(result.issues[0].message, /gh api/);
+  assert.match(result.issues[0].message, /resolve\/dismiss/);
+  assert.match(result.issues[0].message, /Do not rely on author self-approval/i);
+});
+
 test("passes when unresolved threads are outdated or resolved", async () => {
   const result = await validate(
     payload({
       pullRequest: {
         reviewThreads: {
           nodes: [thread({ isOutdated: true }), thread({ isResolved: true })],
+        },
+      },
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.metadata.unresolvedCurrentHeadThreadCount, 0);
+});
+
+test("passes when an AI reviewer false positive has an EM evidence reply and the thread is resolved", async () => {
+  const result = await validate(
+    payload({
+      pullRequest: {
+        reviewThreads: {
+          nodes: [
+            thread({
+              isResolved: true,
+              comments: [
+                comment({
+                  author: { login: "copilot-pull-request-reviewer" },
+                  body: "This change appears to remove validation.",
+                }),
+                comment({
+                  id: "PRRC_2",
+                  author: { login: "science-officer-em" },
+                  body: "false_positive: validation remains covered by node --test plugins/ship-flow/bin/review-thread-gate.test.mjs.",
+                  commit: { oid: headSha },
+                }),
+              ],
+            }),
+          ],
         },
       },
     }),

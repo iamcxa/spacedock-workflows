@@ -352,6 +352,26 @@ After metadata persistence, run the read-only helper before any post-create auto
 
 Invoke the workflow's pr-merge mod `Hook: post-create` (`docs/<wf>/_mods/pr-merge.md`). The FO computes a 5-signal confidence score (verify gate / quality gates / outstanding feedback / rebase clean / token spend); on score ≥90 auto-applies the policy steps (mark Ready via `gh pr ready` + request Copilot review with graceful skip if absent); on 80-89 surfaces breakdown to captain and asks; on <80 surfaces concerns and skips. Tagging `@claude review` is intentionally NOT a default step — adopters who have the Claude Code Action wired can extend in a project-scoped override of the mod. Failure of any post-create step is non-blocking — log + surface, never halt ship-final.
 
+### Step 6.8a — AI/external review adjudication for auto-merge readiness
+
+When `auto-merge-readiness.mjs` returns
+`science_officer_em_adjudicate_review_feedback` or
+`science_officer_em_adjudicate_review_threads`, FO routes the blocking review
+feedback to `ship-flow:science-officer-em` instead of trying PR author
+self-approval. EM classifies each reviewer finding as `accepted`,
+`false_positive`, or `out_of_scope`.
+
+- `accepted`: route back for the code/test/doc fix before auto-merge can
+  continue.
+- `false_positive` / `out_of_scope`: EM uses `gh api` to leave an
+  evidence-bearing reply on the exact review comment/thread, citing code,
+  tests, command output, or commit SHA; then resolve/dismiss the thread or bot
+  review when permissions allow.
+- If EM lacks permission to resolve/dismiss, FO surfaces the posted evidence
+  reply and exact permission blocker to the captain. Do not treat silence,
+  ignored comments, or author self-approval attempts as a valid review
+  disposition.
+
 ### Step 6.9 — Announce + close
 
 - **Announce** to captain: entity shipped + PR URL + stage artifact paths + post-create auto-review outcome (Ready ✓ / Copilot reviewer id or "skipped" / score breakdown if <90).

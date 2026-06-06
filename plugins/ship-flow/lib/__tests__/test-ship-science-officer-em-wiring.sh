@@ -41,6 +41,8 @@ check "helper runs before SendMessage template" \
 check "ship stops when helper fails" \
   "grep -qi 'stop before SendMessage' '$SHIP_SKILL' && grep -qi 'helper fails' '$SHIP_SKILL'"
 check "Codex dispatch evidence guard preserved" "grep -q 'Codex dispatch evidence guard' '$SHIP_SKILL'"
+check "post-create review feedback routes to SO/EM adjudication" \
+  "grep -q 'science_officer_em_adjudicate_review_feedback' '$SHIP_SKILL' && grep -q 'science_officer_em_adjudicate_review_threads' '$SHIP_SKILL' && grep -q 'accepted' '$SHIP_SKILL' && grep -q 'false_positive' '$SHIP_SKILL' && grep -q 'out_of_scope' '$SHIP_SKILL' && grep -q 'gh api' '$SHIP_SKILL' && grep -qi 'author self-approval' '$SHIP_SKILL'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

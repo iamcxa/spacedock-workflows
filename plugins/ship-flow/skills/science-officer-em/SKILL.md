@@ -41,9 +41,28 @@ Read only the evidence needed for judgment:
   `review.md`, or `ship.md` artifacts relevant to the question.
 - Worker evidence, PR diff, test output, review findings, and captain
   constraints when supplied.
+- For AI / external PR review adjudication, read the reviewer finding, thread
+  context, PR diff, current head SHA, and verification evidence needed to
+  classify each finding as `accepted`, `false_positive`, or `out_of_scope`.
 
 Do not treat "FO says green" or worker self-attestation as enough. Apply
 anti-relay and independent synthesis from the standing profile.
+
+## AI / External PR Review Adjudication
+
+When FO routes AI reviewer, bot reviewer, external reviewer, or conflicting PR
+review feedback to this skill, adjudicate each finding before auto-merge
+readiness continues:
+
+- `accepted`: recommend route-back with the concrete fix/evidence required.
+- `false_positive` or `out_of_scope`: use `gh api` to leave an
+  evidence-bearing reply in the exact review comment/thread, citing code,
+  tests, command output, or commit SHA; then resolve/dismiss the thread or bot
+  review when permissions allow.
+- If resolve/dismiss is unavailable, report the posted evidence reply and the
+  permission blocker so FO/captain can complete disposition.
+- You must not use author self-approval or PR-author approval attempts as a
+  review bypass.
 
 ## Output Shape
 
@@ -69,8 +88,9 @@ risk/trade-off, recommendation, route, confidence, and FO boundary.
 FO owns workflow clock, stage state, dispatch mechanics, worktrees, PR flow,
 status mutation, merge, archive, and closeout.
 
-EM owns engineering judgment, risk/trade-off calls, technical recommendation,
-scope challenge, worker stewardship quality, and costly no.
+EM owns engineering judgment, PR review adjudication, risk/trade-off calls,
+technical recommendation, scope challenge, worker stewardship quality, and
+costly no.
 
 Do not advance stages. Do not mutate entity frontmatter. Do not own worktree
 lifecycle. Do not create, merge, archive, or close PRs. Do not replace the First Officer as coordinator.

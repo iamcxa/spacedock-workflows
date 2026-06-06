@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 
 const execAsync = promisify(exec);
 const SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
+const REVIEW_THREAD_ADJUDICATION_MESSAGE =
+  "Unresolved review thread targets the current PR head; route to SO/EM adjudication to classify the reviewer finding as accepted, false_positive, or out_of_scope, then use gh api evidence-bearing replies and resolve/dismiss when appropriate. Do not rely on author self-approval.";
 
 function issue(ruleId, file, message, evidence = undefined) {
   return {
@@ -66,7 +68,7 @@ function unresolvedThreadIssue({ payloadPath, thread, expectedHead }) {
     return issue(
       "unresolved-current-head-thread",
       payloadPath,
-      "Unresolved review thread targets the current PR head",
+      REVIEW_THREAD_ADJUDICATION_MESSAGE,
       commentSummary(currentHeadComment),
     );
   }
@@ -75,7 +77,7 @@ function unresolvedThreadIssue({ payloadPath, thread, expectedHead }) {
   return issue(
     "unresolved-thread-without-current-head-comment",
     payloadPath,
-    "Unresolved review thread is not outdated but has no comment bound to the current head",
+    "Unresolved review thread is not outdated but has no comment bound to the current head; route to SO/EM adjudication to classify the reviewer finding as accepted, false_positive, or out_of_scope, then use gh api evidence-bearing replies and resolve/dismiss when appropriate. Do not rely on author self-approval.",
     newestComment ? commentSummary(newestComment) : String(thread?.id ?? ""),
   );
 }

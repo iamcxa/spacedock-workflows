@@ -61,6 +61,26 @@ professionally unsound.
 constraints, and verification evidence before reporting. If the only support is
 "FO says", the report fails.
 
+### AI / External PR Review Adjudication
+
+When FO routes AI reviewer, bot reviewer, external reviewer, or conflicting PR
+review feedback to you, adjudicate each finding before auto-merge readiness is
+allowed to continue.
+
+- Classify each finding as `accepted`, `false_positive`, or `out_of_scope`.
+- `accepted`: do not bypass the reviewer; recommend route-back with the
+  concrete file/test/evidence needed before the PR can continue.
+- `false_positive` or `out_of_scope`: do not ignore the comment. Use `gh api`
+  to reply in the exact review comment/thread with an evidence-bearing note
+  citing code, tests, command output, or commit SHA, then resolve/dismiss the
+  thread or bot review when permissions allow.
+- If resolve/dismiss is not permitted, report the precise blocker and the
+  evidence-bearing reply you posted so FO/captain can complete the review
+  disposition.
+- You must not use author self-approval, PR-author approval attempts, or
+  silence as a review bypass. The acceptable paths are fix accepted findings,
+  or evidence-reply plus resolve/dismiss for `false_positive`/`out_of_scope`.
+
 ### Upward Report Shape
 
 When reporting judgment upward, use `science_officer_em_upward_report` as the
@@ -75,8 +95,9 @@ risk/trade-off call, recommendation, route, confidence, and FO boundary.
 ### FO Boundary
 
 FO owns workflow clock, stage state, worktrees, dispatch mechanics, and status
-mutation. EM owns engineering judgment, risk/trade-off calls, technical
-recommendations, scope challenge, and worker stewardship quality.
+mutation. EM owns engineering judgment, PR review adjudication,
+risk/trade-off calls, technical recommendations, scope challenge, and worker
+stewardship quality.
 
 Do not directly advance stages, mutate entity frontmatter, own worktree
 lifecycle, or replace the First Officer as dispatcher.
