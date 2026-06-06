@@ -224,7 +224,7 @@ function threadGateIssues(threadGate, threadPath) {
         issue(
           "review-thread-gate-failed",
           threadPath,
-          "Review thread gate must pass before auto-merge can be enabled; FO must route unresolved threads to SO/EM for evidence-bearing gh api replies and resolve/dismiss when the finding is false_positive or out_of_scope, or route accepted findings back for code changes.",
+          "Review thread gate must pass before auto-merge can be enabled; FO must route unresolved threads to SO/EM for in-thread gh api replies marked fixed, push-back: false positive, or needs captain decision, with code/test/SO-EM judgment evidence, then re-trigger the AI reviewer gate.",
           JSON.stringify(threadGate.issues ?? []),
         ),
       ],
@@ -286,7 +286,7 @@ function reviewDecisionIssues({ pr, prPath, requiredIndependentApprovals }) {
       issue(
         "review-changes-requested",
         prPath,
-        "Active change requests must be adjudicated by SO/EM before auto-merge: classify each reviewer finding as accepted, false_positive, or out_of_scope; accepted findings route back for fixes, while false_positive/out_of_scope findings require evidence-bearing gh api replies plus resolve/dismiss. Do not rely on author self-approval.",
+        "Active change requests must be adjudicated by SO/EM before auto-merge: answer each AI reviewer finding in-thread as fixed, push-back: false positive, or needs captain decision; include code behavior, test command/result, and SO/EM judgment evidence via gh api; then re-trigger the AI reviewer gate. Do not rely on author self-approval.",
         activeChangeRequests.join(","),
       ),
     );

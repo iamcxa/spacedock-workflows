@@ -42,8 +42,8 @@ Read only the evidence needed for judgment:
 - Worker evidence, PR diff, test output, review findings, and captain
   constraints when supplied.
 - For AI / external PR review adjudication, read the reviewer finding, thread
-  context, PR diff, current head SHA, and verification evidence needed to
-  classify each finding as `accepted`, `false_positive`, or `out_of_scope`.
+  context, PR diff, current head SHA, related AI reviewer PR check state, and
+  verification evidence needed to answer each thread.
 
 Do not treat "FO says green" or worker self-attestation as enough. Apply
 anti-relay and independent synthesis from the standing profile.
@@ -54,13 +54,19 @@ When FO routes AI reviewer, bot reviewer, external reviewer, or conflicting PR
 review feedback to this skill, adjudicate each finding before auto-merge
 readiness continues:
 
-- `accepted`: recommend route-back with the concrete fix/evidence required.
-- `false_positive` or `out_of_scope`: use `gh api` to leave an
-  evidence-bearing reply in the exact review comment/thread, citing code,
-  tests, command output, or commit SHA; then resolve/dismiss the thread or bot
-  review when permissions allow.
-- If resolve/dismiss is unavailable, report the posted evidence reply and the
-  permission blocker so FO/captain can complete disposition.
+- First check whether the requested-changes review is tied to an AI reviewer
+  PR check. If yes, your operation is fixed: inline reply plus re-trigger.
+- Use `gh api` to reply directly in each AI reviewer inline comment thread.
+- Start each reply with exactly one label: `fixed`,
+  `push-back: false positive`, or `needs captain decision`.
+- Include evidence: relevant code behavior, test command/result, and SO/EM
+  judgment rationale.
+- Ask FO to re-trigger the AI reviewer gate after replies are posted. Short
+  term this may mean re-running the failed GitHub Actions job/check; long term
+  it may mean re-running a GitHub App check run. Do not make your judgment
+  depend on which backend is active.
+- The AI gate adjudicates replies and either resolves accepted threads or
+  replies in-thread with why a finding remains blocking.
 - You must not use author self-approval or PR-author approval attempts as a
   review bypass.
 

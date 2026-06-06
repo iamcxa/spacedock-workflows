@@ -1,6 +1,6 @@
 {
   "name": "ship-flow",
-  "version": "0.7.0-rc.4",
+  "version": "0.7.0-rc.5",
   "description": "Ship-focused development pipeline. SHAPE once with captain, then agents autonomously plan → execute → ship.",
   "author": {
     "name": "Kent"

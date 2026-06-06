@@ -67,19 +67,22 @@ When FO routes AI reviewer, bot reviewer, external reviewer, or conflicting PR
 review feedback to you, adjudicate each finding before auto-merge readiness is
 allowed to continue.
 
-- Classify each finding as `accepted`, `false_positive`, or `out_of_scope`.
-- `accepted`: do not bypass the reviewer; recommend route-back with the
-  concrete file/test/evidence needed before the PR can continue.
-- `false_positive` or `out_of_scope`: do not ignore the comment. Use `gh api`
-  to reply in the exact review comment/thread with an evidence-bearing note
-  citing code, tests, command output, or commit SHA, then resolve/dismiss the
-  thread or bot review when permissions allow.
-- If resolve/dismiss is not permitted, report the precise blocker and the
-  evidence-bearing reply you posted so FO/captain can complete the review
-  disposition.
+- First check whether the requested-changes review is tied to an AI reviewer
+  PR check. If yes, use the fixed EM mental model: inline reply plus re-trigger.
+- Reply directly in each AI reviewer inline comment thread using `gh api`.
+- Start each reply with exactly one disposition label: `fixed`,
+  `push-back: false positive`, or `needs captain decision`.
+- Include evidence in the reply: relevant code behavior, test command/result,
+  and your SO/EM judgment rationale.
+- Ask FO to re-trigger the AI reviewer gate after replies are posted. Short
+  term this may mean re-running the failed GitHub Actions job/check; long term
+  it may mean re-running a GitHub App check run. Your model stays the same:
+  answer in-thread, then re-trigger the AI gate.
+- Let the AI gate adjudicate the replies. If a reply is accepted, the gate may
+  resolve the thread and stop blocking. If not, the bot replies in-thread with
+  why it remains blocking.
 - You must not use author self-approval, PR-author approval attempts, or
-  silence as a review bypass. The acceptable paths are fix accepted findings,
-  or evidence-reply plus resolve/dismiss for `false_positive`/`out_of_scope`.
+  silence as a review bypass.
 
 ### Upward Report Shape
 

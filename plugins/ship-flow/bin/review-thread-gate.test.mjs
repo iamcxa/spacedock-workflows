@@ -122,11 +122,12 @@ test("unresolved AI review threads direct FO to SO/EM adjudication instead of au
 
   assert.equal(result.ok, false);
   assert.match(result.issues[0].message, /SO\/EM adjudication/);
-  assert.match(result.issues[0].message, /accepted/);
-  assert.match(result.issues[0].message, /false_positive/);
-  assert.match(result.issues[0].message, /out_of_scope/);
+  assert.match(result.issues[0].message, /fixed/);
+  assert.match(result.issues[0].message, /push-back: false positive/);
+  assert.match(result.issues[0].message, /needs captain decision/);
   assert.match(result.issues[0].message, /gh api/);
-  assert.match(result.issues[0].message, /resolve\/dismiss/);
+  assert.match(result.issues[0].message, /re-trigger the AI reviewer gate/);
+  assert.doesNotMatch(result.issues[0].message, /resolve\/dismiss/);
   assert.match(result.issues[0].message, /Do not rely on author self-approval/i);
 });
 
@@ -161,7 +162,7 @@ test("passes when an AI reviewer false positive has an EM evidence reply and the
                 comment({
                   id: "PRRC_2",
                   author: { login: "science-officer-em" },
-                  body: "false_positive: validation remains covered by node --test plugins/ship-flow/bin/review-thread-gate.test.mjs.",
+                  body: "push-back: false positive\nEvidence: validation remains covered by node --test plugins/ship-flow/bin/review-thread-gate.test.mjs.",
                   commit: { oid: headSha },
                 }),
               ],

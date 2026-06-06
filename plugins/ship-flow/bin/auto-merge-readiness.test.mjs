@@ -215,9 +215,11 @@ test("blocks active change requests before auto-merge", async () => {
   assert.match(result.blockers.map((blocker) => blocker.ruleId).join("\n"), /review-changes-requested/);
   assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /SO\/EM/);
   assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /gh api/);
-  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /accepted/);
-  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /false_positive/);
-  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /out_of_scope/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /fixed/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /push-back: false positive/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /needs captain decision/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /re-trigger the AI reviewer gate/);
+  assert.doesNotMatch(result.blockers.map((blocker) => blocker.message).join("\n"), /resolve\/dismiss/);
   assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /Do not rely on author self-approval/i);
 });
 
@@ -238,8 +240,12 @@ test("routes unresolved review thread gates to SO/EM adjudication", async () => 
   assert.equal(result.ready, false);
   assert.equal(result.nextAction, "science_officer_em_adjudicate_review_threads");
   assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /SO\/EM/);
-  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /evidence-bearing gh api replies/);
-  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /resolve\/dismiss/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /in-thread gh api replies/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /fixed/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /push-back: false positive/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /needs captain decision/);
+  assert.match(result.blockers.map((blocker) => blocker.message).join("\n"), /re-trigger the AI reviewer gate/);
+  assert.doesNotMatch(result.blockers.map((blocker) => blocker.message).join("\n"), /resolve\/dismiss/);
 });
 
 test("blocks non-mergeable PRs before checking auto-merge readiness", async () => {

@@ -358,19 +358,22 @@ When `auto-merge-readiness.mjs` returns
 `science_officer_em_adjudicate_review_feedback` or
 `science_officer_em_adjudicate_review_threads`, FO routes the blocking review
 feedback to `ship-flow:science-officer-em` instead of trying PR author
-self-approval. EM classifies each reviewer finding as `accepted`,
-`false_positive`, or `out_of_scope`.
+self-approval. If the requested-changes review is tied to an AI reviewer PR
+check, EM uses the fixed operation: inline reply plus re-trigger.
 
-- `accepted`: route back for the code/test/doc fix before auto-merge can
-  continue.
-- `false_positive` / `out_of_scope`: EM uses `gh api` to leave an
-  evidence-bearing reply on the exact review comment/thread, citing code,
-  tests, command output, or commit SHA; then resolve/dismiss the thread or bot
-  review when permissions allow.
-- If EM lacks permission to resolve/dismiss, FO surfaces the posted evidence
-  reply and exact permission blocker to the captain. Do not treat silence,
-  ignored comments, or author self-approval attempts as a valid review
-  disposition.
+- EM replies directly in each AI reviewer inline comment thread using `gh api`.
+- Each reply starts with exactly one label: `fixed`,
+  `push-back: false positive`, or `needs captain decision`.
+- Each reply includes evidence: relevant code behavior, test command/result,
+  and SO/EM judgment rationale.
+- FO then re-triggers the AI reviewer gate. Short term this may mean re-running
+  the failed GitHub Actions job/check; long term it may mean re-running a
+  GitHub App check run. EM does not need to distinguish the backend.
+- The AI gate re-reads the thread. If the reply is reasonable, the gate may
+  resolve the thread and stop blocking. If not, the bot replies in-thread with
+  why it remains blocking and the check stays failed.
+- Do not treat silence, ignored comments, direct manual thread resolution, or
+  author self-approval attempts as a valid review disposition.
 
 ### Step 6.9 — Announce + close
 
