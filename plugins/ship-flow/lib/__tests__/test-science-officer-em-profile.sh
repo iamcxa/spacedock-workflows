@@ -39,6 +39,8 @@ for mod in "$PLUGIN_MOD" "$WORKFLOW_MOD"; do
   check "${rel}: upward report required fields named" "grep -q 'em_judgment' '$mod' && grep -q 'evidence_synthesis' '$mod' && grep -q 'risk_tradeoff_call' '$mod' && grep -q 'recommendation' '$mod' && grep -q 'route' '$mod' && grep -q 'confidence' '$mod' && grep -q 'fo_boundary' '$mod'"
   check "${rel}: upward report route enum named" "grep -q 'proceed' '$mod' && grep -q 'narrow' '$mod' && grep -q 'return' '$mod' && grep -q 'block' '$mod' && grep -q 'costly_no' '$mod'"
   check "${rel}: report shape without FO mechanics" "grep -qi 'upward report shape' '$mod' && grep -qi 'Do not directly advance stages' '$mod' && ! grep -qi 'EM owns.*stage advancement' '$mod'"
+  check "${rel}: references are portable plugin contracts" \
+    "! grep -q 'docs/ship-flow/130\\.' '$mod' && grep -q 'render-science-officer-em-stewardship-contract.sh' '$mod' && grep -q 'render-science-officer-em-upward-report-contract.sh' '$mod'"
 done
 
 echo ""

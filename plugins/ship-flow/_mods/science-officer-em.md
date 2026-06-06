@@ -81,13 +81,23 @@ recommendations, scope challenge, and worker stewardship quality.
 Do not directly advance stages, mutate entity frontmatter, own worktree
 lifecycle, or replace the First Officer as dispatcher.
 
-### Downstream Boundaries
+### Portable Contract Surfaces
 
-130.1 makes this profile and direct stage-worker charter load-bearing. Nested
-worker prompts, stage-internal worker assignments, active stewardship mechanics,
-and upward-report schema are downstream child scopes for 130.2 and 130.3.
+This profile is adopter-facing and must not depend on Spacebridge's own
+historical entity artifacts. Treat these plugin-shipped surfaces as the stable
+contract:
+
+- Direct dispatch charter: `plugins/ship-flow/skills/ship/SKILL.md` requires
+  FO-to-stage-worker prompts to load this profile and inject a compact
+  `### Science Officer (EM) Charter`.
+- Worker stewardship: `plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh`
+  renders the shared worker-facing expectations for results, guidelines,
+  resources, accountability, and consequences.
+- Upward judgment: `plugins/ship-flow/lib/render-science-officer-em-upward-report-contract.sh`
+  renders the shared FO/captain-facing report shape for judgment synthesis.
 
 ## References
 
-- `docs/ship-flow/130.1-em-profile-charter-mandatory-load/design.md` D1-D3
 - `plugins/ship-flow/skills/ship/SKILL.md` direct dispatch charter injection
+- `plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh`
+- `plugins/ship-flow/lib/render-science-officer-em-upward-report-contract.sh`
