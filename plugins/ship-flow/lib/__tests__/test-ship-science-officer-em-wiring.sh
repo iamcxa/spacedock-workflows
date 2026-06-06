@@ -28,6 +28,10 @@ line_no() {
 echo "=== /ship Science Officer (EM) wiring ==="
 
 check "helper is named in /ship" "grep -q 'build-stage-dispatch-prompt.sh' '$SHIP_SKILL'"
+check "helper invocation is adopter-aware" \
+  "grep -q 'CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/build-stage-dispatch-prompt.sh' '$SHIP_SKILL' && grep -q -- '--plugin-root \"\${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}\"' '$SHIP_SKILL'"
+check "helper invocation is not dogfood-only" \
+  "! grep -q 'bash plugins/ship-flow/lib/build-stage-dispatch-prompt.sh' '$SHIP_SKILL'"
 check "EM charter section is required" "grep -q '### Science Officer (EM) Charter' '$SHIP_SKILL'"
 check "missing profile blocks dispatch" "grep -q 'science-officer-em-profile-not-loaded' '$SHIP_SKILL'"
 check "direct dispatch boundary is explicit" \

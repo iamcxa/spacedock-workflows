@@ -95,6 +95,7 @@ extract_profile_charter() {
   awk '
     /^### Judgment Criteria$/ {printing=1}
     /^### Downstream Boundaries$/ {printing=0}
+    /^### Portable Contract Surfaces$/ {printing=0}
     printing {print}
   ' "$profile" | sed '/^$/N;/^\n$/D'
 }

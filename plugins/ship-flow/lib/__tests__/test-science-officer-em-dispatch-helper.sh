@@ -82,6 +82,8 @@ check "independent synthesis included" "grep -qi 'independent synthesis' <<<\"\$
 check "FO boundary included" "grep -qi 'FO owns' <<<\"\$prompt\" && grep -qi 'EM owns' <<<\"\$prompt\""
 check "Codex dispatch evidence guard included in generated prompt" \
   "grep -q 'Codex dispatch evidence guard' <<<\"\$prompt\" && grep -q 'Domain Registry Validation' <<<\"\$prompt\" && grep -q 'Schema Design Output' <<<\"\$prompt\" && grep -q 'Intent Match Findings' <<<\"\$prompt\""
+check "profile reference section excluded from worker charter" \
+  "! grep -q 'Portable Contract Surfaces' <<<\"\$prompt\" && ! grep -q '^## References$' <<<\"\$prompt\""
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT

@@ -131,7 +131,8 @@ passed. The gate is output-shape evidence, not worker self-attestation. FO owns
 workflow mechanics; EM owns judgment and recommendation.
 
 ```bash
-DISPATCH_BODY="$(bash plugins/ship-flow/lib/build-stage-dispatch-prompt.sh \
+DISPATCH_BODY="$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/build-stage-dispatch-prompt.sh" \
+  --plugin-root "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}" \
   --workflow-dir "$WORKFLOW_DIR" \
   --stage "<stage>" \
   --teammate "<teammate>" \
