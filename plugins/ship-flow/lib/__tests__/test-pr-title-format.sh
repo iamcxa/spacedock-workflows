@@ -53,6 +53,9 @@ check "type without required scope fails" \
 check "sentence-case non-conventional title fails" \
   "! '${VALIDATOR}' 'Merged PR closeout reconciler runtime fix'"
 
+check "type outside documented allowlist fails" \
+  "! '${VALIDATOR}' 'style(ship-flow): adjust markdown formatting'"
+
 check "validator reports expected format on failure" \
   "'${VALIDATOR}' 'Merged PR closeout reconciler runtime fix' 2>&1 | grep -q 'type(scope): subject'"
 
@@ -64,6 +67,12 @@ GH_CREATE_LINE="$(line_no 'gh pr create --base main')"
 
 check "pr-merge preflight calls shared title validator before gh pr create" \
   "[ -n '${PREFLIGHT_LINE}' ] && [ -n '${GH_CREATE_LINE}' ] && [ '${PREFLIGHT_LINE:-99999}' -lt '${GH_CREATE_LINE:-0}' ]"
+
+check "pr-merge documents PR and commit subjects as one Conventional Commits contract" \
+  "grep -q 'PR title MUST use Conventional Commits' '${PR_MERGE_MOD}' && grep -q 'worktree head commit subject MUST use the same Conventional Commits format' '${PR_MERGE_MOD}' && grep -q 'squash commit subject MUST use the same Conventional Commits format' '${PR_MERGE_MOD}'"
+
+check "pr-merge documents type allowlist and kebab-case scope guidance" \
+  "grep -q 'feat|fix|docs|test|refactor|perf|build|ci|chore|revert' '${PR_MERGE_MOD}' && grep -q 'scope SHOULD be kebab-case' '${PR_MERGE_MOD}' && grep -q 'ai-review' '${PR_MERGE_MOD}' && grep -q 'ship-flow' '${PR_MERGE_MOD}' && grep -q 'daemon' '${PR_MERGE_MOD}'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
