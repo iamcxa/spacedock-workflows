@@ -107,6 +107,10 @@ run_release() {  # <plugin root> <plugin.json> <marketplace.json> <README.md> <v
   fi
 }
 
+release_commit_subject() {  # <version>
+  printf 'chore(ship-flow): release %s\n' "$1"
+}
+
 # ---------------------------------------------------------------------------
 # Entry point (runs only when executed, not when sourced)
 # ---------------------------------------------------------------------------
@@ -127,7 +131,7 @@ main() {
     exit 1
   fi
 
-  local script_dir shipflow_root repo_root plugin_json marketplace_json readme old_version
+  local script_dir shipflow_root repo_root plugin_json marketplace_json readme old_version commit_subject
   script_dir="$(cd "$(dirname "$0")" && pwd)"
   shipflow_root="$(cd "$script_dir/.." && pwd)"
   repo_root="$(cd "$shipflow_root/../.." && pwd)"
@@ -149,9 +153,10 @@ main() {
   echo "=== Staged changes ==="
   git diff --cached --stat
   echo ""
-  read -r -p "Commit as 'release: bump ship-flow to $new_version'? [Enter to commit, Ctrl-C to abort] "
+  commit_subject="$(release_commit_subject "$new_version")"
+  read -r -p "Commit as '$commit_subject'? [Enter to commit, Ctrl-C to abort] "
 
-  git commit -m "release: bump ship-flow to $new_version" -- "$plugin_json" "$marketplace_json" "$readme"
+  git commit -m "$commit_subject" -- "$plugin_json" "$marketplace_json" "$readme"
   echo "[bump-version] Committed. Run 'git push' manually when ready to release."
 }
 

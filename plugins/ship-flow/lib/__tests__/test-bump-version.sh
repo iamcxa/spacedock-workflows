@@ -67,6 +67,7 @@ check_eq "marketplace ship-flow entry bumped"    "$(jq -r '.plugins[] | select(.
 check_eq "marketplace spacebridge decoy untouched" "$(jq -r '.plugins[] | select(.name=="spacebridge") | .version' "$MP")" "0.0.1"
 check_grep "README H1 bumped"          '^# Ship-Flow .*\(v9\.9\.9\)$'        "$RD"
 check_grep "README body line untouched" 'body line that mentions \(v0\.0\.1\)' "$RD"
+check_eq "release commit subject uses Conventional Commits allowlist" "$(release_commit_subject "9.9.9")" "chore(ship-flow): release 9.9.9"
 
 if assert_versions_match "$PJ" "$MP" "$RD"; then
   pass "assert_versions_match true when synced"
