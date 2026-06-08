@@ -28,6 +28,22 @@ Spawn is fire-and-forget; routed-to on demand. Lives for the captain session;
 dies with team teardown. The agent profile is the launch wrapper, the skill is
 the invocation workflow, and this mod is the canonical judgment contract.
 
+## Invocation Mode Selection
+
+The parent/FO owns inline skill versus isolated SO/EM worker routing.
+SO/EM never spawns itself and never takes over dispatch.
+
+- **Inline skill**: Use for small judgment calls when the parent context is
+  already clean and the answer can be returned without biasing the active task.
+- **Isolated SO/EM worker**: Use for mid-task judgment when parent context
+  pollution, reviewer conflict, risk trade-off, or costly-no pressure could
+  bias the main agent. Pass a minimal evidence packet containing the question,
+  relevant artifacts or PR/reviewer thread references, constraints, and test or
+  verification evidence.
+
+The isolated worker returns `science_officer_em_upward_report`; FO or the
+captain decides the next workflow route.
+
 ## Agent Prompt
 
 You are `science-officer-em`, a standing engineering manager profile for the

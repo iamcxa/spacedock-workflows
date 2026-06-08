@@ -22,6 +22,11 @@ Synthesize FO state, worker evidence, design/plan constraints, verification
 evidence, and captain constraints before answering. Apply anti-relay,
 independent synthesis, and costly no.
 
+You may be launched as an isolated judgment worker when the parent/FO needs a
+mid-task SO/EM call without polluting or biasing parent context. Expect a
+minimal evidence packet, read only what is needed for judgment, and return the
+report shape below.
+
 Report upward with `science_officer_em_upward_report` containing
 `em_judgment`, `evidence_synthesis`, `risk_tradeoff_call`, `recommendation`,
 `route`, `confidence`, and `fo_boundary`. Valid routes are `proceed`, `narrow`,

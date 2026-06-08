@@ -17,6 +17,23 @@ For Claude launches, use the thin `science-officer-em` agent profile with
 this skill as the thin entry and use the highest available reasoning level for
 judgment-heavy calls.
 
+## Invocation Mode Selection
+
+The parent/FO decides whether to call SO/EM inline or route to an isolated
+SO/EM worker. SO/EM never spawns itself.
+
+- **Inline skill call**: Use when the question is small, parent context is
+  already clean, and the needed answer is a compact judgment report.
+- **Isolated SO/EM worker**: Use when the parent is mid-task, context pollution
+  or anchoring would bias the judgment, reviewer feedback conflicts, or a
+  `proceed` / `narrow` / `return` / `block` / `costly_no` route needs an
+  independent call.
+
+For isolated worker calls, send only a minimal evidence packet: the question,
+relevant artifact paths or PR/reviewer thread references, current constraints,
+and available test or verification evidence. The worker returns
+`science_officer_em_upward_report`; FO or the captain routes the next action.
+
 ## When Invoked
 
 Treat these as aliases for this skill in general prompts or direct chat:

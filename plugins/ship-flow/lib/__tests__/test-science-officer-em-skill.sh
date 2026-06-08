@@ -33,6 +33,12 @@ check "skill description is trigger-only" \
   "grep -q '^description: Use when' '$SKILL' && ! grep -Eiq '^description:.*(write|render|follow|output)' '$SKILL'"
 check "skill is captain-invocable" "grep -q '^user-invocable: true$' '$SKILL'"
 check "skill references standing profile" "grep -q 'plugins/ship-flow/_mods/science-officer-em.md' '$SKILL'"
+check "skill defines inline versus isolated worker invocation mode selection" \
+  "grep -q 'Invocation Mode Selection' '$SKILL' && grep -q 'Inline skill call' '$SKILL' && grep -q 'Isolated SO/EM worker' '$SKILL'"
+check "skill routes mid-task judgment through isolated worker to avoid parent context pollution" \
+  "grep -qi 'mid-task' '$SKILL' && grep -qi 'parent context' '$SKILL' && grep -qi 'minimal evidence packet' '$SKILL'"
+check "skill keeps worker-spawn decision with parent or FO, not SO/EM" \
+  "grep -qi 'parent/FO decides' '$SKILL' && grep -qi 'SO/EM never spawns itself' '$SKILL'"
 check "skill supports conductor/general-prompt aliases" \
   "grep -q 'science-officer' '$SKILL' && grep -q '科學官' '$SKILL' && grep -q 'EM' '$SKILL'"
 check "skill requires independent synthesis, not relay" \
@@ -63,6 +69,8 @@ check "claude agent profile delegates to standing profile" "grep -q 'plugins/shi
 check "claude agent profile invokes thin skill" "grep -q 'ship-flow:science-officer-em' '$AGENT'"
 check "claude agent profile keeps FO boundary" \
   "grep -qi 'FO owns workflow' '$AGENT' && grep -qi 'EM owns engineering judgment' '$AGENT' && grep -qi 'Do not.*replace.*First Officer' '$AGENT'"
+check "claude agent profile can run as isolated judgment worker" \
+  "grep -qi 'isolated judgment worker' '$AGENT' && grep -qi 'minimal evidence packet' '$AGENT'"
 check "claude agent profile uses upward report shape" \
   "grep -q 'science_officer_em_upward_report' '$AGENT' && grep -q 'route' '$AGENT' && grep -q 'confidence' '$AGENT'"
 check "standing profiles pin opus and xhigh" \

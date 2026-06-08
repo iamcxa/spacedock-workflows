@@ -40,6 +40,10 @@ check "helper runs before SendMessage template" \
   "helper_line=\$(line_no 'build-stage-dispatch-prompt.sh'); send_line=\$(line_no 'SendMessage(to: \"<teammate>\"'); test -n \"\$helper_line\" -a -n \"\$send_line\" -a \"\$helper_line\" -lt \"\$send_line\""
 check "ship stops when helper fails" \
   "grep -qi 'stop before SendMessage' '$SHIP_SKILL' && grep -qi 'helper fails' '$SHIP_SKILL'"
+check "ship routes high-risk judgment to isolated SO/EM worker when host supports it" \
+  "grep -qi 'isolated SO/EM worker' '$SHIP_SKILL' && grep -qi 'host supports' '$SHIP_SKILL' && grep -qi 'inline fallback' '$SHIP_SKILL'"
+check "ship names SO/EM routing triggers beyond AI review" \
+  "grep -qi 'high-risk judgment' '$SHIP_SKILL' && grep -qi 'reviewer conflict' '$SHIP_SKILL' && grep -qi 'context pollution' '$SHIP_SKILL'"
 check "Codex dispatch evidence guard preserved" "grep -q 'Codex dispatch evidence guard' '$SHIP_SKILL'"
 check "post-create review feedback routes to SO/EM adjudication" \
   "grep -q 'science_officer_em_adjudicate_review_feedback' '$SHIP_SKILL' && grep -q 'science_officer_em_adjudicate_review_threads' '$SHIP_SKILL' && grep -q 'fixed' '$SHIP_SKILL' && grep -q 'push-back: false positive' '$SHIP_SKILL' && grep -q 'needs captain decision' '$SHIP_SKILL' && grep -q 'gh api' '$SHIP_SKILL' && grep -qi 're-triggers the AI reviewer gate' '$SHIP_SKILL' && grep -qi 'author self-approval' '$SHIP_SKILL' && ! grep -qi 'resolve/dismiss' '$SHIP_SKILL'"

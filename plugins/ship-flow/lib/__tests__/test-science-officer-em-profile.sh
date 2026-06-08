@@ -30,6 +30,12 @@ for mod in "$PLUGIN_MOD" "$WORKFLOW_MOD"; do
   check "${rel}: name is science-officer-em" "grep -q '^name: science-officer-em$' '$mod'"
   check "${rel}: standing teammate" "grep -q '^standing: true$' '$mod'"
   check "${rel}: startup hook" "grep -q '^## Hook: startup$' '$mod' && grep -q 'name: science-officer-em' '$mod'"
+  check "${rel}: parent or FO owns inline versus isolated worker routing" \
+    "grep -q 'Invocation Mode Selection' '$mod' && grep -qi 'parent/FO owns' '$mod' && grep -qi 'inline skill' '$mod' && grep -qi 'isolated SO/EM worker' '$mod'"
+  check "${rel}: isolated worker protects mid-task parent context" \
+    "grep -qi 'mid-task' '$mod' && grep -qi 'parent context' '$mod' && grep -qi 'minimal evidence packet' '$mod'"
+  check "${rel}: SO does not spawn itself" \
+    "grep -qi 'SO/EM never spawns itself' '$mod'"
   check "${rel}: Agent Prompt section" "grep -q '^## Agent Prompt$' '$mod'"
   check "${rel}: anti-relay criterion" "grep -qi 'anti-relay' '$mod' && grep -qi 'status-only relay' '$mod'"
   check "${rel}: costly no authority" "grep -qi 'costly no' '$mod' && grep -qi 'say no' '$mod'"

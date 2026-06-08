@@ -130,6 +130,12 @@ transcript summary, or checklist digest is invalid even when all stage checks
 passed. The gate is output-shape evidence, not worker self-attestation. FO owns
 workflow mechanics; EM owns judgment and recommendation.
 
+When ship-final or review needs high-risk judgment, reviewer conflict
+adjudication, or a context pollution resistant call, route the question to an
+isolated SO/EM worker when the host supports workers. Send only the minimal
+evidence packet and consume the returned `science_officer_em_upward_report`.
+Use inline fallback only when the host cannot launch an isolated worker.
+
 ```bash
 DISPATCH_BODY="$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/build-stage-dispatch-prompt.sh" \
   --plugin-root "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}" \
