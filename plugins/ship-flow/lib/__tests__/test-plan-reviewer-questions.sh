@@ -60,9 +60,6 @@ check "ship-plan final handoff emit list includes domain acceptance checklist" \
 check "ship-verify consumes plan reviewer_questions into verify-check-manifest" \
   "grep -q 'reviewer_questions' '${VERIFY_STEP2_BLOCK}' && grep -q 'domain_acceptance_checklist' '${VERIFY_STEP2_BLOCK}' && grep -q 'verify-check-manifest' '${VERIFY_STEP2_BLOCK}'"
 
-check "README documents plan-to-verify reviewer question handoff" \
-  "grep -q 'reviewer_questions' '${README}' && grep -q 'domain_acceptance_checklist' '${README}' && grep -qi 'verify reviewer panel' '${README}' && ! grep -q 'plan-parallelization-manifest.*reviewer_questions' '${README}'"
-
 check "fallback reviewer panel consumes concrete reviewer questions" \
   "grep -q 'reviewer_questions' '${REPO_ROOT}/plugins/ship-flow/skills/verify-reviewer-panel/SKILL.md' && grep -q 'domain_acceptance_checklist' '${REPO_ROOT}/plugins/ship-flow/skills/verify-reviewer-panel/SKILL.md' && grep -q 'reviewer_question' '${REPO_ROOT}/plugins/ship-flow/skills/verify-reviewer-panel/SKILL.md' && grep -q 'affected_path_family' '${REPO_ROOT}/plugins/ship-flow/skills/verify-reviewer-panel/SKILL.md'"
 

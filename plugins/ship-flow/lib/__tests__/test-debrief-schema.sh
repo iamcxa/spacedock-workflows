@@ -16,12 +16,15 @@ else
   grep -q "schema_version: 1" "$WDIR/plugins/ship-flow/references/debrief-schema.yaml" || { echo "FAIL: schema_version not 1"; fail=1; }
 fi
 
-# (c) all debriefs validate
-for f in "$WDIR/docs/ship-flow/_debriefs/"*.md; do
-  bash "$VALIDATOR" "$f" || fail=1
-done
-CARLOVE="/Users/kent/Project/carlove/docs/ship-flow/_debriefs/2026-04-25-01.md"
-[ -f "$CARLOVE" ] && bash "$VALIDATOR" "$CARLOVE" || { echo "WARN: carlove debrief not found (skipping)"; }
+# (c) all debriefs validate (guard against absent dir in fresh clone)
+if [ -d "$WDIR/docs/ship-flow/_debriefs" ]; then
+  for f in "$WDIR/docs/ship-flow/_debriefs/"*.md; do
+    [ -f "$f" ] || continue
+    bash "$VALIDATOR" "$f" || fail=1
+  done
+else
+  echo "NOTE: $WDIR/docs/ship-flow/_debriefs/ absent (fresh clone) — debrief dir not adopted yet"
+fi
 
 # (c2) schema_version policy fixtures
 bash "$VALIDATOR" "$FIXTURES/v1-valid.md" || fail=1

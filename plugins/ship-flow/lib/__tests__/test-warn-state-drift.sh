@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # test-warn-state-drift.sh - SessionStart state-drift hook contract
+# Expected runtime: ~22-25s (many git-fixture operations). Allow >=30s timeout in CI runners.
 
 set -euo pipefail
 

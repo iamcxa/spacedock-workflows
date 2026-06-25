@@ -74,11 +74,11 @@ check "claude agent profile can run as isolated judgment worker" \
 check "claude agent profile uses upward report shape" \
   "grep -q 'science_officer_em_upward_report' '$AGENT' && grep -q 'route' '$AGENT' && grep -q 'confidence' '$AGENT'"
 check "standing profiles pin opus and xhigh" \
-  "grep -q '^- model: opus$' '$PROFILE' && grep -q '^- reasoning: xhigh$' '$PROFILE' && grep -q '^- model: opus$' '$WORKFLOW_PROFILE' && grep -q '^- reasoning: xhigh$' '$WORKFLOW_PROFILE'"
+  "grep -q '^- model: opus$' '$PROFILE' && grep -q '^- reasoning: xhigh$' '$PROFILE'"
 check "standing profiles point to thin skill" \
-  "grep -q 'ship-flow:science-officer-em' '$PROFILE' && grep -q 'ship-flow:science-officer-em' '$WORKFLOW_PROFILE'"
+  "grep -q 'ship-flow:science-officer-em' '$PROFILE'"
 check "ship-flow SO surfaces do not reference deprecated spacedock-workflow SO" \
-  "! grep -R 'spacedock-workflow:science-officer' '$SKILL' '$AGENT' '$PROFILE' '$WORKFLOW_PROFILE'"
+  "! grep -R 'spacedock-workflow:science-officer' '$SKILL' '$AGENT' '$PROFILE'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

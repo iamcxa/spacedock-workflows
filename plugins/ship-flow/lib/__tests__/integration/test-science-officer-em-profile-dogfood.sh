@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Regression guard for 130.1 Science Officer (EM) standing profile.
+# integration/test-science-officer-em-profile-dogfood.sh
+#
+# Host artifacts needed:
+#   docs/ship-flow/_mods/science-officer-em.md — adopted workflow SO mod
+#
+# Why not standalone: the adopted workflow mod only exists in the host project.
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-PLUGIN_MOD="${ROOT}/plugins/ship-flow/_mods/science-officer-em.md"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)"
 WORKFLOW_MOD="${ROOT}/docs/ship-flow/_mods/science-officer-em.md"
 
 PASS=0
@@ -13,7 +17,7 @@ FAIL=0
 check() {
   local desc="$1"
   local cmd="$2"
-  if eval "$cmd" > /dev/null 2>&1; then
+  if eval "$cmd" >/dev/null 2>&1; then
     echo "PASS: ${desc}"
     PASS=$((PASS + 1))
   else
@@ -22,9 +26,9 @@ check() {
   fi
 }
 
-echo "=== Science Officer (EM) profile contract ==="
+echo "=== integration: Science Officer (EM) profile — adopted workflow mod ==="
 
-for mod in "$PLUGIN_MOD"; do
+for mod in "$WORKFLOW_MOD"; do
   rel="${mod#"${ROOT}"/}"
   check "${rel}: file exists" "test -f '$mod'"
   check "${rel}: name is science-officer-em" "grep -q '^name: science-officer-em$' '$mod'"

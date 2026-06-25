@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # test-designer-skills-available.sh — Assert T5.1 designer-skills marketplace registration
+# HOST ARTIFACTS: docs/ship-flow/ entities, .claude/settings.json, or plugins/spacebridge/ — not present in standalone clone.
+# Run only from the dogfood host project. See lib/__tests__/integration/README.md
 # Entity: #106 pipeline-render-fidelity-hardening Wave 2b T5.1
 #
 # Usage:

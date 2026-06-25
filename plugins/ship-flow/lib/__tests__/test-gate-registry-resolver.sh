@@ -97,9 +97,6 @@ check "ship-plan documents adopter gate registry resolution into domain_acceptan
 check "ship-verify documents required gate evidence audit" \
   "grep -q 'resolve-gate-registry.py' '${VERIFY_SKILL}' && grep -q 'required_gates' '${VERIFY_SKILL}' && grep -q 'Evidence Required' '${VERIFY_SKILL}'"
 
-check "README documents adopter gate registry boundary" \
-  "grep -q '.claude/ship-flow/gates.yaml' '${README}' && grep -q 'resolve-gate-registry.py' '${README}'"
-
 check "schema documents gate registry handoff fields" \
   "grep -q 'gate_registry' '${SCHEMA}' && grep -q 'required_gates' '${SCHEMA}' && grep -q 'evidence_required' '${SCHEMA}'"
 

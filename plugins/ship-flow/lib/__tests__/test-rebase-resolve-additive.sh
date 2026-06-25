@@ -188,8 +188,7 @@ rm -rf "$REPO"
 echo
 echo "--- Case 5: ship-final docs mention poll + helper contract ---"
 if grep -q "mergeStateStatus" "${REPO_ROOT}/plugins/ship-flow/skills/ship/SKILL.md" &&
-   grep -q "rebase-resolve-additive.sh" "${REPO_ROOT}/plugins/ship-flow/skills/ship/SKILL.md" &&
-   grep -q "rebase-resolve-additive.sh" "${REPO_ROOT}/docs/ship-flow/_mods/pr-merge.md"; then
+   grep -q "rebase-resolve-additive.sh" "${REPO_ROOT}/plugins/ship-flow/skills/ship/SKILL.md"; then
   pass "Case-5 docs wire merge-state polling to additive resolver"
 else
   fail "Case-5 docs missing merge-state polling/additive resolver contract"

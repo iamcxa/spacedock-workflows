@@ -73,9 +73,6 @@ check "reviewer panel output matrix matches D3 source route confidence and dispo
 check "ship-verify normalizes task reviewer question sources to D3 reviewer_questions" \
   "grep -q 'source \`reviewer_questions\`' '${VERIFY_SKILL}' && ! grep -q 'source \`task\\.reviewer_questions\`' '${VERIFY_SKILL}'"
 
-check "README documents general external reviewer baseline and domain specialization" \
-  "grep -q 'general external reviewer' '${README}' && grep -q 'ship-flow:verify-reviewer-panel' '${README}' && grep -q 'domain expert panel.*specialization' '${README}'"
-
 check "invariants classify reviewer panel as utility skill and preserve stage cap" \
   "grep -q 'verify-reviewer-panel' '${INVARIANTS}' && grep -q 'verify-reviewer-panel' '${CHECK_INVARIANTS}' && grep -q 'Utility-skills.*verify-reviewer-panel' '${INVARIANTS}' && grep -q 'ship-design.*7 total' '${INVARIANTS}'"
 

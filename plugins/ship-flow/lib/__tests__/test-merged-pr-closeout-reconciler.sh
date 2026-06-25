@@ -833,7 +833,13 @@ run_scope_guard() {
 }
 
 run_doc_scope_cases() {
+  # Dogfood check — only runs when docs/ship-flow/_mods/pr-merge.md exists (adopted host).
+  # In fresh-clone standalone mode this function is intentionally skipped.
   local pr_merge_doc="${PLUGIN_ROOT}/../../docs/ship-flow/_mods/pr-merge.md"
+  if [ ! -f "$pr_merge_doc" ]; then
+    echo "  NOTE: pr-merge.md absent (fresh clone) — skipping dogfood doc scope assertions"
+    return 0
+  fi
   assert_contains "pr merge doc scopes v1 provider support" 'v1 reconciler supports GitHub `gh` and fixture-backed tests only' "$pr_merge_doc"
   assert_not_contains "pr merge doc does not advertise GitLab closeout state checks" 'glab mr view|If `MERGED` .*GitLab|If `MERGED` \(GitHub\) or `merged` \(GitLab\)' "$pr_merge_doc"
 }

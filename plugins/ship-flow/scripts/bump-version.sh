@@ -86,6 +86,13 @@ release_gate() {  # <ship-flow plugin root>
     echo "  == $(basename "$t") =="
     CI=true bash "$t"
   done
+  # bin node tests gate — requires node >= 18 (--test runner built-in)
+  if command -v node >/dev/null 2>&1; then
+    echo "  == bin/*.test.mjs (node --test) =="
+    node --test "$root"/bin/*.test.mjs
+  else
+    echo "  SKIP: bin/*.test.mjs — node not found on PATH"
+  fi
 }
 
 run_release() {  # <plugin root> <plugin.json> <marketplace.json> <README.md> <version>

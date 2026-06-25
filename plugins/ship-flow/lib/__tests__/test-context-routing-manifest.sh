@@ -153,15 +153,6 @@ check "ship-verify requires extracted context-routing-manifest input" \
 check "fallback reviewer panel preserves context routing manifest lens fields" \
   "grep -q 'context-routing-manifest' '${REVIEWER_PANEL}' && grep -q 'manifest_required_skill' '${REVIEWER_PANEL}'"
 
-check "README documents context-routing-manifest contract" \
-  "grep -q 'context-routing-manifest' '${README}' && grep -q 'Context Routing Receipt' '${README}' && grep -q 'prose-only' '${README}'"
-
-check "PRODUCT documents deterministic local context routing capability" \
-  "grep -q 'deterministic local context router' '${PRODUCT}' && grep -q 'context-routing-manifest' '${PRODUCT}'"
-
-check "ARCHITECTURE documents local registry authority and append-only providers" \
-  "grep -q 'local registry remains authoritative' '${ARCHITECTURE}' && grep -q 'append-only' '${ARCHITECTURE}'"
-
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 

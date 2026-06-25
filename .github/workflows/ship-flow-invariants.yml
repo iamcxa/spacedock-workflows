@@ -1,0 +1,84 @@
+name: ship-flow invariants
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/ship-flow/**'
+      - '.github/workflows/ship-flow-invariants.yml'
+  pull_request:
+    paths:
+      - 'plugins/ship-flow/**'
+      - '.github/workflows/ship-flow-invariants.yml'
+
+jobs:
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect changed-file scope
+        id: ship_flow_scope
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          CHANGED=$(git diff --name-only "$BASE" HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          PLUGIN_CHANGED=false
+          DOCS_ONLY=true
+          FULL_SUITE=false
+
+          while IFS= read -r f; do
+            if [[ "$f" == plugins/ship-flow/* ]]; then
+              PLUGIN_CHANGED=true
+              DOCS_ONLY=false
+            elif [[ "$f" != *.md && "$f" != docs/* ]]; then
+              DOCS_ONLY=false
+            fi
+          done <<< "$CHANGED"
+
+          if [ "$PLUGIN_CHANGED" = "true" ]; then
+            FULL_SUITE=true
+          fi
+
+          if [ "$DOCS_ONLY" = "true" ]; then
+            FULL_SUITE=false
+            echo "docs_only_lightweight=true" >> "$GITHUB_OUTPUT"
+            echo "full_suite=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only_lightweight=false" >> "$GITHUB_OUTPUT"
+            echo "full_suite=$FULL_SUITE" >> "$GITHUB_OUTPUT"
+          fi
+          echo "plugin_changed=$PLUGIN_CHANGED" >> "$GITHUB_OUTPUT"
+
+      - name: Lightweight gate (docs-only / non-plugin changes)
+        if: steps.ship_flow_scope.outputs.full_suite == 'false'
+        run: |
+          echo "Docs-only or non-plugin change — running lightweight gate only"
+          bash plugins/ship-flow/scripts/check-invariants.sh
+
+      - name: Run full ship-flow shell test suite
+        if: steps.ship_flow_scope.outputs.full_suite == 'true'
+        timeout-minutes: 10
+        run: |
+          cd plugins/ship-flow
+          echo "Running full standalone test suite..."
+          FAILED=0
+          for t in lib/__tests__/test-*.sh; do
+            echo "  == $(basename "$t") =="
+            # test-warn-state-drift.sh takes ~22-25s; allow up to 60s per test
+            if ! timeout 60 CI=true bash "$t"; then
+              FAILED=$((FAILED + 1))
+            fi
+          done
+          if [ "$FAILED" -gt 0 ]; then
+            echo "ERROR: $FAILED test(s) failed"
+            exit 1
+          fi
+          echo "All tests passed"
+
+      - name: Run bin node tests
+        if: steps.ship_flow_scope.outputs.full_suite == 'true'
+        run: |
+          node --test plugins/ship-flow/bin/*.test.mjs

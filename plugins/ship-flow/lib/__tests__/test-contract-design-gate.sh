@@ -62,12 +62,6 @@ check "ship-plan treats design-skipped valid only when no contract_decision_requ
 check "ship-plan treats design-skipped valid only when no domain or design_required signal exists" \
   "grep -q 'domain.*unset' '${PLAN_SKILL}' && grep -q 'design_required: false' '${PLAN_SKILL}' && grep -q 'design-bearing decision skipped' '${PLAN_SKILL}'"
 
-echo "Block 5: README documents design as intent decision, not just UI"
-check "README says design covers contract/interface design" \
-  "grep -q 'contract/interface design' '${README}' && grep -q 'selector grammar' '${README}'"
-check "README design stage no longer has skip-when (W3 — design always runs per pitch 116)" \
-  "! grep -A6 'name: design' '${README}' | grep -q 'skip-when:'"
-
 echo "Block 6: registry-backed contract domains route to contract-interface design"
 check "shape documents registry-backed contract domains as no-UI/no-schema design triggers" \
   "grep -q 'registry-backed contract domains' '${SHAPE_SKILL}' && grep -q 'no UI or schema trigger' '${SHAPE_SKILL}'"

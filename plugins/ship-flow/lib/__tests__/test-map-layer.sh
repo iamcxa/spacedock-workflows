@@ -30,20 +30,101 @@ assert_stderr_contains() {
   else echo "FAIL $name (stderr missing: $needle)"; FAIL=1; fi
 }
 
-cd "$REPO_ROOT" || exit 1
+# Create a standalone fixture dir so this test runs without REPO_ROOT map files
+_MAP_FIXTURE_DIR="$(mktemp -d)"
+trap 'rm -rf "$_MAP_FIXTURE_DIR"' EXIT
+
+# Minimal ARCHITECTURE.md with all 6 section tags expected by extract-map/patch-map.
+# context/containers/components require mermaid diagrams (requires_diagram: true in schema).
+cat > "$_MAP_FIXTURE_DIR/ARCHITECTURE.md" <<'ARCHEOF'
+# Architecture
+
+<!-- section:context -->
+```mermaid
+C4Context
+  System(sf, "ship-flow", "Standalone workflow plugin")
+```
+<!-- /section:context -->
+
+<!-- section:containers -->
+```mermaid
+C4Container
+  Container(lib, "lib/", "Shell scripts")
+```
+<!-- /section:containers -->
+
+<!-- section:components -->
+```mermaid
+C4Component
+  Component(skills, "skills/", "Slash command prompts")
+```
+<!-- /section:components -->
+
+<!-- section:constraints -->
+Constraints placeholder
+<!-- /section:constraints -->
+
+<!-- section:dependencies -->
+Dependencies placeholder
+<!-- /section:dependencies -->
+
+<!-- section:decisions -->
+Decisions placeholder
+<!-- /section:decisions -->
+ARCHEOF
+
+# Minimal ROADMAP.md for DC-14/DC-15
+cat > "$_MAP_FIXTURE_DIR/ROADMAP.md" <<'ROADEOF'
+# Roadmap
+
+<!-- section:now -->
+| ID | Item | Why | Date | PR |
+|----|------|-----|------|----|
+<!-- /section:now -->
+
+<!-- section:later -->
+| ID | Item | Why | Date |
+|----|------|-----|------|
+<!-- /section:later -->
+
+<!-- section:not-doing -->
+| ID | Item | Why |
+|----|------|-----|
+<!-- /section:not-doing -->
+
+<!-- section:shipped -->
+| ID | Item | Why | Date | PR |
+|----|------|-----|------|----|
+<!-- /section:shipped -->
+ROADEOF
+
+# Minimal PRODUCT.md for DC-16
+cat > "$_MAP_FIXTURE_DIR/PRODUCT.md" <<'PRODEOF'
+# Product
+
+<!-- section:capabilities -->
+- Initial capability placeholder (#000)
+<!-- /section:capabilities -->
+
+<!-- section:anti-goals -->
+- Anti-goal placeholder
+<!-- /section:anti-goals -->
+PRODEOF
+
+cd "$_MAP_FIXTURE_DIR" || exit 1
 ARCH="ARCHITECTURE.md"
 
-# DC-1: extract-map content
-assert_stdout_matches 'System boundary' \
+# DC-1: extract-map content (context section has mermaid diagram in fixture)
+assert_stdout_matches 'C4Context|ship-flow' \
   "${LIB_DIR}/extract-map.sh ${ARCH} context" 'DC-1 extract-map content'
 
 # DC-2: extract-map hash
 assert_stdout_matches '^[a-f0-9]{64}$' \
   "${LIB_DIR}/extract-map.sh ${ARCH} context --emit-hash-only" 'DC-2 extract-map hash'
 
-# DC-3: round-trip (no-commit)
+# DC-3: round-trip (no-commit) — use constraints (requires_diagram: false)
 dc3() {
-  local tag=context H BODY TMP RE H2
+  local tag=constraints H BODY TMP RE H2
   H="$(${LIB_DIR}/extract-map.sh ${ARCH} $tag --emit-hash-only)" || return 1
   BODY="$(${LIB_DIR}/extract-map.sh ${ARCH} $tag | sed '1d;$d')"
   TMP="$(mktemp)"
@@ -94,7 +175,7 @@ dc8() {
     git init -q
     git config user.email t@t; git config user.name t
     mkdir -p plugins/ship-flow/lib/__tests__ plugins/ship-flow/references
-    cp "${REPO_ROOT}/ARCHITECTURE.md" ARCHITECTURE.md
+    cp "${_MAP_FIXTURE_DIR}/ARCHITECTURE.md" ARCHITECTURE.md
     cp "${REPO_ROOT}/plugins/ship-flow/references/flow-map-schema.yaml" plugins/ship-flow/references/
     cp "${REPO_ROOT}/plugins/ship-flow/lib/map-helpers.sh" plugins/ship-flow/lib/
     cp "${REPO_ROOT}/plugins/ship-flow/lib/extract-map.sh" plugins/ship-flow/lib/
@@ -117,14 +198,14 @@ if dc8 2>/dev/null; then echo "OK DC-8 atomic staging"; else echo "FAIL DC-8 ato
 # DC-9: full 6-section round-trip byte-identical
 dc9() {
   local before after; before="$(mktemp)"; after="$(mktemp)"
-  cp "${REPO_ROOT}/${ARCH}" "$before"
+  cp "${_MAP_FIXTURE_DIR}/${ARCH}" "$before"
   for tag in context containers components constraints dependencies decisions; do
     local H BODY
     H="$(${LIB_DIR}/extract-map.sh ${ARCH} $tag --emit-hash-only)" || return 1
     BODY="$(${LIB_DIR}/extract-map.sh ${ARCH} $tag | sed '1d;$d')"
     printf '%s\n' "$BODY" | "${LIB_DIR}/patch-map.sh" "${ARCH}" "$tag" --if-hash="$H" --no-commit || return 1
   done
-  cp "${REPO_ROOT}/${ARCH}" "$after"
+  cp "${_MAP_FIXTURE_DIR}/${ARCH}" "$after"
   diff -q "$before" "$after" >/dev/null
   local rc=$?
   rm -f "$before" "$after"
@@ -133,7 +214,7 @@ dc9() {
 if dc9 2>/dev/null; then echo "OK DC-9 full round-trip byte-identical"; else echo "FAIL DC-9 full round-trip byte-identical"; FAIL=1; fi
 
 # DC-10: cross-platform sha256 (uses $(uname -s))
-if type sha256_of >/dev/null 2>&1 && [ -n "$(sha256_of "${REPO_ROOT}/${ARCH}")" ]; then
+if type sha256_of >/dev/null 2>&1 && [ -n "$(sha256_of "${_MAP_FIXTURE_DIR}/${ARCH}")" ]; then
   echo "OK DC-10 sha256 on $(uname -s)"
 else
   echo "FAIL DC-10 sha256 (map-helpers.sh missing or sha256_of failed)"; FAIL=1

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # test-parallel-stage-contract.sh - stage-internal parallelism contract.
+# HOST ARTIFACTS: docs/ship-flow/ entities, .claude/settings.json, or plugins/spacebridge/ — not present in standalone clone.
+# Run only from the dogfood host project. See lib/__tests__/integration/README.md
 
 set -euo pipefail
 

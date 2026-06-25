@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # test-canonical-context-lifecycle.sh - canonical docs are read and maintained across stages.
+# HOST ARTIFACTS: docs/ship-flow/ entities, .claude/settings.json, or plugins/spacebridge/ — not present in standalone clone.
+# Run only from the dogfood host project. See lib/__tests__/integration/README.md
 
 set -euo pipefail
 

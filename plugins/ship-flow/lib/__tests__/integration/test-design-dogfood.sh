@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # plugins/ship-flow/lib/__tests__/test-design-dogfood.sh
+# HOST ARTIFACTS: docs/ship-flow/ entities, .claude/settings.json, or plugins/spacebridge/ — not present in standalone clone.
+# Run only from the dogfood host project. See lib/__tests__/integration/README.md
 # Re-runs ship-design SKILL on plugins/spacebridge/design-exploration-spatial.html;
 # diffs output against canonical artifacts at L2 strictness.
 #

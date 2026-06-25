@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # test-stale-worktree-cleanup-planner.sh - 114.3 read-only stale worktree cleanup planner contract
+# HOST ARTIFACTS: docs/ship-flow/ entities, .claude/settings.json, or plugins/spacebridge/ — not present in standalone clone.
+# Run only from the dogfood host project. See lib/__tests__/integration/README.md
 #
 # Usage:
 #   bash plugins/ship-flow/lib/__tests__/test-stale-worktree-cleanup-planner.sh

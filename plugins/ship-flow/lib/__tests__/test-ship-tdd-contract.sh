@@ -70,9 +70,6 @@ check "execute mirrors the TDD exemption list" \
 check "invariants classify TDD fallback as ship-flow-owned Layer B contract" \
   "grep -q 'ship-flow:test-driven-development' '${INVARIANTS}' && grep -q 'superpowers optional' '${INVARIANTS}' && grep -q 'ship-design.*7 total' '${INVARIANTS}'"
 
-check "dogfood README documents TDD fallback as ship-flow-owned SOT" \
-  "grep -q 'test-driven-development' '${README}' && grep -q 'tdd_contract' '${README}' && grep -q 'RED-before-GREEN' '${README}' && grep -q 'superpowers.*optional' '${README}'"
-
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 

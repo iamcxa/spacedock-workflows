@@ -32,8 +32,6 @@ echo "=== test-entity-entrypoint-index.sh ==="
 echo ""
 
 echo "Block 1: public ship-flow contract names folder entity entrypoint index.md"
-check "README folder layout documents index.md as entity metadata file" \
-  "grep -q '^[[:space:]]*index\\.md[[:space:]]*# entity metadata' '${REPO_ROOT}/docs/ship-flow/README.md'"
 check "ship-shape entity id routing documents folder index.md" \
   "grep -q 'docs/<wf>/<id>-<slug>/index\\.md' '${REPO_ROOT}/plugins/ship-flow/skills/ship-shape/SKILL.md'"
 check "ship skill entity id routing documents folder index.md" \

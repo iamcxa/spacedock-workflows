@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # test-pr-title-format.sh - PR title validator and pr-merge preflight contract.
+# HOST ARTIFACTS: docs/ship-flow/ entities, .claude/settings.json, or plugins/spacebridge/ — not present in standalone clone.
+# Run only from the dogfood host project. See lib/__tests__/integration/README.md
 
 set -u
 

@@ -279,9 +279,6 @@ check "ship-verify audits tdd-ledger schema and layer drift" \
 check "schema documents tdd-ledger and layer validation fields" \
   "grep -q 'tdd_ledger' '${SCHEMA}' && grep -q 'declared_layer' '${SCHEMA}' && grep -q 'inferred_layer' '${SCHEMA}' && grep -q 'command_quality' '${SCHEMA}'"
 
-check "README documents TDD ledger gate and core/domain-pack boundary" \
-  "grep -q 'tdd-ledger.jsonl' '${README}' && grep -q 'core gate' '${README}' && grep -q 'domain-pack' '${README}' && grep -q -- '--require-ledger-jsonl' '${README}'"
-
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 

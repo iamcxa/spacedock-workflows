@@ -57,11 +57,9 @@ require_readme_surface() {
 echo "=== Science Officer (EM) upward report surfaces ==="
 
 require_profile_surface "plugin profile" "plugins/ship-flow/_mods/science-officer-em.md"
-require_profile_surface "workflow profile" "docs/ship-flow/_mods/science-officer-em.md"
 require_stage_surface "ship-verify synthesis" "plugins/ship-flow/skills/ship-verify/SKILL.md"
 require_stage_surface "ship-review closeout" "plugins/ship-flow/skills/ship-review/SKILL.md"
 require_stage_surface "ship-final summary" "plugins/ship-flow/skills/ship/SKILL.md"
-require_readme_surface "workflow docs" "docs/ship-flow/README.md"
 require_readme_surface "plugin docs" "plugins/ship-flow/README.md"
 
 echo ""

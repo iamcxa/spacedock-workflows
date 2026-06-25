@@ -451,7 +451,8 @@ case "$REQUESTED_CASE" in
   all)
     case_helper_contracts
     case_ordering
-    case_docs
+    # case_docs requires docs/ship-flow/_mods/pr-merge.md (dogfood host only)
+    # → moved to lib/__tests__/integration/test-check-pr-mergeable-dogfood.sh
     ;;
   --case)
     case "${2:-}" in
