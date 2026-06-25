@@ -81,35 +81,32 @@ Expected: commit count unchanged; only `plugins/ship-flow/**` files remain; no f
 
 - [ ] **Step 4: Validate the graft strategy on a scratch copy BEFORE touching yangon**
 
-Decision: use **transplant** (filtered history as base, replay yangon's 2 content commits on top) for a clean linear single-root history. Validate on scratch:
+Decision: use **transplant** — replay ALL of yangon's content commits (everything after the empty `Initial commit` `bf70589`: currently `561b48d` spec v1, `be8f557` spec v2, `a5f1b63` plan, plus any added before execution) onto the filtered ship-flow base, for a clean linear single-root history. Use `git rebase --onto` (NOT hardcoded cherry-picks) so it is robust to however many doc commits exist at execution time. Validate on scratch first:
 ```bash
 rm -rf /tmp/yangon-scratch
 git clone /Users/kent/conductor/workspaces/spacedock-workflows/yangon /tmp/yangon-scratch
 cd /tmp/yangon-scratch
-git remote add filtered /tmp/ship-flow-extract
-git fetch filtered
-# Strategy A (transplant): rebase yangon's content commits onto the filtered history
-git checkout -b graft-trial filtered/master 2>/dev/null || git checkout -b graft-trial filtered/main
-git cherry-pick 561b48d be8f557   # the spec v1 + v2 commits (the only yangon content)
-git log --graph --oneline --all | head -40
+git remote add filtered /tmp/ship-flow-extract && git fetch filtered
+FILTERED_TIP=$(git rev-parse filtered/master 2>/dev/null || git rev-parse filtered/main)
+# replay every yangon commit after the empty Initial commit (bf70589) onto the filtered base
+git rebase --onto "$FILTERED_TIP" bf70589 iamcxa/yangon
+git log --graph --oneline | head -40
 git log --oneline -- plugins/ship-flow/ | wc -l   # must equal EXPECTED_COMMITS
+git ls-files | grep -c '^docs/superpowers/'        # yangon docs retained on top
 ```
-Expected: single linear history, ship-flow commits present, spec commits on top. If cherry-pick of the empty `Initial commit` parent is needed for provenance, fall back to **Strategy B (merge with explicit merge commit)** and document why. Inspect `--graph` and confirm no stray roots.
+Expected: single linear history, all ship-flow commits present, all yangon doc commits replayed on top, no stray roots. If preserving the empty `Initial commit` as a parent is required for provenance, fall back to **Strategy B (merge with explicit merge commit)** and document why.
 
 - [ ] **Step 5: Apply the validated strategy to the real yangon branch**
 
-Run (transplant variant; adjust if Step 4 chose merge):
+Run (transplant variant; adjust if Step 4 chose merge). Safety: tag the current tip first so the rewrite is recoverable.
 ```bash
 cd /Users/kent/conductor/workspaces/spacedock-workflows/yangon
+git tag pre-graft-backup iamcxa/yangon          # recovery point
 git remote add filtered /tmp/ship-flow-extract && git fetch filtered
-# replay current yangon tip content onto filtered base on a new history
-git checkout -b iamcxa/yangon-grafted filtered/master 2>/dev/null || git checkout -b iamcxa/yangon-grafted filtered/main
-git cherry-pick 561b48d be8f557
-# fast-forward the working branch to the grafted history
-git branch -f iamcxa/yangon iamcxa/yangon-grafted
-git checkout iamcxa/yangon
-git branch -D iamcxa/yangon-grafted
+FILTERED_TIP=$(git rev-parse filtered/master 2>/dev/null || git rev-parse filtered/main)
+git rebase --onto "$FILTERED_TIP" bf70589 iamcxa/yangon   # replay all yangon docs onto filtered base
 git remote remove filtered
+# verify before deleting the backup tag (Step 6); keep pre-graft-backup until proof passes
 ```
 
 - [ ] **Step 6: Prove history + cleanliness**
@@ -123,7 +120,7 @@ git log --graph --oneline | head -20                         # single root, line
 git status --short                                           # clean
 rm -rf /tmp/ship-flow-extract /tmp/yangon-scratch
 ```
-Expected: commit count matches, plugin present, clean linear history, no stray files. **Do NOT push yet** (push gate is Wave 4).
+Expected: commit count matches, plugin present, clean linear history, no stray files. Keep the `pre-graft-backup` tag until the Wave 4 push succeeds, then delete it. **Do NOT push yet** (push gate is Wave 4).
 
 > Note: history graft is the highest-risk task. If index/cherry-pick fails ≥2 mechanical retries, STOP and dispatch a fresh sonnet subagent for the git work (delegation circuit-breaker) rather than looping.
 
