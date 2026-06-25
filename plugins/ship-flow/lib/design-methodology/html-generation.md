@@ -2,7 +2,7 @@
 Snapshot from gstack design-html (2026-05-12)
 Source: design-html/SKILL.md:906-1100
 Purpose: ship-flow design-officer production HTML/CSS generation
-After /spacedock:overhaul: plugins/ship-flow/lib/design-methodology/html-generation.md
+Extracted into ship-flow plugin at lib/design-methodology/html-generation.md
 
 Adaptations from source:
 - ~/.gstack/projects/$SLUG/{ceo-plans,designs}/ paths → <entity>/design-explore/ + design.md

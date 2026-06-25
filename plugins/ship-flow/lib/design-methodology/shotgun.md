@@ -2,7 +2,7 @@
 Snapshot from gstack design-shotgun (2026-05-12)
 Source: design-shotgun/SKILL.md:1034-1162
 Purpose: ship-flow design-officer multi-variant ideation discipline
-After /spacedock:overhaul: plugins/ship-flow/lib/design-methodology/shotgun.md
+Extracted into ship-flow plugin at lib/design-methodology/shotgun.md
 
 Adaptations from source:
 - $D image generation binary → text-based markdown variants (mood, palette, layout description, sample HTML snippet)

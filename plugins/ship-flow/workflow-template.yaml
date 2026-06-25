@@ -1,5 +1,5 @@
 ## Ship-Flow Pipeline Template
-## Discovered by spacedock:workflow-adopt to bootstrap via commission.
+## Scaffolded by /spacedock:commission when adopting ship-flow as a workflow plugin.
 
 name: ship-flow
 description: "Ship-focused pipeline. SHAPE once with captain, then agents run design for UI/domain/contract-bearing work before plan → execute → verify → ship."

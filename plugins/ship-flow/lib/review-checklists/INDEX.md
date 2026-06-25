@@ -2,7 +2,7 @@
 
 **Source**: gstack `/review` skill content at `~/.claude/skills/gstack/review/`
 **Snapshot date**: 2026-05-12
-**Target after `/spacedock:overhaul`**: `plugins/ship-flow/lib/review-checklists/`
+**Location**: `lib/review-checklists/` (ship-flow plugin canonical)
 
 ## Why this snapshot exists
 
@@ -26,7 +26,7 @@ ship-flow orchestration supersedes copied specialist scope notes. The copied spe
 
 ## What was stripped or adapted
 
-1. **`design-checklist.md`** — removed `~/.claude/skills/gstack/bin/gstack-diff-scope` bash invocation. Trigger condition rewritten as plain description: ship-verify decides scope detection via its own portable `lib/review-scope.sh` (to be written in `/spacedock:overhaul`).
+1. **`design-checklist.md`** — removed `~/.claude/skills/gstack/bin/gstack-diff-scope` bash invocation. Trigger condition rewritten as plain description: ship-verify decides scope detection via its own portable `lib/review-scope.sh`.
 
 2. **JSON output schema headers** — KEPT verbatim. Ship-flow adopts the same finding schema (`severity / confidence / path / line / category / summary / fix / fingerprint / specialist`). Cross-tool compatibility is a feature.
 

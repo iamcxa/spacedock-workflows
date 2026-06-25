@@ -2,7 +2,7 @@
 
 A scaffolding plugin for captain-directed autonomous work across multi-stage pipelines. This README is written from claude 4.7's perspective — explaining **why** the flow is shaped this way, not how to use each skill (SKILL.md files document the how).
 
-> **Canonical project-level operational doc** (how captain uses ship-flow in THIS project): `docs/ship-flow/README.md`.
+> **Canonical project-level operational doc** (how captain uses ship-flow in an adopted project): `docs/ship-flow/README.md` (created in each adopting repo by `/spacedock:commission`).
 > **This file**: plugin-level design rationale. Adopters + onboarding + future-me read this first.
 
 ---
@@ -348,8 +348,8 @@ flowchart LR
     P[README + INVARIANTS\nSKILL.md files]
   end
   subgraph Projects["Adopted projects"]
-    A[spacedock-ui\ndocs/ship-flow/]
-    B[carlove\ndocs/ship-flow/]
+    A[project-A\ndocs/ship-flow/]
+    B[project-B\ndocs/ship-flow/]
   end
 
   P -- "1 workflow-adopt\n(initial setup)" --> A
@@ -364,8 +364,8 @@ The cycle: plugin knowledge flows **down** to projects on adoption/sync, and pro
 
 | Journey | Trigger | Skill | Mechanism |
 |---|---|---|---|
-| Initial adoption | New project wants ship-flow | `spacedock:workflow-adopt` | Scaffold `docs/<wf>/`, `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` |
-| Sync updates | Plugin ships new patterns | `spacedock:workflow-sync` | Pull changed SKILL.md / INVARIANTS sections into project |
+| Initial adoption | New project wants ship-flow | `/spacedock:commission` (with ship-flow template) | Scaffold `docs/<wf>/`, `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` |
+| Sync updates | Plugin ships new patterns | manual diff + cherry-pick | Pull changed SKILL.md / INVARIANTS sections into project |
 | Promote learnings | Projects accumulate `_debriefs/` | `spacebridge:debrief-promote` | Aggregate STRONG/WARN patterns → plugin canonical |
 
 **`_debriefs/` convention**: each project accumulates session debriefs under `docs/<wf>/_debriefs/<date>-<seq>.md` (schema: `references/debrief-schema.yaml`). After ≥2 projects have debriefs, run `spacebridge:debrief-promote` to surface cross-project STRONG signals back into plugin docs.
@@ -610,7 +610,7 @@ dimensions.
 Incremental additions after the 0.5.0 release that were fully shipped on main before the 0.6.0 release. The semantic PR review and auto-merge readiness items below are now part of the named 0.6.0 surface; the rest remain historical hardening notes.
 
 **Workflow SOT sync**:
-- `docs/ship-flow/README.md` is the dogfood workflow SOT. Run `bash plugins/ship-flow/lib/sync-workflow-sot.sh --check` in CI or before review to detect drift, and `bash plugins/ship-flow/lib/sync-workflow-sot.sh --write` after changing the SOT to refresh derived files (`workflow-template.yaml` and this README's managed design-stage summary).
+- In an adopted project, `docs/ship-flow/README.md` is the project-level workflow SOT. Run `bash <PLUGIN_ROOT>/lib/sync-workflow-sot.sh --check` in CI or before review to detect drift, and `bash <PLUGIN_ROOT>/lib/sync-workflow-sot.sh --write` after changing the SOT to refresh derived files (`workflow-template.yaml` and this README's managed design-stage summary).
 
 **`design` stage added** (pitch-104):
 - New stage `design` inserted between `shape` and `plan`. Always runs (no `skip-when:` clause); trivial-pass fast-path in Phase 0 short-circuits pure mechanical work (no `affects_ui`, no matched domain, no `design_required`, no `contract_decision_required`, no `open_contract_decisions`). Dispatched by `/ship` to `designer` teammate (opus). Output: `design.md` + narrow artifact bundle required by the selected `design-dispatch-manifest`. Per pitch 116 W3 (design always runs); INVARIANTS Principle 11 "Design Stage Required".
@@ -654,13 +654,12 @@ Incremental additions after the 0.5.0 release that were fully shipped on main be
 - `bin/auto-merge-readiness-collect.mjs` is the evidence collector for GitHub-backed PRs. It gathers PR snapshot, labels, issue comments, review threads, semantic gate output, review-thread gate output, and readiness output under `.context/ship-flow-auto-merge/` so the merge decision is inspectable. Pass `--policy-json` when an adopter repo uses a project-specific semantic review key or dimensions, and pass `--required-independent-approvals <n>` when branch policy requires independent approval before auto-merge.
 - `bin/auto-merge-run.mjs` is the optional mutating executor. It first runs the collector; when readiness is clean, it tries GitHub native auto-merge with `expectedHeadOid`. If GitHub reports the PR is already `clean`, it direct-merges with the same expected head. If GitHub reports `unstable`, direct merge requires adopter opt-in via `--allow-direct-merge-unstable`; otherwise the runner returns `blocked` and asks the operator to wait or opt in explicitly. The runner rejects semantic review `--mode off`, and also accepts `--policy-json` and `--required-independent-approvals` for forwarding to the collector.
 
-Spacebridge dogfood note: this private repository currently runs on a free
-GitHub organization plan, so repository rulesets, required checks, required
-approval, and native auto-merge cannot be fully enforced by GitHub. The
-`.github/workflows/ship-flow-invariants.yml` CI still runs the shell and bin
-test suites as report gates for every ship-flow PR, but operators must treat
-the green checks and readiness artifacts as a manual merge gate until the repo
-is public or the org plan supports protected branches for private repositories.
+Note: repository rulesets, required checks, required approval, and native
+auto-merge availability depend on the adopting repo's GitHub plan. On free
+private-org plans these cannot be fully enforced. CI (`.github/workflows/
+ship-flow-invariants.yml`) still runs the shell and bin test suites as report
+gates, but operators may need to treat readiness artifacts as a manual merge
+gate depending on their plan.
 
 ---
 

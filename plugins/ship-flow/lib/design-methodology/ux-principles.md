@@ -2,7 +2,7 @@
 Snapshot from gstack design skills (2026-05-12)
 Source: design-shotgun/SKILL.md:797-880 + design-html/SKILL.md:783-866 (identical content)
 Purpose: ship-flow design-officer foundation principles
-After /spacedock:overhaul: plugins/ship-flow/lib/design-methodology/ux-principles.md
+Extracted into ship-flow plugin at lib/design-methodology/ux-principles.md
 -->
 
 # UX Principles: How Users Actually Behave

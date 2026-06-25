@@ -2,7 +2,7 @@
 Snapshot from gstack /review checklist (2026-05-12)
 Source: ~/.claude/skills/gstack/review/specialists/maintainability.md
 Purpose: ship-flow plugin self-contained review checklists
-After /spacedock:overhaul: plugins/ship-flow/lib/review-checklists/specialists/maintainability.md
+Extracted into ship-flow plugin at lib/review-checklists/specialists/maintainability.md
 -->
 
 # Maintainability Specialist Review Checklist

@@ -2,7 +2,7 @@
 
 **Source**: gstack design skills at `~/.claude/skills/{design-shotgun,design-consultation,design-html}/SKILL.md`
 **Snapshot date**: 2026-05-12
-**Target after `/spacedock:overhaul`**: `plugins/ship-flow/lib/design-methodology/`
+**Location**: `lib/design-methodology/` (ship-flow plugin canonical)
 
 ## Why this snapshot exists
 

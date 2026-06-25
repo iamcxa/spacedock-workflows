@@ -31,7 +31,7 @@ An auto-trigger (run at /ship end when size > warn) was considered and DEFERRED 
 
 ## Budget source
 
-Thresholds live in the project memory policy file (`<project-memory-dir>/_policy.md`), not hardcoded here, because they are project-specific (a micro project and a monorepo want different budgets). At authoring time the spacedock-ui policy is:
+Thresholds live in the project memory policy file (`<project-memory-dir>/_policy.md`), not hardcoded here, because they are project-specific (a micro project and a large repo want different budgets). Example thresholds (read the live `_policy.md` for the actual values):
 
 | Tier | Bytes | Meaning |
 |---|---|---|

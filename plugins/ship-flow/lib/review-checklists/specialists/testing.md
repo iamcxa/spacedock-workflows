@@ -2,7 +2,7 @@
 Snapshot from gstack /review checklist (2026-05-12)
 Source: ~/.claude/skills/gstack/review/specialists/testing.md
 Purpose: ship-flow plugin self-contained review checklists
-After /spacedock:overhaul: plugins/ship-flow/lib/review-checklists/specialists/testing.md
+Extracted into ship-flow plugin at lib/review-checklists/specialists/testing.md
 -->
 
 # Testing Specialist Review Checklist

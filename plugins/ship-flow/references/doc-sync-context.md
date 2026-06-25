@@ -8,7 +8,7 @@ last_sync: 2026-05-20 (0.6.0 release metadata sync)
 
 Reference file for `ship-flow:doc-sync`. It maps Ship Flow source files to documentation targets and defines sync levels, style defaults, probe policy, and post-sync hooks.
 
-Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, then a runtime-provided Codex plugin root, then infer from `skills/doc-sync/SKILL.md` by walking up to the plugin root. All paths in this file are relative to `PLUGIN_ROOT`. Repository note: in the spacedock-ui monorepo, `PLUGIN_ROOT` is `plugins/ship-flow/`; installed plugin contexts use the plugin root/cache directory directly.
+Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, then a runtime-provided Codex plugin root, then infer from `skills/doc-sync/SKILL.md` by walking up to the plugin root. All paths in this file are relative to `PLUGIN_ROOT`. Installed plugin contexts use the plugin root/cache directory directly.
 
 ## Source Map
 

@@ -9,7 +9,7 @@ argument-hint: "[--check] [--auto] [--section <doc-file>] [--diff <ref>] [--prob
 
 Keep Ship Flow plugin documentation aligned with stage skills, shell primitives, invariants, workflow templates, and release expectations. Docs conform to source behavior; when docs and source disagree, update docs or block release rather than changing implementation from this skill.
 
-Resolve `PLUGIN_ROOT` before reading or scanning any files. Prefer `${CLAUDE_PLUGIN_ROOT}` when present, then a runtime-provided Codex plugin root when available, then infer from this skill file by walking up from `skills/doc-sync/SKILL.md` to the plugin root. Repository note: in the spacedock-ui monorepo, this resolves to `plugins/ship-flow/`; installed plugin contexts resolve directly to the plugin cache/root.
+Resolve `PLUGIN_ROOT` before reading or scanning any files. Prefer `${CLAUDE_PLUGIN_ROOT}` when present, then a runtime-provided Codex plugin root when available, then infer from this skill file by walking up from `skills/doc-sync/SKILL.md` to the plugin root. Installed plugin contexts resolve directly to the plugin cache/root.
 
 All source globs, doc targets, and reference paths below are relative to `PLUGIN_ROOT`. Read `references/doc-sync-context.md` before scanning. It defines the Source Map, Doc Structure, Style Guide, Probe Config, and Post-Sync Hooks for this plugin.
 

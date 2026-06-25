@@ -2,7 +2,7 @@
 Snapshot from gstack design-consultation (2026-05-12)
 Source: design-consultation/SKILL.md:943-1230
 Purpose: ship-flow design-officer research-grounded proposal flow
-After /spacedock:overhaul: plugins/ship-flow/lib/design-methodology/consultation.md
+Extracted into ship-flow plugin at lib/design-methodology/consultation.md
 
 Adaptations from source:
 - AskUserQuestion → SendMessage / Shift+Down dialogue

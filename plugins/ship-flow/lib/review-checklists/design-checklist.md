@@ -2,7 +2,7 @@
 Snapshot from gstack /review design-checklist (2026-05-12)
 Source: ~/.claude/skills/gstack/review/design-checklist.md
 Purpose: ship-flow plugin self-contained review checklists
-After /spacedock:overhaul: plugins/ship-flow/lib/review-checklists/design-checklist.md
+Extracted into ship-flow plugin at lib/review-checklists/design-checklist.md
 
 Adaptations from source:
 - Removed `~/.claude/skills/gstack/bin/gstack-diff-scope` bash invocation.

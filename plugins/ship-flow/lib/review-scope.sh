@@ -14,8 +14,7 @@
 #   SCOPE_API        = true|false
 #   SCOPE_MIGRATIONS = true|false
 #
-# Snapshot 2026-05-12. After /spacedock:overhaul lives at
-# plugins/ship-flow/lib/review-scope.sh
+# Snapshot 2026-05-12. Extracted into ship-flow plugin as lib/review-scope.sh
 
 set -u
 

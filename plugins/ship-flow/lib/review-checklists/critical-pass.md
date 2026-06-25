@@ -2,7 +2,7 @@
 Snapshot from gstack /review checklist (2026-05-12)
 Source: ~/.claude/skills/gstack/review/checklist.md
 Purpose: ship-flow plugin self-contained review checklists
-After /spacedock:overhaul: plugins/ship-flow/lib/review-checklists/critical-pass.md
+Extracted into ship-flow plugin at lib/review-checklists/critical-pass.md
 
 DO NOT add ~/.claude/skills/gstack/ runtime references here.
 This file is content-only; routing/dispatch lives in ship-verify SOT.

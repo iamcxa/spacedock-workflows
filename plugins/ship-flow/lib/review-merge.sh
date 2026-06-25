@@ -12,8 +12,7 @@
 #   {"_summary": true, "quality_score": N, "critical": N, "informational": N,
 #    "confirmed_multi": N, "suppressed": N}
 #
-# Snapshot 2026-05-12. After /spacedock:overhaul lives at
-# plugins/ship-flow/lib/review-merge.sh
+# Snapshot 2026-05-12. Extracted into ship-flow plugin as lib/review-merge.sh
 
 set -eu
 

@@ -2,7 +2,7 @@
 Snapshot from gstack /review checklist (2026-05-12)
 Source: ~/.claude/skills/gstack/review/specialists/api-contract.md
 Purpose: ship-flow plugin self-contained review checklists
-After /spacedock:overhaul: plugins/ship-flow/lib/review-checklists/specialists/api-contract.md
+Extracted into ship-flow plugin at lib/review-checklists/specialists/api-contract.md
 -->
 
 # API Contract Specialist Review Checklist
