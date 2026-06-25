@@ -21,8 +21,15 @@ This bridge applies in both runtimes:
 - Claude Code (`CLAUDECODE` env var is set): load `spacedock:first-officer`,
   then follow its Claude Code runtime adapter while running this ship-flow
   pipeline.
-- Codex (`CODEX_HOME` env var is set): load `spacedock:first-officer`, then
-  follow its Codex runtime adapter while running this ship-flow pipeline.
+- Codex (`CODEX_THREAD_ID` env var is set): load `spacedock:first-officer`,
+  then follow its Codex runtime adapter while running this ship-flow pipeline.
+
+**Codex support scope (honest statement):** The `/ship` entry delegates to
+`spacedock:first-officer`, which supports Claude Code, Codex, and Pi in
+spacedock 0.22.0 — the entry bridge is Codex-capable. Ship-flow's own
+stage-dispatch skills (ship-execute, ship-shape ensign dispatch, etc.) are
+Claude-native and have NOT been verified end-to-end under Codex in 0.7.0 —
+full-pipeline Codex execution is unverified, not unsupported-by-design.
 
 `ship-flow:ship` remains the pipeline-specific entrypoint, but it must operate
 under the First Officer contract. Do not bypass first-officer startup, status

@@ -37,7 +37,7 @@ check "ship skill preserves shape fallback through first-officer workflow state"
   "grep -q 'If requirements are vague' '${SHIP_SKILL}' && grep -q 'ship-flow:ship-shape' '${SHIP_SKILL}' && grep -q 'do not bypass first-officer' '${SHIP_SKILL}'"
 
 check "ship skill is explicit that the bridge applies to Claude Code and Codex" \
-  "grep -q 'Claude Code' '${SHIP_SKILL}' && grep -q 'Codex' '${SHIP_SKILL}' && grep -q 'CLAUDECODE' '${SHIP_SKILL}' && grep -q 'CODEX_HOME' '${SHIP_SKILL}'"
+  "grep -q 'Claude Code' '${SHIP_SKILL}' && grep -q 'Codex' '${SHIP_SKILL}' && grep -q 'CLAUDECODE' '${SHIP_SKILL}' && grep -q 'CODEX_THREAD_ID' '${SHIP_SKILL}'"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

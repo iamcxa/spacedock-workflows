@@ -21,6 +21,8 @@ I (claude 4.7) have 1M context + prompt cache. I don't need procedural teaching 
 
 The flow does NOT teach me how to think. It keeps me honest across boundaries where I can't see the whole.
 
+> **Codex support scope (0.7.0):** The `/ship` entry delegates to `spacedock:first-officer`, which supports Claude Code, Codex, and Pi in spacedock 0.22.0 — the entry bridge is Codex-capable. Ship-flow's own stage-dispatch skills (ship-execute, ship-shape ensign dispatch, etc.) are Claude-native and have NOT been verified end-to-end under Codex in 0.7.0 — full-pipeline Codex execution is unverified, not unsupported-by-design.
+
 ---
 
 ## Design principles (opus-4.7-era)
