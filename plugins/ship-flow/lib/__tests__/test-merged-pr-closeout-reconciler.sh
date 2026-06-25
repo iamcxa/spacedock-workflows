@@ -148,7 +148,7 @@ write_workflow_readme() {
   local workflow_dir="$1"
   cat > "${workflow_dir}/README.md" <<'EOF'
 ---
-commissioned-by: spacedock@0.10.2
+commissioned-by: spacedock@0.22.0
 id-style: slug
 stages:
   states:

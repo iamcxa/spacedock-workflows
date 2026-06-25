@@ -1,5 +1,5 @@
 ---
-commissioned-by: spacedock@0.10.1
+commissioned-by: spacedock@0.22.0
 entry-point: ship-flow:ship-shape
 entity-type: feature
 entity-label: feature

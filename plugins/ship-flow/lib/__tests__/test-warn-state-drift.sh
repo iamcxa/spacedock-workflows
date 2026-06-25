@@ -179,7 +179,7 @@ write_workflow_readme() {
   local auto_fix="${2:-off}"
   cat > "${workflow_dir}/README.md" <<EOF
 ---
-commissioned-by: spacedock@0.10.1
+commissioned-by: spacedock@0.22.0
 auto_fix: ${auto_fix}
 id-style: slug
 stages:
