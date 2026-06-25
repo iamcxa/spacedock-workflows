@@ -137,8 +137,10 @@ wants to avoid.
 
 1. Fresh `clone` of `spacedock-ui`; on the throwaway clone run
    `git filter-repo --path plugins/ship-flow/` (keep the subdir path — it lands
-   exactly where §4 wants it, preserving the 21 hardcoded paths). 50 commits
-   touch `plugins/ship-flow/`, so history is substantive.
+   exactly where §4 wants it, preserving the 21 hardcoded paths). The plugin has
+   a deep history (~500 commits — measure with `git rev-list --count HEAD -- plugins/ship-flow/`,
+   NOT `git log --oneline | wc -l`, which the RTK shell hook truncates to ~50),
+   so history preservation is worth it.
 2. Bring the filtered history into `yangon` **without** `--allow-unrelated-histories`.
    Planner picks ONE of (decide from the corrected facts, document the choice):
    - **(a) Transplant:** make the filtered history the base, then replay yangon's
@@ -151,8 +153,8 @@ wants to avoid.
 3. Decide and document: tag handling (preserve / drop / namespace ship-flow tags),
    removal of the throwaway clone's `spacedock-ui` remote before any push, and the
    **proof command** that the new repo's history contains the prior
-   `plugins/ship-flow/` commits (e.g. `git log --oneline -- plugins/ship-flow/ | wc -l`
-   ≈ 50, and a known historical SHA is reachable).
+   `plugins/ship-flow/` commits (e.g. `git rev-list --count HEAD -- plugins/ship-flow/`
+   matches the source count, and a known historical SHA is reachable).
 4. Layer repo-level new files (`.claude-plugin/marketplace.json`, root `README.md`,
    release tooling, `.gitignore`) as top-of-tree commits.
 5. **Risk control:** this is git surgery on a *strategy* choice, not just index

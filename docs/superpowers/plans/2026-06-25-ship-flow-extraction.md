@@ -44,7 +44,7 @@ Migrated (history-preserved) under `yangon:plugins/ship-flow/` — edited in pla
 - Work area: a throwaway clone of `spacedock-ui` outside both workspaces (e.g. `/tmp/ship-flow-extract/`)
 
 **Interfaces:**
-- Produces: `yangon:plugins/ship-flow/` populated with preserved history; a verified proof that ≈50 `plugins/ship-flow/` commits are present.
+- Produces: `yangon:plugins/ship-flow/` populated with preserved history; a verified proof that ~500 `plugins/ship-flow/` commits (full history) are present.
 
 - [ ] **Step 1: Confirm preconditions**
 
@@ -65,7 +65,7 @@ git clone /Users/kent/conductor/workspaces/spacedock-ui/kathmandu /tmp/ship-flow
 # verify the clone has full history for the plugin
 git -C /tmp/ship-flow-extract log --oneline -- plugins/ship-flow/ | wc -l
 ```
-Expected: count ≈ 50 (the plugin's commit count). Record this number as `EXPECTED_COMMITS`.
+Expected: ~500 (the plugin's full commit count). Note: RTK truncates `git log | wc -l` to ~50 — always use `git rev-list --count` for commit counts. Record this number as `EXPECTED_COMMITS`.
 
 - [ ] **Step 3: filter-repo to keep only the plugin subtree (path preserved)**
 
@@ -73,7 +73,7 @@ Run:
 ```bash
 cd /tmp/ship-flow-extract
 git filter-repo --path plugins/ship-flow/ --force
-git log --oneline -- plugins/ship-flow/ | wc -l   # must equal EXPECTED_COMMITS
+git rev-list --count HEAD -- plugins/ship-flow/   # must equal EXPECTED_COMMITS
 git ls-files | grep -c '^plugins/ship-flow/'        # all files retained
 git ls-files | grep -v '^plugins/ship-flow/' | head # expect EMPTY (nothing outside the subtree)
 ```
@@ -91,7 +91,7 @@ FILTERED_TIP=$(git rev-parse filtered/master 2>/dev/null || git rev-parse filter
 # replay every yangon commit after the empty Initial commit (bf70589) onto the filtered base
 git rebase --onto "$FILTERED_TIP" bf70589 iamcxa/yangon
 git log --graph --oneline | head -40
-git log --oneline -- plugins/ship-flow/ | wc -l   # must equal EXPECTED_COMMITS
+git rev-list --count HEAD -- plugins/ship-flow/   # must equal EXPECTED_COMMITS
 git ls-files | grep -c '^docs/superpowers/'        # yangon docs retained on top
 ```
 Expected: single linear history, all ship-flow commits present, all yangon doc commits replayed on top, no stray roots. If preserving the empty `Initial commit` as a parent is required for provenance, fall back to **Strategy B (merge with explicit merge commit)** and document why.
@@ -114,7 +114,7 @@ git remote remove filtered
 Run:
 ```bash
 cd /Users/kent/conductor/workspaces/spacedock-workflows/yangon
-git log --oneline -- plugins/ship-flow/ | wc -l              # == EXPECTED_COMMITS
+git rev-list --count HEAD -- plugins/ship-flow/              # == EXPECTED_COMMITS
 test -f plugins/ship-flow/.claude-plugin/plugin.json && echo "PLUGIN PRESENT"
 git log --graph --oneline | head -20                         # single root, linear
 git status --short                                           # clean
