@@ -30,16 +30,19 @@ You are running the ONBOARD skill for ship-flow. This runs once when ship-flow i
 
 0.6. Suggest workflow-adopt prerequisite (greenfield mode only — skip if step 0.5 found scaffolding):
 
-   > No workflow scaffolding detected. ship-onboard drafts PRODUCT.md and ROADMAP.md (project **content**) but does not install workflow stages, gates, or skill bindings (project **structure**).
+   > **No workflow scaffolding detected.**
    >
-   > Recommended: run `/spacebridge:workflow-adopt` first to install workflow scaffolding from a plugin template (ship-flow, build-pipeline, or other), then re-run `/ship-flow:ship-onboard` for PRODUCT/ROADMAP drafting.
+   > ship-onboard drafts PRODUCT.md and ROADMAP.md (project **content**) but does not install workflow stages, gates, or skill bindings (project **structure**).
    >
-   > Continue with ship-onboard anyway? (y / n / abort)
-   >   y: proceed without workflow scaffolding (PRODUCT.md and ROADMAP.md will land at repo root; you can wire them into a workflow later)
-   >   n: stop here — captain runs /spacebridge:workflow-adopt first
-   >   abort: same as n
+   > **Adoption note (0.7.0):** Bootstrapping ship-flow workflow scaffolding is **not self-contained in 0.7.0**. The recommended bridge is `/spacebridge:workflow-adopt`, which discovers `workflow-template.yaml` and delegates to `spacedock:commission` — but this requires the `spacebridge` plugin. Without spacebridge, scaffold `docs/<wf>/` manually from `plugins/ship-flow/workflow-template.yaml` or run `/spacedock:commission` with ship-flow directly. Self-contained adoption is a planned later milestone.
+   >
+   > How to proceed?
+   >   **y** — continue now: PRODUCT.md and ROADMAP.md land at repo root; wire them into workflow scaffolding later (manual or via spacebridge when available)
+   >   **spacebridge** — pause here and run `/spacebridge:workflow-adopt` first (if spacebridge plugin is installed), then re-run this skill
+   >   **n / abort** — stop for now
 
-   Wait for captain answer. On `y`: continue to step 1. On `n` / `abort`: STOP with message "Run /spacebridge:workflow-adopt first; then re-invoke /ship-flow:ship-onboard."
+   Wait for captain answer. On `y`: continue to step 1. On `spacebridge`, `n`, or `abort`: emit the following note and stop (do NOT hard-error — the adopter may lack spacebridge, which is expected in 0.7.0):
+   > Stopping ship-onboard. To bootstrap workflow scaffolding: run `/spacebridge:workflow-adopt` (requires spacebridge plugin) or scaffold `docs/<wf>/` manually from `plugins/ship-flow/workflow-template.yaml`. Then re-invoke `/ship-flow:ship-onboard`.
 
 1. Check if PRODUCT.md or ROADMAP.md already exist at project root:
    ```bash

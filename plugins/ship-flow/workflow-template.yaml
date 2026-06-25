@@ -1,5 +1,9 @@
 ## Ship-Flow Pipeline Template
-## Scaffolded by /spacedock:commission when adopting ship-flow as a workflow plugin.
+## Adoption note (0.7.0): bootstrapping this template into a project is NOT self-contained in 0.7.0.
+## The intended bridge is `spacebridge:workflow-adopt`, which discovers this file and delegates
+## to `spacedock:commission` to scaffold `docs/<wf>/`. That requires the `spacebridge` plugin.
+## Without spacebridge: scaffold `docs/<wf>/` manually from this template, or use
+## `/spacedock:commission` with ship-flow directly. Self-contained adoption is a planned later milestone.
 
 name: ship-flow
 description: "Ship-focused pipeline. SHAPE once with captain, then agents run design for UI/domain/contract-bearing work before plan → execute → verify → ship."

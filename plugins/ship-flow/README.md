@@ -364,9 +364,11 @@ The cycle: plugin knowledge flows **down** to projects on adoption/sync, and pro
 
 | Journey | Trigger | Skill | Mechanism |
 |---|---|---|---|
-| Initial adoption | New project wants ship-flow | `/spacedock:commission` (with ship-flow template) | Scaffold `docs/<wf>/`, `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` |
+| Initial adoption | New project wants ship-flow | `spacebridge:workflow-adopt` → `spacedock:commission` | Discovers `workflow-template.yaml`, delegates to commission to scaffold `docs/<wf>/`, `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md`. Requires the `spacebridge` plugin — **not self-contained in 0.7.0**. Without spacebridge: scaffold manually from `workflow-template.yaml` or run `spacedock:commission` with ship-flow directly. |
 | Sync updates | Plugin ships new patterns | manual diff + cherry-pick | Pull changed SKILL.md / INVARIANTS sections into project |
 | Promote learnings | Projects accumulate `_debriefs/` | `spacebridge:debrief-promote` | Aggregate STRONG/WARN patterns → plugin canonical |
+
+> **Adoption milestone note (0.7.0):** Adopting ship-flow into a project is not self-contained in 0.7.0. The workflow instance is bootstrapped by `spacebridge:workflow-adopt` (which discovers `workflow-template.yaml` and bridges into `spacedock:commission`), so it requires the `spacebridge` plugin — or a manual scaffold. Self-contained adoption is a planned later milestone.
 
 **`_debriefs/` convention**: each project accumulates session debriefs under `docs/<wf>/_debriefs/<date>-<seq>.md` (schema: `references/debrief-schema.yaml`). After ≥2 projects have debriefs, run `spacebridge:debrief-promote` to surface cross-project STRONG signals back into plugin docs.
 
@@ -472,7 +474,7 @@ SendMessage(to: "verifier", message: "...verify brief with execute.md...")
 
 ## For adopters
 
-**Commissioning to a new repo**: use `/spacedock:commission` with `ship-flow` as template plugin. The commissioner scaffolds `docs/<wf>/README.md` with `entry-point:` frontmatter + creates initial `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` with section tags for `patch-map.sh`.
+**Commissioning to a new repo (0.7.0 adoption note):** Adopting ship-flow is **not self-contained in 0.7.0**. The intended bridge is `spacebridge:workflow-adopt`, which discovers `workflow-template.yaml` and delegates to `spacedock:commission` to scaffold `docs/<wf>/README.md` with `entry-point:` frontmatter + initial `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` with section tags for `patch-map.sh`. This requires the `spacebridge` plugin. Without spacebridge: scaffold `docs/<wf>/` manually from `plugins/ship-flow/workflow-template.yaml`, or run `/spacedock:commission` with ship-flow directly. Self-contained adoption is a planned later milestone.
 
 **Debrief convention**: after each shipped pitch, run `spacedock:debrief` to write a session debrief under `docs/<wf>/_debriefs/<date>-<seq>.md`. Debriefs follow the schema in `references/debrief-schema.yaml` (required sections: `## Shipped`, `## Filed (backlog)`, `## Issues — Workflow`, `## Issues — Spacedock`, `## Non-PR commits (workflow-only)`, `## Observations`, `## Decisions`, `## What's Next`). When a session had review-loop churn, CI reruns, stale-head problems, or workflow surprise, apply `_mods/debrief-guardrail-harvest.md` and include `## Guardrail Harvest`. The `spacebridge:debrief-promote` skill aggregates cross-project debrief patterns and promotes STRONG signals back into plugin canonical docs.
 
