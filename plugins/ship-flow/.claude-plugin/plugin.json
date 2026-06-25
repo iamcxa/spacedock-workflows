@@ -1,11 +1,11 @@
 {
   "name": "ship-flow",
-  "version": "0.7.0-rc.7",
+  "version": "0.7.0",
   "description": "Ship-focused development pipeline. SHAPE once with captain, then agents autonomously plan → execute → ship.",
   "author": {
     "name": "Kent"
   },
-  "repository": "https://github.com/spacedock-dev/spacebridge",
+  "repository": "https://github.com/iamcxa/spacedock-workflows",
   "license": "Apache-2.0",
   "keywords": [
     "workflow",
