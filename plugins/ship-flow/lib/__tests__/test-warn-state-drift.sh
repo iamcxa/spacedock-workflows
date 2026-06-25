@@ -662,11 +662,29 @@ PATH="$TMP_DIR/bin:$PATH"
 # Hermetic "no spacedock" PATH: symlink every tool the hook needs, but
 # deliberately omit `spacedock`, so the auto-fix discovery (`command -v
 # spacedock`) returns empty even on hosts where spacedock is installed.
+#
+# Resolution strategy: `command -pv` first (canonical OS PATH, bypasses shell
+# function wrappers and version-manager shims), then `command -v` as fallback
+# for tools that live only in Homebrew/pyenv (e.g. timeout on macOS). Only
+# accept absolute paths — a non-absolute result means a shell function or
+# broken shim whose symlink would be self-referencing and unusable.
+#
+# Why this matters for cwd-independence (the portability bug fixed here):
+#   - Claude Code wraps grep/find as shell functions; `command -v grep` → "grep"
+#     (not an absolute path) → `ln -sf grep /nospacedock/grep` creates a
+#     self-referencing symlink → every grep call inside the hook silently fails
+#   - `command -v python3` → pyenv shim; shim calls grep+cut to resolve version;
+#     grep broken in hermetic env → pyenv shim spins in an infinite loop → hang
+#   - Both failures are cwd-independent bugs that only surface when the test's
+#     surrounding shell session happens to have these function/shim wrappers
+#     active, which differs across invocation contexts.
 NOSPACEDOCK_BIN="$TMP_DIR/nospacedock-bin"
 mkdir -p "$NOSPACEDOCK_BIN"
 for tool in bash sh env git awk grep tr basename dirname find sort tail head timeout date python3 mktemp cat sed; do
-  tool_path="$(command -v "$tool" 2>/dev/null || true)"
-  [ -n "$tool_path" ] && ln -sf "$tool_path" "$NOSPACEDOCK_BIN/$tool"
+  # Prefer standard-PATH canonical binary; fall back to full PATH for
+  # Homebrew-only tools (e.g. timeout, bash 5.x). Skip if not absolute.
+  tool_path="$(command -pv "$tool" 2>/dev/null || command -v "$tool" 2>/dev/null || true)"
+  [[ "$tool_path" == /* ]] && ln -sf "$tool_path" "$NOSPACEDOCK_BIN/$tool"
 done
 # Fake gh from the fixture (no spacedock) so PR re-probe still works.
 ln -sf "$TMP_DIR/bin/gh" "$NOSPACEDOCK_BIN/gh"
