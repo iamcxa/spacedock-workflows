@@ -1,0 +1,7 @@
+{
+  "name": "spacedock-workflows",
+  "owner": { "name": "Kent", "email": "duckbaseco@gmail.com" },
+  "plugins": [
+    { "name": "ship-flow", "source": "./plugins/ship-flow", "version": "0.7.0-rc.7" }
+  ]
+}
