@@ -311,40 +311,56 @@ Run: `grep -rn "spacedock:overhaul" plugins/ship-flow/` → Expected: no output.
 - [ ] **Step 3:** Verify the README adoption section and `workflow-template.yaml` header state the same thing (grep both).
 - [ ] **Step 4: Commit** (`docs(ship-flow): state one honest deferred adoption story`).
 
-### Task 7: B5 — test / CI decoupling (fresh-clone green)
+### Task 7: B5 — test / CI decoupling (fresh-clone green, three-state ledger)
+
+**SO-corrected scope (empirical fresh-clone census):** 116 tests → **74 pass / 33 hard-fail / 9 hang**. Actionable surface ≈ **42** (33 hard-fail + 9 hang), NOT ~10-12 and NOT ~70. The 9 hangs include `test-check-invariants.sh` itself (the release gate's gate-1) — the suite is not safely runnable to completion without a bounded timeout wrapper. Two false-green classes to kill: (a) `test-render-fidelity-check.sh` prints `SKIP` + rc=0 (decoupled-by-absence, not genuine); (b) `test-bidirectional-lifecycle-readme.sh` passes only because README still has dangling strings (flips red after T5 — must be co-fixed). Audit C.5 is wrong: `test-debrief-schema.sh` hard-fails at the `_debriefs/*.md` glob (lines 19-21), NOT graceful at the CARLOVE line 23.
 
 **Files:**
-- Modify: the test files in the audit's `B5` list (verified floor in Task 3 Step 3), `plugins/ship-flow/lib/__tests__/test-bidirectional-lifecycle-readme.sh`, `plugins/ship-flow/scripts/bump-version.sh`, `plugins/ship-flow/lib/sync-workflow-sot.sh`
+- Modify: the B5 test files (Task 3 audit list), `lib/__tests__/test-bidirectional-lifecycle-readme.sh`, `lib/__tests__/test-debrief-schema.sh`, `scripts/bump-version.sh`, `lib/sync-workflow-sot.sh`, `bin/check-invariants.sh` (hang)
+- Create: `lib/__tests__/integration/` (adopter-only tier) + an explicit allowlist of what standalone CI runs
 
-- [ ] **Step 1: Reproduce the clean-clone failure**
-
-Run the suite as if standalone:
-```bash
-cd /tmp && rm -rf ff && git clone /Users/kent/conductor/workspaces/spacedock-workflows/yangon ff
-cd ff/plugins/ship-flow && CI=true bash lib/__tests__/test-designer-skills-available.sh; echo "exit=$?"
-```
-Expected: FAIL (monorepo `.claude/settings.json` / `docs/ship-flow/` missing).
-
-- [ ] **Step 2: Decouple instance-coupled tests** — for each, either (a) point it at a local fixture/temp-dir stub instead of walking to monorepo paths, or (b) move it to an explicitly-skipped adopter-only integration tier (a `lib/__tests__/integration/` dir the standalone CI does not run, with a header comment explaining why). Choose per the audit's recommendation.
-
-- [ ] **Step 3: Fix the contradiction test** — `test-bidirectional-lifecycle-readme.sh:9-11` currently asserts the README MUST cite `workflow-adopt`/`workflow-sync`. Update it to match the Task 6 honest deferred statement (assert the deferred-adoption note exists, not the dangling command names).
-
-- [ ] **Step 4: Strip absolute author paths** — `test-debrief-schema.sh:23`, `test-merged-pr-closeout-reconciler.sh:9` → fixtures / env-overridable defaults with a portable fallback.
-
-- [ ] **Step 5: Add bin node tests to the verification path** — `scripts/bump-version.sh` (and the CI command) must also run `node --test plugins/ship-flow/bin/*.test.mjs`.
-
-- [ ] **Step 6: Verify fresh-clone green**
+- [ ] **Step 1: Census the fresh clone — classify three ways (fail / hang / skip-pass)**
 
 ```bash
 cd /tmp && rm -rf ff && git clone /Users/kent/conductor/workspaces/spacedock-workflows/yangon ff
 cd ff/plugins/ship-flow
-CI=true bash bin/check-invariants.sh; echo "inv=$?"
-for t in lib/__tests__/test-*.sh; do CI=true bash "$t" || echo "FAIL: $t"; done
-node --test bin/*.test.mjs
+for t in lib/__tests__/test-*.sh; do
+  out=$(CI=true timeout 20 bash "$t" 2>&1); rc=$?
+  if [ "$rc" = 124 ]; then echo "HANG: $t";
+  elif [ "$rc" != 0 ]; then echo "FAIL($rc): $t";
+  elif echo "$out" | grep -qiE 'SKIP|degrad|not found'; then echo "SKIPPASS: $t";
+  fi
+done
 ```
-Expected: all green, zero FAIL lines.
+Expected: ≈33 FAIL + 9 HANG + the SKIPPASS set. This census IS the authoritative work-list (supersedes any grep guess).
 
-- [ ] **Step 7: Commit** (`test(ship-flow): decouple suite from monorepo for standalone CI`).
+- [ ] **Step 2: Resolve each non-PASS test into exactly one of three states (the ledger).** For every FAIL/HANG/SKIPPASS test, choose: **(a) PASS** — rewrite to a local fixture/temp-dir stub so it genuinely exercises the assertion with no monorepo path; **(b) RELOCATED** — move to `lib/__tests__/integration/` (an adopter-only tier standalone CI does NOT run), with a header comment naming the host artifact it needs and why; **(c) DELETED** — only if the test asserts the dogfood instance and has no standalone meaning. **Forbidden:** a test that prints `SKIP`/`degraded`/`not found` and returns rc=0 while remaining in the default suite (that is the false-green being eliminated). The integration tier is excluded by an explicit allowlist, never by silent skip.
+
+- [ ] **Step 3: Fix the 9 hangs** — wrap the suite runner with a bounded `timeout` AND fix/relocate each hanging test so it terminates. `test-check-invariants.sh` hanging is a gate-blocker — it must run to completion on a fresh clone (fix the hang in-place or scope its inputs).
+
+- [ ] **Step 4: Fix the contradiction test** — `test-bidirectional-lifecycle-readme.sh:9-11` asserts the README MUST cite `workflow-adopt`/`workflow-sync`. Co-fix with T5/T6: assert the honest deferred-adoption note exists, not the dangling command names.
+
+- [ ] **Step 5: Fix `test-debrief-schema.sh`** — the real hard-fail is the `_debriefs/*.md` glob loop at lines 19-21 (guard empty/absent dir), NOT just the CARLOVE absolute path at line 23. Fix both: guard the glob AND remove/neutralise `/Users/kent/...` paths (also `test-merged-pr-closeout-reconciler.sh:9`).
+
+- [ ] **Step 6: Add bin node tests to the gate** — `scripts/bump-version.sh` and the standalone CI command must run `node --test plugins/ship-flow/bin/*.test.mjs` (currently excluded; bump-version.sh:76-85 runs only `test-*.sh`).
+
+- [ ] **Step 7: Verify fresh-clone green (three-state acceptance)**
+
+```bash
+cd /tmp && rm -rf ff && git clone /Users/kent/conductor/workspaces/spacedock-workflows/yangon ff
+cd ff/plugins/ship-flow
+CI=true timeout 60 bash bin/check-invariants.sh; echo "inv=$?"   # must terminate, rc 0
+fail=0; for t in lib/__tests__/test-*.sh; do
+  out=$(CI=true timeout 20 bash "$t" 2>&1); rc=$?
+  [ "$rc" = 0 ] || { echo "NONZERO($rc): $t"; fail=1; }
+  echo "$out" | grep -qiE 'SKIP|degrad|not found' && { echo "SKIPPASS-IN-SUITE: $t"; fail=1; }
+done
+node --test bin/*.test.mjs || fail=1
+echo "RESULT fail=$fail"
+```
+Expected: `inv=0` (terminates), zero NONZERO, zero SKIPPASS-IN-SUITE, bin node tests green → `fail=0`.
+
+- [ ] **Step 8: Produce the before/after ledger table + commit** — a table in the report: each non-PASS test → {fixture | relocated | deleted} + the line it failed/hung on. Commit (`test(ship-flow): decouple suite from monorepo for standalone CI (three-state ledger)`).
 
 ### Task 8: B4 — cosmetic fixture version refresh
 
@@ -353,20 +369,32 @@ Expected: all green, zero FAIL lines.
 
 - [ ] **Step 1:** Update fixture `commissioned-by: spacedock@…` stamps to a current-era value for cosmetic consistency (runtime is version-agnostic; this changes nothing functional). - [ ] **Step 2:** Re-run the suite (Task 7 Step 6) → green. - [ ] **Step 3: Commit** (`test(ship-flow): refresh fixture spacedock version stamps`).
 
-### Task 9: AC6 — downgrade existing Codex runtime claims
+### Task 9: AC6 — precise Codex statement + fix CODEX env-marker bug
+
+**SO correction (verified):** the `ship` entry's Codex branch is a **legitimate delegation**, not a false claim — `spacedock 0.22.0` first-officer + ensign are genuinely tri-platform with real `references/codex-*-runtime.md` adapters. So a blanket "downgrade Codex as not-supported" is the WRONG edit (it understates a working delegation). There is also a real consistency BUG: `skills/ship/SKILL.md:24` detects Codex via `CODEX_HOME`, but spacedock 0.22.0 detects via `CODEX_THREAD_ID` (first-officer/SKILL.md:31, ensign/SKILL.md:14) — and `lib/__tests__/test-ship-first-officer-bridge.sh:40` hard-asserts the wrong var.
 
 **Files:**
-- Modify: `plugins/ship-flow/skills/ship/SKILL.md` (lines ~20, ~157), `plugins/ship-flow/README.md`
+- Modify: `plugins/ship-flow/skills/ship/SKILL.md` (line ~24 marker + bridge prose), `plugins/ship-flow/lib/__tests__/test-ship-first-officer-bridge.sh` (line ~40), `plugins/ship-flow/README.md`
 
-- [ ] **Step 1:** In `ship/SKILL.md`, downgrade/flag the Codex-runtime bridge language (the "bridge applies in Codex" + Codex dispatch evidence guard) as **not-yet-supported this release** — keep it accurate, do not claim ship-flow runs under Codex. Preserve the `/codex` review-tool references (legitimate; that is the OpenAI Codex CLI review gate, not ship-flow-on-Codex). - [ ] **Step 2:** Ensure README's Codex note matches (Claude-only today). - [ ] **Step 3:** Verify: `grep -rni "codex" plugins/ship-flow/skills/ship/SKILL.md` shows no un-flagged "runs on Codex" claim. - [ ] **Step 4: Commit** (`docs(ship-flow): mark Codex runtime support as not-yet-available`).
+- [ ] **Step 1: Make the precise honest statement** (in `ship/SKILL.md` + README), verbatim intent: *"`/ship` entry delegates to `spacedock:first-officer`, which supports Claude Code, Codex, and Pi in spacedock 0.22.0 — the entry bridge is Codex-capable. Ship-flow's own stage-dispatch skills (ship-execute, ship-shape ensign dispatch, etc.) are Claude-native and have NOT been verified end-to-end under Codex in 0.7.0 — full-pipeline Codex execution is unverified, not unsupported-by-design."* Do NOT blanket-downgrade. Keep `/codex` review-tool references (the OpenAI Codex CLI review gate — legitimate, unrelated).
+
+- [ ] **Step 2: Fix the env-marker bug** — `skills/ship/SKILL.md:24` `CODEX_HOME` → `CODEX_THREAD_ID` (match the spacedock contract it delegates to), and update `lib/__tests__/test-ship-first-officer-bridge.sh:40` to assert `CODEX_THREAD_ID`. Run that test → green.
+
+- [ ] **Step 3:** Ensure README's Codex note matches the precise statement (delegation Codex-capable; ship-flow pipeline Codex-unverified this release).
+
+- [ ] **Step 4:** Verify: `grep -n "CODEX_HOME" plugins/ship-flow/` returns nothing; the bridge test passes asserting `CODEX_THREAD_ID`.
+
+- [ ] **Step 5: Commit** (`fix(ship-flow): align Codex env marker to CODEX_THREAD_ID + precise Codex-support statement`).
 
 ---
 
 ## Wave 4 — Verification + Push Gate
 
-### Task 10: AC1 — fresh-clone green
+### Task 10: AC1 — fresh-clone green (three-state ledger acceptance)
 
-- [ ] **Step 1:** Clone yangon to `/tmp`, run `CI=true bash bin/check-invariants.sh`, the `lib/__tests__/test-*.sh` suite, and `node --test bin/*.test.mjs`. Expected: all green, no reachable monorepo paths. - [ ] **Step 2:** `grep -rnE "\.\./\.\./\.\./\.\.|docs/ship-flow/README|/\.claude/settings\.json" plugins/ship-flow/lib/__tests__` → no active (non-integration-tier) hits.
+AC1 acceptance (closes the false-green hole): on a fresh clone, `CI=true` over the default suite + `node --test bin/*.test.mjs` yields **zero rc≠0, zero hangs (every test terminates under a bounded timeout), and zero in-suite tests emit a `SKIP`/`degrade`/`not found` line**. Any skip-on-absence test is RELOCATED to the adopter-only integration tier (enumerated by explicit allowlist, NOT silent-skipped) or rewritten to a local fixture.
+
+- [ ] **Step 1:** Run the Task 7 Step 7 three-state census on a fresh `/tmp` clone. Expected: `inv=0` (terminates), zero NONZERO, zero SKIPPASS-IN-SUITE, bin node tests green. - [ ] **Step 2:** `grep -rnE "\.\./\.\./\.\./\.\.|docs/ship-flow/README|/\.claude/settings\.json|/Users/kent" plugins/ship-flow/lib/__tests__ --exclude-dir=integration` → no hits outside the integration tier. - [ ] **Step 3:** Confirm the `lib/__tests__/integration/` allowlist is explicit and that the default-suite runner excludes it by that allowlist (not by silent skip).
 
 ### Task 11: AC2 — install + skill/hook smoke
 

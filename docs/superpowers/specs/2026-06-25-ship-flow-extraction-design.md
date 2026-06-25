@@ -262,22 +262,32 @@ adoption-path reference as `deferred (spacebridge-dependent)` vs `fixable`;
   across both `.claude-plugin/` and `.codex-plugin/`, but this foot stamps Claude only.
 - The repo README states plainly: **Claude only today; Codex functionalisation is a later foot.**
 - **No `.codex-plugin/plugin.json` is created.**
-- **Existing Codex-runtime claims must be addressed (from review):** absence of a
-  manifest is NOT sufficient to avoid claiming support. `skills/ship/SKILL.md:20,157`
-  already contain Codex-runtime bridge language ("the bridge applies in Codex",
-  Codex dispatch evidence guard). These are claims that ship-flow runs under Codex
-  and must be downgraded or clearly flagged as not-yet-supported. (Distinguish:
-  `README.md:127,268` reference the `/codex` **review tool** — legitimate, keep;
-  the `ship` skill bridge language is the "runs on Codex" claim — downgrade.)
+- **Existing Codex references must be made PRECISE, not blanket-downgraded (SO
+  correction):** `skills/ship/SKILL.md` has a Codex branch that loads
+  `spacedock:first-officer`. SO verified this is a **legitimate delegation** — the
+  spacedock 0.22.0 FO + ensign are genuinely tri-platform with real
+  `references/codex-*-runtime.md` adapters. So a blanket "downgrade Codex as
+  unsupported" would understate a working delegation. The honest statement: the
+  entry bridge is Codex-capable (delegates to tri-platform spacedock FO);
+  ship-flow's own stage-dispatch skills are Claude-native and Codex-unverified this
+  release. There is also a real consistency BUG to fix: `ship/SKILL.md:24` detects
+  Codex via `CODEX_HOME`, but spacedock 0.22.0 uses `CODEX_THREAD_ID` — reconcile
+  the marker and the test that asserts it. (`/codex` review-tool references are the
+  OpenAI Codex CLI review gate — legitimate, keep.)
 - Layout and marketplace `source` do not preclude adding a Codex manifest later.
 
 ## 8. Acceptance criteria (testable definition of "consistent")
 
 - **AC1** On a **fresh clone** of the new repo (no monorepo parent),
-  `CI=true bash plugins/ship-flow/bin/check-invariants.sh`, the
-  `lib/__tests__` suite, AND `node --test plugins/ship-flow/bin/*.test.mjs` are all
-  green — with zero references to monorepo-only paths (`docs/ship-flow/`, root
-  `.claude/settings.json`) reachable by the suite. (Depends on B5.)
+  `CI=true bash plugins/ship-flow/bin/check-invariants.sh`, the `lib/__tests__`
+  suite, AND `node --test plugins/ship-flow/bin/*.test.mjs` pass under a
+  **three-state ledger**: zero `rc≠0`, **zero hangs** (every test terminates under
+  a bounded timeout — verified census: 9 tests hang on a raw fresh clone, incl.
+  `check-invariants.sh` itself), and **zero in-suite tests emit a `SKIP`/`degrade`/
+  `not found` line** (skip-on-absence false-green is forbidden in the default
+  suite). Monorepo-coupled tests are RELOCATED to an adopter-only
+  `lib/__tests__/integration/` tier (excluded by explicit allowlist, never silent
+  skip) or rewritten to local fixtures. (Depends on B5.)
 - **AC2** From the GitHub remote, `/plugin marketplace add iamcxa/spacedock-workflows`
   then `/plugin install ship-flow` succeeds, AND a smoke check invokes one skill
   and exercises one hook so that `${CLAUDE_PLUGIN_ROOT}` resolves in the installed
@@ -295,9 +305,13 @@ adoption-path reference as `deferred (spacebridge-dependent)` vs `fixable`;
   adoption is a later foot. This statement appears in the repo README and the
   `workflow-template.yaml` header, and the previously-conflicting adoption surfaces
   (B3) agree with it. We do NOT assert `refit` reports up-to-date.
-- **AC6** Codex: no `.codex-plugin/` present; README marks Claude-only; existing
-  Codex-runtime bridge claims (§7) are downgraded/flagged; release tool has the
-  dual-stamp capability reserved.
+- **AC6** Codex: no `.codex-plugin/` present; release tool has dual-stamp
+  capability reserved; the `ship` entry carries the **precise** Codex statement
+  (entry delegates to tri-platform `spacedock:first-officer` = Codex-capable;
+  ship-flow's own stage-dispatch skills are Claude-native and Codex-unverified this
+  release — NOT a blanket "unsupported"); and the env-marker bug is fixed
+  (`CODEX_HOME` → `CODEX_THREAD_ID`, matching the spacedock contract, with the
+  bridge test asserting the correct var).
 
 ## 9. Execution approach (FO mode)
 
