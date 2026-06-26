@@ -62,7 +62,7 @@ jobs:
         if: steps.ship_flow_scope.outputs.full_suite == 'false'
         run: |
           echo "Docs-only or non-plugin change — running lightweight gate only"
-          bash plugins/ship-flow/scripts/check-invariants.sh
+          CI=true bash plugins/ship-flow/bin/check-invariants.sh
 
       - name: Run full ship-flow shell test suite
         if: steps.ship_flow_scope.outputs.full_suite == 'true'
