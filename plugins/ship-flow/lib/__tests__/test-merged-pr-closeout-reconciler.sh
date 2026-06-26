@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
 HELPER="${PLUGIN_ROOT}/bin/merged-pr-closeout-reconciler.sh"
-STATUS_BIN="${STATUS_BIN:-/Users/kent/.codex/plugins/cache/spacedock/spacedock/0.10.2/skills/commission/bin/status}"
+STATUS_BIN="${STATUS_BIN:-}"
 FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/merged-pr-closeout-reconciler"
 
 PASS=0
