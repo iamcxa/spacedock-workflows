@@ -321,18 +321,19 @@ Run: `grep -rn "spacedock:overhaul" plugins/ship-flow/` → Expected: no output.
 
 - [ ] **Step 1: Census the fresh clone — classify three ways (fail / hang / skip-pass)**
 
+**CRITICAL cwd:** run the suite from the **repo root** (`cd ff`), NOT from `ff/plugins/ship-flow` — the canonical gate does `cd repo_root` (`scripts/bump-version.sh:156`) and several tests resolve `plugins/ship-flow/...` repo-root-relative paths (e.g. `registry-resolve.sh` `check_m2_knowledge`). Running from the plugin dir produces FALSE failures (path-doubling). Use a 60s+ per-test timeout (warn-state-drift is the slowest).
 ```bash
 cd /tmp && rm -rf ff && git clone /Users/kent/conductor/workspaces/spacedock-workflows/yangon ff
-cd ff/plugins/ship-flow
-for t in lib/__tests__/test-*.sh; do
-  out=$(CI=true timeout 20 bash "$t" 2>&1); rc=$?
+cd ff   # REPO ROOT — matches bump-version.sh cd repo_root
+for t in plugins/ship-flow/lib/__tests__/test-*.sh; do
+  out=$(CI=true timeout 90 bash "$t" 2>&1); rc=$?
   if [ "$rc" = 124 ]; then echo "HANG: $t";
   elif [ "$rc" != 0 ]; then echo "FAIL($rc): $t";
-  elif echo "$out" | grep -qiE 'SKIP|degrad|not found'; then echo "SKIPPASS: $t";
+  elif echo "$out" | grep -qE '^[[:space:]]*SKIP:|skipping all|absent.*skipping'; then echo "SKIPPASS: $t";
   fi
 done
 ```
-Expected: ≈33 FAIL + 9 HANG + the SKIPPASS set. This census IS the authoritative work-list (supersedes any grep guess).
+Note: detect true false-green narrowly — a top-level `SKIP:`/`skipping all`/`absent…skipping` abort line, NOT any substring "skip"/"not found" (those appear in legitimate PASS assertions and over-flag). The authoritative signal is rc≠0 / rc=124 plus a genuine skip-on-absence abort. This census IS the work-list (supersedes any grep guess).
 
 - [ ] **Step 2: Resolve each non-PASS test into exactly one of three states (the ledger).** For every FAIL/HANG/SKIPPASS test, choose: **(a) PASS** — rewrite to a local fixture/temp-dir stub so it genuinely exercises the assertion with no monorepo path; **(b) RELOCATED** — move to `lib/__tests__/integration/` (an adopter-only tier standalone CI does NOT run), with a header comment naming the host artifact it needs and why; **(c) DELETED** — only if the test asserts the dogfood instance and has no standalone meaning. **Forbidden:** a test that prints `SKIP`/`degraded`/`not found` and returns rc=0 while remaining in the default suite (that is the false-green being eliminated). The integration tier is excluded by an explicit allowlist, never by silent skip.
 
@@ -348,17 +349,17 @@ Expected: ≈33 FAIL + 9 HANG + the SKIPPASS set. This census IS the authoritati
 
 ```bash
 cd /tmp && rm -rf ff && git clone /Users/kent/conductor/workspaces/spacedock-workflows/yangon ff
-cd ff/plugins/ship-flow
-CI=true timeout 60 bash bin/check-invariants.sh; echo "inv=$?"   # must terminate, rc 0
-fail=0; for t in lib/__tests__/test-*.sh; do
-  out=$(CI=true timeout 20 bash "$t" 2>&1); rc=$?
+cd ff   # REPO ROOT (see Step 1 cwd note)
+CI=true timeout 90 bash plugins/ship-flow/bin/check-invariants.sh; echo "inv=$?"   # must terminate, rc 0
+fail=0; for t in plugins/ship-flow/lib/__tests__/test-*.sh; do
+  out=$(CI=true timeout 90 bash "$t" 2>&1); rc=$?
   [ "$rc" = 0 ] || { echo "NONZERO($rc): $t"; fail=1; }
-  echo "$out" | grep -qiE 'SKIP|degrad|not found' && { echo "SKIPPASS-IN-SUITE: $t"; fail=1; }
+  echo "$out" | grep -qE '^[[:space:]]*SKIP:|skipping all|absent.*skipping' && { echo "SKIPPASS-IN-SUITE: $t"; fail=1; }
 done
-node --test bin/*.test.mjs || fail=1
+node --test plugins/ship-flow/bin/*.test.mjs || fail=1
 echo "RESULT fail=$fail"
 ```
-Expected: `inv=0` (terminates), zero NONZERO, zero SKIPPASS-IN-SUITE, bin node tests green → `fail=0`.
+Expected (ACHIEVED 2026-06-26): `inv=0` (2s), pass=101, zero NONZERO, zero SKIPPASS-IN-SUITE, node green → `fail=0`.
 
 - [ ] **Step 8: Produce the before/after ledger table + commit** — a table in the report: each non-PASS test → {fixture | relocated | deleted} + the line it failed/hung on. Commit (`test(ship-flow): decouple suite from monorepo for standalone CI (three-state ledger)`).
 
