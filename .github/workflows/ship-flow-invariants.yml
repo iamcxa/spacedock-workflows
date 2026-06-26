@@ -68,13 +68,18 @@ jobs:
         if: steps.ship_flow_scope.outputs.full_suite == 'true'
         timeout-minutes: 10
         run: |
-          cd plugins/ship-flow
-          echo "Running full standalone test suite..."
+          # MUST run from repo root (NOT cd plugins/ship-flow): several tests
+          # resolve plugins/ship-flow/... repo-root-relative (e.g. registry-resolve
+          # check_m2_knowledge); running from the plugin dir path-doubles → false fail.
+          # Matches bump-version.sh which does `cd repo_root`.
+          echo "Running full standalone test suite (from repo root)..."
           FAILED=0
-          for t in lib/__tests__/test-*.sh; do
+          for t in plugins/ship-flow/lib/__tests__/test-*.sh; do
             echo "  == $(basename "$t") =="
-            # test-warn-state-drift.sh takes ~22-25s; allow up to 60s per test
-            if ! timeout 60 CI=true bash "$t"; then
+            # CI=true must precede timeout (env assignment), not be timeout's command.
+            # warn-state-drift is the slowest (~7-25s); allow up to 90s per test.
+            if ! CI=true timeout 90 bash "$t"; then
+              echo "  FAILED: $t"
               FAILED=$((FAILED + 1))
             fi
           done
