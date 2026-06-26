@@ -15,9 +15,9 @@ Ship-flow is a staged feature-delivery pipeline for autonomous Claude Code agent
 
 ## Compatibility
 
-> **Claude Code only today. Codex support is a later milestone.**
+> **Entry bridge is Codex-capable; full ship-flow pipeline execution under Codex is unverified this release.**
 
-ship-flow skills use Claude Code-specific primitives (hooks, slash commands, SendMessage, worktrees). Codex runtime is not supported in this release and will be a separate tracked milestone.
+The `/ship` entry point delegates to `spacedock:first-officer`, which is tri-platform (Claude Code, Codex, Pi) in spacedock 0.22.0 — so the entry bridge itself is Codex-capable. Ship-flow's own stage-dispatch skills (ship-execute, ship-shape ensign dispatch, etc.) use Claude Code-specific primitives (hooks, slash commands, SendMessage, worktrees) and have NOT been verified end-to-end under Codex in 0.7.0. Full ship-flow pipeline execution under Codex is unverified, not unsupported-by-design. Codex functionalization of the full pipeline is a tracked later milestone.
 
 ## Adoption gap — 0.7.0 is not self-contained
 

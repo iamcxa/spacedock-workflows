@@ -4,6 +4,10 @@
 ## to `spacedock:commission` to scaffold `docs/<wf>/`. That requires the `spacebridge` plugin.
 ## Without spacebridge: scaffold `docs/<wf>/` manually from this template, or use
 ## `/spacedock:commission` with ship-flow directly. Self-contained adoption is a planned later milestone.
+## Vendored-layout requirement (0.7.0): ship-flow must be vendored at `plugins/ship-flow/` in
+## the consuming repo (dogfood layout). Stage skills invoke helpers via hardcoded
+## `bash plugins/ship-flow/lib/...` paths; running as a pure marketplace-installed plugin is
+## the deferred self-adoption milestone and is NOT supported in 0.7.0.
 
 name: ship-flow
 description: "Ship-focused pipeline. SHAPE once with captain, then agents run design for UI/domain/contract-bearing work before plan → execute → verify → ship."

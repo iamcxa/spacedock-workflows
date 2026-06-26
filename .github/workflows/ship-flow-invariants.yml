@@ -6,10 +6,16 @@ on:
     paths:
       - 'plugins/ship-flow/**'
       - '.github/workflows/ship-flow-invariants.yml'
+      - '.claude-plugin/marketplace.json'
+      - 'README.md'
+      - 'scripts/**'
   pull_request:
     paths:
       - 'plugins/ship-flow/**'
       - '.github/workflows/ship-flow-invariants.yml'
+      - '.claude-plugin/marketplace.json'
+      - 'README.md'
+      - 'scripts/**'
 
 jobs:
   invariants:
@@ -82,3 +88,9 @@ jobs:
         if: steps.ship_flow_scope.outputs.full_suite == 'true'
         run: |
           node --test plugins/ship-flow/bin/*.test.mjs
+
+      - name: Check version triple consistency
+        run: bash scripts/check-version-triple.sh
+
+      - name: Check no dangling references
+        run: bash scripts/check-no-dangling.sh

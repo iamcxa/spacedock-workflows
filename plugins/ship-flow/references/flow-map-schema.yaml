@@ -80,6 +80,7 @@ maps:
         title: "Shipped"
         purpose: "History of shipped entities"
         requires_diagram: false
+  # ILLUSTRATIVE EXAMPLE — sample map registration from the source monorepo; adopters register their own paths here.
   plugins/spacebridge/design/design-system.md:
     path: "plugins/spacebridge/design/design-system.md"
     sections:

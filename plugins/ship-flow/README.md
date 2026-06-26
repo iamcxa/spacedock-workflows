@@ -371,6 +371,8 @@ The cycle: plugin knowledge flows **down** to projects on adoption/sync, and pro
 | Promote learnings | Projects accumulate `_debriefs/` | `spacebridge:debrief-promote` | Aggregate STRONG/WARN patterns → plugin canonical |
 
 > **Adoption milestone note (0.7.0):** Adopting ship-flow into a project is not self-contained in 0.7.0. The workflow instance is bootstrapped by `spacebridge:workflow-adopt` (which discovers `workflow-template.yaml` and bridges into `spacedock:commission`), so it requires the `spacebridge` plugin — or a manual scaffold. Self-contained adoption is a planned later milestone.
+>
+> **Vendored-layout requirement (0.7.0):** Ship-flow 0.7.0 assumes it is vendored at `plugins/ship-flow/` in the consuming repo (the dogfood layout the stage skills' `bash plugins/ship-flow/lib/...` helper paths expect). Running it as a pure marketplace-installed plugin — where skills resolve helpers via `${CLAUDE_PLUGIN_ROOT}` — is the deferred self-adoption milestone and is NOT supported in 0.7.0.
 
 **`_debriefs/` convention**: each project accumulates session debriefs under `docs/<wf>/_debriefs/<date>-<seq>.md` (schema: `references/debrief-schema.yaml`). After ≥2 projects have debriefs, run `spacebridge:debrief-promote` to surface cross-project STRONG signals back into plugin docs.
 
