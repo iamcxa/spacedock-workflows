@@ -580,6 +580,7 @@ Use grep-friendly `key: value` lines:
 - Atomic writer: `plugins/ship-flow/lib/shape-confirm.sh` (`--layout=folder` lands Wave 5 of #085).
 - Rabbit-hole capture: `plugins/ship-flow/skills/add-todos/SKILL.md`.
 - Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
+- Reverse-recovery audit mod (brownfield: assume the abstraction exists, classify with evidence, only greenfield confirmed MISSING): `docs/ship-flow/_mods/reverse-recovery-audit.md`; plugin-canonical copy at `plugins/ship-flow/_mods/reverse-recovery-audit.md`.
 - Layer A: `superpowers:brainstorming` (Mode B), `superpowers:writing-skills` (Mode C).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
 - Hand-off schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.sharp.hand_off_to_design`.
