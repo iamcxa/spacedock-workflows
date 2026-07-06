@@ -123,6 +123,8 @@ Stage transitions within a pitch should prefer SendMessage to a named teammate o
 
 Fresh-subagent reserved for: (a) adversarial review across teammates; (b) clearly separate domain; (c) explicit captain request; (d) cross-review gate between stages (structured review prompt, ~5min).
 
+**Verbatim constraint carriage (dispatch packaging)**: any dispatch prompt packaged from an entity's plan/spec (primary SendMessage, fresh-subagent fallback, or nested re-dispatch) carries the plan/spec constraints **verbatim** — exact flags, paths, thresholds, and never/always qualifiers are load-bearing; paraphrasing a constraint during packaging is a defect. Worker-side half: `lib/build-stage-dispatch-prompt.sh` emits the matching `### Verbatim constraint carriage` instruction in every generated dispatch prompt.
+
 **Rule A Fallback (when TeamCreate / SendMessage fails)**:
 
 TeamCreate and SendMessage are experimental primitives — Kent's MEMORY `agent-teams-experimental-gotchas.md` documents three known failure modes (tmux silent fail, phantom teams, dead SendMessage). Fresh-Agent dispatches can also stall on the 600s stream watchdog (pitch 086 live evidence: 2 of 3 subagents stalled).
