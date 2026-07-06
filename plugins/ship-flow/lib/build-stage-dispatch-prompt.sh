@@ -141,6 +141,13 @@ completion blocker; do not report completion without the required Domain
 Registry Validation, ## Schema Design Output, or ## Intent Match Findings block
 for the triggered stage.
 
+### Verbatim constraint carriage
+
+Constraints quoted in this prompt are carried verbatim from the entity's
+plan/spec. Treat exact flags, paths, thresholds, and never/always qualifiers
+as load-bearing. When you re-state a constraint (in sub-dispatches, todos, or
+reports), quote it verbatim — never paraphrase or summarize it.
+
 Send this assignment to ${teammate} only after the charter block above is
 present in the dispatch body.
 PROMPT
