@@ -427,7 +427,7 @@ check_cross_review_gate() {
 
 check_layer_a_table_parity() {
   # Verify every stage SKILL.md that declares a concrete Layer A delegate in
-  # the INVARIANTS.md master table (lines 157-168) carries BOTH:
+  # the INVARIANTS.md § "Layer A delegation table" carries BOTH:
   #   (1) the canonical H2 heading `## Layer A delegation (Principle 6 Rule B)`
   #   (2) a description-frontmatter prefix `description: "... Layer A delegation: ..."`
   #
@@ -456,11 +456,11 @@ check_layer_a_table_parity() {
     has_h2=$({ grep -cE "^## Layer A delegation" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
     has_desc=$({ grep -cE '^description:.*Layer A delegation:' "$skill_file" 2>/dev/null || true; } | tr -d ' ')
     if [ "${has_h2:-0}" = "0" ]; then
-      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md missing canonical \`## Layer A delegation (Principle 6 Rule B)\` H2 heading — INVARIANTS.md:157-168 master table declares a concrete Layer A delegate for this stage" >&2
+      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md missing canonical \`## Layer A delegation (Principle 6 Rule B)\` H2 heading — the INVARIANTS.md § \"Layer A delegation table\" declares a concrete Layer A delegate for this stage" >&2
       fail=1
     fi
     if [ "${has_desc:-0}" = "0" ]; then
-      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md frontmatter \`description:\` lacks \`Layer A delegation: ...\` prefix — required for structural parity with INVARIANTS.md:157-168 master table" >&2
+      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md frontmatter \`description:\` lacks \`Layer A delegation: ...\` prefix — required for structural parity with the INVARIANTS.md § \"Layer A delegation table\"" >&2
       fail=1
     fi
   done
@@ -470,7 +470,7 @@ check_layer_a_table_parity() {
     has_h2=$({ grep -cE "^## Layer A delegation" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
     has_exception=$({ grep -cE "Layer A exception" "$skill_file" 2>/dev/null || true; } | tr -d ' ')
     if [ "${has_h2:-0}" = "0" ] && [ "${has_exception:-0}" = "0" ]; then
-      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md is a multi-mode stage but has neither \`## Layer A delegation\` H2 nor a documented \`Layer A exception\` annotation — INVARIANTS.md:161-163 requires one form" >&2
+      echo "ERROR [layer-a-table-parity]: ${sk}/SKILL.md is a multi-mode stage but has neither \`## Layer A delegation\` H2 nor a documented \`Layer A exception\` annotation — INVARIANTS.md § \"Rule B (3-Layer Skill Architecture)\" EXCEPTION clause requires one form" >&2
       fail=1
     fi
   done
