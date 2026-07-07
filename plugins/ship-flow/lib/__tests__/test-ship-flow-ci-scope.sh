@@ -33,6 +33,16 @@ check "workflow triggers when ship-flow workflow changes" \
 check "workflow detects changed-file scope before full suite" \
   "grep -q 'id: ship_flow_scope' '${WORKFLOW}' && grep -q 'git diff --name-only' '${WORKFLOW}'"
 
+# The scope diff needs the PR base SHA and HEAD~1 — neither exists at depth 1,
+# so every checkout step must fetch full history. Scoped awk (not bare grep):
+# a commented-out `# fetch-depth: 0` or a mention outside a checkout step must
+# NOT satisfy this assertion.
+check "every checkout step fetches full history (fetch-depth: 0) for the scope diff" \
+  "awk '/- uses: actions\\/checkout/{if (in_step && !has_fd) bad=1; in_step=1; has_fd=0; steps++; next} in_step && /^      - /{if (!has_fd) bad=1; in_step=0} in_step && /^[[:space:]]*fetch-depth:[[:space:]]*0([[:space:]]|$)/{has_fd=1} END{if (in_step && !has_fd) bad=1; exit !(steps >= 1 && !bad)}' '${WORKFLOW}'"
+
+check "scope diff keeps a HEAD~1 fallback for unusable base SHAs" \
+  "grep -qF -- 'git diff --name-only HEAD~1 HEAD' '${WORKFLOW}'"
+
 check "full suite is limited to plugin or workflow changes" \
   "awk '/Run full ship-flow shell test suite/{in_step=1} in_step && /^      - name: / && !/Run full ship-flow shell test suite/{in_step=0} in_step && /if: steps\\.ship_flow_scope\\.outputs\\.full_suite == '\\''true'\\''/{found=1} END{exit !found}' '${WORKFLOW}'"
 
