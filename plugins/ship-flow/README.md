@@ -528,6 +528,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 - **`INVARIANTS.md`** — Principles 1-8 (hard grep-enforced + captain-gate checklist). Start here to understand WHY each rule exists.
 - **`references/entity-body-schema.yaml`** — structured section schema per stage. Source of truth for what sections each `{stage}.md` must contain.
 - **`references/flow-map-schema.yaml`** — canonical doc section-tag declarations.
+- **`references/pr-merge-paths.md`** — decision record: the plugin-native auto-merge stack (`bin/semantic-review-*` + `auto-merge-*`, ACTIVE) vs the adopter-native manual-merge path, and why adopter-side deprecation must never sweep plugin `bin/`.
 - **`docs/ship-flow/ship-shape-v2-implementation.md`** — #085 entity: full 6-wave redesign journal with rationale, decisions, and evidence. The case study for this flow's design.
 - **Individual SKILL.md files** under `skills/*/` — procedural detail per skill. Written concisely (opus-naturally-does applies).
 
