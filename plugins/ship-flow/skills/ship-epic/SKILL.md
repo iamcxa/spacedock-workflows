@@ -23,8 +23,8 @@ You run an epic's born-sharped children through the existing `/ship` pipeline **
 
 Resolve `WORKFLOW_DIR` from `docs/*/README.md` `entry-point:`. Then:
 
-1. **Plan** — `bash plugins/ship-flow/lib/dag-waves.sh --layers --from-workflow <WORKFLOW_DIR> --epic <epic-id>` → print the wave layers (situational awareness; this is the static parallel plan).
-2. **Ready set** — `bash plugins/ship-flow/lib/dag-waves.sh --ready --from-workflow <WORKFLOW_DIR> --epic <epic-id>` → children whose `depends-on` are all `done` and that are not themselves `done`.
+1. **Plan** — `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/dag-waves.sh" --layers --from-workflow <WORKFLOW_DIR> --epic <epic-id>` → print the wave layers (situational awareness; this is the static parallel plan).
+2. **Ready set** — `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/dag-waves.sh" --ready --from-workflow <WORKFLOW_DIR> --epic <epic-id>` → children whose `depends-on` are all `done` and that are not themselves `done`.
 3. **Classify** each ready child by reading its `index.md` frontmatter — **status first**. A born-sharped child's entry stage is `design` or `plan`; the `verify` and `ship` stages run `worktree: false` (README `stages`), so a missing `worktree` does NOT mean a child is fresh — it may be an advanced child mid-pipeline.
    - **fresh** — `status` is `design` or `plan` (entry stages) AND `worktree` empty AND `pr` empty. Not yet started → dispatch.
    - **in-flight** — everything else in the ready set: `status` is `execute`/`verify`/`ship` (already advanced — a missing worktree at `verify`/`ship` is expected, not a fresh signal), OR `worktree` set, OR `pr` set. Already running or PR open → do NOT dispatch.

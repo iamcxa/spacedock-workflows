@@ -63,7 +63,7 @@ Check entity frontmatter `pr_feedback_round`:
 Fetch PR reviews via VCS CLI (`gh pr view --json reviews,comments` for GitHub; `glab mr view` for GitLab). Classify each comment as BLOCKING (architecture / correctness) / NITS (style / naming) / OBSERVATIONS.
 
 - All NITS → log + close PR comment, no rollback (nits go in separate entity).
-- BLOCKING target = execute → write `## Execute Guidance` section (tagged `<!-- section:execute-guidance -->`) with flagged-items list; run `bash plugins/ship-flow/bin/pr-feedback-rollback.sh <entity-file> execute <pr#> <round>`.
+- BLOCKING target = execute → write `## Execute Guidance` section (tagged `<!-- section:execute-guidance -->`) with flagged-items list; run `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/pr-feedback-rollback.sh" <entity-file> execute <pr#> <round>`.
 - BLOCKING target = plan (architecture concern) → write `## Plan Guidance` section; rollback target=plan.
 
 Exit after rollback. FO re-dispatches ship-execute (or ship-plan) on next status cycle.
@@ -72,7 +72,7 @@ Exit after rollback. FO re-dispatches ship-execute (or ship-plan) on next status
 
 ### Step 1 — Read plan + build wave graph
 
-Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> plan`. Parse tasks: files, steps, verify commands, model hints, wave assignments.
+Record stage-start ISO. Extract via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" <entity-file> plan`. Parse tasks: files, steps, verify commands, model hints, wave assignments.
 
 Parse `skills_needed` from each task block. Accepted forms:
 - `**Skills needed:** {skills_needed: ["test", "tdd"]}`
@@ -96,7 +96,7 @@ If `skills_needed` is missing on a legacy plan, fallback to the existing density
 For every task with non-empty touched files, re-run adopter routing before dispatch:
 
 ```bash
-bash plugins/ship-flow/lib/resolve-skill-routing.sh \
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/resolve-skill-routing.sh" \
   --config=.claude/ship-flow/skill-routing.yaml \
   --files=<task-files>
 ```
@@ -110,10 +110,10 @@ Group by wave (0, 1, 2, ...). Wave dependency sanity: for each task in wave N, e
 ### Step 1.5 — Architecture snippet (ARCH_SNIPPET for troop context)
 
 ```bash
-ARCH_SNIPPET="$(bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md constraints 2>/dev/null || true)"
-TARGET=$(bash plugins/ship-flow/lib/extract-section.sh "$ENTITY_FILE" architecture-impact 2>/dev/null | awk '/^target_section:/ {print $2; exit}')
+ARCH_SNIPPET="$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-map.sh" ARCHITECTURE.md constraints 2>/dev/null || true)"
+TARGET=$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" "$ENTITY_FILE" architecture-impact 2>/dev/null | awk '/^target_section:/ {print $2; exit}')
 if [ -n "$TARGET" ] && [ "$TARGET" != "constraints" ]; then
-  ARCH_SNIPPET="${ARCH_SNIPPET}"$'\n\n'"$(bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md \"$TARGET\" 2>/dev/null || true)"
+  ARCH_SNIPPET="${ARCH_SNIPPET}"$'\n\n'"$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-map.sh" ARCHITECTURE.md \"$TARGET\" 2>/dev/null || true)"
 fi
 ```
 
@@ -138,7 +138,7 @@ Before dispatching a wave, write `execute-dispatch-manifest` into `execute.md` d
 - Task text from plan (verbatim).
 - Project / entity context.
 - `### Science Officer (EM) Stewardship Contract` block rendered with
-  `bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh`.
+  `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-stewardship-contract.sh"`.
   This stage-internal worker, task-reviewer, and execute cross-reviewer contract
   carries results, guidelines, resources, accountability, consequences. FO owns
   workflow clock, state, worktrees, dispatch mechanics, PR lifecycle, and stage
@@ -311,7 +311,7 @@ Verdict: **PROCEED** / **VETO** (loop to fix) / **PROMPT_CAPTAIN**. Each verdict
 
 ### Step 7 — Emit execute.md
 
-Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=execute --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; handles atomic commit + pathspec-lock).
+Write via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/write-stage-artifact.sh" --stage=execute --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; handles atomic commit + pathspec-lock).
 
 Execute.md sections: `## Execution Log` (per-task table), `## Issues Found`, `## Knowledge Captures` (D1/D2), `## Execute UAT` (first-pass AC), `## Execute Report` (status / stage_cost: Σ dispatches×model / tasks summary / knowledge capture counts / started/completed/duration).
 

@@ -126,7 +126,7 @@ captain-facing ship summary or PR-body composition gate, render and consume the
 shared upward report contract:
 
 ```bash
-bash plugins/ship-flow/lib/render-science-officer-em-upward-report-contract.sh
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-upward-report-contract.sh"
 ```
 
 The ship-final summary report uses `science_officer_em_upward_report` with
@@ -245,7 +245,7 @@ After `review.md` cross-review PROCEED, run the create sequence 6.1 → 6.7 in t
 
 ### Step 6.1 — Compose `ship.md` SKELETON (no `pr:` yet)
 
-Compose `ship.md` body EXCEPT the PR ref: customer-visible summary (1-2 sentences from the resolved shape artifact + execute.md), `## Todo Closeout Digest`, `### Token Summary`, `### Verdict` (`status:` / costs / timestamps / tasks / verify) — but **leave `### Verdict → pr:` UNSET** by omitting the line entirely. Single atomic commit via Layer C writer (Wave 5 primitive `acd73545`): `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=ship --entity=<id>-<slug>`.
+Compose `ship.md` body EXCEPT the PR ref: customer-visible summary (1-2 sentences from the resolved shape artifact + execute.md), `## Todo Closeout Digest`, `### Token Summary`, `### Verdict` (`status:` / costs / timestamps / tasks / verify) — but **leave `### Verdict → pr:` UNSET** by omitting the line entirely. Single atomic commit via Layer C writer (Wave 5 primitive `acd73545`): `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/write-stage-artifact.sh" --stage=ship --entity=<id>-<slug>`.
 
 **ship.md records the PR REF + brief summary only — NEVER the composed PR body.** The full body is an external payload on the GitHub PR (Step 6.2-6.4); it is deliberately NOT written into ship.md, which has the smallest C15 cap (≤60 body lines) — persisting the body would blow the cap (the same tension 129.3 CD-2 removed from review.md). Schema: `stages.ship.pr_payload` (external descriptor) + `### Verdict → pr:` (ship.md's durable ref). Keep ship.md ≤60.
 
@@ -273,7 +273,7 @@ Do NOT write frontmatter `pr:` here — the frontmatter `pr:` is written ONLY by
 
 ### Step 6.1b — Mechanical guardrail lint
 
-If `plugins/ship-flow/bin/ship-flow-lint.mjs` exists, run it before PR creation: `node plugins/ship-flow/bin/ship-flow-lint.mjs --workflow-dir docs/ship-flow`. Prefer an adopter package script (`pnpm ship-flow:lint`) when present. Any failure is a ship-final blocker — fix the deterministic issue before spending PR review cycles. Project-specific seed/migration/env checks stay in adopter config; ship-flow core only owns the generic runner.
+If `plugins/ship-flow/bin/ship-flow-lint.mjs` exists, run it before PR creation: `node "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/ship-flow-lint.mjs" --workflow-dir docs/ship-flow`. Prefer an adopter package script (`pnpm ship-flow:lint`) when present. Any failure is a ship-final blocker — fix the deterministic issue before spending PR review cycles. Project-specific seed/migration/env checks stay in adopter config; ship-flow core only owns the generic runner.
 
 ### Step 6.2 — Compose the PR body ONCE into `$PR_BODY_FILE`
 
@@ -282,7 +282,7 @@ ship-final is the SOLE PR-body composer (129.3 CD-2). The body is an external PR
     PR_BODY_FILE="$(mktemp "${TMPDIR:-/tmp}/ship-flow-pr-body.XXXXXX.md")"
 
 Compose into `$PR_BODY_FILE` from canonical sources:
-- `## Problem` + `## User Journey` ← resolved shape artifact: `SHAPE="$(bash plugins/ship-flow/lib/resolve-shape-artifact.sh <entity-folder>)"` then `bash plugins/ship-flow/lib/extract-section.sh "$SHAPE" <tag>`. SOLE full-prose materialization point (external readers can't resolve `shape.md → section`).
+- `## Problem` + `## User Journey` ← resolved shape artifact: `SHAPE="$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/resolve-shape-artifact.sh" <entity-folder>)"` then `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" "$SHAPE" <tag>`. SOLE full-prose materialization point (external readers can't resolve `shape.md → section`).
 - `## Done Criteria + Verification` ← `verify.md → ### UAT` (DC-N-keyed table, verbatim — every row).
 - `## Changes` ← `execute.md → ## Execution Log` task summary; commit SHAs via `git log <base>..HEAD`.
 - `## Canonical Docs Update` ← `review.md → ## Canonical Docs Update` SHAs/skip-rationale.
@@ -299,7 +299,7 @@ Run the pr-merge mod's privacy primitive (0.11.1) on the materialized file befor
     grep -nE '/Users/|/home/|~/Project|@gmail|@yahoo|@hotmail|C:\\Users' "$PR_BODY_FILE"
     # MUST return 0 lines. Any hit → redact in $PR_BODY_FILE before continuing.
 
-Also: `bash plugins/ship-flow/bin/validate-pr-title.sh "$PR_TITLE"`. Non-zero on either → fix `$PR_BODY_FILE` / `$PR_TITLE`, do NOT proceed to gate/create.
+Also: `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/validate-pr-title.sh" "$PR_TITLE"`. Non-zero on either → fix `$PR_BODY_FILE` / `$PR_TITLE`, do NOT proceed to gate/create.
 
 ### Step 6.3a — PR-body coherence gate ON `$PR_BODY_FILE` (MANDATORY, before create)
 
@@ -352,7 +352,7 @@ After metadata persistence, run the read-only helper before any post-create auto
    - Exit `0` / `CLEAN` → continue to post-create auto-review.
    - Exit `10` / `CONFLICTING` or exit `11` / `DIRTY` → update the branch against main: `git fetch origin main && git rebase origin/main`.
      - If rebase is clean: `git push --force-with-lease`, then re-check `mergeStateStatus`.
-     - If the only unmerged path is `ROADMAP.md`: run `bash plugins/ship-flow/lib/rebase-resolve-additive.sh`. The helper may only resolve pure-additive changes inside `ROADMAP.md` append-only sections `later`, `not-doing`, and `shipped`; it stages the resolved file. Then run `GIT_EDITOR=true git rebase --continue`, `git push --force-with-lease`, and re-check `mergeStateStatus`.
+     - If the only unmerged path is `ROADMAP.md`: run `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/rebase-resolve-additive.sh"`. The helper may only resolve pure-additive changes inside `ROADMAP.md` append-only sections `later`, `not-doing`, and `shipped`; it stages the resolved file. Then run `GIT_EDITOR=true git rebase --continue`, `git push --force-with-lease`, and re-check `mergeStateStatus`.
      - If any other file is unmerged, or the helper exits non-zero: stop ship-final auto-progression and surface a conflict summary to the captain. Do not guess at structural conflicts.
      - After any branch update, run `check-pr-mergeable.sh` again. Only a later helper run exiting `0` may proceed automatically to post-create auto-review, Ready, or reviewer routing.
    - Exit `12` / `UNSTABLE`, `BLOCKED`, or another non-clean status → surface the status and current check summary to the captain; do not treat it as a content conflict.

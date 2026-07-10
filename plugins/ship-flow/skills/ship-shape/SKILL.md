@@ -124,7 +124,7 @@ If fit check **fails**:
 
 ### Architecture-impact (only when ARCHITECTURE.md moves)
 
-Skip for pure bug / UI polish / docs. Run when L0 surfaces drift OR new decision belongs in ARCHITECTURE.md. Draft `<!-- section:architecture-impact -->` per child; pre-fill `before:` via `bash plugins/ship-flow/lib/extract-map.sh ARCHITECTURE.md <section>`. Uncertain → emit assumption `verified_by: design-contract`. Consumer: ship-review planner dispatch patches ARCHITECTURE.md via `patch-map.sh --if-hash`.
+Skip for pure bug / UI polish / docs. Run when L0 surfaces drift OR new decision belongs in ARCHITECTURE.md. Draft `<!-- section:architecture-impact -->` per child; pre-fill `before:` via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-map.sh" ARCHITECTURE.md <section>`. Uncertain → emit assumption `verified_by: design-contract`. Consumer: ship-review planner dispatch patches ARCHITECTURE.md via `patch-map.sh --if-hash`.
 
 ### Product-impact (only when PRODUCT.md moves)
 
@@ -191,7 +191,7 @@ ship-review owns atomic writes after verify PASS.
 Run before composing the proposal:
 
 ```bash
-bash plugins/ship-flow/lib/density-classify.sh --entity=<path-to-index.md>
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/density-classify.sh" --entity=<path-to-index.md>
 ```
 
 Output: `high | medium | low | vacuum`. Include as `answers_density` in the proposal JSON pitch block (see schema below). FO uses this to auto-proceed without captain gate when `high`. Skip when entity index does not yet exist (first-time shape of a directive).
@@ -381,13 +381,13 @@ Exception rationale: skill design + 4.7 knowledge is writing-skills' domain; Sha
 
 1. **Allocate the pitch ID** — ship-flow's native, worktree-aware, reservation-based allocator. Replaces the removed spacedock python `commission/bin/status --next-id` (spacedock v1 makes `--next-id` non-applicable for `id-style: slug`; ship-flow owns its `<N>-<slug>` + `.N`-children numeric scheme):
    ```bash
-   bash plugins/ship-flow/lib/allocate-id.sh "$WORKFLOW_DIR"
+   bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/allocate-id.sh" "$WORKFLOW_DIR"
    ```
    Echoes the next top-level number → pitch ID. Child IDs = `<pitch-id>.N` (dense, no gaps). The allocator scans all git worktrees + `_archive` + pending reservations and writes a reservation **before** returning, so the allocate → commit gap no longer races (the number is held for up to 2h or until the entity materializes — the old "one uninterrupted pair" discipline is no longer required).
 
 2. **Serialize → temp JSON → invoke atomic writer:**
    ```bash
-   bash plugins/ship-flow/lib/shape-confirm.sh --proposal="$PROPOSAL_JSON" --layout=folder --workflow-dir="$WORKFLOW_DIR"
+   bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/shape-confirm.sh" --proposal="$PROPOSAL_JSON" --layout=folder --workflow-dir="$WORKFLOW_DIR"
    ```
    `--layout=folder` (default for new pitches) writes `docs/<wf>/<id>-<slug>/index.md` + `shape.md`.
 
@@ -503,7 +503,7 @@ test -f .claude/ship-flow/skill-routing.yaml
 If `.claude/ship-flow/skill-routing.yaml` is missing, run:
 
 ```bash
-bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/discover-adopter-skills.sh" --root=.
 ```
 
 Present the discovered routing draft to the captain and record it in
@@ -513,7 +513,7 @@ plan so planner does not collapse adopter-specific skills into generic
 `project-db` / `fmodel` defaults.
 
 ```bash
-bash plugins/ship-flow/lib/registry-resolve.sh --classify <spec-or-entity-file>
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --classify <spec-or-entity-file>
 ```
 
 Branch on output:
@@ -527,7 +527,7 @@ When any matched domain is one of the registry-backed contract domains above, al
 If captain/shape explicitly specifies a `domain:` value before or during shape, validate that value before the shape gate:
 
 ```bash
-bash plugins/ship-flow/lib/registry-resolve.sh --validate --domain=<domain>
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --validate --domain=<domain>
 ```
 
 Branch on validation output:
@@ -538,8 +538,8 @@ Shape output/frontmatter evidence MUST include a grep-friendly `Domain Registry 
 
 ```text
 ## Domain Registry Validation
-- classify: bash plugins/ship-flow/lib/registry-resolve.sh --classify <spec-or-entity-file>
-- validate: bash plugins/ship-flow/lib/registry-resolve.sh --validate --domain=<domain>
+- classify: bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --classify <spec-or-entity-file>
+- validate: bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --validate --domain=<domain>
 - domain: <name>
 - result: proceed | HALT-with-options
 ```

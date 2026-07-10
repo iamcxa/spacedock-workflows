@@ -54,6 +54,13 @@ for helper in "${HELPERS[@]}"; do
     "grep -rn 'CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/\\(lib\\|bin\\)/${helper}' '${SKILLS_DIR}' | grep -q ."
 done
 
+# Blanket rule (sweep slice 2): NO executable invocation of any lib/bin
+# helper may use a bare repo-root-relative path. Prose mentions (no verb)
+# are exempt — the measured degraded-mode cost comes from workers copying
+# command lines, not from documentation pointers.
+check "blanket: no verb-prefixed bare lib/bin invocation in skills" \
+  "! grep -rn '\\(bash\\|python3\\|node\\|ruby\\|sh\\) plugins/ship-flow/\\(lib\\|bin\\)/' '${SKILLS_DIR}' | grep -v 'CLAUDE_PLUGIN_ROOT' | grep -q ."
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 

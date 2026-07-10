@@ -82,7 +82,7 @@ intake LLM-coupling-free; a missed flag is corrected when the child reaches desi
 ### 3. Transform → contract (deterministic)
 
 ```bash
-bash plugins/ship-flow/lib/issues-to-contract.sh /tmp/ship-project-issues.json \
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/issues-to-contract.sh" /tmp/ship-project-issues.json \
   --workflow-dir "$WORKFLOW_DIR" --out /tmp/ship-project-contract.yaml
 ```
 
@@ -97,7 +97,7 @@ When invoked with `--contract=<path>`, skip steps 1–3 and use that file direct
 ### 4. Instantiate (deterministic, atomic)
 
 ```bash
-bash plugins/ship-flow/lib/instantiate-cut-project.sh /tmp/ship-project-contract.yaml \
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/instantiate-cut-project.sh" /tmp/ship-project-contract.yaml \
   --workflow-dir "$WORKFLOW_DIR"            # add --dry-run to preview without writing
 ```
 

@@ -8,7 +8,7 @@ user-invocable: false
 
 **READ-as-context only.** Do NOT call `Skill: ship-flow:domain-registry`. This file
 is orientation for consumers (ship-design router, architecture-lens, intent-match-verifier).
-To perform registry resolution, call `bash plugins/ship-flow/lib/registry-resolve.sh`.
+To perform registry resolution, call `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh"`.
 
 ## When to Consult the Registry
 
@@ -38,19 +38,19 @@ no shallow-merge. This is intentional: adopters own their domain-specific trigge
 
 ```bash
 # List all registered domain names
-bash plugins/ship-flow/lib/registry-resolve.sh --list
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --list
 
 # Classify a spec file against all domains
-bash plugins/ship-flow/lib/registry-resolve.sh --classify <spec-file>
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --classify <spec-file>
 
 # Look up a specific domain entry
-bash plugins/ship-flow/lib/registry-resolve.sh --domain=schema
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --domain=schema
 
 # Validate config + optional per-domain M1/M2 check
-bash plugins/ship-flow/lib/registry-resolve.sh --validate [--domain=schema]
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --validate [--domain=schema]
 
 # Override config paths (for testing or adopter use)
-bash plugins/ship-flow/lib/registry-resolve.sh \
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" \
   --config=plugins/ship-flow/registry/defaults.yaml \
   --adopter-config=.claude/ship-flow/domains.yaml \
   --classify <spec-file>

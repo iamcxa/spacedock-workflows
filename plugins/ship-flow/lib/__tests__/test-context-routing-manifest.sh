@@ -148,7 +148,7 @@ check "schema describes plan context routing receipt and manifest block" \
   "grep -q 'context_routing_manifest' '${SCHEMA}' && grep -q 'Context Routing Receipt' '${SCHEMA}' && grep -q 'future_provider_boundary' '${SCHEMA}'"
 
 check "ship-verify requires extracted context-routing-manifest input" \
-  "grep -q 'extract-section.sh <plan.md> context-routing-manifest' '${VERIFY_SKILL}' && grep -q 'prose-only inference' '${VERIFY_SKILL}'"
+  "grep -q 'extract-section.sh\" <plan.md> context-routing-manifest' '${VERIFY_SKILL}' && grep -q 'prose-only inference' '${VERIFY_SKILL}'"
 
 check "fallback reviewer panel preserves context routing manifest lens fields" \
   "grep -q 'context-routing-manifest' '${REVIEWER_PANEL}' && grep -q 'manifest_required_skill' '${REVIEWER_PANEL}'"
