@@ -268,13 +268,13 @@ check_not "validator rejects empty plan without false-matching L5 or W0 as task 
   "python3 '${VALIDATOR}' --plan '${EMPTY_PLAN}'"
 
 check "ship-plan requires validate-tdd-ledger before plan handoff" \
-  "grep -q 'validate-tdd-ledger.py --plan' '${PLAN_SKILL}' && grep -q 'tdd-ledger.jsonl' '${PLAN_SKILL}' && grep -q -- '--require-ledger-jsonl' '${PLAN_SKILL}'"
+  "grep -q 'validate-tdd-ledger.py\" --plan' '${PLAN_SKILL}' && grep -q 'tdd-ledger.jsonl' '${PLAN_SKILL}' && grep -q -- '--require-ledger-jsonl' '${PLAN_SKILL}'"
 
 check "ship-execute consumes validated tdd-ledger rather than prose-only inference" \
   "grep -q 'tdd-ledger.jsonl' '${EXECUTE_SKILL}' && grep -q 'prose-only TDD inference' '${EXECUTE_SKILL}' && grep -q -- '--require-ledger-jsonl' '${EXECUTE_SKILL}'"
 
 check "ship-verify audits tdd-ledger schema and layer drift" \
-  "grep -q 'validate-tdd-ledger.py --plan' '${VERIFY_SKILL}' && grep -q 'declared_layer' '${VERIFY_SKILL}' && grep -q 'inferred_layer' '${VERIFY_SKILL}' && grep -q -- '--require-ledger-jsonl' '${VERIFY_SKILL}'"
+  "grep -q 'validate-tdd-ledger.py\" --plan' '${VERIFY_SKILL}' && grep -q 'declared_layer' '${VERIFY_SKILL}' && grep -q 'inferred_layer' '${VERIFY_SKILL}' && grep -q -- '--require-ledger-jsonl' '${VERIFY_SKILL}'"
 
 check "schema documents tdd-ledger and layer validation fields" \
   "grep -q 'tdd_ledger' '${SCHEMA}' && grep -q 'declared_layer' '${SCHEMA}' && grep -q 'inferred_layer' '${SCHEMA}' && grep -q 'command_quality' '${SCHEMA}'"
