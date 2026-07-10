@@ -1,13 +1,15 @@
 ## Ship-Flow Pipeline Template
-## Adoption note (0.7.0): bootstrapping this template into a project is NOT self-contained in 0.7.0.
+## Adoption note (0.8.0): bootstrapping this template into a project is NOT self-contained yet.
 ## The intended bridge is `spacebridge:workflow-adopt`, which discovers this file and delegates
 ## to `spacedock:commission` to scaffold `docs/<wf>/`. That requires the `spacebridge` plugin.
 ## Without spacebridge: scaffold `docs/<wf>/` manually from this template, or use
 ## `/spacedock:commission` with ship-flow directly. Self-contained adoption is a planned later milestone.
-## Vendored-layout requirement (0.7.0): ship-flow must be vendored at `plugins/ship-flow/` in
-## the consuming repo (dogfood layout). Stage skills invoke helpers via hardcoded
-## `bash plugins/ship-flow/lib/...` paths; running as a pure marketplace-installed plugin is
-## the deferred self-adoption milestone and is NOT supported in 0.7.0.
+## Helper-path caveat (still true in 0.8.0): most stage skills invoke lib/ helpers via hardcoded
+## `bash plugins/ship-flow/lib/...` paths that assume a vendored `plugins/ship-flow/` tree
+## (dogfood layout); only the ship dispatch helper resolves `${CLAUDE_PLUGIN_ROOT:-...}`.
+## A pure marketplace-installed adopter therefore runs in DEGRADED MODE — workers fall back to
+## manual equivalents when helpers are absent (empirical record: carlove entity stage-reports,
+## joint audit 2026-07-08). Fixing the ~175 bare paths is the self-adoption milestone.
 
 name: ship-flow
 description: "Ship-focused pipeline. SHAPE once with captain, then agents run design for UI/domain/contract-bearing work before plan → execute → verify → ship."

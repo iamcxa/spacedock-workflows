@@ -21,7 +21,7 @@ I (claude 4.7) have 1M context + prompt cache. I don't need procedural teaching 
 
 The flow does NOT teach me how to think. It keeps me honest across boundaries where I can't see the whole.
 
-> **Codex support scope (0.7.0):** The `/ship` entry delegates to `spacedock:first-officer`, which supports Claude Code, Codex, and Pi in spacedock 0.22.0 — the entry bridge is Codex-capable. Ship-flow's own stage-dispatch skills (ship-execute, ship-shape ensign dispatch, etc.) are Claude-native and have NOT been verified end-to-end under Codex in 0.7.0 — full-pipeline Codex execution is unverified, not unsupported-by-design.
+> **Codex support scope (0.8.0):** The `/ship` entry delegates to `spacedock:first-officer`, which supports Claude Code, Codex, and Pi (spacedock 0.24.0 verified) — the entry bridge is Codex-capable, and the plugin installs cleanly on the Codex host (`codex plugin add ship-flow@spacedock-workflows`, verified 2026-07-08). Ship-flow's own stage-dispatch skills (ship-execute, ship-shape ensign dispatch, etc.) are Claude-native and have NOT been verified end-to-end under Codex — full-pipeline Codex execution remains unverified, not unsupported-by-design.
 
 ---
 
@@ -516,6 +516,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 | `bin/auto-merge-readiness.mjs` | reports whether a PR is ready for auto-merge and names the next action when blocked |
 | `bin/auto-merge-readiness-collect.mjs` | collects GitHub PR evidence, runs semantic/thread gates, and writes readiness artifacts |
 | `bin/auto-merge-run.mjs` | executes the readiness result by enabling native auto-merge or policy-approved direct merge with `expectedHeadOid` |
+| `bin/sync-drift-check.mjs` | adopter drift gate: 3-bucket manifest check of adopter `_mods/` + `scripts/` copies against plugin `_mods/` + `bin/`, plus a workflow-version stamp staleness WARN (see `_mods/sync-drift-check.md`) |
 
 **Skill count policy** (Principle 2 split): stage skills ≤ 7 cap, utility skills uncapped. Current inventory: 7 stage (`ship-shape`, `ship`, `ship-design`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review`) + utility skills (`add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel`) plus non-skill utility scripts/mods such as `ship-flow-lint`. Stage skills remain at cap (7/7). Enforced by `check-invariants.sh --check skill-count`.
 
