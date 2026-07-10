@@ -8,7 +8,7 @@
     {
       "name": "ship-flow",
       "source": "./plugins/ship-flow",
-      "version": "0.8.0"
+      "version": "0.8.1"
     }
   ]
 }

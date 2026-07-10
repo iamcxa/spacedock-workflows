@@ -1,4 +1,4 @@
-# Ship-Flow — Auditable Autonomous Workflow for Claude 4.7 (v0.8.0)
+# Ship-Flow — Auditable Autonomous Workflow for Claude 4.7 (v0.8.1)
 
 A scaffolding plugin for captain-directed autonomous work across multi-stage pipelines. This README is written from claude 4.7's perspective — explaining **why** the flow is shaped this way, not how to use each skill (SKILL.md files document the how).
 
