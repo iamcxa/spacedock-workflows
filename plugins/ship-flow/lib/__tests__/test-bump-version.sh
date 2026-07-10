@@ -45,7 +45,7 @@ EOF
 ] }
 EOF
   cat >"$d/README.md" <<EOF
-# Ship-Flow — Auditable Autonomous Workflow for Claude 4.7 (v$v)
+# Ship-Flow — Auditable Autonomous Feature Delivery for AI Coding Agents (v$v)
 
 body line that mentions (v$v) but is NOT the H1 — must stay untouched.
 EOF
@@ -124,7 +124,7 @@ cat >"$TMPC/.claude-plugin/marketplace.json" <<EOF
 { "plugins": [ { "name": "spacebridge", "version": "0.0.1" } ] }
 EOF
 cat >"$TMPC/README.md" <<EOF
-# Ship-Flow — Auditable Autonomous Workflow for Claude 4.7 (v0.0.1)
+# Ship-Flow — Auditable Autonomous Feature Delivery for AI Coding Agents (v0.0.1)
 EOF
 PJC="$TMPC/.claude-plugin/plugin.json"
 MPC="$TMPC/.claude-plugin/marketplace.json"
