@@ -57,7 +57,7 @@ Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / 
 
 ### Step 1 — Read verify verdict + entity sections
 
-Record stage-start ISO. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS`. From execute.md: execution log (for PR body Changes section). From the resolved shape artifact (canonical `shape.md`, legacy `spec.md` fallback alias; aggregated across children): Problem, User Journey, Done Criteria, Shape Output, Size Assessment, `architecture-impact`, `product-impact`, `readme-impact`. From parent entity (if `parent:` set): `roadmap-phase`.
+Record stage-start ISO. Extract via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS`. From execute.md: execution log (for PR body Changes section). From the resolved shape artifact (canonical `shape.md`, legacy `spec.md` fallback alias; aggregated across children): Problem, User Journey, Done Criteria, Shape Output, Size Assessment, `architecture-impact`, `product-impact`, `readme-impact`. From parent entity (if `parent:` set): `roadmap-phase`.
 
 **Pre-check**: verdict != PASS → write `## Review Report status: blocked, reason: verify verdict <actual>, expected passed` and return. Never proceed without PASS.
 
@@ -69,7 +69,7 @@ Before dispatching the planner canonical-doc patch worker or any review
 cross-reviewer, render and include the shared worker-facing stewardship section:
 
 ```bash
-bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-stewardship-contract.sh"
 ```
 
 The resulting `### Science Officer (EM) Stewardship Contract` block is part of
@@ -89,7 +89,7 @@ When review closes out verify evidence for PR readiness or canonical-doc
 handoff, render and consume the shared upward report contract:
 
 ```bash
-bash plugins/ship-flow/lib/render-science-officer-em-upward-report-contract.sh
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-upward-report-contract.sh"
 ```
 
 The review closeout report uses `science_officer_em_upward_report` with
@@ -104,8 +104,8 @@ mechanics; EM owns judgment and recommendation.
 
 > Draft canonical doc patches for pitch `<id>-<slug>`. Read entity children's `architecture-impact`, `product-impact`, `readme-impact` blocks + plan `canonical_doc_actions` rows + parent `roadmap-phase` + verify verdict. Aggregate per target_section. Treat `canonical_doc_actions` as the plan/verify handoff for actions discovered after shape: `source: plan` and `source: touched-files` rows can require canonical updates even when the original impact block was absent; `action: skip` rows require a `skip_rationale`. Apply patches atomically:
 >
-> - **ARCHITECTURE.md** — per aggregated `architecture-impact` section: `bash plugins/ship-flow/lib/patch-map.sh --if-hash=<sha> --section=<target_section> --commit-as="docs(architecture): #<id> — <summary>" ARCHITECTURE.md`. Then append Decisions index row for #<id> via same primitive.
-> - **PRODUCT.md** — per aggregated `product-impact` section: `bash plugins/ship-flow/lib/patch-map.sh --if-hash=<sha> --section=<target_section> --commit-as="docs(product): #<id> — <summary>" PRODUCT.md`. Covers user stories, constraints, capabilities.
+> - **ARCHITECTURE.md** — per aggregated `architecture-impact` section: `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/patch-map.sh" --if-hash=<sha> --section=<target_section> --commit-as="docs(architecture): #<id> — <summary>" ARCHITECTURE.md`. Then append Decisions index row for #<id> via same primitive.
+> - **PRODUCT.md** — per aggregated `product-impact` section: `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/patch-map.sh" --if-hash=<sha> --section=<target_section> --commit-as="docs(product): #<id> — <summary>" PRODUCT.md`. Covers user stories, constraints, capabilities.
 > - **README.md** — per `readme-impact` block: Edit tool with before/after matching (README is prose-heavy, typically NO section tags → DO NOT use patch-map.sh). Commit via explicit pathspec: `git add -- README.md && git commit -m "docs(readme): #<id> — <summary>" -- README.md`. If block has `entry_critical: true`, note it in commit body.
 > - **ROADMAP.md** — status flip: `patch-map.sh --if-hash=<sha> --mode=remove-row --match=<slug> --section=now --commit-as="ship: remove #<id> from Now" ROADMAP.md` then `--mode=append --section=shipped --commit-as="ship: record #<id> in Shipped"` with new row.
 >
@@ -342,7 +342,7 @@ Verdict: **PROCEED** / **VETO** (loop to fix sections) / **PROMPT_CAPTAIN**. Eac
 
 ### Step 8 — Emit review.md
 
-Write via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=review --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; atomic + pathspec-lock).
+Write via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/write-stage-artifact.sh" --stage=review --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive at commit `acd73545`; atomic + pathspec-lock).
 
 Review.md sections: `## PR Draft` (slim — title + ship-final composition reference, NOT full prose per 129.3 CD-2), `## Per-Feature Retrospective` (compact), `## What Worked` / `## What Almost Failed` (Step 4.5 machine-readable harvest blocks), `## Canonical Docs Update` (4 commit SHAs or skip-rationale per doc), `## D2 Knowledge Candidates` (conditional), `## Token Summary`, `## Review Report` (status / stage_cost / planner dispatch cost / Verify results / canonical sync status / timestamps / duration). Verbose finding dumps → a bounded `<details>` excerpt or the add-todos queue (keep body under the C15 ≤100 cap; `<details>` is body-excluded but the 2× raw-total backstop — raw ≤ 200 — still applies, so excerpt-and-link, don't inline-dump).
 

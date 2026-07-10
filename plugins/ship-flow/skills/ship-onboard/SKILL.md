@@ -119,7 +119,7 @@ cat pyproject.toml 2>/dev/null | grep -A 30 'dependencies'
 Run the adopter skill discovery helper after the baseline codebase scan:
 
 ```bash
-bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/discover-adopter-skills.sh" --root=.
 ```
 
 If the output contains one or more `routing:` entries, present the discovered

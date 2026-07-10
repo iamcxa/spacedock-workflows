@@ -36,21 +36,21 @@ check "ship-shape SKILL.md includes Domain Registry Validation evidence heading"
 
 echo "Block 2: shape classification is mandatory for possible non-UI domains"
 check "ship-shape instructs registry-resolve.sh --classify against spec/entity file" \
-  "grep -qE 'registry-resolve\\.sh --classify <(spec-or-entity-file|entity-folder>/spec\\.md|.*spec.*entity)' '${SKILL_FILE}'"
+  "grep -qE 'registry-resolve\\.sh\"? --classify <(spec-or-entity-file|entity-folder>/spec\\.md|.*spec.*entity)' '${SKILL_FILE}'"
 check "classification result writes domain: <name> at shape stage" \
   "grep -qE 'domain: <(name|domain)>|set \`domain: <[^\`]+>\`|set \`domain: [^\`]+\`' '${SKILL_FILE}'"
 
 echo "Block 3: explicit captain/shape domain values are validated at shape gate"
 check "ship-shape validates explicit domain via registry-resolve.sh --validate --domain=<domain>" \
-  "grep -qE 'registry-resolve\\.sh --validate --domain=<domain>' '${SKILL_FILE}'"
+  "grep -qE 'registry-resolve\\.sh\"? --validate --domain=<domain>' '${SKILL_FILE}'"
 check "invalid or missing-specialist validation blocks at shape gate with HALT-with-options" \
   "grep -qE 'HALT-with-options' '${SKILL_FILE}' && grep -qE 'specialist_missing|knowledge_module_missing|parse_error|invalid_trigger_config' '${SKILL_FILE}'"
 
 echo "Block 4: evidence output remains grep-friendly"
 check "shape output records classify command evidence" \
-  "awk '/Domain Registry Validation/{in_block=1; next} in_block && /^## /{in_block=0} in_block && /registry-resolve\\.sh --classify/{found=1} END{exit !found}' '${SKILL_FILE}'"
+  "awk '/Domain Registry Validation/{in_block=1; next} in_block && /^## /{in_block=0} in_block && /registry-resolve\\.sh\"? --classify/{found=1} END{exit !found}' '${SKILL_FILE}'"
 check "shape output records validate command evidence" \
-  "awk '/Domain Registry Validation/{in_block=1; next} in_block && /^## /{in_block=0} in_block && /registry-resolve\\.sh --validate --domain=<domain>/{found=1} END{exit !found}' '${SKILL_FILE}'"
+  "awk '/Domain Registry Validation/{in_block=1; next} in_block && /^## /{in_block=0} in_block && /registry-resolve\\.sh\"? --validate --domain=<domain>/{found=1} END{exit !found}' '${SKILL_FILE}'"
 check "shape output records resolved domain evidence" \
   "awk '/Domain Registry Validation/{in_block=1; next} in_block && /^## /{in_block=0} in_block && /domain: <name>/{found=1} END{exit !found}' '${SKILL_FILE}'"
 check "shape output records HALT-with-options evidence for blocked validation" \

@@ -48,7 +48,7 @@ Run before any verify work. Stop and SendMessage(FO) if any check fails.
 
 Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Read entity file (flat `.md` or folder `index.md` + prior `.md` stages). Record stage-start ISO timestamp.
 
-**Read** (tag-based via `bash plugins/ship-flow/lib/extract-section.sh <entity> <tag>`):
+**Read** (tag-based via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" <entity> <tag>`):
 - resolved shape artifact (`shape.md`, with legacy `spec.md` fallback alias, or entity `## Sharp Output`) → `### Done Criteria`, `### Size Assessment`
 - `plan.md` → `### Plan` (`files_modified`), `### Verification Spec` (DC procedures)
 - `execute.md` → `### Execution Log` (commit SHAs, base SHA), `### Issues Found`, `## Execute UAT`
@@ -110,7 +110,7 @@ domain reviewer, specialist reviewer, adversarial pass, designer handoff, or
 cross-reviewer, render and include the shared worker-facing stewardship section:
 
 ```bash
-bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-stewardship-contract.sh"
 ```
 
 The resulting `### Science Officer (EM) Stewardship Contract` block is part of
@@ -128,7 +128,7 @@ When verify synthesizes reviewer evidence upward, render and consume the shared
 upward report contract:
 
 ```bash
-bash plugins/ship-flow/lib/render-science-officer-em-upward-report-contract.sh
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-upward-report-contract.sh"
 ```
 
 The verify synthesis report uses `science_officer_em_upward_report` with
@@ -140,7 +140,7 @@ green. The gate is output-shape evidence, not worker self-attestation. FO owns
 workflow mechanics; EM owns judgment and recommendation.
 
 When plan contains routed domain context, verify must first run
-`bash plugins/ship-flow/lib/extract-section.sh <plan.md> context-routing-manifest`
+`bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" <plan.md> context-routing-manifest`
 and treat an empty result as BLOCKING with `route_to: execute` or `plan`
 depending on whether execute omitted evidence or plan omitted the block. The
 extracted `context-routing-manifest` is the only accepted input for routed
@@ -264,7 +264,7 @@ For every plan task that is not marked `TDD: skip -- <reason>`:
 3. Confirm RED-before-GREEN ordering: the RED command ran before production edits were accepted, failed for the expected reason, then GREEN passed after implementation.
 4. If RED evidence is absent, RED passed immediately, or GREEN exists without matching RED, emit a `BLOCKING` finding with `route_to: execute` and required fix: rerun/rework the task with valid RED-before-GREEN evidence or bounce to plan if the contract was underspecified.
 
-If `.claude/ship-flow/gates.yaml` exists, re-run `python3 plugins/ship-flow/lib/resolve-gate-registry.py --config .claude/ship-flow/gates.yaml --files <task-owned-paths>` for every implementation task. Compare `required_gates`, `reviewer_questions`, and `evidence_required` against the plan's `domain_acceptance_checklist` and execute evidence. Missing required gate rows are `BLOCKING` with `route_to: plan`; missing `Evidence Required` proof for a present gate is `BLOCKING` with `route_to: execute`. If the gate registry returns `status=no_match` for a code-bearing task in a new multi-layer adopter plan, record a WARNING so the adopter can extend its registry.
+If `.claude/ship-flow/gates.yaml` exists, re-run `python3 "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/resolve-gate-registry.py" --config .claude/ship-flow/gates.yaml --files <task-owned-paths>` for every implementation task. Compare `required_gates`, `reviewer_questions`, and `evidence_required` against the plan's `domain_acceptance_checklist` and execute evidence. Missing required gate rows are `BLOCKING` with `route_to: plan`; missing `Evidence Required` proof for a present gate is `BLOCKING` with `route_to: execute`. If the gate registry returns `status=no_match` for a code-bearing task in a new multi-layer adopter plan, record a WARNING so the adopter can extend its registry.
 
 Record results inside existing `### Review Findings` in `verify.md` under subsection `#### TDD Evidence Audit`, using the schema-backed severity vocabulary `BLOCKING`, `WARNING`, or `NIT`. Use columns `Task`, `RED evidence`, `GREEN evidence`, `REFACTOR check`, `Severity`, and `route_to`.
 
@@ -333,7 +333,7 @@ Pre-scan findings merge into Phase D alongside specialist findings.
 Worker runs `plugins/ship-flow/lib/review-scope.sh` (Phase 1 commit `ce181145`):
 
 ```bash
-eval "$(bash plugins/ship-flow/lib/review-scope.sh --base=<execute_base> --head=HEAD)"
+eval "$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/review-scope.sh" --base=<execute_base> --head=HEAD)"
 # Sets: STACK / TEST_FW / DIFF_INS / DIFF_DEL / DIFF_LINES /
 #       SCOPE_AUTH / SCOPE_BACKEND / SCOPE_FRONTEND / SCOPE_API / SCOPE_MIGRATIONS
 ```
@@ -390,7 +390,7 @@ Same-message `Agent()` × N. Each fresh-context subagent reads its checklist fro
 Worker pipes all specialist + adversarial + pre-scan JSON output through `plugins/ship-flow/lib/review-merge.sh` (Phase 1, smoke-tested):
 
 ```bash
-cat all-findings.jsonl | bash plugins/ship-flow/lib/review-merge.sh > merged-findings.jsonl
+cat all-findings.jsonl | bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/review-merge.sh" > merged-findings.jsonl
 ```
 
 `review-merge.sh` handles:
@@ -434,7 +434,7 @@ The red-team subagent receives Phase D merged findings as context. Prompt: "find
 Worker reads prior-round captain-skipped fingerprints:
 
 ```bash
-SKIPPED_FPS=$(bash plugins/ship-flow/lib/review-log.sh read-suppressed <entity-folder>)
+SKIPPED_FPS=$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/review-log.sh" read-suppressed <entity-folder>)
 ```
 
 For each current finding:
@@ -493,7 +493,7 @@ Phase G writes verdict to scratch; Step 6.0 reads verdict and emits receipt with
 Worker writes round summary via:
 
 ```bash
-bash plugins/ship-flow/lib/review-log.sh append <entity-folder> '<json>'
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/review-log.sh" append <entity-folder> '<json>'
 ```
 
 JSON payload:
@@ -575,7 +575,7 @@ SendMessage(to: "designer@pitch-XX",
 
 1. Generate ui-verify YAML spec from entity hand-off:
    ```bash
-   bash plugins/ship-flow/lib/generate-ui-verify-spec.sh <entity-folder> <mapping-name> [auth-account] \
+   bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/generate-ui-verify-spec.sh" <entity-folder> <mapping-name> [auth-account] \
      > .claude/e2e/ui-verify/<entity-slug>.yaml
    ```
    `<mapping-name>` is the e2e-pipeline mapping filename without `.yaml` (e.g., `spacebridge`). The script reads `render_fidelity_targets[]` from the entity's `### Hand-off to Plan`, converts each to a ui-verify check (kebab→camel CSS property names, D{N} backref preserved in check name).
@@ -644,7 +644,7 @@ Step 3.6.1, when `### Hand-off to Plan` contains `visible_surface_map[]`, verify
 MUST compare the live rendered visible surfaces against that map:
 
 ```bash
-bash plugins/ship-flow/lib/check-visible-surface-coverage.sh \
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/check-visible-surface-coverage.sh" \
   --design <entity-folder>/design.md \
   --live-surfaces <visible-surfaces.tsv> \
   --render-report <mechanical-ui-parity-report.md>
@@ -746,14 +746,14 @@ fix.
 
 **Trigger**: run when any of these are true:
 - Entity frontmatter has `domain: schema`.
-- `bash plugins/ship-flow/lib/registry-resolve.sh --classify <entity spec/index>` resolves or partially resolves to `schema`.
+- `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --classify <entity spec/index>` resolves or partially resolves to `schema`.
 - The entity has a design artifact (`design.md` or entity body design output) containing `## Schema Design Output`.
 
 **Registry contract**: verify is a registry consumer. Before checking schema intent, run:
 
 ```bash
-bash plugins/ship-flow/lib/registry-resolve.sh --validate --domain=schema
-bash plugins/ship-flow/lib/registry-resolve.sh --domain=schema
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --validate --domain=schema
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --domain=schema
 ```
 
 Respect M1-M5 degradation from Principle 9. Do not hardcode domain-to-specialist mappings inside ship-verify prose; the registry owns specialist and knowledge-module resolution.
@@ -995,7 +995,7 @@ Record in `### Verdict → strengthened_dcs:` with `{dc-id, commit-sha, before�
 
 ## Step 6 — Write `verify.md` + cross-review gate
 
-**Atomic write** via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=verify --entity=<id>-<slug>`. Writer handles atomic commit with explicit pathspec. No `-a`/`-A` (parallel-session staging defense).
+**Atomic write** via Layer C writer — Wave 5 primitive landed at commit `acd73545`; invoke via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/write-stage-artifact.sh" --stage=verify --entity=<id>-<slug>`. Writer handles atomic commit with explicit pathspec. No `-a`/`-A` (parallel-session staging defense).
 
 **Verbosity budget (INVARIANTS Principle 8 — verify.md ≤120 body lines; C15 BLOCKER)**: verify is the most evidence-heavy stage. Keep the body lean by the `<details>`-collapse rule (129.3 CD-1, captain gate):
 - **KEEP in body (these are the consumables — never collapse)**: `### Verdict`, `## Panel Coverage`, the `### Runtime Verification` per-DC result table, the `### UAT` results table. Result tables are the genuinely-new evidence Principle 8 names.
@@ -1166,7 +1166,7 @@ open_decisions: []
 next_action: "record verify stage status"
 YAML
 
-bash plugins/ship-flow/lib/write-fo-receipt.sh \
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/write-fo-receipt.sh" \
   --entity-folder "$ENTITY_FOLDER" \
   --receipt-file "$FO_RECEIPT_FILE" \
   --transition-slug verify-proceed-auto-advance

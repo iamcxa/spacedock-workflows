@@ -25,7 +25,7 @@ Every reviewer lens receives the same immutable input bundle:
   accept prose-only routing as a substitute for extracted manifest input
 - required skills and knowledge modules for the lens, when derived from domain registry, `skills_needed`, adopter file signals, or touched files
 - `### Science Officer (EM) Stewardship Contract`, rendered by:
-  `bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh`
+  `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-stewardship-contract.sh"`
   The block carries results, guidelines, resources, accountability,
   consequences. FO owns workflow clock, state, worktrees, dispatch mechanics,
   PR lifecycle, and stage advancement. EM owns engineering judgment, delegation

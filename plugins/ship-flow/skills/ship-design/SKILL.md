@@ -190,7 +190,7 @@ contract/interface worker, or design cross-reviewer, render and include the
 shared worker-facing stewardship section:
 
 ```bash
-bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-stewardship-contract.sh"
 ```
 
 The resulting `### Science Officer (EM) Stewardship Contract` block is part of
@@ -231,7 +231,7 @@ Dispatch rules:
   UI candidate file from shape handoff, spec `Files modified`, exploration
   cites, or obvious UI surface path, run:
   ```bash
-  bash plugins/ship-flow/lib/resolve-skill-routing.sh \
+  bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/resolve-skill-routing.sh" \
     --config=.claude/ship-flow/skill-routing.yaml \
     --files=<comma-separated-ui-candidate-files>
   ```
@@ -371,7 +371,7 @@ Per DC-8: `design-skipped: true` (not `design-skipped: false` with empty constra
 1. Read entity frontmatter `affects_ui:` and `domain:`. Record both.
 2. **If `domain:` is set**: invoke registry-resolve to confirm specialist availability:
    ```bash
-   bash plugins/ship-flow/lib/registry-resolve.sh --validate --domain=<domain-name>
+   bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --validate --domain=<domain-name>
    ```
    Branch on exit code:
    - exit 0 → domain registered + specialist available. Resolve `designer_section_anchor` with `registry-resolve.sh --domain=<domain-name>`. If the anchor is `ship-design#contract-interface-designer`, skip the generic domain specialist path and let the contract-interface lane handle it; otherwise proceed to Phase 0.5 (specialist dispatch).
@@ -418,7 +418,7 @@ Reached when Phase 0 step 2 returns exit 0 (domain registered + `specialist_miss
 
 1. Resolve specialist anchor and knowledge module:
    ```bash
-   bash plugins/ship-flow/lib/registry-resolve.sh --domain=<domain-name>
+   bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/registry-resolve.sh" --domain=<domain-name>
    ```
    Read `designer_section_anchor`, `knowledge_module_path`, `required_skills`,
    and `skill_hints.*` from the output envelope.
@@ -647,7 +647,7 @@ requested. It exists to stop bad design contracts before plan decomposes them.
 Before marking design complete, run:
 
 ```bash
-bash plugins/ship-flow/lib/check-design-readiness-review.sh <entity-folder>/design.md
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/check-design-readiness-review.sh" <entity-folder>/design.md
 ```
 
 The checker derives required reviewers from the design artifact and blocks when

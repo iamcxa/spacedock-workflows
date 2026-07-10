@@ -48,7 +48,7 @@ Run before any plan work. Stop and SendMessage(FO) if any check fails.
 
 ### Step 1 — Read spec + cross-entity contracts
 
-Record stage-start ISO timestamp. For folder entities, resolve the shape artifact first: `SHAPE_ARTIFACT="$(bash plugins/ship-flow/lib/resolve-shape-artifact.sh <entity-folder>)"`; this returns canonical `shape.md` or legacy `spec.md` fallback. Extract via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> <section-tag>` (handles folder + flat layouts). From the resolved shape artifact: problem, done criteria, size (S/M/L), scope-in bullets, musk-audit verdicts, stated assumptions.
+Record stage-start ISO timestamp. For folder entities, resolve the shape artifact first: `SHAPE_ARTIFACT="$(bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/resolve-shape-artifact.sh" <entity-folder>)"`; this returns canonical `shape.md` or legacy `spec.md` fallback. Extract via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" <entity-file> <section-tag>` (handles folder + flat layouts). From the resolved shape artifact: problem, done criteria, size (S/M/L), scope-in bullets, musk-audit verdicts, stated assumptions.
 
 If `parent:` frontmatter set: read parent `## Cross-Entity Contracts`. Extract `Contracts to implement`, `Inherited decisions` (ADR overrides), `Slice scope`. These override any conflicting research finding.
 
@@ -86,19 +86,19 @@ Skip if no file:line citations (common for S-size).
 - Block has design-emitted fields (`design_constraints[]` / `render_fidelity_targets[]` / `whole_page_visual_targets[]`) → run mechanical mapping below.
 - Block ABSENT entirely → **BLOCKER** (status: blocked, reason: `hand-off-to-plan absent — neither design-skipped stub nor design output found`). Either shape Phase 8 missed the stub emit OR design errored without writing hand-off. Do not silently treat as "no UI" — that's the ambiguity G14 fixes.
 
-**Read** via `bash plugins/ship-flow/lib/extract-section.sh <entity-file> hand-off-to-plan` (handles folder + flat layouts).
+**Read** via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" <entity-file> hand-off-to-plan` (handles folder + flat layouts).
 
 **Mechanical mapping** delegated to lib script:
 ```bash
-bash plugins/ship-flow/lib/import-design-dcs.sh <entity-folder> >> <entity-folder>/plan.md
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/import-design-dcs.sh" <entity-folder> >> <entity-folder>/plan.md
 ```
 The script reads structured `### Hand-off to Plan`, emits `## Plan Imported Design DCs` table directly. Falls back to MIGRATE-FIRST notice when entity is in legacy prose format. **Do NOT manually transcribe** — that's the LLM-drift mode this script eliminates.
 
 Pre-import validation (run in this order):
-- `bash plugins/ship-flow/lib/check-design-readiness-review.sh <entity-folder>/design.md` — risk-gated design readiness check. If it reports `status=blocked`, stop before planning. If it reports `status=warn`, continue only after preserving the warning in `## Plan Report`.
-- `bash plugins/ship-flow/lib/validate-handoff-schema.sh <entity-folder>` — structural check
-- `bash plugins/ship-flow/lib/validate-d-references.sh <entity-folder>` — D{N} backref consistency
-- `bash plugins/ship-flow/lib/import-design-dcs.sh <entity-folder>` — count-preserving import; if it reports `imported design_constraints count mismatch`, BLOCK instead of hand-copying missing rows.
+- `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/check-design-readiness-review.sh" <entity-folder>/design.md` — risk-gated design readiness check. If it reports `status=blocked`, stop before planning. If it reports `status=warn`, continue only after preserving the warning in `## Plan Report`.
+- `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/validate-handoff-schema.sh" <entity-folder>` — structural check
+- `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/validate-d-references.sh" <entity-folder>` — D{N} backref consistency
+- `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/import-design-dcs.sh" <entity-folder>` — count-preserving import; if it reports `imported design_constraints count mismatch`, BLOCK instead of hand-copying missing rows.
 
 If the readiness checker blocks → BLOCKER (status: blocked, reason from checker stdout; bounce to design/FO).
 If either hand-off validator fails → BLOCKER (status: blocked, reason: hand-off schema invalid; details from script stderr).
@@ -134,7 +134,7 @@ plan cross-reviewer, or gap-fill worker, render and include the shared
 worker-facing stewardship section:
 
 ```bash
-bash plugins/ship-flow/lib/render-science-officer-em-stewardship-contract.sh
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/render-science-officer-em-stewardship-contract.sh"
 ```
 
 The resulting `### Science Officer (EM) Stewardship Contract` block is part of
@@ -218,7 +218,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring when available. It 
   - `framework_detected`, `theme_indirection`, and `design_canonical_dir` from `ship-flow:ship-runtime-detect`
   - density-classified skill set already loaded for `answers_density: high`
   - domain registry routing from `registry-resolve.sh --domain=<domain>` or `--classify <spec>`: preserve `required_skills` and merge `skill_hints.plan` into plan-stage task `skills_needed`
-  - adopter file-signal routing from `.claude/ship-flow/skill-routing.yaml` when present. For each implementation task, run `bash plugins/ship-flow/lib/resolve-skill-routing.sh --files=<task-files> --config=.claude/ship-flow/skill-routing.yaml` and merge the emitted `skills_needed=` list. Also record `folder_guidance_files=` and `folder_guidance_skills=` in `## Context Manifest → Folder guidance`, and merge guidance skills into task `skills_needed` when they are not already present. If the config is absent on a non-trivial multi-surface pitch, run `bash plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` and surface the draft in `## Context Manifest` before finalizing `skills_needed`.
+  - adopter file-signal routing from `.claude/ship-flow/skill-routing.yaml` when present. For each implementation task, run `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/resolve-skill-routing.sh" --files=<task-files> --config=.claude/ship-flow/skill-routing.yaml` and merge the emitted `skills_needed=` list. Also record `folder_guidance_files=` and `folder_guidance_skills=` in `## Context Manifest → Folder guidance`, and merge guidance skills into task `skills_needed` when they are not already present. If the config is absent on a non-trivial multi-surface pitch, run `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/discover-adopter-skills.sh" --root=.` and surface the draft in `## Context Manifest` before finalizing `skills_needed`.
 
   Use concrete file-glob mapping, then trim to the smallest relevant list:
 
@@ -246,7 +246,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring when available. It 
   output visible in `## Context Manifest` and surface missing skills early.
 
   Non-trivial plan guard: if a plan has ≥2 implementation tasks touching different file classes, require ≥2 distinct `skills_needed` lists. If every task receives the same list, treat it as boilerplate and revise before emitting plan.md.
-- **Adopter gate registry**: for every implementation task with non-empty `owned_paths`, run `python3 plugins/ship-flow/lib/resolve-gate-registry.py --config .claude/ship-flow/gates.yaml --files <comma-separated-owned_paths>` when the adopter config exists. Merge `required_gates`, `reviewer_questions`, and `evidence_required` into the task's reviewer questions and `domain_acceptance_checklist`; record `matched_routes` and `layers` in the Context Manifest. Missing config is a WARNING for legacy/single-surface plans and a plan gap for new multi-layer adopter plans. These gates are adopter-owned; ship-flow core only resolves and carries them.
+- **Adopter gate registry**: for every implementation task with non-empty `owned_paths`, run `python3 "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/resolve-gate-registry.py" --config .claude/ship-flow/gates.yaml --files <comma-separated-owned_paths>` when the adopter config exists. Merge `required_gates`, `reviewer_questions`, and `evidence_required` into the task's reviewer questions and `domain_acceptance_checklist`; record `matched_routes` and `layers` in the Context Manifest. Missing config is a WARNING for legacy/single-surface plans and a plan gap for new multi-layer adopter plans. These gates are adopter-owned; ship-flow core only resolves and carries them.
 - TDD contract: every non-exempt implementation task MUST include `tdd_contract` with `red_command`, `expected_red_failure`, `green_command`, and `refactor_check`. In prose task blocks, include the same data as `RED command`, `Expected RED failure`, `GREEN command`, and `REFACTOR check`. Execute consumes this contract for RED-before-GREEN evidence; verify audits it before PASS.
 - **TDD ledger gate**: after drafting `plan.md` and before `### Hand-off to Execute`, run `python3 "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/validate-tdd-ledger.py" --plan <entity-folder>/plan.md > <entity-folder>/tdd-ledger.txt 2>&1` for the human-readable pass/fail summary, then run `python3 "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/validate-tdd-ledger.py" --plan <entity-folder>/plan.md --emit-jsonl > <entity-folder>/tdd-ledger.jsonl`. Finally run `python3 "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/validate-tdd-ledger.py" --plan <entity-folder>/plan.md --require-ledger-jsonl <entity-folder>/tdd-ledger.jsonl` to prove the persisted ledger exists and matches the current plan. Failure blocks plan advance. This makes the `tdd_contract` authoritative at plan time rather than post-hoc extraction. The validator rejects missing contracts, low-confidence `red_command` / `green_command`, invalid `layer`, stale ledger JSONL, and code-bearing tasks that declare `layer: meta` when the inferred layer is L1-L7.
 - TDD exceptions (mark inline): config / pure refactor with coverage / docs-only / migration — `TDD: skip -- <reason>`.
@@ -274,7 +274,7 @@ Invoke `Skill: superpowers:writing-plans` for plan authoring when available. It 
   be skipped only with an explicit rationale. Future provider hints are
   append-only and non-authoritative: the local registry remains the routing
   source of truth for this block.
-- **T0.X auto-indirection-sweep** (T6.1, #106): when `theme_indirection` from ship-runtime-detect Step R5 is non-empty (e.g. `tailwind-v4`), auto-emit a Wave 0 task in the plan: `T0.X: Audit @theme inline indirection layer — verify design tokens align with CSS custom properties, no hardcoded hex values in component files`. REFUSE to emit a plan without this task when `theme_indirection != ""`. Enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check indirection-sweep-emitted` (fixture-based).
+- **T0.X auto-indirection-sweep** (T6.1, #106): when `theme_indirection` from ship-runtime-detect Step R5 is non-empty (e.g. `tailwind-v4`), auto-emit a Wave 0 task in the plan: `T0.X: Audit @theme inline indirection layer — verify design tokens align with CSS custom properties, no hardcoded hex values in component files`. REFUSE to emit a plan without this task when `theme_indirection != ""`. Enforcement: `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/check-invariants.sh" --check indirection-sweep-emitted` (fixture-based).
 - **Lens FLAG integration** (entity 110, 2026-04-29): after Step 1.7 lens verdicts are collected, plan worker MUST for each FLAG verdict: (a) add a DC covering the flagged concern, or (b) write an entry in `## Lens Findings: deferred` with explicit rationale. Gate refuses advance if any FLAG exists without Option A or Option B. Silence is NOT acceptable — the deferred section exists precisely to make punts explicit and captain-visible.
 
 ### Step 3.5 — Verification spec (structural parity enforcement)
@@ -331,7 +331,7 @@ Run 9 dimensions. Any BLOCKER → fix inline + re-review. Max 3 iterations.
 8. **Stale-line-anchor** — every `file:line` citation re-read; content-matches / line-shifted / contradicted (BLOCKER) / phantom path (BLOCKER). Catches #1 cause of execute BLOCKED returns.
 9. **Design reference compliance** — skip if no `## Design Reference` section; else cross-check visual attrs (fill/stroke/colors/dimensions) against cited spec files. Flag deviations.
 10. **Stub-captain-ack scan** (T6.2, #106): grep every task body for keywords `stub|fake|placeholder|v1.*only|wired only for`. For each match: check entity frontmatter `pre-acked-stubs: true` OR check that the Plan Report has a `## Stub Flag` entry for this task with explicit captain rationale. If neither present → `BLOCK: stub task without captain ack` (literal string required for test DC). Populate `## Plan Report → Stub Flags` table with all stub tasks found. Cross-review PROCEED blocked until all stubs either pre-acked or cleared.
-11. **Context Manifest completeness** (entity 110, 2026-04-29): `## Context Manifest` section present and all 7 fields non-empty: `Skills loaded`, `INVARIANTS sections read`, `Architecture docs consulted`, `Domains touched`, `Lens dispatched`, `Lens findings integrated`, `Folder guidance`. Lens dispatched field must reflect actual Step 1.7 trigger matching results (not copy-pasted from a prior entity). `Folder guidance` must cite every non-root `folder_guidance_files=` entry from `resolve-skill-routing.sh`, list `folder_guidance_skills=`, and include the literal `codex_context_boundary` line so reviewers can see this is not duplicating Codex root instruction loading. C8 check: `bash plugins/ship-flow/bin/check-invariants.sh --check context-manifest-emitted`.
+11. **Context Manifest completeness** (entity 110, 2026-04-29): `## Context Manifest` section present and all 7 fields non-empty: `Skills loaded`, `INVARIANTS sections read`, `Architecture docs consulted`, `Domains touched`, `Lens dispatched`, `Lens findings integrated`, `Folder guidance`. Lens dispatched field must reflect actual Step 1.7 trigger matching results (not copy-pasted from a prior entity). `Folder guidance` must cite every non-root `folder_guidance_files=` entry from `resolve-skill-routing.sh`, list `folder_guidance_skills=`, and include the literal `codex_context_boundary` line so reviewers can see this is not duplicating Codex root instruction loading. C8 check: `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/check-invariants.sh" --check context-manifest-emitted`.
 12. **skills_needed non-boilerplate** (#108.1): for plans with ≥2 implementation tasks touching different file classes, grep the task blocks and confirm there are ≥2 distinct `skills_needed` lists. Empty lists or one repeated list across heterogeneous tasks are BLOCKERs.
 
 ### Step 5 — Cross-review gate (Principle 6 Rule C)
@@ -372,7 +372,7 @@ Verdict: **PROCEED** / **VETO** (max 2 loops back to Step 3 with reviewer feedba
 
 ### Step 6 — Emit plan.md
 
-Write to `<entity-folder>/plan.md` via `bash plugins/ship-flow/lib/write-stage-artifact.sh --stage=plan --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive landed at commit `acd73545`). Primitive handles atomic commit with explicit pathspec.
+Write to `<entity-folder>/plan.md` via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/write-stage-artifact.sh" --stage=plan --entity=<id>-<slug> --content=<draft-path>` (Wave 5 primitive landed at commit `acd73545`). Primitive handles atomic commit with explicit pathspec.
 
 Plan.md sections: `## Research Summary` (findings + open questions if contradictions + reviewer verdict), `## Size Re-evaluation`, `## Verification Spec` (table from Step 3.5), `## Plan` (TDD tasks from Step 3), `## Plan Report` (status, stage_cost: dispatches×model, iterations, dimensions pass/fail, reviewer verdict, scope anchoring, task count, model split, started/completed/duration), `## Context Manifest` (mandatory — see Step 1.7 and dimension 11).
 
@@ -405,7 +405,7 @@ Use grep-friendly `key: value` lines:
 - **Folder guidance**: [for each task group: `files=<paths>` → `folder_guidance_files=<non-root AGENTS.md/CLAUDE.md>`; `folder_guidance_skills=<skills>`; `codex_context_boundary=root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files`]
 ```
 
-C8 enforcement: `bash plugins/ship-flow/bin/check-invariants.sh --check context-manifest-emitted` — fails if section absent in any non-blocked plan.md created after 2026-04-29.
+C8 enforcement: `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/check-invariants.sh" --check context-manifest-emitted` — fails if section absent in any non-blocked plan.md created after 2026-04-29.
 
 Mark TaskCreate sub-task `emit-plan.md` completed; return to /ship for advance to execute.
 
