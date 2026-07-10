@@ -140,7 +140,7 @@ per plan `canonical_doc_actions` entry:
 Before review passes, run the executable read-only gate:
 
 ```bash
-bash plugins/ship-flow/bin/canonical-doc-sync-checker.sh <entity-folder>
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/canonical-doc-sync-checker.sh" <entity-folder>
 ```
 
 Any `BLOCKER canonical_doc_actions:` output blocks review. Fix by patching the
@@ -360,7 +360,7 @@ Use grep-friendly `key: value` lines:
 **Forward-only exemption check (run FIRST, before BLOCKER/WARN).** The harvest gate applies forward-only — entities created before the gate shipped (pre-0.7.0) carry no harvest blocks and MUST NOT be retroactively gated. This is enforced deterministically, not by prose. Run:
 
 ```bash
-bash plugins/ship-flow/lib/check-harvest-exempt.sh <entity-folder>/index.md
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/check-harvest-exempt.sh" <entity-folder>/index.md
 ```
 
 - Exit 0 / prints `exempt` → the entity lacks `harvest_required: true` (a pre-gate entity) → **SKIP the BLOCKER and WARN checks entirely** for this review. Record `harvest_gate: exempt (forward-only)` in `## Review Report` and proceed to PR draft.

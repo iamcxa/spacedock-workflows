@@ -87,7 +87,7 @@ Parse each task's `tdd_contract` from structured YAML or prose fields:
 - `green_command` / `GREEN command`
 - `refactor_check` / `REFACTOR check`
 
-Before dispatching implementation work, consume the plan-time `tdd-ledger.jsonl` from `### Hand-off to Execute`. Re-run `python3 plugins/ship-flow/lib/validate-tdd-ledger.py --plan <entity-folder>/plan.md --require-ledger-jsonl <entity-folder>/tdd-ledger.jsonl` in the execute worktree and treat any missing, stale, or failing ledger as a bounce to plan. Do not rely on prose-only TDD inference when the ledger is missing on a new non-trivial entity; for legacy plans, proceed serially only with an explicit WARNING and generate the ledger with `--emit-jsonl` as best-effort evidence.
+Before dispatching implementation work, consume the plan-time `tdd-ledger.jsonl` from `### Hand-off to Execute`. Re-run `python3 "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/validate-tdd-ledger.py" --plan <entity-folder>/plan.md --require-ledger-jsonl <entity-folder>/tdd-ledger.jsonl` in the execute worktree and treat any missing, stale, or failing ledger as a bounce to plan. Do not rely on prose-only TDD inference when the ledger is missing on a new non-trivial entity; for legacy plans, proceed serially only with an explicit WARNING and generate the ledger with `--emit-jsonl` as best-effort evidence.
 
 For every task without a valid `TDD: skip -- <reason>` exemption, enforce RED-before-GREEN before implementation: run the RED command before production edits, confirm the expected RED failure, then implement the minimal change, run the GREEN command, and only refactor after GREEN while re-running the refactor check. Record command text, exit/pass/fail snippets, and whether the RED failure matched expectation in `execute.md`. If the task lacks `tdd_contract` on a new non-trivial entity, bounce to plan; for a legacy plan, proceed only with a WARNING and a focused test command you can justify.
 
@@ -216,7 +216,7 @@ Rationale: lets verify panel trust self-check on these classes and focus on subs
 Before accepting DONE or DONE_WITH_CONCERNS for any task with folder guidance, validate the task return or execute draft:
 
 ```bash
-bash plugins/ship-flow/lib/check-guidance-receipt.sh \
+bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/check-guidance-receipt.sh" \
   --config=.claude/ship-flow/skill-routing.yaml \
   --files=<task-files> \
   --artifact=<task-return-or-execute-draft>
