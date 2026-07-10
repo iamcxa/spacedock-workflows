@@ -34,20 +34,42 @@ async function withFixture(files, fn) {
   }
 }
 
-function manifestJson(mods) {
-  return JSON.stringify({ version: 1, mods }, null, 2);
+function manifestJson(mods, scripts) {
+  const manifest = { version: 1, mods };
+  if (scripts !== undefined) manifest.scripts = scripts;
+  return JSON.stringify(manifest, null, 2);
 }
 
-function fixtureFiles({ manifestMods, adopterMods = {}, pluginMods = {} }) {
+function fixtureFiles({
+  manifestMods,
+  manifestScripts,
+  adopterMods = {},
+  pluginMods = {},
+  adopterScripts = {},
+  pluginBin = {},
+  readme,
+}) {
   const files = {};
   if (manifestMods !== undefined) {
-    files["adopter/docs/ship-flow/sync-manifest.json"] = manifestJson(manifestMods);
+    files["adopter/docs/ship-flow/sync-manifest.json"] = manifestJson(
+      manifestMods,
+      manifestScripts,
+    );
   }
   for (const [name, contents] of Object.entries(adopterMods)) {
     files[`adopter/docs/ship-flow/_mods/${name}.md`] = contents;
   }
   for (const [name, contents] of Object.entries(pluginMods)) {
     files[`plugin/_mods/${name}.md`] = contents;
+  }
+  for (const [name, contents] of Object.entries(adopterScripts)) {
+    files[`adopter/docs/ship-flow/scripts/${name}`] = contents;
+  }
+  for (const [name, contents] of Object.entries(pluginBin)) {
+    files[`plugin/bin/${name}`] = contents;
+  }
+  if (readme !== undefined) {
+    files["adopter/docs/ship-flow/README.md"] = readme;
   }
   return files;
 }
@@ -58,6 +80,9 @@ async function runFixture(options) {
       cwd: path.join(root, "adopter"),
       workflowDir: "docs/ship-flow",
       pluginModsDir: path.join(root, "plugin", "_mods"),
+      pluginBinDir: path.join(root, "plugin", "bin"),
+      pluginName: options.pluginName ?? "ship-flow",
+      pluginVersion: options.pluginVersion ?? "9.9.9-test",
       acceptUpstream: options.acceptUpstream,
     }),
   );
@@ -312,6 +337,171 @@ test("CLI exits 0 with a one-line notice when the manifest is missing", async ()
     assert.match(stdout, /sync-manifest\.json/);
     assert.equal(stdout.trim().split("\n").length, 1);
   });
+});
+
+test("scripts section: passes a clean plugin-canonical script copy", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    manifestScripts: { "semantic-review-gate.mjs": { bucket: "plugin-canonical" } },
+    adopterScripts: { "semantic-review-gate.mjs": "console.log('same');\n" },
+    pluginBin: { "semantic-review-gate.mjs": "console.log('same');\n" },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.issues, []);
+});
+
+test("scripts section: fails a drifted plugin-canonical script copy", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    manifestScripts: { "semantic-review-gate.mjs": { bucket: "plugin-canonical" } },
+    adopterScripts: { "semantic-review-gate.mjs": "console.log('local edit');\n" },
+    pluginBin: { "semantic-review-gate.mjs": "console.log('upstream');\n" },
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(ruleIds(result), ["canonical.drifted-copy"]);
+  assert.match(result.issues[0].file, /scripts\/semantic-review-gate\.mjs/);
+});
+
+test("scripts section: warns when upstream moved under a customized script and names the scripts/ accept path", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    manifestScripts: {
+      "semantic-review-gate.mjs": {
+        bucket: "customized",
+        upstreamBaseHash: sha256("console.log('old upstream');\n"),
+      },
+    },
+    adopterScripts: { "semantic-review-gate.mjs": "console.log('fork');\n" },
+    pluginBin: { "semantic-review-gate.mjs": "console.log('new upstream');\n" },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(ruleIds(result), ["customized.upstream-moved"]);
+  assert.match(
+    result.issues[0].message,
+    /--accept-upstream scripts\/semantic-review-gate\.mjs/,
+  );
+});
+
+test("scripts section: warns on a local-only script name collision with plugin bin/", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    manifestScripts: { "lint.mjs": { bucket: "local-only" } },
+    adopterScripts: { "lint.mjs": "console.log('adopter lint');\n" },
+    pluginBin: { "lint.mjs": "console.log('plugin lint');\n" },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(ruleIds(result), ["local-only.plugin-collision"]);
+});
+
+test("scripts section: warns on an unclassified adopter script when the section is present", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    manifestScripts: {},
+    adopterScripts: { "mystery.mjs": "console.log('who am I');\n" },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(ruleIds(result), ["manifest.unclassified-adopter-script"]);
+  assert.equal(result.issues[0].level, "WARN");
+});
+
+test("scripts section: absent section disables script checks entirely (back-compat)", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    adopterScripts: { "mystery.mjs": "console.log('unchecked');\n" },
+    pluginBin: { "mystery.mjs": "console.log('different');\n" },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.issues, []);
+});
+
+test("--accept-upstream scripts/<name> rewrites the scripts entry hash and preserves the mods section", async () => {
+  const newUpstream = "console.log('new upstream');\n";
+  const files = fixtureFiles({
+    manifestMods: { "alpha-mod": { bucket: "local-only" } },
+    manifestScripts: {
+      "semantic-review-gate.mjs": {
+        bucket: "customized",
+        upstreamBaseHash: sha256("console.log('old upstream');\n"),
+      },
+    },
+    adopterMods: { "alpha-mod": "# Alpha\n" },
+    adopterScripts: { "semantic-review-gate.mjs": "console.log('fork');\n" },
+    pluginBin: { "semantic-review-gate.mjs": newUpstream },
+  });
+
+  await withFixture(files, async (root) => {
+    const result = await runSyncDriftCheck({
+      cwd: path.join(root, "adopter"),
+      workflowDir: "docs/ship-flow",
+      pluginModsDir: path.join(root, "plugin", "_mods"),
+      pluginBinDir: path.join(root, "plugin", "bin"),
+      pluginName: "ship-flow",
+      pluginVersion: "9.9.9-test",
+      acceptUpstream: "scripts/semantic-review-gate.mjs",
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.accepted, {
+      mod: "scripts/semantic-review-gate.mjs",
+      upstreamBaseHash: sha256(newUpstream),
+    });
+
+    const saved = JSON.parse(
+      await readFile(
+        path.join(root, "adopter/docs/ship-flow/sync-manifest.json"),
+        "utf8",
+      ),
+    );
+    assert.equal(
+      saved.scripts["semantic-review-gate.mjs"].upstreamBaseHash,
+      sha256(newUpstream),
+    );
+    assert.deepEqual(Object.keys(saved.mods), ["alpha-mod"]);
+  });
+});
+
+test("workflow-version stamp: warns when the README stamp lags the installed plugin version", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    readme:
+      "---\ncommissioned-by: spacedock@0.24.0\nworkflow-version: ship-flow@0.7.0-rc.4  # stale comment\n---\n\n# Pipeline\n",
+    pluginVersion: "0.7.1",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(ruleIds(result), ["stamp.workflow-version-stale"]);
+  assert.equal(result.issues[0].level, "WARN");
+  assert.match(result.issues[0].message, /ship-flow@0\.7\.0-rc\.4/);
+  assert.match(result.issues[0].message, /ship-flow@0\.7\.1/);
+});
+
+test("workflow-version stamp: silent when the stamp matches the installed plugin version", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    readme:
+      "---\nworkflow-version: ship-flow@0.7.1  # current\n---\n\n# Pipeline\n",
+    pluginVersion: "0.7.1",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.issues, []);
+});
+
+test("workflow-version stamp: silent when the README has no stamp", async () => {
+  const result = await runFixture({
+    manifestMods: {},
+    readme: "---\ncommissioned-by: spacedock@0.24.0\n---\n\n# Pipeline\n",
+    pluginVersion: "0.7.1",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.issues, []);
 });
 
 test("CLI exits 1 when a FAIL check fires", async () => {
