@@ -104,7 +104,10 @@ assert_contains "weak declaration reports BLOCKER doc-impact" '^BLOCKER doc-impa
 
 echo ""
 echo "Block 4: src touched, doc not touched, concrete declaration — pass"
-run_checker "changed-doc-not-touched.txt" "Some PR prose. doc-impact: none — covered by follow-up PR #42 already merged upstream." "${TMP_DIR}/good-decl.out" "${TMP_DIR}/good-decl.exit"
+# codex-gate round-2 P1-2: the marker must be a standalone line, so this
+# fixture puts the surrounding PR prose on its own line (a real PR body is
+# multi-line) rather than sharing a line with "doc-impact:".
+run_checker "changed-doc-not-touched.txt" "$(printf 'Some PR prose.\ndoc-impact: none — covered by follow-up PR #42 already merged upstream.')" "${TMP_DIR}/good-decl.out" "${TMP_DIR}/good-decl.exit"
 assert_exit "concrete declaration exits 0" 0 "${TMP_DIR}/good-decl.exit"
 assert_contains "concrete declaration emits PASS for skill-readme" '^PASS skill-readme: doc-impact declaration accepted' "${TMP_DIR}/good-decl.out"
 assert_not_contains "concrete declaration emits no blockers" '^BLOCKER ' "${TMP_DIR}/good-decl.out"
@@ -126,6 +129,25 @@ assert_exit "anchored pipe separator is still accepted" 0 "${TMP_DIR}/p1-2-pipe.
 
 run_checker "changed-doc-not-touched.txt" "doc-impact: none -- valid double-dash-separated reason text" "${TMP_DIR}/p1-2-dashdash.out" "${TMP_DIR}/p1-2-dashdash.exit"
 assert_exit "anchored double-dash separator is still accepted" 0 "${TMP_DIR}/p1-2-dashdash.exit"
+
+echo ""
+echo "Block 4c: codex-gate round-2 P1-2 residual — marker must be line-anchored, not just anywhere"
+# FO repro: a PR-template example line ("Example only: ...") sharing a line
+# with the marker must NOT count as a real waiver.
+run_checker "changed-doc-not-touched.txt" "Example only: doc-impact: none — this is documentation" "${TMP_DIR}/p1-2-template.out" "${TMP_DIR}/p1-2-template.exit"
+assert_exit "template-prefixed declaration is rejected same as no declaration" 1 "${TMP_DIR}/p1-2-template.exit"
+assert_contains "template-prefixed declaration reports BLOCKER doc-impact for skill-readme" '^BLOCKER doc-impact: skill-readme' "${TMP_DIR}/p1-2-template.out"
+
+# A marker quoted/attributed inside surrounding prose on the same line must
+# likewise NOT count — indistinguishable from prefixed template prose.
+run_checker "changed-doc-not-touched.txt" 'He argued: "doc-impact: none — this is fine" but reviewers disagreed.' "${TMP_DIR}/p1-2-quoted.out" "${TMP_DIR}/p1-2-quoted.exit"
+assert_exit "quoted-context declaration is rejected same as no declaration" 1 "${TMP_DIR}/p1-2-quoted.exit"
+assert_contains "quoted-context declaration reports BLOCKER doc-impact for skill-readme" '^BLOCKER doc-impact: skill-readme' "${TMP_DIR}/p1-2-quoted.out"
+
+# Control: leading whitespace before the marker (e.g. an indented paragraph)
+# stays anchored — only non-whitespace prefixes are rejected.
+run_checker "changed-doc-not-touched.txt" "   doc-impact: none — indented but still a standalone line" "${TMP_DIR}/p1-2-indented.out" "${TMP_DIR}/p1-2-indented.exit"
+assert_exit "leading-whitespace-only prefix is still accepted" 0 "${TMP_DIR}/p1-2-indented.exit"
 
 echo ""
 echo "Block 5: unrelated changes — no coupling triggered, silent pass"

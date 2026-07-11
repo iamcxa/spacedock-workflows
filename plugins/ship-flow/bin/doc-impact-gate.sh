@@ -110,12 +110,21 @@ emit_blocker() {
 # stays permissive (`[-—:|]*`) once a match is confirmed, so multi-char
 # separators like "--" are stripped in full, matching prior behavior for
 # already-anchored declarations.
+#
+# codex-gate round-2 P1-2 residual: the marker must also be line-anchored
+# (only leading whitespace allowed before "doc-impact:"). Without this, any
+# text preceding the marker on the same line — a PR-template example line
+# ("Example only: doc-impact: none — ..."), a quoted/attributed aside
+# ('"doc-impact: none — ..." they said'), etc. — counted as a real waiver.
+# A genuine declaration is always its own standalone line; anything else is
+# indistinguishable from quoted/prefixed prose and must fall through to the
+# caller's empty-REASON BLOCKER path exactly like no declaration at all.
 extract_doc_impact_reason() {
   local declaration="$1"
   local marker_line
-  marker_line="$(printf '%s\n' "$declaration" | grep -im1 '[Dd][Oo][Cc]-[Ii][Mm][Pp][Aa][Cc][Tt]:[[:space:]]*[Nn][Oo][Nn][Ee][[:space:]]*[-—:|]')" || true
+  marker_line="$(printf '%s\n' "$declaration" | grep -im1 '^[[:space:]]*[Dd][Oo][Cc]-[Ii][Mm][Pp][Aa][Cc][Tt]:[[:space:]]*[Nn][Oo][Nn][Ee][[:space:]]*[-—:|]')" || true
   [ -n "$marker_line" ] || { printf ''; return 0; }
-  printf '%s' "$marker_line" | sed -E 's/.*[Dd][Oo][Cc]-[Ii][Mm][Pp][Aa][Cc][Tt]:[[:space:]]*[Nn][Oo][Nn][Ee][[:space:]]*[-—:|]*[[:space:]]*//'
+  printf '%s' "$marker_line" | sed -E 's/^[[:space:]]*[Dd][Oo][Cc]-[Ii][Mm][Pp][Aa][Cc][Tt]:[[:space:]]*[Nn][Oo][Nn][Ee][[:space:]]*[-—:|]*[[:space:]]*//'
 }
 
 REASON="$(extract_doc_impact_reason "$DECLARATION")"
