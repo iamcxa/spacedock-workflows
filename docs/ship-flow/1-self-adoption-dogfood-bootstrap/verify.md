@@ -154,3 +154,22 @@ No item above is `INCONCLUSIVE` — each was independently re-run this session w
 - No BLOCKING or WARNING finding routes back to execute. Feedback-to target (execute) is not invoked this cycle.
 
 A parallel Codex 5.6 cross-model EM review of the execute diff runs at FO level per captain directive; this verdict stands independently of that review's outcome, per dispatch instruction.
+
+<!-- section:codex-gate-findings -->
+## Codex Gate Findings
+
+[P1] `.github/workflows/ship-flow-invariants.yml:79` runs the gate on `push` events, but line 81 can only obtain a PR body on `pull_request`; consequently, any legitimately waived PR passes before merge and then produces a red main-branch run after merge because the declaration disappears. Restrict the step to pull-request events or provide an event-independent declaration source for push runs.
+
+[P1] `plugins/ship-flow/bin/doc-impact-gate.sh:106` matches `none` without line anchoring or a word boundary, so text such as `doc-impact: none of these docs...` or an instructional/template sentence containing the marker is accepted as a waiver; both cases were confirmed to exit 0. Require a standalone, anchored declaration with an explicit separator, and ignore comments/template examples.
+
+[P1] `plugins/ship-flow/bin/doc-impact-gate.sh:224` silently recognizes only one exact inline-array YAML layout, so valid adopter overrides using block arrays, single quotes, or different indentation leave `srcGlobs` empty and disable affected coupling rows without an error. Parse the declared YAML format properly or fail closed by validating every row has recognized, nonempty `srcGlobs` and `docPaths`.
+
+FO independent confirmation (2026-07-11): P1-2 reproduced live — declaration text
+`doc-impact: none of these docs are affected by my change I promise` → PASS exit 0,
+while the no-declaration control → BLOCKER exit 1; P1-1 and P1-3 confirmed by direct
+source read (workflow `on: push` + `plugin_changed`-only step gating; parser case
+patterns match only the exact 4-space inline-array layout). Unknown-arg path exits 2
+(fail-closed) — no fourth finding.
+
+GATE: FAIL   prompt-sha256: d8894c2a002c   diff-LOC: 846   codex-version: 0.144.1   [P1]:3  [P2]:0
+<!-- /section:codex-gate-findings -->
