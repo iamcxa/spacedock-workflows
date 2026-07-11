@@ -260,7 +260,7 @@ Re-ran every check independently against the live worktree HEAD (`f5a8fd2`) rath
 
 | cycle | date | reviewer verdict | routed to | findings | resolution |
 |---|---|---|---|---|---|
-| 1 | 2026-07-11 | verify.md PASS (local scope) overridden by codex-gate FAIL ([P1]:3, all FO-confirmed) | execute (cycle-2 dispatch) | P1-1 CI step runs on push where PR body is absent; P1-2 unanchored `none` match accepts non-waiver prose; P1-3 coupling YAML parser fails open on layout variants — full text + repro evidence in verify.md `codex-gate-findings` section | fixed cycle-2: P1-1 `004456c`, P1-2 `961223a`, P1-3 `f030145` — RED-first evidence in execute.md § Cycle-2 Fixes |
+| 1 | 2026-07-11 | verify.md PASS (local scope) overridden by codex-gate FAIL ([P1]:3, all FO-confirmed) | execute (cycle-2 dispatch) | P1-1 CI step runs on push where PR body is absent; P1-2 unanchored `none` match accepts non-waiver prose; P1-3 coupling YAML parser fails open on layout variants — full text + repro evidence in verify.md `codex-gate-findings` section | **RESOLVED** — fixed cycle-2: P1-1 `004456c`, P1-2 `961223a`, P1-3 `f030145` (RED-first evidence in execute.md § Cycle-2 Fixes); re-verified live against HEAD in verify.md § Verdict (cycle 2) — all 3 P1s confirmed closed, regression suites 32/32 + 8/8 green |
 
 ## Stage Report: execute (cycle 2)
 
@@ -282,3 +282,24 @@ All 3 codex-gate P1 findings (CI push-event scoping, unanchored `none` declarati
 - iteration_count: 1 (cycle-2 fix pass, no further rejection within this cycle)
 - commit_count: 3
 - new_findings: 0 (all 3 are the codex-gate-routed P1s; the 3 pre-existing check-invariants.sh FAILs are not new)
+
+## Stage Report: verify (cycle 2)
+
+- DONE: Each routed P1 fix is re-verified against the live tree (not execute.md claims): the FO bypass repro string exits 1, a legit anchored declaration exits 0, a block-array coupling map hard-errors exit 2, and the CI step carries the pull_request event guard — plus the fix regression tests re-run green
+  P1-1: `.github/workflows/ship-flow-invariants.yml` step condition confirmed live to read `... && github.event_name == 'pull_request'`. P1-2: FO repro string `doc-impact: none of these docs are affected by my change I promise` → exit 1 (live); anchored control → exit 0 (live). P1-3: `coupling-map-block-array.yaml` fixture → exit 2, `ERROR: coupling map row 'skill-readme' ... has an empty or unparseable srcGlobs/docPaths` (live). `test-doc-impact-gate.sh` 32/32, `test-ship-flow-ci-scope.sh` 8/8, both re-run this session. Full table in verify.md § Cycle-2 P1 Fix Re-verification.
+- DONE: verify.md is brought to invariant compliance as verify-stage-owned work: C11 Panel Coverage section, C12 Deferred-to-TODO section, C15 body-line cap (bulk evidence wrapped in details blocks); CI=true check-invariants.sh afterward shows ONLY the 2 known historical C14 lines
+  `## Panel Coverage` and `## Deferred to TODO` added (grep count 1 each); the 4 original per-AC + 3 runtime-UAT full evidence tables moved into two `<details>` blocks, body measured 119 lines (cap 120), raw 230 lines (cap 240). `CI=true bash plugins/ship-flow/bin/check-invariants.sh` re-run live after the commit: `OK C11`, `OK C12`, `OK C15`; only `FAIL C14` on `695addea`/`0d0ca53e` remains.
+- DONE: verify.md gains a cycle-2 verdict section superseding (not deleting) the cycle-1 verdict, with per-P1 evidence citations and the updated Feedback Cycles row marked resolved; index.md Stage Report: verify updated with cycle-2 accounting
+  cycle-1 `## Verdict` retitled `(cycle 1 — superseded by cycle 2 below)`, content unchanged; new `## Verdict (cycle 2 — current, supersedes cycle 1)` added with per-P1 evidence citations and final PASS. Feedback Cycles table row 1 resolution column now reads `**RESOLVED** — ...`. This section is the cycle-2 accounting.
+
+### Summary
+
+Re-verified all 3 codex-gate P1 fixes live against HEAD (not execute.md's word): CI push-event guard, anchored declaration matcher, and coupling-map fail-closed parsing all confirmed working exactly as fixed, with both regression suites (`test-doc-impact-gate.sh` 32/32, `test-ship-flow-ci-scope.sh` 8/8) re-run green. Separately brought verify.md itself to C11/C12/C15 compliance — the schema debt inherited from the cycle-1 verify worker dying at session limit — by adding the mandatory Panel Coverage / Deferred to TODO sections and collapsing bulk per-AC/runtime-UAT evidence into `<details>` blocks to fit the 120-line body cap. `CI=true check-invariants.sh` now shows only the 2 known historical C14 lines (out of scope, FO-acknowledged). Verdict: PASS, proceed to review/ship; feedback loop to execute is closed this cycle.
+
+### Metrics
+- status: passed
+- duration_minutes: (see FO dispatch timing)
+- iteration_count: 2 (cycle-2 re-verify)
+- p1_fixes_reverified: 3
+- invariant_fails_closed: 3 (C11, C12, C15)
+- new_findings: 0
