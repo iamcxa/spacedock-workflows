@@ -210,3 +210,85 @@ total: `.github/workflows/ship-flow-invariants.yml`,
 fixture files under `plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/`).
 
 </details>
+
+## Cycle-3 Fixes (codex-gate round-2 residual P1s)
+
+Codex-gate round 2 found 2 residual P1s in the cycle-2 fixes — point-patch
+gaps in the same bug classes, not new bugs. Full finding text: index.md
+`Feedback from prior review` (`6d338e4`) / verify.md `codex-gate-findings`
+Round-2. FO instruction: kill the class. Fixed one commit each, RED→GREEN,
+re-run independently this session — evidence in `<details>` below.
+Summary: P1-2 residual `2de8b87` (`test-doc-impact-gate.sh` 32/32→37/37),
+P1-3 residual `670df77` (37/37→43/43). Full local gate re-run clean apart
+from the 2 known pre-existing shell fails and 1 pre-existing verify.md
+`C15` (predates this cycle).
+
+<details>
+<summary>Full per-P1 RED/GREEN evidence + gate re-run table + deviation note</summary>
+
+#### P1-2 residual — marker not line-anchored
+
+`extract_doc_impact_reason()`'s cycle-2 fix anchored the separator after
+`none` but not the marker itself to the line — `grep -im1` matched
+`doc-impact: none — ...` anywhere inside a line, so same-line prefix text
+(a PR-template example, a quoted aside) still counted as a real waiver.
+
+- RED (pre-fix, live): FO repro `Example only: doc-impact: none — this is
+  documentation` → `PASS ... accepted`, exit 0 (should be 1).
+- Fix: both the `grep` detection and `sed` extraction now anchor
+  `^[[:space:]]*` before `doc-impact:` — only leading whitespace tolerated.
+- GREEN (post-fix, live): same repro → `BLOCKER doc-impact: ...`, exit 1.
+  `test-doc-impact-gate.sh` 32/32→**37/37** (Block 4c: template-prefixed,
+  quoted-context, leading-whitespace-control). Block 4's fixture shared the
+  same bug pattern; updated to realistic multi-line PR-body text.
+- Commit: `2de8b87`.
+
+#### P1-3 residual — parser silent on zero-parsed-row maps
+
+Cycle-2's `validate_and_process_row` fail-closed check only fires for a row
+the matcher recognized (`- name:` line). A `couplings:` layout the matcher
+never triggers on at all — flow-style `[{...}]`, or empty `[]` — parses to
+zero rows, hits the row-check once at EOF with an empty name (a no-op).
+Whole gate goes dark: exit 0, zero output, zero enforcement.
+
+- RED (pre-fix, live): flow-style map, changed file matching a would-be
+  coupling, no declaration → silent exit 0 (should hard-error).
+- Fix: (a) count parsed rows in the `couplings:` block; zero rows with the
+  key present → hard error naming the map. (b) any non-blank, non-comment
+  line inside the block matching none of `- name:`/`srcGlobs:`/`docPaths:`/
+  `rationale:` → hard error naming the line.
+- GREEN (post-fix, live): same repro → `ERROR: ... zero rows parsed.`,
+  exit 2. `test-doc-impact-gate.sh` 37/37→**43/43** (Blocks 12-14:
+  flow-style, `couplings: []`, stray-unrecognized-key). Real
+  `references/doc-coupling-map.yaml` and the 3 pre-existing variant
+  fixtures (single-quote, indent-variant, block-array) sanity-checked
+  unchanged post-fix.
+- Commit: `670df77`.
+
+### Full local gate re-run (post-fix, this session)
+
+| Check | Result |
+|---|---|
+| `test-doc-impact-gate.sh` | 43/43 |
+| `test-ship-flow-ci-scope.sh` | 8/8 (unchanged) |
+| Shell suite (103 files) | 101/103 — 2 pre-existing fails (`test-archived-corpus-invariants.sh`, `test-merged-pr-closeout-reconciler.sh`), identical to base `6d338e4` |
+| `node --test bin/*.test.mjs` | 79/79 |
+| `CI=true check-invariants.sh` | 2 known `C14` + 1 pre-existing `C15` on verify.md — see deviation |
+| `check-no-dangling.sh` | PASS |
+| `check-version-triple.sh` | PASS |
+| `git diff --check 6d338e4 HEAD` | clean |
+
+**Deviation — check-invariants.sh's 3rd FAIL (`C15` on verify.md, body 131
+lines > cap 120) is pre-existing, not introduced here.** Confirmed live
+against the unmodified worktree before any edit this cycle — it comes from
+`6d338e4` itself (cycle-2's feedback-routing commit) appending round-2
+findings to verify.md, growing it past the cap. `git diff --stat 6d338e4
+HEAD` confirms verify.md is not among the 5 files this cycle touched
+(`bin/doc-impact-gate.sh`, `lib/__tests__/test-doc-impact-gate.sh`, 3 new
+fixtures under `lib/__tests__/fixtures/doc-impact-gate/`). Per this
+dispatch's "verify.md NOT touched (re-verify owns it)" instruction, not
+fixed here — same disposition as cycle-2's analogous deviation.
+
+No scope growth beyond the 2 named residual fixes.
+
+</details>
