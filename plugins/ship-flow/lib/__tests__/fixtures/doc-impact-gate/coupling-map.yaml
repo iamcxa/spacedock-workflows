@@ -1,0 +1,13 @@
+# Test fixture coupling map — independent of the plugin default
+# (references/doc-coupling-map.yaml), so this test never depends on
+# production coupling content.
+schema_version: "1.0"
+couplings:
+  - name: skill-readme
+    srcGlobs: ["fixtures/skills/*/SKILL.md"]
+    docPaths: ["fixtures/README.md"]
+    rationale: "Test fixture: skill behavior changes must stay reflected in README."
+  - name: bin-source-map
+    srcGlobs: ["fixtures/bin/*.sh"]
+    docPaths: ["fixtures/doc-sync-context.md"]
+    rationale: "Test fixture: new checkers must register a Source-Map row."
