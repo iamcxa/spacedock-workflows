@@ -1,27 +1,20 @@
 # Self-adoption dogfood bootstrap — canonical docs + doc-impact gate — Verify
 
-This is the **cycle-2 re-verify** after feedback routing. Cycle-1's PASS
-verdict (local/mechanical scope) was overridden by a parallel codex-gate FAIL
-(3 P1 findings — see `## Codex Gate Findings` below). Execute cycle-2 fixed
-all three (`004456c`, `961223a`, `f030145`, stage report `0053693`). This
-round re-verifies the fixes against the live tree at HEAD, not execute.md's
-word, and brings verify.md itself to C11/C12/C15 invariant compliance
-(verify-stage-owned; the cycle-1 verify worker died at session limit before
-schema-completing it). Base for pre-existing comparisons: `7780b2a`.
+This is the **cycle-3 re-verify** (LAST automatic cycle) after two feedback-routing rounds. Cycle-1's PASS was overridden by codex-gate round-1 FAIL (3 P1, fixed cycle-2, `004456c`/`961223a`/`f030145`); cycle-2's PASS was in turn overridden by codex-gate round-2 FAIL (2 residual P1, fixed cycle-3, `2de8b87`/`670df77`). This round re-verifies the round-2 fixes against the live tree at HEAD, not execute.md's word, and restores verify.md's own C15 artifact-verbosity compliance (re-introduced by the round-2 feedback-routing append). Base for pre-existing comparisons: `7780b2a`.
 
 ## Quality Gate
 
 | Check | Command | Result | Note |
 |---|---|---|---|
-| Shell suite | `for f in plugins/ship-flow/lib/__tests__/test-*.sh; do bash "$f"; done` | 101/103 pass, 2 fail | identical 2 pre-existing failures at HEAD and at base `7780b2a` — see Known-Dirty |
-| Node suite | `node --test plugins/ship-flow/bin/*.test.mjs` | 79/79 pass | zero fail |
-| Invariants | `CI=true bash plugins/ship-flow/bin/check-invariants.sh` | 5 FAIL pre-this-report → 2 FAIL after (this stage report closes C11/C12/C15) | only the 2 known historical C14 lines remain — see Known-Dirty |
-| No-dangling | `bash scripts/check-no-dangling.sh` | PASS (exit 0) | 8 patterns, 0 violations |
-| Version triple | `bash scripts/check-version-triple.sh` | PASS (exit 0) | 0.8.2 triple-matched |
-| Whitespace | `git diff --check 7780b2a HEAD` | clean (exit 0) | no trailing-whitespace/conflict-marker errors |
-| TDD ledger | `python3 plugins/ship-flow/lib/validate-tdd-ledger.py --plan plan.md --require-ledger-jsonl tdd-ledger.jsonl` | `status=pass records=7` | re-run independently |
-| doc-impact-gate unit tests | `bash plugins/ship-flow/lib/__tests__/test-doc-impact-gate.sh` | 32/32 pass | re-run live this cycle; was 20/20 pre-P1-fix, +12 P1-2/P1-3 regression assertions |
-| CI-scope unit tests | `bash plugins/ship-flow/lib/__tests__/test-ship-flow-ci-scope.sh` | 8/8 pass | re-run live this cycle; was 7/7 pre-P1-fix, +1 P1-1 event-guard assertion |
+| Shell suite | `for f in plugins/ship-flow/lib/__tests__/test-*.sh; do bash "$f"; done` | 101/103 pass, 2 fail | identical 2 pre-existing failures at HEAD and at base `7780b2a` — re-confirmed cycle-3 — see Known-Dirty |
+| Node suite | `node --test plugins/ship-flow/bin/*.test.mjs` | 79/79 pass | zero fail — re-confirmed cycle-3 |
+| Invariants | `CI=true bash plugins/ship-flow/bin/check-invariants.sh` | cycle-3: 3 FAIL pre-this-report (2 C14 + 1 C15) → 2 FAIL after (this cycle-3 report closes C15) | only the 2 known historical C14 lines remain — see Known-Dirty |
+| No-dangling | `bash scripts/check-no-dangling.sh` | PASS (exit 0) | 8 patterns, 0 violations — re-confirmed cycle-3 |
+| Version triple | `bash scripts/check-version-triple.sh` | PASS (exit 0) | 0.8.2 triple-matched — re-confirmed cycle-3 |
+| Whitespace | `git diff --check 7780b2a HEAD` | clean (exit 0) | no trailing-whitespace/conflict-marker errors — re-confirmed cycle-3 |
+| TDD ledger | `python3 plugins/ship-flow/lib/validate-tdd-ledger.py --plan plan.md --require-ledger-jsonl tdd-ledger.jsonl` | `status=pass records=7` | re-run independently — re-confirmed cycle-3 |
+| doc-impact-gate unit tests | `bash plugins/ship-flow/lib/__tests__/test-doc-impact-gate.sh` | 43/43 pass | cycle-3: was 32/32 pre-round-2-fix, +11 round-2 P1-2/P1-3 residual regression assertions (Block 4c, Blocks 12-14) |
+| CI-scope unit tests | `bash plugins/ship-flow/lib/__tests__/test-ship-flow-ci-scope.sh` | 8/8 pass | unchanged this cycle — re-confirmed live |
 
 ## Per-AC Verification Claims
 
@@ -117,6 +110,10 @@ schema-completing it). Base for pre-existing comparisons: `7780b2a`.
 | P1-3 block-array coupling map | `f030145` | `doc-impact-gate.sh --coupling-map=.../coupling-map-block-array.yaml` | exit 2, `ERROR: coupling map row 'skill-readme' ... has an empty or unparseable srcGlobs/docPaths` (hard-closed, was silent exit 0 pre-fix) |
 | Regression suites | all 3 | `test-doc-impact-gate.sh`; `test-ship-flow-ci-scope.sh` | 32/32; 8/8 — both re-run green this session |
 
+### Cycle-3 P1 Fix Re-verification (live against HEAD `3c3c760` this session; full per-case output in index.md `Stage Report: verify (cycle 3)`)
+
+Round-2 residuals re-verified live, class-wide plus 2 NEW variants per class beyond the shipped fixtures, not just the fixture repro strings: **P1-2′** (`2de8b87`) — template-prefixed declaration + 2 NEW same-line-prefix declarations (markdown blockquote, inline code span) all exit 1 `BLOCKER`; line-start control exits 0 `PASS` — anchoring confirmed and generalizes beyond the shipped repro. **P1-3′** (`670df77`) — flow-style fixture, zero-row `couplings: []` fixture, 2 NEW hand-written variants (own empty-map file, own flow-style file), and the unrecognized-line fixture all hard-error exit 2 naming the failure — default-deny confirmed and generalizes beyond the shipped fixture text. Full FO 8-case repro battery (both original P1s + both round-2 residuals) reproduced live this session, matching results. `test-doc-impact-gate.sh` 43/43 (see Quality Gate table).
+
 <details>
 <summary>Full runtime-UAT verification records — carried over unchanged from cycle-1, independently re-confirmed this cycle</summary>
 
@@ -180,10 +177,9 @@ No item above is `INCONCLUSIVE`; each has a reproducible command and a named roo
 - Quality gate: clean apart from the 2 named pre-existing shell-suite failures and the 2 named historical C14 failures — both independently re-verified present-and-unchanged at base and HEAD.
 - This verdict was overridden by the parallel codex-gate FAIL below before it could route to review/ship — see cycle-2 verdict.
 
-## Verdict (cycle 2 — current, supersedes cycle 1)
+## Verdict (cycle 2 — superseded by cycle 3 below)
 
 **PASS** (local/mechanical scope) — proceed to review/ship.
-
 All three codex-gate P1 findings are closed, each independently re-verified live against HEAD this session (not execute.md's word — see Cycle-2 P1 Fix Re-verification table above):
 
 - **P1-1** (CI ran the declaration check on `push`, where the PR body is structurally absent) — fixed `004456c`. Live: the workflow step condition now reads `... && github.event_name == 'pull_request'`. `test-ship-flow-ci-scope.sh` 8/8.
@@ -191,47 +187,42 @@ All three codex-gate P1 findings are closed, each independently re-verified live
 - **P1-3** (coupling-map parser silently fails open on unsupported YAML layouts) — fixed `f030145`. Live: the block-array fixture now hard-errors exit 2 naming the unparseable row; quote/indent variants still parse and gate correctly. `test-doc-impact-gate.sh` 32/32 (shared suite).
 
 verify.md itself is now C11/C12/C15-compliant (this stage report): `## Panel Coverage` and `## Deferred to TODO` sections present exactly once each, body content brought under the 120-line cap via `<details>`-collapsed bulk evidence. `CI=true check-invariants.sh` re-run after this commit shows only the 2 known historical C14 lines — no C11/C12/C15, no new findings.
+This verdict was overridden by the parallel codex-gate round-2 FAIL ([P1]:2) before it could route to review/ship — see cycle-3 verdict below.
 
-No BLOCKING or WARNING finding routes back to execute this cycle. Feedback-to target (execute) is not invoked again this cycle — the loop is closed.
+## Verdict (cycle 3 — current, supersedes cycle 2)
+
+**PASS** (local/mechanical scope) — proceed to review/ship. This is the LAST automatic cycle. Both round-2 residual P1s are closed class-wide, each independently re-verified live against HEAD `3c3c760` this session — original repro strings plus NEW variants exercised beyond the shipped fixture suite (see Cycle-3 P1 Fix Re-verification above; full per-case output in index.md `Stage Report: verify (cycle 3)`):
+
+- **P1-2′** (declaration marker matched anywhere within a line, not anchored to line start) — fixed `2de8b87`. Live: the FO template-prefixed repro now exits 1; 2 NEW same-line-prefix variants (markdown blockquote, inline code span) also exit 1; a genuine line-start declaration still exits 0. `test-doc-impact-gate.sh` 43/43.
+- **P1-3′** (coupling-map parser silent when the WHOLE map parses to zero rows, not just per-row) — fixed `670df77`. Live: the FO flow-style repro and the `couplings: []` fixture now hard-error exit 2; 2 NEW hand-written variants (own empty-map file, own flow-style file, not the shipped fixtures) confirm the fix generalizes; an unrecognized-line map also hard-errors exit 2 naming the offending line. `test-doc-impact-gate.sh` 43/43 (shared suite).
+
+verify.md's C15 artifact-verbosity budget (pushed over by the round-2 findings append at `6d338e4`) is restored this cycle: Round 1 + Round 2 codex-gate finding text collapsed into a single `<details>` block (text unchanged, only collapsed) and the Cycle-2/Cycle-3 FO-confirmation prose reflowed to single lines (no wording changed). `CI=true check-invariants.sh` re-run after this commit shows only the 2 known historical C14 lines — no C11/C12/C15, no new findings. Shell suite 101/103 (2 pre-existing fails, identical to base), node 79/79, no-dangling PASS, version-triple PASS, `git diff --check` clean, TDD ledger pass — all independently re-confirmed live this session, not carried over from execute.md's word. No item this cycle is `INCONCLUSIVE`; no `PROMPT_CAPTAIN` line is warranted. No BLOCKING or WARNING finding routes back to execute this cycle — the loop is closed. Feedback Cycles row 2 (index.md) is marked resolved.
 
 ## Panel Coverage
 
-- Tier: C (minimal — mechanical re-verify of 3 routed P1 fixes; no new multi-specialist dispatch this round)
-- Specialists run: none newly dispatched this cycle (re-verify scope is the 3 P1 fixes + the C11/C12/C15 debt on verify.md itself)
-- Adversarial: Claude (this verify worker) ✓; Codex ✓ — codex-gate ran in cycle 1 (`## Codex Gate Findings` below, GATE: FAIL, 3 P1); a further Codex 5.6 re-review of the fix diff (`fb59795..HEAD`) runs in parallel at FO level per captain directive — this verdict stands independently of that review's outcome
-- Pass ownership: verify_agent_worker_ownership PASS; runtime_uat PASS; workflow_ci PASS (P1-1 fixed); silent_failure PASS (P1-2/P1-3 fail-closed fixes)
+- Tier: C (minimal — mechanical re-verify of 2 routed round-2 P1 residuals; no new multi-specialist dispatch this round)
+- Specialists run: none newly dispatched this cycle (re-verify scope is the 2 round-2 P1 fixes + the C15 debt re-introduced on verify.md by the round-2 feedback-routing append)
+- Adversarial: Claude (this verify worker) ✓; Codex ✓ — codex-gate ran rounds 1 and 2 (`## Codex Gate Findings` below, both GATE: FAIL, resolved cycles 2 and 3 respectively); a parallel Codex round-3 re-review runs at FO level per captain directive — this verdict stands independently of that review's outcome
+- Pass ownership: verify_agent_worker_ownership PASS; runtime_uat PASS; workflow_ci PASS; silent_failure PASS (P1-2′/P1-3′ class-wide fail-closed fixes)
 - PR Quality Score: not scored this cycle (mechanical re-verify, not a fresh multi-specialist round)
-- Cross-model: YES — codex-gate cycle-1 findings + parallel FO-level Codex 5.6 re-review
+- Cross-model: YES — codex-gate rounds 1+2 findings + a parallel FO-level Codex round-3 re-review of the cycle-3 fix diff
 
 <!-- section:codex-gate-findings -->
 ## Codex Gate Findings
 
+<details>
+<summary>Round 1 + Round 2 finding text (unchanged) — collapsed cycle-3 to restore the C15 artifact-verbosity budget; both rounds RESOLVED (Round 1 by cycle-2, Round 2 by cycle-3, re-verified live above)</summary>
 [P1] `.github/workflows/ship-flow-invariants.yml:79` runs the gate on `push` events, but line 81 can only obtain a PR body on `pull_request`; consequently, any legitimately waived PR passes before merge and then produces a red main-branch run after merge because the declaration disappears. Restrict the step to pull-request events or provide an event-independent declaration source for push runs.
-
 [P1] `plugins/ship-flow/bin/doc-impact-gate.sh:106` matches `none` without line anchoring or a word boundary, so text such as `doc-impact: none of these docs...` or an instructional/template sentence containing the marker is accepted as a waiver; both cases were confirmed to exit 0. Require a standalone, anchored declaration with an explicit separator, and ignore comments/template examples.
-
 [P1] `plugins/ship-flow/bin/doc-impact-gate.sh:224` silently recognizes only one exact inline-array YAML layout, so valid adopter overrides using block arrays, single quotes, or different indentation leave `srcGlobs` empty and disable affected coupling rows without an error. Parse the declared YAML format properly or fail closed by validating every row has recognized, nonempty `srcGlobs` and `docPaths`.
-
-FO independent confirmation (2026-07-11): P1-2 reproduced live — declaration text
-`doc-impact: none of these docs are affected by my change I promise` → PASS exit 0,
-while the no-declaration control → BLOCKER exit 1; P1-1 and P1-3 confirmed by direct
-source read (workflow `on: push` + `plugin_changed`-only step gating; parser case
-patterns match only the exact 4-space inline-array layout). Unknown-arg path exits 2
-(fail-closed) — no fourth finding.
-
+FO independent confirmation (2026-07-11): P1-2 reproduced live — declaration text `doc-impact: none of these docs are affected by my change I promise` → PASS exit 0, while the no-declaration control → BLOCKER exit 1; P1-1 and P1-3 confirmed by direct source read (workflow `on: push` + `plugin_changed`-only step gating; parser case patterns match only the exact 4-space inline-array layout). Unknown-arg path exits 2 (fail-closed) — no fourth finding.
 GATE: FAIL   prompt-sha256: d8894c2a002c   diff-LOC: 846   codex-version: 0.144.1   [P1]:3  [P2]:0
-
 ### Round 2 (cycle-2 fix diff fb59795..0053693, 2026-07-11)
-
 [P1] `plugins/ship-flow/bin/doc-impact-gate.sh:116` still matches the marker anywhere within a line, so a PR-body template or quoted example such as `Example only: doc-impact: none — this is documentation` is accepted as a waiver (confirmed exit 0). Anchor the declaration to the complete line and reject quoted/template contexts.
-
 [P1] `plugins/ship-flow/bin/doc-impact-gate.sh:250` only fails closed after recognizing a `- name:` line, so an unsupported map layout that recognizes zero rows—such as a valid YAML flow-map sequence—silently exits 0 and disables all coupling enforcement. Track recognized rows and hard-error when the document contains no parseable coupling rows, or use a real YAML parser with schema validation.
-
-FO independent confirmation (2026-07-11): both reproduced live — template-prefixed
-declaration → PASS exit 0; flow-style coupling map → empty output, exit 0 (all
-enforcement silently disabled).
-
+FO independent confirmation (2026-07-11): both reproduced live — template-prefixed declaration → PASS exit 0; flow-style coupling map → empty output, exit 0 (all enforcement silently disabled).
 GATE: FAIL   prompt-sha256: d8894c2a002c   diff-LOC: 329   codex-version: 0.144.1   [P1]:2  [P2]:0
+</details>
 <!-- /section:codex-gate-findings -->
 
 ## Deferred to TODO
