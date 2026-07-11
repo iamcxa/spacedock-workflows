@@ -222,3 +222,16 @@ Resumed the killed predecessor's already-structurally-complete plan.md (7 tasks,
 - duration_minutes: 40
 - iteration_count: 1
 - reviewer_verdict: N/A (ungated stage per dispatch — FO advances straight to execute)
+
+## Stage Report: execute
+
+- DONE: Every code-bearing task lands with RED evidence before GREEN (tdd-ledger contracts T2.1-T2.3): test-doc-impact-gate.sh observed failing before bin/doc-impact-gate.sh exists, and the new CI-scope assertion observed failing before the workflow step is added
+  T2.2: `test-doc-impact-gate.sh` exit 127 / 15 of 20 fixture assertions FAIL before `bin/doc-impact-gate.sh` existed → 20/20 PASS after (commit `1b5dba0`). T2.3: `test-ship-flow-ci-scope.sh` 6/7 (new assertion FAIL) before the workflow step was added → 7/7 after (commit `22c3c87`). T2.1 is a pure refactor (`TDD: skip` per tdd-ledger.jsonl, `applicable: false`) — regression-gated instead: `test-adopter-skill-discovery.sh` (18/18) and `test-canonical-doc-sync-checker.sh` (62/62) unchanged pre/post extraction.
+- DONE: Full local gate run is clean before handoff and the report names each suite: shell test-*.sh loop, node --test bin/*.test.mjs, CI=true check-invariants.sh (Principle 5b now enforcing, zero WARN lines), check-no-dangling.sh, check-version-triple.sh, git diff --check
+  shell `test-*.sh` loop: 103 files, 101 pass, 2 pre-existing/out-of-scope fails (see deviations in execute.md Hand-off to Verify). `node --test plugins/ship-flow/bin/*.test.mjs`: 79/79 pass. `CI=true bash plugins/ship-flow/bin/check-invariants.sh`: zero `WARN [Principle 5b]` lines (ARCHITECTURE.md now real-checked); only failure is the pre-existing, explicitly out-of-scope C14 (commits `695addea`/`0d0ca53e`, shape-stage, "handled at FO level" per dispatch). `check-no-dangling.sh`: PASS (8 patterns, 0 violations). `check-version-triple.sh`: PASS (0.8.2 triple-matched). `git diff --check` (against dispatch-base `7780b2a`): clean, no whitespace errors.
+- DONE: Deviations from plan.md recorded with one-line rationale in execute.md; no scope growth beyond the 7 planned tasks (T1.1-T2.4)
+  Full detail in execute.md § Hand-off to Verify → deviations (ROADMAP Stage-column value execute vs. plan.md's literal "plan"; the 2 pre-existing shell-suite fails verified via a scratch `git worktree add --detach 7780b2a` check). Exactly 7 tasks landed (T1.1-T2.4), one commit each, no additional files touched beyond each task's `owned_paths`.
+
+### Summary
+
+All 7 planned tasks (T1.1-T2.4) landed, one commit per task, in wave order (W1 parallel-safe → W2 chain). AC-1 (Principle 5b enforcing) and AC-4 (harvest vocabulary) are fully satisfied; AC-2's mechanical gate is built and RED→GREEN-proven for both TDD-contracted tasks (T2.2, T2.3); AC-3 stays correctly deferred to ship-review per plan.md. Full local gate run is clean apart from two pre-existing, out-of-scope shell-test failures independently verified present at the dispatch-base commit before this entity's work began — flagged for FO/captain visibility, not fixed, matching the dispatch's explicit "handled at FO level" instruction and the no-scope-growth constraint.
