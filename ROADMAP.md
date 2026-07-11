@@ -9,6 +9,7 @@
 <!-- section:now -->
 | Entity | Title | Stage |
 | --- | --- | --- |
+| 1-self-adoption-dogfood-bootstrap | Self-adoption dogfood bootstrap — canonical docs + doc-impact gate | execute |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
@@ -16,7 +17,6 @@
 <!-- section:next -->
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
-| 1-self-adoption-dogfood-bootstrap | Self-adoption dogfood bootstrap — canonical docs + doc-impact gate | (pitch) | small-batch |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
