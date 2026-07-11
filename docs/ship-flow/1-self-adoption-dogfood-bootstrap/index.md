@@ -1,7 +1,7 @@
 ---
 id: "1"
 title: "Self-adoption dogfood bootstrap — canonical docs + doc-impact gate"
-status: design
+status: execute
 pattern: pitch
 appetite: "small-batch"
 layout: folder
@@ -255,3 +255,9 @@ Re-ran every check independently against the live worktree HEAD (`f5a8fd2`) rath
 - iteration_count: 1
 - degraded_checks_declared: 4
 - new_findings: 0
+
+### Feedback Cycles
+
+| cycle | date | reviewer verdict | routed to | findings | resolution |
+|---|---|---|---|---|---|
+| 1 | 2026-07-11 | verify.md PASS (local scope) overridden by codex-gate FAIL ([P1]:3, all FO-confirmed) | execute (cycle-2 dispatch) | P1-1 CI step runs on push where PR body is absent; P1-2 unanchored `none` match accepts non-waiver prose; P1-3 coupling YAML parser fails open on layout variants — full text + repro evidence in verify.md `codex-gate-findings` section | pending |
