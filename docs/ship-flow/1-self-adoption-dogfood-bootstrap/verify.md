@@ -222,6 +222,13 @@ GATE: FAIL   prompt-sha256: d8894c2a002c   diff-LOC: 846   codex-version: 0.144.
 [P1] `plugins/ship-flow/bin/doc-impact-gate.sh:250` only fails closed after recognizing a `- name:` line, so an unsupported map layout that recognizes zero rows—such as a valid YAML flow-map sequence—silently exits 0 and disables all coupling enforcement. Track recognized rows and hard-error when the document contains no parseable coupling rows, or use a real YAML parser with schema validation.
 FO independent confirmation (2026-07-11): both reproduced live — template-prefixed declaration → PASS exit 0; flow-style coupling map → empty output, exit 0 (all enforcement silently disabled).
 GATE: FAIL   prompt-sha256: d8894c2a002c   diff-LOC: 329   codex-version: 0.144.1   [P1]:2  [P2]:0
+
+### Round 3 (cycle-3 fix diff 6d338e4..4681e66, 2026-07-11)
+
+[P1] `plugins/ship-flow/bin/doc-impact-gate.sh:336` — An adopter override with a missing or misspelled `couplings:` key leaves `couplings_key_seen=0`, bypasses this check, and silently exits 0 with no enforcement. Require exactly one recognized `couplings:` key and at least one parsed row, failing with exit 2 otherwise, with a missing-key regression test.
+
+FO independent confirmation (2026-07-11): reproduced live — misspelled `coupling:` key → exit 0, zero enforcement, no error.
+GATE: FAIL   prompt-sha256: d8894c2a002c   diff-LOC: 254   codex-version: 0.144.1   [P1]:1  [P2]:0
 </details>
 <!-- /section:codex-gate-findings -->
 
