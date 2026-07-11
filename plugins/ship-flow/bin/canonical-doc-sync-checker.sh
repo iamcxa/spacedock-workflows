@@ -6,6 +6,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+# shellcheck source=../lib/doc-rationale.sh
+source "${SCRIPT_DIR}/../lib/doc-rationale.sh"
+
 usage() {
   echo "Usage: canonical-doc-sync-checker.sh <entity-dir>" >&2
   echo "Read-only dry-run only. No write mode is available." >&2
@@ -109,27 +113,6 @@ table_field() {
 is_skipped_outcome() {
   local line="$1"
   printf '%s\n' "$line" | grep -Eiq '(^|[[:space:]:|—])skipped([[:space:]:|—.]|$)'
-}
-
-is_weak_skip_rationale() {
-  local line="$1"
-  local rationale
-  rationale="$(printf '%s\n' "$line" | sed -E 's/.*[Ss][Kk][Ii][Pp][Pp]?[Ee]?[Dd]?[*`[:space:]]*[-—:|]?[[:space:]]*//')"
-  rationale="$(printf '%s\n' "$rationale" | sed -E 's/[|[:space:]]*$//; s/^[`*[:space:]]+//; s/[`*[:space:]]+$//')"
-  local lowered
-  lowered="$(printf '%s\n' "$rationale" | tr '[:upper:]' '[:lower:]')"
-
-  case "$lowered" in
-    ""|"-"|"--"|"n/a"|"na"|"none"|"no"|"no rationale"|"not applicable"|"skip"|"skipped"|"tbd"|"todo")
-      return 0
-      ;;
-  esac
-
-  if [ "${#rationale}" -lt 12 ]; then
-    return 0
-  fi
-
-  return 1
 }
 
 check_doc() {

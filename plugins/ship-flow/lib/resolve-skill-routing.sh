@@ -3,6 +3,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+# shellcheck source=./glob-match.sh
+source "${SCRIPT_DIR}/glob-match.sh"
+
 CONFIG=".claude/ship-flow/skill-routing.yaml"
 FILES=""
 
@@ -59,26 +63,6 @@ done
   echo "status=config_missing" >&2
   echo "config=$CONFIG" >&2
   exit 11
-}
-
-glob_to_regex() {
-  local glob="$1"
-  local token="__DOUBLE_STAR__"
-  local brace_token="__BRACE_GROUP__"
-  local brace_group=""
-
-  glob="${glob//\*\*/$token}"
-  if printf '%s' "$glob" | grep -qE '\{[^}]+\}'; then
-    brace_group=$(printf '%s' "$glob" | sed -n 's/.*{\([^}]*\)}.*/\1/p' | sed 's/[;,]/|/g')
-    glob=$(printf '%s' "$glob" | sed 's/{[^}]*}/__BRACE_GROUP__/')
-  fi
-  glob=$(printf '%s' "$glob" | sed 's/[.[\^$()+?|]/\\&/g')
-  glob="${glob//\*/[^\/]*}"
-  glob="${glob//$token/.*}"
-  if [ -n "$brace_group" ]; then
-    glob="${glob//$brace_token/($brace_group)}"
-  fi
-  printf '^%s$' "$glob"
 }
 
 route_matches() {
