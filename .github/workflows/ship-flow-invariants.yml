@@ -76,7 +76,11 @@ jobs:
           CI=true bash plugins/ship-flow/bin/check-invariants.sh
 
       - name: doc-impact-gate (mechanical coupling gate)
-        if: steps.ship_flow_scope.outputs.plugin_changed == 'true'
+        # Scoped to pull_request events only: on push (post-merge to main),
+        # github.event.pull_request.body is structurally absent — a
+        # legitimately-waived PR would otherwise go green pre-merge and then
+        # RED on main post-merge (codex-gate P1-1).
+        if: steps.ship_flow_scope.outputs.plugin_changed == 'true' && github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |

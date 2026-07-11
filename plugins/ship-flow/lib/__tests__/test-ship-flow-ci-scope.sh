@@ -52,6 +52,12 @@ check "docs-only PRs keep lightweight gate without full suite" \
 check "doc-impact-gate step gated on plugin_changed, reads PR body via env indirection (no direct interpolation)" \
   "grep -qF 'name: doc-impact-gate' '${WORKFLOW}' && grep -qF \"if: steps.ship_flow_scope.outputs.plugin_changed == 'true'\" '${WORKFLOW}' && grep -qF 'PR_BODY: \${{ github.event.pull_request.body }}' '${WORKFLOW}'"
 
+# codex-gate P1-1: on push(main) the declaration source (PR body) is
+# structurally absent, so the step must not evaluate on push events at all —
+# scoped to the doc-impact-gate step's own `if:` line, not any other step.
+check "doc-impact-gate step does not evaluate on push events (PR body is structurally absent there)" \
+  "awk '/^      - name: doc-impact-gate/{in_step=1; next} in_step && /^      - name: /{in_step=0} in_step && /^        if:/{line=\$0} END{exit !(line ~ /event_name/ && line ~ /pull_request/)}' '${WORKFLOW}'"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 
