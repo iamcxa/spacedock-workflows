@@ -1,7 +1,7 @@
 ---
 id: "1.2"
 title: "doc-impact-gate checker + CI wiring"
-status: sharp
+status: shape
 pattern: shaped-child
 parent_pitch: "1"
 harvest_required: true
