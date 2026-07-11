@@ -303,4 +303,25 @@ Re-verified all 3 codex-gate P1 fixes live against HEAD (not execute.md's word):
 - p1_fixes_reverified: 3
 - invariant_fails_closed: 3 (C11, C12, C15)
 - new_findings: 0
+
+## Stage Report: execute (cycle 3)
+
+- DONE: Both round-2 P1s are fixed CLASS-WIDE, not point-patched, with RED-first tests: the declaration matcher is line-anchored (the FO repro `Example only: doc-impact: none — this is documentation` exits 1; a line-start `doc-impact: none — <reason>` still exits 0), and the coupling-map parser is default-deny (zero parseable rows → hard error exit 2 — FO repro: flow-style map currently silent exit 0; any unrecognized non-comment non-blank line inside the couplings block → hard error naming the line)
+  P1-2 residual: `grep`/`sed` in `extract_doc_impact_reason()` now anchor `^[[:space:]]*` before `doc-impact:` — FO repro confirmed exit 1 live, anchored declarations (incl. leading-whitespace, multi-line PR-body placement) confirmed exit 0 live. Commit `2de8b87`. P1-3 residual: parser counts parsed rows across the `couplings:` block (zero rows + key present → hard error naming the map) and hard-errors on any unrecognized non-comment/non-blank line inside the block (naming the line) — FO's flow-style-map repro confirmed exit 2 live (was silent exit 0 pre-fix); `couplings: []` and a stray-unrecognized-key fixture also confirmed exit 2. Commit `670df77`. RED-before-GREEN captured live for both (see execute.md § Cycle-3 Fixes).
+- DONE: Full local gate re-run named and clean: test-doc-impact-gate.sh (all prior 32 + new round-2 cases), test-ship-flow-ci-scope.sh 8/8, shell loop at the 101/103 baseline, node --test 79/79, CI=true check-invariants.sh showing only the 2 known historical C14 lines, check-no-dangling.sh, check-version-triple.sh, git diff --check
+  `test-doc-impact-gate.sh` 43/43 (32 prior + 11 new: Block 4c ×3, Blocks 12-14 ×2 each). `test-ship-flow-ci-scope.sh` 8/8 (unchanged). Full shell suite 101/103, 2 pre-existing fails (`test-archived-corpus-invariants.sh`, `test-merged-pr-closeout-reconciler.sh`) — re-run twice this session, both times identical to the `6d338e4` baseline. `node --test bin/*.test.mjs` 79/79. `check-no-dangling.sh` PASS. `check-version-triple.sh` PASS. `git diff --check 6d338e4 HEAD` clean. Deviation: `CI=true check-invariants.sh` shows 3 FAIL lines, not 2 — the 2 known C14 lines plus 1 pre-existing `C15` (verify.md body 131 lines, cap 120), independently confirmed present at dispatch base `6d338e4` before any edit this cycle (it comes from `6d338e4` itself, cycle-2's feedback-routing commit, appending round-2 findings text to verify.md). `git diff --stat 6d338e4 HEAD` confirms verify.md is not among the 6 files this cycle touched. Out of scope per this dispatch's explicit "verify.md NOT touched (re-verify owns it)" instruction — same disposition as cycle-2's analogous deviation.
+- DONE: execute.md gains a cycle-3 fix section with per-P1 RED-before-GREEN evidence; verify.md NOT touched (re-verify owns it)
+  See execute.md § Cycle-3 Fixes (commit `2099643`); wrapped in `<details>` to stay under execute.md's artifact-verbosity raw/body caps (300/150). `git diff --stat 6d338e4 HEAD` confirms verify.md is not among the changed files.
+
+### Summary
+
+Both codex-gate round-2 residual P1s (declaration matcher unanchored to the line; coupling-map parser silent on zero-parsed-row layouts) fixed class-wide, one commit each, with independently re-run RED-before-GREEN evidence live against the unfixed and fixed checker. No scope growth beyond the 2 named fixes (6 files: `bin/doc-impact-gate.sh`, `lib/__tests__/test-doc-impact-gate.sh`, 3 new fixtures, `execute.md`). Full local gate re-run clean apart from the 2 known pre-existing shell-suite failures and 1 pre-existing verify.md `check-invariants.sh` finding, both independently proven to predate this cycle's work and flagged (not fixed) per the dispatch's explicit scope boundary. Ready for re-verify.
+
+### Metrics
+
+- status: passed
+- duration_minutes: (see FO dispatch timing)
+- iteration_count: 1 (cycle-3 fix pass, no further rejection within this cycle)
+- commit_count: 3
+- new_findings: 0 (both are the codex-gate-routed round-2 P1 residuals; the pre-existing shell/invariant deviations are not new)
 | 2 | 2026-07-11 | verify.md cycle-2 PASS overridden by codex-gate round-2 FAIL ([P1]:2, both FO-confirmed) | execute (cycle-3 dispatch) | P1-2′ declaration marker not line-anchored (template/example text accepted); P1-3′ zero-parseable-rows map silently disables all enforcement — full text in verify.md codex-gate-findings Round 2 | pending |
