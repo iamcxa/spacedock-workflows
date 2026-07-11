@@ -98,12 +98,22 @@ emit_blocker() {
 }
 
 # extract_doc_impact_reason <declaration> — prints the free-text reason after
-# a "doc-impact: none" marker (first matching line only), or empty if no
-# marker is present. Declaration is an explicit input, never fetched here.
+# an anchored "doc-impact: none" marker (first matching line only), or empty
+# if no anchored marker is present. Declaration is an explicit input, never
+# fetched here.
+#
+# codex-gate P1-2: detection requires an explicit separator (one of
+# doc-rationale.sh's -—:| chars, optionally repeated e.g. "--") right after
+# "none" — prose like "none of these docs are affected" has no separator
+# there and must NOT match; it is indistinguishable from no declaration at
+# all (falls through to the caller's empty-REASON BLOCKER path). Extraction
+# stays permissive (`[-—:|]*`) once a match is confirmed, so multi-char
+# separators like "--" are stripped in full, matching prior behavior for
+# already-anchored declarations.
 extract_doc_impact_reason() {
   local declaration="$1"
   local marker_line
-  marker_line="$(printf '%s\n' "$declaration" | grep -im1 '[Dd][Oo][Cc]-[Ii][Mm][Pp][Aa][Cc][Tt]:[[:space:]]*[Nn][Oo][Nn][Ee]')" || true
+  marker_line="$(printf '%s\n' "$declaration" | grep -im1 '[Dd][Oo][Cc]-[Ii][Mm][Pp][Aa][Cc][Tt]:[[:space:]]*[Nn][Oo][Nn][Ee][[:space:]]*[-—:|]')" || true
   [ -n "$marker_line" ] || { printf ''; return 0; }
   printf '%s' "$marker_line" | sed -E 's/.*[Dd][Oo][Cc]-[Ii][Mm][Pp][Aa][Cc][Tt]:[[:space:]]*[Nn][Oo][Nn][Ee][[:space:]]*[-—:|]*[[:space:]]*//'
 }

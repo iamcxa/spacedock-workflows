@@ -110,6 +110,24 @@ assert_contains "concrete declaration emits PASS for skill-readme" '^PASS skill-
 assert_not_contains "concrete declaration emits no blockers" '^BLOCKER ' "${TMP_DIR}/good-decl.out"
 
 echo ""
+echo "Block 4b: codex-gate P1-2 — unanchored 'none' prose is not a waiver"
+run_checker "changed-doc-not-touched.txt" "doc-impact: none of these docs are affected by my change I promise" "${TMP_DIR}/p1-2-fo-repro.out" "${TMP_DIR}/p1-2-fo-repro.exit"
+assert_exit "FO repro prose ('none of these docs...') is rejected same as no declaration" 1 "${TMP_DIR}/p1-2-fo-repro.exit"
+assert_contains "FO repro prose reports BLOCKER doc-impact for skill-readme" '^BLOCKER doc-impact: skill-readme' "${TMP_DIR}/p1-2-fo-repro.out"
+
+run_checker "changed-doc-not-touched.txt" "doc-impact: nonetheless we changed nothing doc-related" "${TMP_DIR}/p1-2-nonetheless.out" "${TMP_DIR}/p1-2-nonetheless.exit"
+assert_exit "'nonetheless' (no separator after 'none') is rejected same as no declaration" 1 "${TMP_DIR}/p1-2-nonetheless.exit"
+
+run_checker "changed-doc-not-touched.txt" "doc-impact: none: valid colon-separated reason text here" "${TMP_DIR}/p1-2-colon.out" "${TMP_DIR}/p1-2-colon.exit"
+assert_exit "anchored colon separator is still accepted" 0 "${TMP_DIR}/p1-2-colon.exit"
+
+run_checker "changed-doc-not-touched.txt" "doc-impact: none | valid pipe-separated reason text here" "${TMP_DIR}/p1-2-pipe.out" "${TMP_DIR}/p1-2-pipe.exit"
+assert_exit "anchored pipe separator is still accepted" 0 "${TMP_DIR}/p1-2-pipe.exit"
+
+run_checker "changed-doc-not-touched.txt" "doc-impact: none -- valid double-dash-separated reason text" "${TMP_DIR}/p1-2-dashdash.out" "${TMP_DIR}/p1-2-dashdash.exit"
+assert_exit "anchored double-dash separator is still accepted" 0 "${TMP_DIR}/p1-2-dashdash.exit"
+
+echo ""
 echo "Block 5: unrelated changes — no coupling triggered, silent pass"
 run_checker "changed-unrelated.txt" "" "${TMP_DIR}/unrelated.out" "${TMP_DIR}/unrelated.exit"
 assert_exit "unrelated changes exit 0" 0 "${TMP_DIR}/unrelated.exit"
