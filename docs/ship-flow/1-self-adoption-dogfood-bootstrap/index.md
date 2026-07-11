@@ -260,4 +260,25 @@ Re-ran every check independently against the live worktree HEAD (`f5a8fd2`) rath
 
 | cycle | date | reviewer verdict | routed to | findings | resolution |
 |---|---|---|---|---|---|
-| 1 | 2026-07-11 | verify.md PASS (local scope) overridden by codex-gate FAIL ([P1]:3, all FO-confirmed) | execute (cycle-2 dispatch) | P1-1 CI step runs on push where PR body is absent; P1-2 unanchored `none` match accepts non-waiver prose; P1-3 coupling YAML parser fails open on layout variants — full text + repro evidence in verify.md `codex-gate-findings` section | pending |
+| 1 | 2026-07-11 | verify.md PASS (local scope) overridden by codex-gate FAIL ([P1]:3, all FO-confirmed) | execute (cycle-2 dispatch) | P1-1 CI step runs on push where PR body is absent; P1-2 unanchored `none` match accepts non-waiver prose; P1-3 coupling YAML parser fails open on layout variants — full text + repro evidence in verify.md `codex-gate-findings` section | fixed cycle-2: P1-1 `004456c`, P1-2 `961223a`, P1-3 `f030145` — RED-first evidence in execute.md § Cycle-2 Fixes |
+
+## Stage Report: execute (cycle 2)
+
+- DONE: Each of the three codex-gate P1s is fixed with a RED-first regression test: (1) CI step no longer evaluates the declaration on push events where PR body is structurally absent, (2) the declaration matcher requires an anchored standalone `doc-impact: none — <reason>` form and the FO repro string now exits 1, (3) the coupling-map parser fails CLOSED on unparsed/empty srcGlobs or docPaths, proven with block-array and quote-variant fixtures
+  All 3 fixed one-commit-each with RED (observed failing) → GREEN (observed passing) evidence: P1-1 `004456c` (test-ship-flow-ci-scope.sh 7/8→8/8), P1-2 `961223a` (test-doc-impact-gate.sh 23/26→26/26, FO repro string now exits 1), P1-3 `f030145` (test-doc-impact-gate.sh 26/32→32/32, new fixtures coupling-map-single-quote.yaml/coupling-map-indent-variant.yaml parse correctly, coupling-map-block-array.yaml hard-errors exit 2). Full per-P1 evidence in execute.md § Cycle-2 Fixes.
+- DONE: Full local gate re-run is clean and named: test-doc-impact-gate.sh (all new cases green), test-ship-flow-ci-scope.sh, full shell loop (baseline 101/103 with only the 2 known pre-existing failures), node --test 79/79, CI=true check-invariants.sh (zero 5b WARNs, only the 2 known historical C14 lines), check-no-dangling.sh, git diff --check
+  test-doc-impact-gate.sh 32/32, test-ship-flow-ci-scope.sh 8/8, full shell suite 101/103 (2 pre-existing fails, identical to base `fb59795`), node --test 79/79, check-no-dangling.sh PASS, check-version-triple.sh PASS, `git diff --check fb59795 HEAD` clean. Deviation: `CI=true check-invariants.sh` shows 5 FAIL lines, not 2 — the 2 known C14 lines PLUS C11/C12 (missing `## Panel Coverage`/`## Deferred to TODO` on verify.md) and C15 (verify.md 173 lines > 120 cap). Independently confirmed via a scratch `git worktree add --detach` that all 3 extra FAILs already fire at dispatch base `fb59795`, and even at the original verify-stage commit `553a471` (156 lines, pre-codex-gate-append) — pre-existing on verify.md, not introduced by this cycle's 7 files (`git diff --stat fb59795 HEAD` confirms verify.md untouched). Out of scope per this dispatch's explicit "verify.md NOT touched (re-verify owns it)" instruction; flagged for FO/re-verify visibility, not fixed here.
+- DONE: execute.md appended with a cycle-2 fix section (per-P1 evidence: RED output before fix, GREEN after) and `## Stage Report: execute` updated; verify.md NOT touched (re-verify owns it)
+  See execute.md § Cycle-2 Fixes (this section) and this `Stage Report: execute (cycle 2)` section; `git diff --stat fb59795 HEAD` confirms verify.md is not among the 7 changed files.
+
+### Summary
+
+All 3 codex-gate P1 findings (CI push-event scoping, unanchored `none` declaration matcher, coupling-map parser fail-open) fixed one-commit-each with independently re-run RED→GREEN evidence, no scope growth beyond the named files. Full local gate re-run is clean apart from the already-known 2 shell-suite failures and 2 C14 historical commits, plus 3 newly-surfaced check-invariants.sh findings (C11/C12/C15) on verify.md that were independently proven pre-existing (present at dispatch base and even at the original verify-stage commit, before any codex-gate work) and out of scope for this execute-cycle dispatch. Ready for re-verify.
+
+### Metrics
+
+- status: passed
+- duration_minutes: (see FO dispatch timing)
+- iteration_count: 1 (cycle-2 fix pass, no further rejection within this cycle)
+- commit_count: 3
+- new_findings: 0 (all 3 are the codex-gate-routed P1s; the 3 pre-existing check-invariants.sh FAILs are not new)
