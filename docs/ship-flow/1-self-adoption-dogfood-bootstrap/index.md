@@ -235,3 +235,23 @@ Resumed the killed predecessor's already-structurally-complete plan.md (7 tasks,
 ### Summary
 
 All 7 planned tasks (T1.1-T2.4) landed, one commit per task, in wave order (W1 parallel-safe → W2 chain). AC-1 (Principle 5b enforcing) and AC-4 (harvest vocabulary) are fully satisfied; AC-2's mechanical gate is built and RED→GREEN-proven for both TDD-contracted tasks (T2.2, T2.3); AC-3 stays correctly deferred to ship-review per plan.md. Full local gate run is clean apart from two pre-existing, out-of-scope shell-test failures independently verified present at the dispatch-base commit before this entity's work began — flagged for FO/captain visibility, not fixed, matching the dispatch's explicit "handled at FO level" instruction and the no-scope-growth constraint.
+
+## Stage Report: verify
+
+- DONE: verify.md carries a per-AC evidence citation (or explicit unmet-with-owning-stage) for each of AC-1 through AC-4, cross-checked against the live worktree, not just execute.md claims
+  Each of AC-1/AC-2/AC-3/AC-4 got an independent live re-run this session (not trusted from execute.md): AC-1 zero `WARN [Principle 5b]` confirmed via fresh `check-invariants.sh` run + section-marker/mermaid grep on ARCHITECTURE.md; AC-2 both the fail-path and declaration-path of `bin/doc-impact-gate.sh` exercised live with a synthetic changed-file list, plus the CI workflow step read directly; AC-3 confirmed correctly deferred (checker live-run returns `BLOCKER review-artifact` — gate is real, not silently skipped); AC-4 file-existence + README grep re-run. See verify.md for full Verification Claim records.
+- DONE: runtime_uat claim is explicit: a live invocation of bin/doc-impact-gate.sh from a worker-perspective (both the fail path and the declaration path) and CI=true check-invariants.sh on the worktree, or a structured not-applicable/deferred reason
+  Both `doc-impact-gate.sh` paths run live this session (fail path → exit 1 `BLOCKER doc-impact: stage-skill-readme`; declaration path → exit 0 `PASS stage-skill-readme: doc-impact declaration accepted`). `CI=true bash plugins/ship-flow/bin/check-invariants.sh` re-run live on HEAD: 0 `WARN [Principle 5b]` lines, only FAIL is the 2 named historical C14 commits. AC-2's live-CI-run leg (a real PR's CI run) is structurally impossible pre-PR — declared explicitly deferred-to-ship in verify.md, not silently marked N/A.
+- DONE: Verdict declares every degraded/known-dirty check by name with route_to per finding class — no silent absorption, no PASS diluted from INCONCLUSIVE without a PROMPT_CAPTAIN line
+  verify.md § Known-Dirty table names all 4 items with route_to: (1) the 2 pre-existing shell-suite failures (`test-archived-corpus-invariants.sh`, `test-merged-pr-closeout-reconciler.sh`) — independently re-verified present-and-identical at base `7780b2a` (via scratch `git worktree add --detach`) and at HEAD, route_to: ship; (2) C14 on the 2 historical shape-stage commits (`695addea`, `0d0ca53e`) — confirmed no new C14 on any of the 7 execute commits via `git log --oneline 7780b2a..HEAD` cross-check, route_to: ship; (3) AC-2 live-CI-run leg, route_to: review; (4) AC-3 whole, route_to: review. No item is INCONCLUSIVE (each has a reproducible command and known root cause), so no PROMPT_CAPTAIN line was needed — verdict is a clean PASS, not a diluted one.
+
+### Summary
+
+Re-ran every check independently against the live worktree HEAD (`f5a8fd2`) rather than trusting execute.md's word: shell suite 101/103 (2 pre-existing fails, both re-verified present-and-unchanged at base `7780b2a` via scratch worktree), node 79/79, zero Principle-5b WARN lines, no-dangling PASS, version-triple PASS, `git diff --check` clean. Exercised `bin/doc-impact-gate.sh` live from both the fail path and the declaration-accepted path with a synthetic changed-file list. Confirmed no NEW C14 violations beyond the 2 historical shape-stage commits. AC-1/AC-2(local)/AC-4 VERIFIED; AC-2's live-CI-run leg and AC-3 whole are explicitly deferred-to-ship/review per plan.md's own scoping, not silently absorbed. Verdict: PASS, proceed to review/ship; no BLOCKING/WARNING routes back to execute this cycle.
+
+### Metrics
+- status: passed
+- duration_minutes: (see FO dispatch timing)
+- iteration_count: 1
+- degraded_checks_declared: 4
+- new_findings: 0
