@@ -220,6 +220,18 @@ patterns match only the exact 4-space inline-array layout). Unknown-arg path exi
 (fail-closed) — no fourth finding.
 
 GATE: FAIL   prompt-sha256: d8894c2a002c   diff-LOC: 846   codex-version: 0.144.1   [P1]:3  [P2]:0
+
+### Round 2 (cycle-2 fix diff fb59795..0053693, 2026-07-11)
+
+[P1] `plugins/ship-flow/bin/doc-impact-gate.sh:116` still matches the marker anywhere within a line, so a PR-body template or quoted example such as `Example only: doc-impact: none — this is documentation` is accepted as a waiver (confirmed exit 0). Anchor the declaration to the complete line and reject quoted/template contexts.
+
+[P1] `plugins/ship-flow/bin/doc-impact-gate.sh:250` only fails closed after recognizing a `- name:` line, so an unsupported map layout that recognizes zero rows—such as a valid YAML flow-map sequence—silently exits 0 and disables all coupling enforcement. Track recognized rows and hard-error when the document contains no parseable coupling rows, or use a real YAML parser with schema validation.
+
+FO independent confirmation (2026-07-11): both reproduced live — template-prefixed
+declaration → PASS exit 0; flow-style coupling map → empty output, exit 0 (all
+enforcement silently disabled).
+
+GATE: FAIL   prompt-sha256: d8894c2a002c   diff-LOC: 329   codex-version: 0.144.1   [P1]:2  [P2]:0
 <!-- /section:codex-gate-findings -->
 
 ## Deferred to TODO

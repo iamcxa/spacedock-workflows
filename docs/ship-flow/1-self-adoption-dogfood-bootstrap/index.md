@@ -1,7 +1,7 @@
 ---
 id: "1"
 title: "Self-adoption dogfood bootstrap — canonical docs + doc-impact gate"
-status: verify
+status: execute
 pattern: pitch
 appetite: "small-batch"
 layout: folder
@@ -303,3 +303,4 @@ Re-verified all 3 codex-gate P1 fixes live against HEAD (not execute.md's word):
 - p1_fixes_reverified: 3
 - invariant_fails_closed: 3 (C11, C12, C15)
 - new_findings: 0
+| 2 | 2026-07-11 | verify.md cycle-2 PASS overridden by codex-gate round-2 FAIL ([P1]:2, both FO-confirmed) | execute (cycle-3 dispatch) | P1-2′ declaration marker not line-anchored (template/example text accepted); P1-3′ zero-parseable-rows map silently disables all enforcement — full text in verify.md codex-gate-findings Round 2 | pending |
