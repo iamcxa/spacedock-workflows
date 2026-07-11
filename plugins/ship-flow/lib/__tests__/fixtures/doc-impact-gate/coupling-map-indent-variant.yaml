@@ -1,0 +1,10 @@
+# Test fixture: non-canonical indentation — codex-gate P1-3 regression.
+# "- name:" at 0-space indent (not the canonical 2-space) and
+# srcGlobs/docPaths at 2-space indent (not the canonical 4-space); must
+# parse identically to coupling-map.yaml (non-empty srcGlobs/docPaths).
+schema_version: "1.0"
+couplings:
+- name: skill-readme
+  srcGlobs: ["fixtures/skills/*/SKILL.md"]
+  docPaths: ["fixtures/README.md"]
+  rationale: "Test fixture: 2-space indent variant must parse correctly."

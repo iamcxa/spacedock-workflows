@@ -1,0 +1,9 @@
+# Test fixture: single-quote inline array — codex-gate P1-3 regression.
+# Same row shape as coupling-map.yaml but with 'single' quotes instead of
+# "double" quotes; must parse identically (non-empty srcGlobs/docPaths).
+schema_version: "1.0"
+couplings:
+  - name: skill-readme
+    srcGlobs: ['fixtures/skills/*/SKILL.md']
+    docPaths: ['fixtures/README.md']
+    rationale: "Test fixture: single-quote variant must parse correctly."

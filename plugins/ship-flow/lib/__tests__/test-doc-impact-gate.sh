@@ -158,6 +158,39 @@ else
 fi
 
 echo ""
+echo "Block 9: codex-gate P1-3 — single-quote inline arrays parse identically to double-quote"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-not-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-single-quote.yaml" \
+  > "${TMP_DIR}/single-quote.out" 2>&1 && SQ_RC=0 || SQ_RC=$?
+printf '%s\n' "$SQ_RC" > "${TMP_DIR}/single-quote.exit"
+assert_exit "single-quote coupling map: no declaration exits 1 (row parsed, not silently skipped)" 1 "${TMP_DIR}/single-quote.exit"
+assert_contains "single-quote coupling map reports BLOCKER for skill-readme" '^BLOCKER doc-impact: skill-readme' "${TMP_DIR}/single-quote.out"
+
+echo ""
+echo "Block 10: codex-gate P1-3 — non-canonical indentation parses identically to 4-space"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-not-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-indent-variant.yaml" \
+  > "${TMP_DIR}/indent-variant.out" 2>&1 && IV_RC=0 || IV_RC=$?
+printf '%s\n' "$IV_RC" > "${TMP_DIR}/indent-variant.exit"
+assert_exit "indent-variant coupling map: no declaration exits 1 (row parsed, not silently skipped)" 1 "${TMP_DIR}/indent-variant.exit"
+assert_contains "indent-variant coupling map reports BLOCKER for skill-readme" '^BLOCKER doc-impact: skill-readme' "${TMP_DIR}/indent-variant.out"
+
+echo ""
+echo "Block 11: codex-gate P1-3 — block-array layout fails CLOSED, not silently skipped"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-not-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-block-array.yaml" \
+  > "${TMP_DIR}/block-array.out" 2>&1 && BA_RC=0 || BA_RC=$?
+printf '%s\n' "$BA_RC" > "${TMP_DIR}/block-array.exit"
+assert_exit "block-array coupling map hard-errors (exit 2), not silent exit 0" 2 "${TMP_DIR}/block-array.exit"
+assert_contains "block-array hard-error names the unparseable row" 'skill-readme' "${TMP_DIR}/block-array.out"
+
+echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 
 if [ "${FAIL}" -gt 0 ]; then

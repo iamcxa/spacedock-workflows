@@ -219,31 +219,62 @@ process_row() {
 
 # --- Parse coupling map (line-based; mirrors lib/resolve-skill-routing.sh's
 # `- name:` / `srcGlobs: [...]` / `docPaths: [...]` reader) ---
+#
+# codex-gate P1-3: the D1 schema (design.md) is declared flat/inline —
+# `srcGlobs: ["a", "b"]` — but the original matcher only recognized one
+# exact 4-space, double-quote layout, so any other reasonable rendering of
+# that same flat schema (single quotes, different indentation) silently
+# parsed to an empty list and the row was skipped unprotected (fail-open).
+# Two-part fix: (1) tolerate whitespace/quote-style variance within the
+# declared flat schema via regex matching instead of literal-prefix `case`;
+# (2) validate_row fails CLOSED (hard error, exit 2) for any named row that
+# still ends up with an empty srcGlobs or docPaths — covering layouts
+# genuinely outside the flat schema (e.g. YAML block sequences) that this
+# zero-dep line-based parser does not attempt to support.
+NAME_RE='^[[:space:]]*-[[:space:]]+name:[[:space:]]*(.+)$'
+SRC_RE='^[[:space:]]*srcGlobs:[[:space:]]*\[(.*)\][[:space:]]*$'
+DOCS_RE='^[[:space:]]*docPaths:[[:space:]]*\[(.*)\][[:space:]]*$'
+
+# strip_bracket_list <bracket-contents> — strips both quote styles the
+# declared flat schema allows ("a" or 'a'), leaving the comma-separated list.
+strip_bracket_list() {
+  printf '%s' "$1" | tr -d "\"'"
+}
+
+# validate_and_process_row <name> <src_csv> <docs_csv> — fail-closed gate in
+# front of process_row: a named row with an empty srcGlobs or docPaths is a
+# coupling-map parse failure, not "no coupling here" — hard-error rather
+# than silently disable the row's protection.
+validate_and_process_row() {
+  local name="$1" src_csv="$2" docs_csv="$3"
+  if [ -n "$name" ]; then
+    if [ -z "$src_csv" ] || [ -z "$docs_csv" ]; then
+      echo "ERROR: coupling map row '${name}' in ${COUPLING_MAP} has an empty or unparseable srcGlobs/docPaths." >&2
+      echo "Only the inline array form is supported: srcGlobs: [\"a\", \"b\"] / docPaths: [\"a\", \"b\"] (single or double quotes, any indentation)." >&2
+      echo "Block-sequence or bareword lists are not supported — fix the row rather than relying on silent skip." >&2
+      exit 2
+    fi
+  fi
+  process_row "$name" "$src_csv" "$docs_csv"
+}
+
 current_name=""
 current_src=""
 current_docs=""
 
 while IFS= read -r line || [ -n "$line" ]; do
-  case "$line" in
-    "  - name: "*)
-      process_row "$current_name" "$current_src" "$current_docs"
-      current_name="${line#  - name: }"
-      current_src=""
-      current_docs=""
-      ;;
-    "    srcGlobs: ["*"]")
-      current_src="${line#    srcGlobs: [}"
-      current_src="${current_src%]}"
-      current_src="$(printf '%s' "$current_src" | tr -d '"')"
-      ;;
-    "    docPaths: ["*"]")
-      current_docs="${line#    docPaths: [}"
-      current_docs="${current_docs%]}"
-      current_docs="$(printf '%s' "$current_docs" | tr -d '"')"
-      ;;
-  esac
+  if [[ "$line" =~ $NAME_RE ]]; then
+    validate_and_process_row "$current_name" "$current_src" "$current_docs"
+    current_name="$(printf '%s' "${BASH_REMATCH[1]}" | sed -E 's/[[:space:]]+$//')"
+    current_src=""
+    current_docs=""
+  elif [[ "$line" =~ $SRC_RE ]]; then
+    current_src="$(strip_bracket_list "${BASH_REMATCH[1]}")"
+  elif [[ "$line" =~ $DOCS_RE ]]; then
+    current_docs="$(strip_bracket_list "${BASH_REMATCH[1]}")"
+  fi
 done < "$COUPLING_MAP"
-process_row "$current_name" "$current_src" "$current_docs"
+validate_and_process_row "$current_name" "$current_src" "$current_docs"
 
 if [ "$BLOCKERS" -gt 0 ]; then
   exit 1
