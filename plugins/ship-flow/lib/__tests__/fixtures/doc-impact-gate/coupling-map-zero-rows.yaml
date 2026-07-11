@@ -1,0 +1,7 @@
+# Test fixture: syntactically-empty couplings array — codex-gate round-2
+# P1-3 residual companion case (distinct from the flow-style-with-content
+# fixture): the map is valid YAML declaring literally zero couplings, which
+# must still fail CLOSED per the class fix rather than silently exit 0 with
+# no enforcement.
+schema_version: "1.0"
+couplings: []

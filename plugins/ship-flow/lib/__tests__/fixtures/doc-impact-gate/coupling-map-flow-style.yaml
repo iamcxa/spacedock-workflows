@@ -1,0 +1,6 @@
+# Test fixture: flow-style top-level array — codex-gate round-2 P1-3
+# residual. The line-based parser never recognizes this layout as any row
+# at all (zero rows parsed), which must fail CLOSED (hard error) rather
+# than silently disable all enforcement for the whole map.
+schema_version: "1.0"
+couplings: [{name: skill-readme, srcGlobs: ["fixtures/skills/*/SKILL.md"], docPaths: ["fixtures/README.md"]}]

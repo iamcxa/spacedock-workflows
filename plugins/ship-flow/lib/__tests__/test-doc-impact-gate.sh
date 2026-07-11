@@ -213,6 +213,39 @@ assert_exit "block-array coupling map hard-errors (exit 2), not silent exit 0" 2
 assert_contains "block-array hard-error names the unparseable row" 'skill-readme' "${TMP_DIR}/block-array.out"
 
 echo ""
+echo "Block 12: codex-gate round-2 P1-3 residual — flow-style map (zero rows) fails CLOSED, not silent exit 0"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-not-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-flow-style.yaml" \
+  > "${TMP_DIR}/flow-style.out" 2>&1 && FS_RC=0 || FS_RC=$?
+printf '%s\n' "$FS_RC" > "${TMP_DIR}/flow-style.exit"
+assert_exit "flow-style coupling map hard-errors (exit 2), not silent exit 0" 2 "${TMP_DIR}/flow-style.exit"
+assert_contains "flow-style hard-error names the couplings map" "coupling-map-flow-style\.yaml" "${TMP_DIR}/flow-style.out"
+
+echo ""
+echo "Block 13: codex-gate round-2 P1-3 residual — zero-rows map ('couplings: []') fails CLOSED, not silent exit 0"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-not-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-zero-rows.yaml" \
+  > "${TMP_DIR}/zero-rows.out" 2>&1 && ZR_RC=0 || ZR_RC=$?
+printf '%s\n' "$ZR_RC" > "${TMP_DIR}/zero-rows.exit"
+assert_exit "zero-rows coupling map hard-errors (exit 2), not silent exit 0" 2 "${TMP_DIR}/zero-rows.exit"
+assert_contains "zero-rows hard-error names the couplings map" "coupling-map-zero-rows\.yaml" "${TMP_DIR}/zero-rows.out"
+
+echo ""
+echo "Block 14: codex-gate round-2 P1-3 residual — unrecognized line inside couplings block fails CLOSED, naming the line"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-not-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-unrecognized-line.yaml" \
+  > "${TMP_DIR}/unrecognized-line.out" 2>&1 && UL_RC=0 || UL_RC=$?
+printf '%s\n' "$UL_RC" > "${TMP_DIR}/unrecognized-line.exit"
+assert_exit "unrecognized-line coupling map hard-errors (exit 2), not silent exit 0" 2 "${TMP_DIR}/unrecognized-line.exit"
+assert_contains "unrecognized-line hard-error names the offending line" 'unexpected_field' "${TMP_DIR}/unrecognized-line.out"
+
+echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 
 if [ "${FAIL}" -gt 0 ]; then

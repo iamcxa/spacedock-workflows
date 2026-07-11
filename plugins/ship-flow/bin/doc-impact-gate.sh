@@ -240,9 +240,35 @@ process_row() {
 # still ends up with an empty srcGlobs or docPaths — covering layouts
 # genuinely outside the flat schema (e.g. YAML block sequences) that this
 # zero-dep line-based parser does not attempt to support.
+#
+# codex-gate round-2 P1-3 residual: per-row fail-closed above is not enough
+# when the WHOLE map parses to zero rows — a `couplings:` key rendered in an
+# unsupported layout the row matcher never triggers on at all (e.g. flow-style
+# `couplings: [{...}]`, or a syntactically-empty `couplings: []`) hits
+# `validate_and_process_row` exactly once at EOF with an empty name, which is
+# a silent no-op, not a hard error — so the whole gate goes dark with zero
+# enforcement and zero output. Default-deny fix, two parts: (a) count parsed
+# rows; if the map declares a `couplings:` key but zero rows parsed, hard
+# error naming the map (below, after the loop). (b) once inside the
+# `couplings:` block, any non-blank, non-comment line that is not a
+# recognized row/key line is itself a parse failure — hard error naming the
+# offending line — instead of being silently skipped by the loop's `elif`
+# chain (this is what let a stray/garbled line pass through undetected).
 NAME_RE='^[[:space:]]*-[[:space:]]+name:[[:space:]]*(.+)$'
 SRC_RE='^[[:space:]]*srcGlobs:[[:space:]]*\[(.*)\][[:space:]]*$'
 DOCS_RE='^[[:space:]]*docPaths:[[:space:]]*\[(.*)\][[:space:]]*$'
+# Loose "is this line attempting one of the recognized keys" patterns — used
+# only by the unrecognized-line guard below. Distinct from SRC_RE/DOCS_RE
+# (strict value-extraction, unchanged): a `srcGlobs:` line with no inline
+# bracket (e.g. a YAML block-sequence continuation) is still a *recognized*
+# key line — it just fails validate_and_process_row's existing empty-value
+# check per-row, which already names the row. Only a line that isn't even an
+# attempt at one of these four keys is "unrecognized" here.
+SRC_KEY_RE='^[[:space:]]*srcGlobs:'
+DOCS_KEY_RE='^[[:space:]]*docPaths:'
+RATIONALE_KEY_RE='^[[:space:]]*rationale:'
+COMMENT_OR_BLANK_RE='^[[:space:]]*(#.*)?$'
+COUPLINGS_KEY_RE='^couplings:'
 
 # strip_bracket_list <bracket-contents> — strips both quote styles the
 # declared flat schema allows ("a" or 'a'), leaving the comma-separated list.
@@ -270,20 +296,48 @@ validate_and_process_row() {
 current_name=""
 current_src=""
 current_docs=""
+in_couplings_block=0
+couplings_key_seen=0
+parsed_row_count=0
 
 while IFS= read -r line || [ -n "$line" ]; do
+  if [ "$in_couplings_block" -eq 0 ]; then
+    if [[ "$line" =~ $COUPLINGS_KEY_RE ]]; then
+      couplings_key_seen=1
+      in_couplings_block=1
+    fi
+    continue
+  fi
+
   if [[ "$line" =~ $NAME_RE ]]; then
     validate_and_process_row "$current_name" "$current_src" "$current_docs"
     current_name="$(printf '%s' "${BASH_REMATCH[1]}" | sed -E 's/[[:space:]]+$//')"
     current_src=""
     current_docs=""
+    parsed_row_count=$((parsed_row_count + 1))
   elif [[ "$line" =~ $SRC_RE ]]; then
     current_src="$(strip_bracket_list "${BASH_REMATCH[1]}")"
   elif [[ "$line" =~ $DOCS_RE ]]; then
     current_docs="$(strip_bracket_list "${BASH_REMATCH[1]}")"
+  elif [[ "$line" =~ $SRC_KEY_RE || "$line" =~ $DOCS_KEY_RE || "$line" =~ $RATIONALE_KEY_RE ]]; then
+    : # recognized key line whose value isn't the strict inline-array form
+      # (e.g. block-sequence) — validate_and_process_row's per-row empty
+      # check (P1-3, cycle 2) catches it below, naming the row.
+  elif [[ "$line" =~ $COMMENT_OR_BLANK_RE ]]; then
+    : # comment or blank line inside the block — allowed
+  else
+    echo "ERROR: coupling map ${COUPLING_MAP} has an unrecognized line inside the 'couplings:' block (current row: '${current_name:-<none>}'): ${line}" >&2
+    echo "Recognized line types inside 'couplings:' are '- name:', 'srcGlobs:', 'docPaths:', 'rationale:', comments, and blank lines." >&2
+    exit 2
   fi
 done < "$COUPLING_MAP"
 validate_and_process_row "$current_name" "$current_src" "$current_docs"
+
+if [ "$couplings_key_seen" -eq 1 ] && [ "$parsed_row_count" -eq 0 ]; then
+  echo "ERROR: coupling map ${COUPLING_MAP} declares a 'couplings:' key but zero rows parsed." >&2
+  echo "Only the block-sequence form is supported: 'couplings:' followed by '- name: <slug>' rows. Flow-style ('couplings: [...]') and empty ('couplings: []') are not supported — fix the map rather than relying on silent skip." >&2
+  exit 2
+fi
 
 if [ "$BLOCKERS" -gt 0 ]; then
   exit 1
