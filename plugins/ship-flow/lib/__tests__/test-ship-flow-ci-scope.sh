@@ -49,6 +49,9 @@ check "full suite is limited to plugin or workflow changes" \
 check "docs-only PRs keep lightweight gate without full suite" \
   "grep -q 'docs_only_lightweight=true' '${WORKFLOW}' && grep -q 'full_suite=false' '${WORKFLOW}'"
 
+check "doc-impact-gate step gated on plugin_changed, reads PR body via env indirection (no direct interpolation)" \
+  "grep -qF 'name: doc-impact-gate' '${WORKFLOW}' && grep -qF \"if: steps.ship_flow_scope.outputs.plugin_changed == 'true'\" '${WORKFLOW}' && grep -qF 'PR_BODY: \${{ github.event.pull_request.body }}' '${WORKFLOW}'"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 

@@ -40,6 +40,7 @@ jobs:
           fi
           echo "Changed files:"
           echo "$CHANGED"
+          printf '%s\n' "$CHANGED" > /tmp/ship_flow_changed_files.txt
 
           PLUGIN_CHANGED=false
           DOCS_ONLY=true
@@ -73,6 +74,15 @@ jobs:
         run: |
           echo "Docs-only or non-plugin change — running lightweight gate only"
           CI=true bash plugins/ship-flow/bin/check-invariants.sh
+
+      - name: doc-impact-gate (mechanical coupling gate)
+        if: steps.ship_flow_scope.outputs.plugin_changed == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          bash plugins/ship-flow/bin/doc-impact-gate.sh \
+            --changed=/tmp/ship_flow_changed_files.txt \
+            --declaration="$PR_BODY"
 
       - name: Run full ship-flow shell test suite
         if: steps.ship_flow_scope.outputs.full_suite == 'true'
