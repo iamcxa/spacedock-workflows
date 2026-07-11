@@ -1,8 +1,8 @@
 ---
 title: Self-adoption dogfood bootstrap — canonical docs + doc-impact gate
-status: draft
+status: shape
 source: 2026-07-11 captain decision (dogfood bundle) + 2026-07-08 joint audit
-started:
+started: 2026-07-11T05:59:50Z
 completed:
 verdict:
 score: 0.9
