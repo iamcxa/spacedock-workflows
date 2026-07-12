@@ -1,0 +1,12 @@
+# Test fixture: stray unrecognized line inside the couplings block —
+# codex-gate round-2 P1-3 residual companion case. A line that is neither a
+# recognized key ('- name:'/'srcGlobs:'/'docPaths:'/'rationale:') nor a
+# comment/blank line must hard-error naming the offending line, not be
+# silently ignored by the parser's elif chain.
+schema_version: "1.0"
+couplings:
+  - name: skill-readme
+    srcGlobs: ["fixtures/skills/*/SKILL.md"]
+    docPaths: ["fixtures/README.md"]
+    unexpected_field: "this key is not part of the schema and must hard-error"
+    rationale: "Test fixture: unrecognized keys inside a row must fail closed."

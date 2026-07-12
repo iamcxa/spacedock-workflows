@@ -187,6 +187,96 @@ EOF
         git add docs/test-wf/stageoutputs-entity/index.md
         git commit -qm "$mutation_msg"
         ;;
+      bodytable-large)
+        # Same shape as "bodytable" but the parent-rev (pre-mutation) index.md
+        # is padded past ~100KB with the marker still near the top. This
+        # exceeds the kernel pipe-buffer size (~64KB), which is what lets the
+        # unfixed printf|grep -q marker-detection pipe SIGPIPE: grep matches
+        # the marker on its first read and exits before printf finishes
+        # writing the padded remainder, and that non-zero writer exit was
+        # misread (under pipefail) as "marker not found" — losing a
+        # legitimate exemption. Regression coverage for the CI-only repro
+        # (PR #14, commits 90f47062/f9a7e4ab) that 4 local macOS pre-flights
+        # never reproduced at small fixture sizes.
+        mkdir -p docs/test-wf/large-bodytable-entity
+        {
+          cat <<'EOF'
+---
+id: "large-bodytable-entity"
+title: "Large Body Table"
+status: sharp
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+
+EOF
+          i=0
+          while [ "$i" -lt 1700 ]; do
+            printf 'padding padding padding padding padding padding padding padding\n'
+            i=$((i + 1))
+          done
+        } > docs/test-wf/large-bodytable-entity/index.md
+        git add docs/test-wf/large-bodytable-entity/index.md
+        git commit -qm "baseline: add large body-table entity"
+        sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/large-bodytable-entity/index.md
+        rm -f docs/test-wf/large-bodytable-entity/index.md.bak
+        git add docs/test-wf/large-bodytable-entity/index.md
+        git commit -qm "$mutation_msg"
+        ;;
+      stageoutputs-large)
+        # Same shape as "stageoutputs" but padded to ~380KB — exercises the
+        # sibling SIGPIPE direction: the unfixed `awk | grep -q y`
+        # stage_outputs-detection pipe can have grep match "y" and exit
+        # before awk (itself blocked writing into a full pipe from an
+        # upstream printf) is done, SIGPIPEing the chain; the resulting
+        # non-zero pipeline exit made the `if pipeline; then return 1; fi`
+        # guard silently skip, wrongly granting the exemption to an entity
+        # that DOES carry stage_outputs.
+        #
+        # Padding sits BETWEEN the frontmatter (stage_outputs near the top,
+        # so the awk|grep-q-y check races early) and the stage-artifact-links
+        # marker (pushed near the END). That keeps the marker-presence check
+        # (`printf | grep -q marker`, the OTHER unfixed pipe, already
+        # regressed by the "bodytable-large" case above) reading almost the
+        # whole buffer before it can match — steady-state drain, not a
+        # blocked-writer race — so this fixture isolates the second,
+        # sibling SIGPIPE direction instead of conflating both.
+        mkdir -p docs/test-wf/large-stageoutputs-entity
+        {
+          cat <<'EOF'
+---
+id: "large-stageoutputs-entity"
+title: "Large Stage Outputs"
+status: sharp
+stage_outputs:
+  shape: shape.md
+---
+
+EOF
+          i=0
+          while [ "$i" -lt 6000 ]; do
+            printf 'padding padding padding padding padding padding padding padding\n'
+            i=$((i + 1))
+          done
+          cat <<'EOF'
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+        } > docs/test-wf/large-stageoutputs-entity/index.md
+        git add docs/test-wf/large-stageoutputs-entity/index.md
+        git commit -qm "baseline: add large stage_outputs entity"
+        sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/large-stageoutputs-entity/index.md
+        rm -f docs/test-wf/large-stageoutputs-entity/index.md.bak
+        git add docs/test-wf/large-stageoutputs-entity/index.md
+        git commit -qm "$mutation_msg"
+        ;;
     esac
   )
   echo "$dir"
@@ -376,6 +466,34 @@ EOF
   git update-ref refs/remotes/origin/main "$(git rev-parse main)"
 )
 assert_exit 1 "run_check_only '$TMP'" "Case-11 strip-stage_outputs after-state bypass: correctly flagged (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 12 (SIGPIPE repro): LARGE (>100KB) body-table entity, marker near top, manual status edit → PASS (exempt; #C14-pipefail) ---"
+# Regresses PR #14 CI-red root cause: _entity_bodytable_no_stage_outputs's
+# marker check used `printf | grep -q`. On an entity whose parent-rev
+# index.md exceeds the kernel pipe-buffer size, grep -q can match and exit
+# before printf finishes writing, SIGPIPEing printf; under `set -o
+# pipefail` that non-zero exit was misread as "no marker" and this
+# legitimate body-table entity LOST its exemption. Deterministic on this
+# fixture size (verified via direct repro before wiring this case in).
+TMP="$(setup_fixture "execute(large-bodytable-entity): correct status to plan" "bodytable-large" "edit")"
+assert_exit 0 "run_check_only '$TMP'" "Case-12 large body-table manual edit exempt (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 13 (SIGPIPE repro, reverse direction): LARGE (~380KB) stage_outputs entity, marker near the end, manual status edit → FAIL (advance-stage safe; exemption is narrow) ---"
+# Sibling of Case 12: the stage_outputs check used
+# `printf | awk ... | grep -q y` inside `if PIPELINE; then return 1; fi`.
+# grep -q y matching and exiting early can SIGPIPE the still-writing
+# upstream, making the pipeline's pipefail-propagated exit non-zero even
+# though stage_outputs IS present — the `if` then silently falls through
+# and wrongly grants the exemption. This entity DOES carry stage_outputs
+# and must still be flagged. See the "stageoutputs-large" fixture comment
+# for why the marker sits near the end here (isolates this pipe's race
+# from the marker-check pipe's own race, regressed separately by Case 12).
+TMP="$(setup_fixture "manual hand-edit status to plan" "stageoutputs-large" "edit")"
+assert_exit 1 "run_check_only '$TMP'" "Case-13 large stage_outputs manual edit still flagged (exit 1)"
 rm -rf "$TMP"
 
 echo

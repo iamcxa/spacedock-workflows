@@ -1,0 +1,2 @@
+fixtures/skills/foo/SKILL.md
+fixtures/README.md
