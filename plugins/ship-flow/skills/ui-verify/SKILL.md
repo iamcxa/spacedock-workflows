@@ -47,9 +47,16 @@ version: 1
 mapping: spacebridge
 auth_account: tenant_admin
 title: "War room density tokens"
+readiness:
+  timeout_ms: 10000
+  poll_ms: 100
 setup:
   - action: goto
     url: "/"
+  - action: click
+    selector: ".open-density-panel"
+    ensure: open
+    postcondition: ".density-panel"
 checks:
   - name: "D1 row padding"
     selector: ".entity-row"
@@ -59,6 +66,25 @@ checks:
       "::before":
         backgroundColor: "rgb(178, 105, 255)"
 ```
+
+`readiness` is optional. The defaults shown above apply when it is omitted, so
+existing version 1 YAML remains compatible. A setup `click` polls its target
+within the bounded readiness window instead of racing a cold page, then clicks
+exactly once. CSS, XPath, `@ref`, and `text=` click locators remain accepted. A
+click may override `timeout_ms` or `poll_ms` on that step.
+
+Use `ensure: open` with a CSS `postcondition` when clicking a toggle should
+open a surface idempotently. If the postcondition already exists, the runner
+skips the click; otherwise it waits for a successful click and then for the
+postcondition. `ensure: open` without `postcondition` is a runner error.
+
+Before any computed-style probe, the runner polls the union of all declared
+`checks[].selector` values until every selector exists in the same current
+document. `goto`, login, redirect, and legacy `wait: { for: networkidle }`
+setup declarations use timeout-bounded document or URL state rather than an
+unbounded network-idle verdict. Explicit millisecond sleeps remain accepted for
+backward compatibility, but the selector-union barrier is the readiness
+verdict for checks.
 
 The runner resolves `.claude/e2e/mappings/<mapping>.yaml` for `base_url` and
 optional auth. It drives `agent-browser`, probes `getComputedStyle()`, and
@@ -74,6 +100,13 @@ Exit codes:
 
 Report rows include selector, expected value, actual value, and pass/fail per
 property. A selector not found is a failed check, not a skip.
+
+A readiness timeout prints diagnostic evidence: current URL, missing selectors,
+navigation timing/type, and available console and page-error context. Setup,
+login, and navigation timeouts are runner errors and exit `2`. A check-selector
+timeout still writes a failed-check report and exits `1`, preserving version 1
+missing-selector behavior. Diagnostic collection is best-effort and reports
+unavailable browser channels without masking the original timeout.
 
 ## Boundaries
 
