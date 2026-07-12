@@ -370,3 +370,25 @@ The last codex-gate P1 in the fail-open class (missing/misspelled `couplings:` k
 - iteration_count: 1 (cycle-4 fix pass, no further rejection within this cycle)
 - commit_count: 2 (fix `76d486e`, stage-report `da335a7`)
 - new_findings: 0 (the 1 fix is the codex-gate-routed round-3 P1; no new findings surfaced)
+
+## Stage Report: ship
+
+- DONE: review.md exists with `## Canonical Docs Update` + `### Canonical Doc Actions Consumed` sections, all 3 rows reconciled with real commit citations
+  `bash plugins/ship-flow/bin/canonical-doc-sync-checker.sh docs/ship-flow/1-self-adoption-dogfood-bootstrap` exits 0, all 7 lines `PASS` (including `umbrella-closeout`, triggered by `pattern: pitch`). Closes AC-3.
+- DONE: Canonical docs consumed per plan.md's Canonical Doc Actions
+  ARCHITECTURE.md — confirmed `e51ed05` (T1.1) already satisfies the row (verified current by direct read, includes the doc-impact-gate mechanism in components/decisions); no re-edit. PRODUCT.md — explicit skip rationale recorded (skeleton compliant since `11350a0`); no edit, consistent with plan.md's action=skip and the checklist's "explicit skip rationale" wording. ROADMAP.md — confirmed `1f08020` (T1.2) already satisfies the row (Next→Now); Shipped-flip correctly deferred to merge (pr-merge mod), not this stage. No patch-map invocation needed since no doc content required mutation at ship.
+- DONE: Release consideration recorded in review.md `## Release Consideration` — new checker + CI gate is a minor-version candidate (0.8.2 → 0.9.x) for the NEXT release; recorded only, not bumped.
+- DONE: PR prepared (not created, nothing pushed) — `pr-body.md` drafted with AC-1..AC-4 evidence citations, 4-round codex-gate history summary, and a self-application note
+  Self-application verified live: `bash plugins/ship-flow/bin/doc-impact-gate.sh --changed=<branch-diff-vs-origin/main> --declaration=""` → `PASS reference-schema-readme`, `PASS checker-source-map`, exit 0 — both coupling rows named in the checklist are touched by this branch's own diff.
+- DONE: Full local gate re-run named and clean (only the 2 known historical C14 lines)
+  `CI=true check-invariants.sh`: exit 1, but only 2 `FAIL C14` lines (`695addea`, `0d0ca53e`, pre-dating this entity, unchanged from the pre-ship baseline) — 0 `WARN [Principle 5b]`; the 3 `WARN [Principle 5a]` lines on the orphaned `1.1`/`1.2`/`1.3` shaped-child stubs are pre-existing and unrelated (byte-identical to the baseline captured before this stage's edits). Shell suite 103 total, 101 pass, 2 fail (the same 2 known pre-existing). Node suite 79/79. `check-version-triple.sh` PASS (0.8.2 triple). `check-no-dangling.sh` PASS. `git diff --check origin/main...HEAD` clean. `validate-tdd-ledger.py` `status=pass records=7`.
+
+### Summary
+
+review.md + pr-body.md are new artifacts closing AC-3 and preparing the shipping package; no canonical-doc content edit was needed at ship since T1.1/T1.2 (execute cycle 1) already satisfied the ARCHITECTURE.md/ROADMAP.md rows and PRODUCT.md's plan action was skip — review.md's job was to consume and cite, not redo. C15 cap on review.md: verified live in code as 100 body/200 raw (stricter than the dispatch note's 120/240); review.md is 47 raw lines either way. No push, no PR created, no merge — HARD BOUNDARY held. The FO owns presenting the shipping package + scaffolding-first merge-order plan for the 2 historical C14 commits to the captain.
+
+### Metrics
+
+- status: passed
+- commit_count: 1 (review.md + pr-body.md + this stage report)
+- new_findings: 0
