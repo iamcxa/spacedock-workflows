@@ -14,7 +14,7 @@ verdict:
 score: 0.9
 worktree: .worktrees/spacedock-ensign-1-self-adoption-dogfood-bootstrap
 issue:
-pr:
+pr: https://github.com/iamcxa/spacedock-workflows/pull/14
 domain: schema
 affects_ui: false
 contract_decision_required: true
