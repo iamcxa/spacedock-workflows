@@ -1,7 +1,7 @@
 ---
 id: "1"
 title: "Self-adoption dogfood bootstrap — canonical docs + doc-impact gate"
-status: verify
+status: ship
 pattern: pitch
 appetite: "small-batch"
 layout: folder
