@@ -1,8 +1,8 @@
 ---
 title: Make shape-confirm/allocate-id instance-aware
-status: draft
+status: shape
 source: todo shape-confirm-instance-awareness (pitch 1 harvest)
-started:
+started: 2026-07-12T13:48:06Z
 completed:
 verdict:
 score:

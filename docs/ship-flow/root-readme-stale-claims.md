@@ -1,8 +1,8 @@
 ---
 title: Refresh root README stale compatibility claims
-status: draft
+status: shape
 source: todo root-readme-stale-claims (pitch 1 harvest)
-started:
+started: 2026-07-12T13:48:06Z
 completed:
 verdict:
 score:

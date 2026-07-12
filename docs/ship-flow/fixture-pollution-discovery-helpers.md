@@ -1,8 +1,8 @@
 ---
 title: Fixture-tree exclusion for discovery helpers
-status: draft
+status: shape
 source: todo fixture-pollution-discovery-helpers (pitch 1 harvest)
-started:
+started: 2026-07-12T13:48:06Z
 completed:
 verdict:
 score:
