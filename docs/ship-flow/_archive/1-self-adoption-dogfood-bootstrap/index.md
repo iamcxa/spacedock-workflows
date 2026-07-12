@@ -1,7 +1,7 @@
 ---
 id: "1"
 title: "Self-adoption dogfood bootstrap — canonical docs + doc-impact gate"
-status: ship
+status: done
 pattern: pitch
 appetite: "small-batch"
 layout: folder
@@ -9,18 +9,19 @@ harvest_required: true
 answers_density: "low"
 source: 2026-07-11 captain decision (dogfood bundle) + 2026-07-08 joint audit
 started: 2026-07-11T05:59:50Z
-completed:
-verdict:
+completed: 2026-07-12T05:03:27Z
+verdict: passed
 score: 0.9
 worktree: .worktrees/spacedock-ensign-1-self-adoption-dogfood-bootstrap
 issue:
-pr: https://github.com/iamcxa/spacedock-workflows/pull/14
+pr: pr-merge:14
 domain: schema
 affects_ui: false
 contract_decision_required: true
 pre_mortem:
     category: wrong-dcs
     one_liner: Declaration escape-hatch becomes rubber-stamp default; PRs carry boilerplate none-reasons and prose drift continues despite a green gate — coupling-map tuning was the real value, unmeasured.
+archived: 2026-07-12T05:03:27Z
 ---
 
 <!-- section:stage-artifact-links -->
