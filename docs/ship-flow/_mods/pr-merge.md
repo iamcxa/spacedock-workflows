@@ -24,6 +24,8 @@ If `OPEN`, no action needed — the PR is still in review.
 
 If `gh` is not available, warn the captain and skip PR state checks.
 
+Provider scope: the v1 reconciler supports GitHub `gh` and fixture-backed tests only.
+
 ## Hook: idle
 
 Check PR-pending entities using the same logic as the startup hook: scan entity files for non-empty `pr` and non-terminal status, run `gh pr view` for each, and advance merged PRs (two-step `mod-block=` clear then terminalize). This is the workflow's PR-pending scan: the generic event loop fires this idle hook and owns no PR scan of its own, so a workflow with no `pr-merge` mod never reaches for `gh` in its loop. Report any advanced entities to the captain.
