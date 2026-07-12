@@ -393,3 +393,24 @@ review.md + pr-body.md are new artifacts closing AC-3 and preparing the shipping
 - commit_count: 1 (review.md + pr-body.md + this stage report)
 - new_findings: 0
 | 4 | 2026-07-12 | PR #14 CI red: C14 exemption helper misfires on Linux (SIGPIPE+pipefail race in printf-pipe-grep on 47KB parent index.md; FO-diagnosed, rerun-confirmed deterministic) — captain authorized bounded c5 ("c5 go") | execute (c5, PR-CI feedback; scope locked to the helper) | check-invariants.sh `_entity_bodytable_no_stage_outputs` false-negative exemption on large entities; sibling pipeline has reverse false-exempt latent bug | pending |
+
+## Stage Report: execute (cycle 5)
+
+- DONE: `_entity_bodytable_no_stage_outputs` in `plugins/ship-flow/bin/check-invariants.sh` is rewritten SIGPIPE-immune — no printf-to-pipe constructs whose reader can exit early under `set -o pipefail`; a pure-shell `case "$content" in *marker*)` replaces the marker-detection pipe, and the `stage_outputs` awk is fed via here-string with output captured by command substitution instead of piped into a `grep -q y` that could exit early. Both directions covered.
+  Commit `8b66a79`. Full change + rationale in execute.md `## Cycle-5 Fix`.
+- DONE: RED-first evidence — Case 12 (synthetic body-table entity, parent-rev index.md >100KB, marker near the top) asserting exempt, and Case 13 (a `stage_outputs`-present variant, ~380KB, marker pushed near the end to isolate this pipe's race from Case 12's) asserting NOT exempt, both added to `test-enforce-advance-stage.sh`; both observed failing against the unfixed helper (3/3 runs: Case 12 expected exit 0 got 1, Case 13 expected exit 1 got 0), then green post-fix (3/3 runs each), all 11 prior cases unchanged. Full local gate re-run named clean.
+  `test-enforce-advance-stage.sh` 11/11→13/13. Shell suite 102/103 (1 pre-existing unrelated failure, `test-merged-pr-closeout-reconciler.sh`) — `test-archived-corpus-invariants.sh`, one of the "2 pre-existing fails" cited in every cycle since cycle-2, now PASSES as a side-effect of this fix (it exercises `check-invariants.sh` over historical commits subject to the same race). `node --test bin/*.test.mjs` 79/79. `CI=true check-invariants.sh` exit 0, 0 `FAIL`, 0 `WARN [Principle 5b]`, `OK C14`, `OK C15` — the 2 previously-known historical `C14` lines on `90f4706`/`f9a7e4a` now evaluate correctly exempt. `check-no-dangling.sh` PASS. `check-version-triple.sh` PASS. `git diff --check 175b32b HEAD` clean. `shellcheck` clean on both changed files. Full evidence in execute.md `## Cycle-5 Fix` `<details>`.
+- DONE: Scope locked to `bin/check-invariants.sh` (the helper) and `lib/__tests__/test-enforce-advance-stage.sh` (the test file, fixtures inline via the existing `setup_fixture` pattern — no separate fixture files needed); execute.md gained the Cycle-5 Fix section (compressing the now-stale Cycle-2/Cycle-3 `<details>` evidence blocks to stay under the 150-body/300-raw C15 cap — narrative only, no finding text altered, independently re-verified `OK C15` post-edit); this index.md Stage Report appended; verify.md untouched.
+  `git diff --stat 6cb2ff3 HEAD` (post cycle-5 commits) confirms only `plugins/ship-flow/bin/check-invariants.sh`, `plugins/ship-flow/lib/__tests__/test-enforce-advance-stage.sh`, `docs/ship-flow/1-self-adoption-dogfood-bootstrap/execute.md`, and this file changed. Feedback Cycles row 4 resolution intentionally left `pending` — CI-confirmed closure on PR #14 is verify-owned, matching the cycle-2/3/4 division of labor (execute proves the fix locally; verify closes the loop against the live CI run).
+
+### Summary
+
+Fixed the PR #14 CI-red root cause: `_entity_bodytable_no_stage_outputs` used `printf`-into-pipe constructs that could SIGPIPE under `set -o pipefail` on large entities, misreading the writer's non-zero exit as "no match" (losing a legitimate C14 exemption) or, in the sibling direction, as "no stage_outputs" (wrongly granting one). Rewrote both checks pipe-free with no behavior change beyond robustness. RED-first regression coverage added for both directions in one test file, reproduced failing against the unfixed helper and green after the fix, 3/3 runs each. Full local gate re-run is clean and, as a bonus, the fix incidentally resolved a previously-flaky pre-existing shell-suite failure (`test-archived-corpus-invariants.sh`) that every prior cycle since cycle-2 had to flag as a known deviation. No scope growth beyond the 1 named helper. Feedback Cycles row 4 left `pending` for verify's CI-confirmed closure. Ready for re-verify.
+
+### Metrics
+
+- status: passed
+- duration_minutes: (see FO dispatch timing)
+- iteration_count: 1 (cycle-5 fix pass, no further rejection within this cycle)
+- commit_count: 1 (fix + test `8b66a79`; this stage-report commit is separate)
+- new_findings: 0 (the fix is the PR-CI-routed root cause; the incidental `test-archived-corpus-invariants.sh` stabilization is a positive side-effect, not a new finding)

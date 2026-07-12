@@ -104,95 +104,19 @@ GREEN (observed passing), re-run independently this session:
 
 #### P1-1 — CI step ran on push events with no PR body
 
-`.github/workflows/ship-flow-invariants.yml:79`'s `doc-impact-gate` step was
-gated only on `plugin_changed`, so it also evaluated on `push` (post-merge to
-`main`), where `github.event.pull_request.body` is structurally absent — a
-legitimately-waived PR would go green pre-merge then RED on `main`
-post-merge.
-
-- RED: added a new assertion to `test-ship-flow-ci-scope.sh` requiring the
-  step's `if:` line to also gate on `github.event_name == 'pull_request'`.
-  `bash plugins/ship-flow/lib/__tests__/test-ship-flow-ci-scope.sh` →
-  **7/8** (new assertion FAIL) against the unfixed workflow.
-- Fix: `if: steps.ship_flow_scope.outputs.plugin_changed == 'true' &&
-  github.event_name == 'pull_request'` — scope-detection step
-  (`ship_flow_scope`) untouched.
-- GREEN: same command → **8/8**.
-- Commit: `004456c`.
+`.github/workflows/ship-flow-invariants.yml:79`'s `doc-impact-gate` step evaluated on `push` too (where `github.event.pull_request.body` is structurally absent), letting a legitimately-waived PR go green pre-merge then RED on `main` post-merge. RED: `test-ship-flow-ci-scope.sh` 7/8 (new assertion requiring `github.event_name == 'pull_request'` on the `if:` line) against the unfixed workflow. Fix: added that condition; scope-detection step (`ship_flow_scope`) untouched. GREEN: 8/8. Commit: `004456c`.
 
 #### P1-2 — unanchored `none` match accepted non-waiver prose
 
-`plugins/ship-flow/bin/doc-impact-gate.sh:106`'s
-`extract_doc_impact_reason()` matched `doc-impact:\s*none` with no
-requirement that a separator follow — prose like `doc-impact: none of these
-docs are affected by my change I promise` (the FO's live repro) was accepted
-as a waiver (exit 0), indistinguishable from a real declaration.
-
-- RED: added Block 4b to `test-doc-impact-gate.sh` with the exact FO repro
-  string + a second unanchored case (`nonetheless`). `bash
-  plugins/ship-flow/lib/__tests__/test-doc-impact-gate.sh` → **23/26** (3
-  FAIL: FO repro string exits 0 instead of 1, missing BLOCKER line,
-  `nonetheless` case exits 0) against the unfixed matcher.
-- Fix: detection now requires an explicit separator (one of
-  `doc-rationale.sh`'s `-—:|` chars, optionally repeated) immediately after
-  `none` (optional whitespace) before the marker is recognized at all;
-  extraction stays permissive so multi-char separators like `--` still
-  strip in full once a match is confirmed.
-- GREEN: same command → **26/26** — FO repro string now exits 1 (same as
-  no declaration); colon/pipe/double-dash separator variants (also added
-  this cycle) continue to pass, proving no regression on legitimate
-  declarations.
-- Commit: `961223a`.
+`extract_doc_impact_reason()` matched `doc-impact:\s*none` with no required separator — prose like `doc-impact: none of these docs are affected by my change I promise` (the FO's live repro) was accepted as a waiver. RED: Block 4b added (FO repro + `nonetheless` case) → 23/26 (3 FAIL) against the unfixed matcher. Fix: detection now requires an explicit separator (`doc-rationale.sh`'s `-—:|` chars) immediately after `none`; extraction stays permissive so multi-char separators still strip in full once matched. GREEN: 26/26 — FO repro now exits 1, legitimate separator variants unaffected. Commit: `961223a`.
 
 #### P1-3 — coupling-map parser silently skipped unparsed rows (fail-open)
 
-`plugins/ship-flow/bin/doc-impact-gate.sh:224`'s coupling-map reader matched
-coupling rows via literal-prefix `case` patterns tied to one exact
-4-space-indent, double-quoted inline-array layout. Any other rendering of
-the same D1 "deliberately flat" schema (design.md) — single quotes,
-different indentation — or a genuinely unsupported layout (YAML block
-sequences) parsed to an empty `srcGlobs`/`docPaths` and the row was skipped
-with zero protection, no error.
-
-- RED: added Blocks 9-11 to `test-doc-impact-gate.sh` plus 3 new fixtures
-  (`coupling-map-single-quote.yaml`, `coupling-map-indent-variant.yaml`,
-  `coupling-map-block-array.yaml`). `bash
-  plugins/ship-flow/lib/__tests__/test-doc-impact-gate.sh` → **26/32** (6
-  FAIL: both variant maps silently exit 0 with the row unprotected instead
-  of blocking; the block-array map exits 0 instead of hard-erroring)
-  against the unfixed parser.
-- Fix: regex-based line matching (`NAME_RE`/`SRC_RE`/`DOCS_RE`) tolerates
-  quote-style and indentation variance within the declared flat schema;
-  `validate_and_process_row()` hard-errors (exit 2) for any named row that
-  still has an empty `srcGlobs` or `docPaths` after parsing, instead of
-  silently treating it as "no coupling here."
-- GREEN: same command → **32/32** — single-quote and indent-variant maps
-  now parse and block correctly; the block-array map now hard-errors
-  (exit 2) naming the unparseable row. Sanity-checked the real
-  `references/doc-coupling-map.yaml` (canonical layout) still parses and
-  blocks/passes correctly post-fix (live fail-path + declaration-path
-  re-run, both matched pre-fix behavior).
-- Commit: `f030145`.
+The coupling-map reader matched rows via literal-prefix `case` patterns tied to one exact 4-space-indent double-quoted layout; any other rendering of the same D1 flat schema (single quotes, different indentation) or a genuinely unsupported layout (YAML block sequences) parsed to an empty `srcGlobs`/`docPaths` and was silently skipped, zero protection. RED: Blocks 9-11 + 3 new fixtures (single-quote, indent-variant, block-array) → 26/32 (6 FAIL) against the unfixed parser. Fix: regex-based line matching (`NAME_RE`/`SRC_RE`/`DOCS_RE`) tolerates quote/indent variance within the declared schema; `validate_and_process_row()` hard-errors exit 2 on any named row still empty after parsing. GREEN: 32/32 — variant maps parse/block correctly, block-array hard-errors naming the row; real `references/doc-coupling-map.yaml` sanity-checked unchanged. Commit: `f030145`.
 
 ### Full local gate re-run (post-fix, this session)
 
-`test-doc-impact-gate.sh` 32/32, `test-ship-flow-ci-scope.sh` 8/8, shell
-suite 101/103 (2 pre-existing fails, identical to base `fb59795`), node
-suite 79/79, `CI=true check-invariants.sh` zero `WARN [Principle 5b]` /
-5 FAIL lines (deviation below), `check-no-dangling.sh` PASS,
-`check-version-triple.sh` PASS, `git diff --check fb59795 HEAD` clean.
-
-**Deviation (pre-existing, resolved by verify cycle-2 — see index.md
-`Stage Report: verify (cycle 2)`):** check-invariants.sh showed 3 extra
-FAILs (`C11`/`C12`/`C15`) on verify.md beyond the 2 known `C14` lines,
-independently confirmed to predate this cycle's 7 touched files (verify.md
-untouched here per this dispatch's scope). Not fixed in execute — that was
-verify-owned work, closed in cycle 2.
-
-No other deviations; no scope growth beyond the 3 named P1 fixes (7 files:
-`.github/workflows/ship-flow-invariants.yml`, `bin/doc-impact-gate.sh`,
-`lib/__tests__/test-doc-impact-gate.sh`, `test-ship-flow-ci-scope.sh`, 3
-new fixtures under `lib/__tests__/fixtures/doc-impact-gate/`).
+`test-doc-impact-gate.sh` 32/32, `test-ship-flow-ci-scope.sh` 8/8, shell suite 101/103 (2 pre-existing fails, identical to base `fb59795`), node 79/79, `check-no-dangling.sh`/`check-version-triple.sh` PASS, `git diff --check fb59795 HEAD` clean. Deviation (pre-existing, resolved by verify cycle-2 — index.md `Stage Report: verify (cycle 2)`): `check-invariants.sh` showed 3 extra FAILs (`C11`/`C12`/`C15`) on verify.md beyond the 2 known `C14` lines, independently confirmed to predate this cycle's 7 touched files (verify.md untouched here). No other deviations; no scope growth beyond the 3 named P1 fixes (7 files: `.github/workflows/ship-flow-invariants.yml`, `bin/doc-impact-gate.sh`, `lib/__tests__/test-doc-impact-gate.sh`, `test-ship-flow-ci-scope.sh`, 3 new fixtures).
 
 </details>
 
@@ -213,59 +137,15 @@ from the 2 known pre-existing shell fails and 1 pre-existing verify.md
 
 #### P1-2 residual — marker not line-anchored
 
-`extract_doc_impact_reason()`'s cycle-2 fix anchored the separator after
-`none` but not the marker itself to the line — `grep -im1` matched
-`doc-impact: none — ...` anywhere inside a line, so same-line prefix text
-(a PR-template example, a quoted aside) still counted as a real waiver.
-
-- RED (pre-fix, live): FO repro `Example only: doc-impact: none — this is
-  documentation` → `PASS ... accepted`, exit 0 (should be 1).
-- Fix: both the `grep` detection and `sed` extraction now anchor
-  `^[[:space:]]*` before `doc-impact:` — only leading whitespace tolerated.
-- GREEN (post-fix, live): same repro → `BLOCKER doc-impact: ...`, exit 1.
-  `test-doc-impact-gate.sh` 32/32→**37/37** (Block 4c: template-prefixed,
-  quoted-context, leading-whitespace-control). Block 4's fixture shared the
-  same bug pattern; updated to realistic multi-line PR-body text.
-- Commit: `2de8b87`.
+Cycle-2's fix anchored the separator after `none` but not the marker itself to the line — `grep -im1` matched `doc-impact: none — ...` anywhere inside a line, so same-line prefix text (a PR-template example, a quoted aside) still counted as a real waiver. RED (pre-fix, live): FO repro `Example only: doc-impact: none — this is documentation` → `PASS ... accepted`, exit 0 (should be 1). Fix: both `grep` detection and `sed` extraction now anchor `^[[:space:]]*` before `doc-impact:` — only leading whitespace tolerated. GREEN (post-fix, live): same repro → `BLOCKER`, exit 1; `test-doc-impact-gate.sh` 32/32→**37/37** (Block 4c: template-prefixed, quoted-context, leading-whitespace-control). Commit: `2de8b87`.
 
 #### P1-3 residual — parser silent on zero-parsed-row maps
 
-Cycle-2's `validate_and_process_row` fail-closed check only fires for a row
-the matcher recognized (`- name:` line). A `couplings:` layout the matcher
-never triggers on at all — flow-style `[{...}]`, or empty `[]` — parses to
-zero rows, hits the row-check once at EOF with an empty name (a no-op).
-Whole gate goes dark: exit 0, zero output, zero enforcement.
-
-- RED (pre-fix, live): flow-style map, changed file matching a would-be
-  coupling, no declaration → silent exit 0 (should hard-error).
-- Fix: (a) count parsed rows in the `couplings:` block; zero rows with the
-  key present → hard error naming the map. (b) any non-blank, non-comment
-  line inside the block matching none of `- name:`/`srcGlobs:`/`docPaths:`/
-  `rationale:` → hard error naming the line.
-- GREEN (post-fix, live): same repro → `ERROR: ... zero rows parsed.`,
-  exit 2. `test-doc-impact-gate.sh` 37/37→**43/43** (Blocks 12-14:
-  flow-style, `couplings: []`, stray-unrecognized-key). Real
-  `references/doc-coupling-map.yaml` and the 3 pre-existing variant
-  fixtures (single-quote, indent-variant, block-array) sanity-checked
-  unchanged post-fix.
-- Commit: `670df77`.
+Cycle-2's `validate_and_process_row` fail-closed check only fires for a row the matcher recognized; a `couplings:` layout it never triggers on at all (flow-style `[{...}]`, or empty `[]`) parsed to zero rows and the whole gate went dark: exit 0, zero enforcement. RED (pre-fix, live): flow-style map, changed file matching a would-be coupling, no declaration → silent exit 0. Fix: (a) count parsed rows in the `couplings:` block, zero rows with the key present → hard error naming the map; (b) any non-blank non-comment line inside the block matching none of the recognized keys → hard error naming the line. GREEN (post-fix, live): same repro → `ERROR: ... zero rows parsed.`, exit 2; `test-doc-impact-gate.sh` 37/37→**43/43** (Blocks 12-14: flow-style, `couplings: []`, stray-unrecognized-key). Commit: `670df77`.
 
 ### Full local gate re-run (post-fix, this session)
 
-`test-doc-impact-gate.sh` 43/43, `test-ship-flow-ci-scope.sh` 8/8
-(unchanged), shell suite 101/103 (2 pre-existing fails, identical to base
-`6d338e4`), node suite 79/79, `CI=true check-invariants.sh` 2 known `C14`
-+ 1 pre-existing `C15` on verify.md (deviation below),
-`check-no-dangling.sh` PASS, `check-version-triple.sh` PASS,
-`git diff --check 6d338e4 HEAD` clean.
-
-**Deviation (pre-existing, resolved by verify cycle-3 — see index.md
-`Stage Report: verify (cycle 3)`):** check-invariants.sh showed 1 extra
-`C15` FAIL on verify.md beyond the 2 known `C14` lines, independently
-confirmed to predate this cycle's 5 touched files (verify.md untouched
-here). Not fixed in execute — verify-owned work, closed in cycle 3.
-
-No scope growth beyond the 2 named residual fixes.
+`test-doc-impact-gate.sh` 43/43, `test-ship-flow-ci-scope.sh` 8/8 (unchanged), shell suite 101/103 (2 pre-existing fails, identical to base `6d338e4`), node 79/79, `check-no-dangling.sh`/`check-version-triple.sh` PASS, `git diff --check 6d338e4 HEAD` clean. Deviation (pre-existing, resolved by verify cycle-3 — index.md `Stage Report: verify (cycle 3)`): `check-invariants.sh` showed 1 extra `C15` FAIL on verify.md beyond the 2 known `C14` lines, independently confirmed to predate this cycle's 5 touched files (verify.md untouched here). No scope growth beyond the 2 named residual fixes.
 
 </details>
 
@@ -298,3 +178,19 @@ No scope growth beyond the 1 named fix (4 files: `bin/doc-impact-gate.sh`,
 `lib/__tests__/test-doc-impact-gate.sh`, 2 new fixtures under
 `lib/__tests__/fixtures/doc-impact-gate/`). verify.md and index.md
 frontmatter not touched.
+
+## Cycle-5 Fix (PR-CI feedback — C14 exemption-helper SIGPIPE robustness)
+
+PR #14 CI red on `ubuntu-latest`: `_entity_bodytable_no_stage_outputs`'s `printf | grep -q` / `printf | awk | grep -q y` pipes SIGPIPE under `set -o pipefail` on content exceeding the kernel pipe-buffer size with an early match — losing legitimate exemptions (commits `90f4706`/`f9a7e4a`) or, via a sibling reverse bug, wrongly granting one to a `stage_outputs`-carrying entity; FO-diagnosed, rerun-confirmed deterministic on Linux, never reproduced in 4 local macOS pre-flights at the smaller fixture sizes previously exercised. Full finding: index.md Feedback Cycles row 4. Captain-authorized bounded cycle-5 ("c5 go"), scope locked to this one helper. Fixed by rewriting both checks pipe-free — a pure-shell `case "$content" in *marker*)` for the marker check, and the `stage_outputs` awk fed via here-string with output captured by command substitution instead of piped into another early-exiting reader; RED-first Cases 12-13 added to `test-enforce-advance-stage.sh` (see `<details>` below) failed both directions against the unfixed helper, GREEN post-fix, all 11 prior cases unchanged; full local gate re-run clean. Commit: `8b66a79`.
+<details>
+<summary>RED/GREEN evidence + full local gate re-run</summary>
+
+- Case 12 (>100KB body-table entity, marker near top): exercises the marker-check pipe (bug direction 1 — loses a legitimate exemption). RED (pre-fix, live, 3/3 runs): expected exit 0, got exit 1. GREEN (post-fix, live, 3/3 runs): exit 0.
+- Case 13 (~380KB `stage_outputs` entity, marker pushed near the end to isolate this pipe's race from Case 12's): exercises the `stage_outputs`-check pipe (bug direction 2 — wrongly grants an exemption). RED (pre-fix, live, 3/3 runs): expected exit 1, got exit 0. GREEN (post-fix, live, 3/3 runs): exit 1.
+- `test-enforce-advance-stage.sh` 11/11→**13/13** (2 new cases), all prior 11 unchanged.
+- Full local gate re-run (this session, against commit `8b66a79`): shell suite 102/103 — 1 pre-existing unrelated failure (`test-merged-pr-closeout-reconciler.sh`, an unrelated doc-string assertion). Note: `test-archived-corpus-invariants.sh`, flagged as one of "2 pre-existing fails" in every prior cycle since cycle-2, now PASSES — this fix incidentally also resolved it (it exercises `check-invariants.sh` over historical commits subject to the same SIGPIPE race). `node --test bin/*.test.mjs` 79/79. `CI=true check-invariants.sh` exit 0, 0 `FAIL` lines, 0 `WARN [Principle 5b]` lines, `OK C14 entity-status-via-advance-stage-only`, `OK C15 artifact-verbosity` (the 2 previously-known historical `C14` lines on `90f4706`/`f9a7e4a` now evaluate correctly exempt). `check-no-dangling.sh` PASS. `check-version-triple.sh` PASS. `git diff --check 175b32b HEAD` clean. `shellcheck` clean on both changed files.
+- Deviation: none. No scope growth beyond the 1 named helper (2 files: `bin/check-invariants.sh`, `lib/__tests__/test-enforce-advance-stage.sh`).
+
+</details>
+
+Feedback Cycles row 4 resolution is left `pending` — CI-confirmed closure on PR #14 itself is verify-owned (this cycle's evidence is local repro + full local gate only, per the established cycle-2/3/4 division of labor). index.md frontmatter and verify.md not touched.
