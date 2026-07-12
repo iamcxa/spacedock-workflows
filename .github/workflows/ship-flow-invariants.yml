@@ -40,6 +40,7 @@ jobs:
           fi
           echo "Changed files:"
           echo "$CHANGED"
+          printf '%s\n' "$CHANGED" > /tmp/ship_flow_changed_files.txt
 
           PLUGIN_CHANGED=false
           DOCS_ONLY=true
@@ -73,6 +74,19 @@ jobs:
         run: |
           echo "Docs-only or non-plugin change — running lightweight gate only"
           CI=true bash plugins/ship-flow/bin/check-invariants.sh
+
+      - name: doc-impact-gate (mechanical coupling gate)
+        # Scoped to pull_request events only: on push (post-merge to main),
+        # github.event.pull_request.body is structurally absent — a
+        # legitimately-waived PR would otherwise go green pre-merge and then
+        # RED on main post-merge (codex-gate P1-1).
+        if: steps.ship_flow_scope.outputs.plugin_changed == 'true' && github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          bash plugins/ship-flow/bin/doc-impact-gate.sh \
+            --changed=/tmp/ship_flow_changed_files.txt \
+            --declaration="$PR_BODY"
 
       - name: Run full ship-flow shell test suite
         if: steps.ship_flow_scope.outputs.full_suite == 'true'

@@ -1,0 +1,12 @@
+# Test fixture: YAML block-sequence arrays — codex-gate P1-3 regression.
+# This layout is outside the declared flat schema (D1, design.md); the
+# checker must fail CLOSED (hard error) rather than silently parse
+# srcGlobs/docPaths as empty and skip the row unprotected.
+schema_version: "1.0"
+couplings:
+  - name: skill-readme
+    srcGlobs:
+      - "fixtures/skills/*/SKILL.md"
+    docPaths:
+      - "fixtures/README.md"
+    rationale: "Test fixture: block-array style is unsupported and must fail closed."

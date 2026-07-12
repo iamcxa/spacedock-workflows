@@ -1302,13 +1302,30 @@ _frontmatter_status_at_rev_path() {
 _entity_bodytable_no_stage_outputs() {
   local rev="$1" path="$2" content
   content="$( { git show "${rev}:${path}" 2>/dev/null || true; } )"
-  printf '%s\n' "$content" | grep -q '<!-- section:stage-artifact-links -->' || return 1
-  if printf '%s\n' "$content" | awk '
+  # NOTE: no `printf ... | grep -q` / `... | awk ... | grep -q` pipes here.
+  # Under `set -o pipefail`, a downstream reader (grep -q) that matches and
+  # exits early can SIGPIPE an upstream writer still blocked on a full pipe
+  # (content > the kernel pipe-buffer size, ~64KB) before the writer has
+  # flushed the rest of `content`. That non-zero writer exit propagates
+  # through pipefail and was silently misread as "no match" / "no
+  # stage_outputs" depending on direction — losing legitimate exemptions on
+  # large entities, or wrongly granting them. `case` does pure in-process
+  # string matching (no subprocess, no pipe) and the awk step is fed via a
+  # here-string (the shell writes to a temp fd fully before awk ever reads,
+  # and its output is captured by command substitution, not piped into
+  # another early-exiting reader) — neither path can SIGPIPE.
+  case "$content" in
+    *'<!-- section:stage-artifact-links -->'*) ;;
+    *) return 1 ;;
+  esac
+  local has_stage_outputs
+  has_stage_outputs="$(awk '
       BEGIN{d=0}
       /^---[[:space:]]*$/ {d++; next}
       d==1 && /^stage_outputs:[[:space:]]*$/ {print "y"; exit}
       d>=2 {exit}
-    ' | grep -q y; then
+    ' <<<"$content")"
+  if [ "$has_stage_outputs" = "y" ]; then
     return 1   # has stage_outputs → advance-stage.sh is safe → NOT exempt
   fi
   return 0     # table present, no stage_outputs → destructive case → exempt

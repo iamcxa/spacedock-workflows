@@ -1,0 +1,25 @@
+# doc-coupling-map.yaml — see references/doc-sync-context.md §Source Map for
+# the exhaustive release-time map; this is the tight per-PR mechanical subset
+# consumed by bin/doc-impact-gate.sh (AC-2).
+#
+# Resolution order: .claude/ship-flow/doc-coupling.yaml (adopter override,
+# absent by default) else this file.
+#
+# Tightness is a design constraint, not a suggestion (design.md D1
+# pre-mortem guard): keep this set small (2-3 rows) where staleness has
+# actually bitten and is NOT already gated elsewhere (e.g. version claims —
+# scripts/check-version-triple.sh already gates those; do not duplicate).
+schema_version: "1.0"
+couplings:
+  - name: stage-skill-readme
+    srcGlobs: ["plugins/ship-flow/skills/ship-*/SKILL.md"]
+    docPaths: ["plugins/ship-flow/README.md"]
+    rationale: "Stage skill behavior changes drift from README pipeline/stage-flow prose (PR #6 precedent)."
+  - name: reference-schema-readme
+    srcGlobs: ["plugins/ship-flow/references/*.yaml"]
+    docPaths: ["plugins/ship-flow/README.md"]
+    rationale: "Schema/reference YAML changes must stay reflected in README schema summaries."
+  - name: checker-source-map
+    srcGlobs: ["plugins/ship-flow/bin/*.sh"]
+    docPaths: ["plugins/ship-flow/references/doc-sync-context.md"]
+    rationale: "New/changed shell checkers must register a Source-Map row per doc-sync-context.md's own coverage contract."

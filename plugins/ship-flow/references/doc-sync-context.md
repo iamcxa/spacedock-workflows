@@ -39,6 +39,7 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 |--------|--------------------|----------------------|
 | `bin/check-invariants.sh` | `INVARIANTS.md` (enforcement list) | `README.md` (release checks) |
 | `bin/canonical-doc-sync-checker.sh` | `README.md` (canonical sync checks) | `references/flow-map-schema.yaml` |
+| `bin/doc-impact-gate.sh` | `README.md` (doc-impact-gate CI check) | `references/doc-coupling-map.yaml` |
 | `bin/workflow-doctor.sh` | `README.md` (diagnostics) | `workflow-template.yaml` (workflow expectations) |
 | `bin/ship-capture.sh` | `README.md` (artifact capture helper) | `references/doc-format.md` |
 | `bin/debrief-boundary-resolver.sh` | `README.md` (debrief flow) | `references/debrief-schema.yaml` |
