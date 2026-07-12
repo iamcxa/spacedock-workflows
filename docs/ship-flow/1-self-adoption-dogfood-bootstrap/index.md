@@ -1,7 +1,7 @@
 ---
 id: "1"
 title: "Self-adoption dogfood bootstrap — canonical docs + doc-impact gate"
-status: verify
+status: execute
 pattern: pitch
 appetite: "small-batch"
 layout: folder
@@ -348,3 +348,4 @@ Re-verified both codex-gate round-2 P1 residual fixes live against HEAD (not exe
 - new_variants_exercised: 4
 - invariant_fails_closed: 1 (C15, re-introduced by round-2 findings append)
 - new_findings: 0
+| 3 | 2026-07-11 | verify.md cycle-3 PASS + codex-gate round-3 FAIL ([P1]:1, FO-confirmed); cycle cap reached — captain authorized bounded cycle-4 ("cycle-4 go") | execute (cycle-4 dispatch, scope locked to the one finding) | P1: missing/misspelled `couplings:` key leaves couplings_key_seen=0, bypassing the zero-rows guard — map silently exits 0 with no enforcement (verify.md codex-gate-findings Round 3) | pending |
