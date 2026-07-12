@@ -1,7 +1,7 @@
 ---
 id: "1"
 title: "Self-adoption dogfood bootstrap — canonical docs + doc-impact gate"
-status: ship
+status: execute
 pattern: pitch
 appetite: "small-batch"
 layout: folder
@@ -392,3 +392,4 @@ review.md + pr-body.md are new artifacts closing AC-3 and preparing the shipping
 - status: passed
 - commit_count: 1 (review.md + pr-body.md + this stage report)
 - new_findings: 0
+| 4 | 2026-07-12 | PR #14 CI red: C14 exemption helper misfires on Linux (SIGPIPE+pipefail race in printf-pipe-grep on 47KB parent index.md; FO-diagnosed, rerun-confirmed deterministic) — captain authorized bounded c5 ("c5 go") | execute (c5, PR-CI feedback; scope locked to the helper) | check-invariants.sh `_entity_bodytable_no_stage_outputs` false-negative exemption on large entities; sibling pipeline has reverse false-exempt latent bug | pending |
