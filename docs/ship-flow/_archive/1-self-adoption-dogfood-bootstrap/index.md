@@ -10,7 +10,7 @@ answers_density: "low"
 source: 2026-07-11 captain decision (dogfood bundle) + 2026-07-08 joint audit
 started: 2026-07-11T05:59:50Z
 completed: 2026-07-12T05:03:27Z
-verdict: passed
+verdict: PASSED
 score: 0.9
 worktree: .worktrees/spacedock-ensign-1-self-adoption-dogfood-bootstrap
 issue:
