@@ -1,0 +1,6 @@
+# Test fixture: no 'couplings:' key at all — codex-gate round-3 P1
+# (cycle 4). The zero-rows fail-closed guard (Blocks 12-14 above) only
+# fires when a recognized 'couplings:' key was seen at all; a map that
+# omits the key entirely must still hard-error naming the map, not
+# silently exit 0 with zero enforcement.
+schema_version: "1.0"

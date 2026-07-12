@@ -333,7 +333,18 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$COUPLING_MAP"
 validate_and_process_row "$current_name" "$current_src" "$current_docs"
 
-if [ "$couplings_key_seen" -eq 1 ] && [ "$parsed_row_count" -eq 0 ]; then
+# codex-gate round-3 P1: the zero-rows guard below only fires once a
+# recognized 'couplings:' key was already seen — a map whose key is missing
+# entirely or misspelled (e.g. 'coupling:' singular) never enters the block
+# at all, so couplings_key_seen stays 0 and the whole gate goes dark with
+# zero enforcement. Require exactly one recognized 'couplings:' key first.
+if [ "$couplings_key_seen" -ne 1 ]; then
+  echo "ERROR: coupling map ${COUPLING_MAP} does not declare a recognized top-level 'couplings:' key." >&2
+  echo "Expected exactly one line matching '^couplings:' (no leading whitespace) to introduce the coupling rows — check for a missing or misspelled key (e.g. 'coupling:' instead of 'couplings:')." >&2
+  exit 2
+fi
+
+if [ "$parsed_row_count" -eq 0 ]; then
   echo "ERROR: coupling map ${COUPLING_MAP} declares a 'couplings:' key but zero rows parsed." >&2
   echo "Only the block-sequence form is supported: 'couplings:' followed by '- name: <slug>' rows. Flow-style ('couplings: [...]') and empty ('couplings: []') are not supported — fix the map rather than relying on silent skip." >&2
   exit 2

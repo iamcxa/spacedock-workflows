@@ -1,0 +1,10 @@
+# Test fixture: misspelled 'coupling:' (singular) instead of 'couplings:' —
+# codex-gate round-3 P1 (cycle 4). FO repro: this exact misspelling
+# currently exits 0 with zero enforcement because couplings_key_seen never
+# gets set to 1. Must hard-error naming the map instead.
+schema_version: "1.0"
+coupling:
+  - name: skill-readme
+    srcGlobs: ["fixtures/skills/*/SKILL.md"]
+    docPaths: ["fixtures/README.md"]
+    rationale: "Test fixture: content under a misspelled key must never be parsed as real rows."

@@ -246,6 +246,26 @@ assert_exit "unrecognized-line coupling map hard-errors (exit 2), not silent exi
 assert_contains "unrecognized-line hard-error names the offending line" 'unexpected_field' "${TMP_DIR}/unrecognized-line.out"
 
 echo ""
+echo "Block 15: codex-gate round-3 P1 — missing or misspelled 'couplings:' key fails CLOSED, not silent exit 0"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-not-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-missing-key.yaml" \
+  > "${TMP_DIR}/missing-key.out" 2>&1 && MK_RC=0 || MK_RC=$?
+printf '%s\n' "$MK_RC" > "${TMP_DIR}/missing-key.exit"
+assert_exit "missing-key coupling map hard-errors (exit 2), not silent exit 0" 2 "${TMP_DIR}/missing-key.exit"
+assert_contains "missing-key hard-error names the couplings map" "coupling-map-missing-key\.yaml" "${TMP_DIR}/missing-key.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-not-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-misspelled-key.yaml" \
+  > "${TMP_DIR}/misspelled-key.out" 2>&1 && MSK_RC=0 || MSK_RC=$?
+printf '%s\n' "$MSK_RC" > "${TMP_DIR}/misspelled-key.exit"
+assert_exit "misspelled-key ('coupling:' singular) coupling map hard-errors (exit 2), not silent exit 0" 2 "${TMP_DIR}/misspelled-key.exit"
+assert_contains "misspelled-key hard-error names the couplings map" "coupling-map-misspelled-key\.yaml" "${TMP_DIR}/misspelled-key.out"
+
+echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 
 if [ "${FAIL}" -gt 0 ]; then
