@@ -75,6 +75,30 @@ if (!fs.existsSync(mappingPath)) {
 }
 const mapping = yaml.load(fs.readFileSync(mappingPath, 'utf8'));
 const baseUrl = mapping.base_url || '';
+const DEFAULT_READINESS_TIMEOUT_MS = 10000;
+const DEFAULT_READINESS_POLL_MS = 100;
+
+function positiveInteger(value, fallback, field) {
+  if (value === undefined) return fallback;
+  if (!Number.isInteger(value) || value <= 0) {
+    console.error(`${field} must be a positive integer`);
+    process.exit(2);
+  }
+  return value;
+}
+
+const readiness = {
+  timeoutMs: positiveInteger(
+    doc.readiness?.timeout_ms,
+    DEFAULT_READINESS_TIMEOUT_MS,
+    'readiness.timeout_ms'
+  ),
+  pollMs: positiveInteger(
+    doc.readiness?.poll_ms,
+    DEFAULT_READINESS_POLL_MS,
+    'readiness.poll_ms'
+  ),
+};
 
 let account = null;
 if (doc.auth_account) {
@@ -90,8 +114,20 @@ if (doc.auth_account) {
 
 // ---------- helpers ----------
 
+let commandTimeoutOverrideMs = null;
+
 function ab(...argv) {
-  const r = spawnSync('agent-browser', argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const timeout = commandTimeoutOverrideMs || readiness.timeoutMs;
+  const r = spawnSync('agent-browser', argv, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout,
+  });
+  if (r.error) {
+    throw new Error(
+      `agent-browser ${argv.join(' ')} failed after ${timeout}ms: ${r.error.message}`
+    );
+  }
   if (r.status !== 0) {
     const msg = (r.stderr || r.stdout || '').trim().slice(0, 800);
     throw new Error(`agent-browser ${argv.join(' ')} failed (exit ${r.status}): ${msg}`);
@@ -126,14 +162,226 @@ function joinUrl(base, rel) {
   return base.replace(/\/$/, '') + (rel.startsWith('/') ? rel : '/' + rel);
 }
 
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function withCommandTimeout(timeoutMs, operation) {
+  const previousTimeout = commandTimeoutOverrideMs;
+  commandTimeoutOverrideMs = Math.max(1, timeoutMs);
+  try {
+    return operation();
+  } finally {
+    commandTimeoutOverrideMs = previousTimeout;
+  }
+}
+
+function retryBoundedly(label, operation, options = {}) {
+  const timeoutMs = positiveInteger(options.timeout_ms, readiness.timeoutMs, `${label}.timeout_ms`);
+  const pollMs = positiveInteger(options.poll_ms, readiness.pollMs, `${label}.poll_ms`);
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+
+  do {
+    const previousTimeout = commandTimeoutOverrideMs;
+    commandTimeoutOverrideMs = Math.max(1, deadline - Date.now());
+    try {
+      return operation();
+    } catch (e) {
+      lastError = e;
+    } finally {
+      commandTimeoutOverrideMs = previousTimeout;
+    }
+    sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));
+  } while (Date.now() < deadline);
+
+  throw new Error(
+    `${label} timed out after ${timeoutMs}ms${lastError ? `: ${lastError.message}` : ''}`
+  );
+}
+
+function probeSelectors(selectors) {
+  const unique = [...new Set(selectors)];
+  return abEval(`(() => {
+    const selectors = ${JSON.stringify(unique)};
+    const missing = selectors.filter((selector) => !document.querySelector(selector));
+    return JSON.stringify({ ready: missing.length === 0, missing });
+  })()`);
+}
+
+function selectorsExist(selectors) {
+  return probeSelectors(selectors)?.ready === true;
+}
+
+function probeActionableTarget(selector) {
+  if (selector.startsWith('@') || selector.startsWith('text=')) {
+    const snapshot = ab('snapshot', '-i');
+    if (selector.startsWith('@')) {
+      const ref = selector.slice(1);
+      return {
+        ready: snapshot.includes(`ref=${ref}`),
+        missing: snapshot.includes(`ref=${ref}`) ? [] : [selector],
+        reason: snapshot.includes(`ref=${ref}`) ? null : 'reference not found',
+      };
+    }
+    const text = selector.slice('text='.length);
+    return {
+      ready: snapshot.includes(text),
+      missing: snapshot.includes(text) ? [] : [selector],
+      reason: snapshot.includes(text) ? null : 'text target not found',
+    };
+  }
+  return abEval(`(() => {
+    const selector = ${JSON.stringify(selector)};
+    let element = null;
+    try {
+      if (selector.startsWith('/')) {
+        element = document.evaluate(
+          selector,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        ).singleNodeValue;
+      } else {
+        element = document.querySelector(selector);
+      }
+    } catch (error) {
+      return JSON.stringify({ ready: false, missing: [selector], reason: error.message });
+    }
+    if (!element) return JSON.stringify({ ready: false, missing: [selector], reason: 'not found' });
+    const style = getComputedStyle(element);
+    const disabled = element.disabled || element.getAttribute('aria-disabled') === 'true';
+    const visible =
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.pointerEvents !== 'none' &&
+      element.getClientRects().length > 0;
+    return JSON.stringify({
+      ready: !disabled && visible,
+      missing: [],
+      reason: disabled ? 'disabled' : visible ? null : 'not actionable'
+    });
+  })()`);
+}
+
+function diagnosticValue(operation) {
+  try {
+    const value = operation();
+    return typeof value === 'string' ? value || '(empty)' : JSON.stringify(value);
+  } catch (e) {
+    return `(unavailable: ${e.message})`;
+  }
+}
+
+function readinessDiagnostics(selectors) {
+  const finalState = diagnosticValue(() => probeSelectors(selectors));
+  let missing = selectors;
+  try {
+    const parsed = JSON.parse(finalState);
+    if (Array.isArray(parsed.missing)) missing = parsed.missing;
+  } catch {
+    // The final probe failure is still retained verbatim below.
+  }
+
+  const currentUrl = diagnosticValue(() => ab('get', 'url'));
+  const navigation = diagnosticValue(() =>
+    abEval(`(() => {
+      const entry = performance.getEntriesByType('navigation')[0];
+      if (!entry) return JSON.stringify({ type: 'unavailable' });
+      return JSON.stringify({
+        type: entry.type,
+        startTime: entry.startTime,
+        domContentLoadedEventEnd: entry.domContentLoadedEventEnd,
+        loadEventEnd: entry.loadEventEnd,
+        duration: entry.duration
+      });
+    })()`)
+  );
+  const consoleContext = diagnosticValue(() => ab('console'));
+  const pageErrors = diagnosticValue(() => ab('errors'));
+
+  return [
+    `[readiness] current URL: ${currentUrl}`,
+    `[readiness] missing selectors: ${missing.join(', ') || '(none reported)'}`,
+    `[readiness] final selector probe: ${finalState}`,
+    `[readiness] navigation timing/type: ${navigation}`,
+    `[readiness] console: ${consoleContext}`,
+    `[readiness] page errors: ${pageErrors}`,
+  ].join('\n');
+}
+
+function withReadinessDiagnostics(label, selectors, operation) {
+  try {
+    return operation();
+  } catch (e) {
+    throw new Error(`${label}: ${e.message}\n${readinessDiagnostics(selectors)}`);
+  }
+}
+
+function waitForSelectors(selectors, label, options = {}) {
+  try {
+    return retryBoundedly(label, () => {
+      const state = probeSelectors(selectors);
+      if (!state?.ready) {
+        throw new Error(`missing selectors: ${(state?.missing || selectors).join(', ')}`);
+      }
+      return state;
+    }, options);
+  } catch (e) {
+    throw new Error(`${e.message}\n${readinessDiagnostics(selectors)}`);
+  }
+}
+
+function waitForActionableTarget(selector, label, options = {}) {
+  try {
+    return retryBoundedly(label, () => {
+      const state = probeActionableTarget(selector);
+      if (!state?.ready) throw new Error(state?.reason || `selector not actionable: ${selector}`);
+      return state;
+    }, options);
+  } catch (e) {
+    throw new Error(`${e.message}\n${readinessDiagnostics([selector])}`);
+  }
+}
+
+function waitForDocumentReady(label, options = {}) {
+  try {
+    return retryBoundedly(label, () => {
+      const state = abEval(`(() => JSON.stringify({
+        ready: document.readyState === 'interactive' || document.readyState === 'complete',
+        state: document.readyState
+      }))()`);
+      if (!state?.ready) throw new Error(`document.readyState=${state?.state || 'unknown'}`);
+      return state;
+    }, options);
+  } catch (e) {
+    throw new Error(`${e.message}\n${readinessDiagnostics([])}`);
+  }
+}
+
+function waitForUrlNotContaining(fragment, label, options = {}) {
+  try {
+    return retryBoundedly(label, () => {
+      const currentUrl = ab('get', 'url');
+      if (currentUrl.includes(fragment)) {
+        throw new Error(`current URL still contains "${fragment}": ${currentUrl}`);
+      }
+      return currentUrl;
+    }, options);
+  } catch (e) {
+    throw new Error(`${e.message}\n${readinessDiagnostics([])}`);
+  }
+}
+
 // ---------- Phase 1: login ----------
 
 function login() {
   if (!account) return;
   const signInUrl = joinUrl(baseUrl, mapping.auth?.signin_path || '/');
   console.log(`[login] ${signInUrl}`);
-  ab('open', signInUrl);
-  ab('wait', '--load', 'networkidle');
+  withReadinessDiagnostics('login navigation failed', [], () => ab('open', signInUrl));
+  waitForDocumentReady('login document readiness');
 
   const authType = mapping.auth?.type || 'password';
   const notContains = mapping.auth?.verification?.url_not_contains;
@@ -155,14 +403,21 @@ function login() {
         `auth.type=${authType} requires email+password in test_accounts, got keys: ${Object.keys(account).join(', ')}`
       );
     }
-    const snap = ab('snapshot', '-i');
-    const emailMatch = snap.match(/\btextbox\b[^\n]*(電子郵件|email|Email|E-mail)[^\n]*\[.*?ref=(e\d+)\]/);
-    const passMatch = snap.match(/\btextbox\b[^\n]*(密碼|password|Password)[^\n]*\[.*?ref=(e\d+)\]/);
-    if (!emailMatch || !passMatch) {
-      throw new Error(
-        `Could not locate email/password fields. Snapshot head:\n${snap.slice(0, 400)}`
-      );
+    let form;
+    try {
+      form = retryBoundedly('login form readiness', () => {
+        const currentSnapshot = ab('snapshot', '-i');
+        const email = currentSnapshot.match(/\btextbox\b[^\n]*(電子郵件|email|Email|E-mail)[^\n]*\[.*?ref=(e\d+)\]/);
+        const password = currentSnapshot.match(/\btextbox\b[^\n]*(密碼|password|Password)[^\n]*\[.*?ref=(e\d+)\]/);
+        if (!email || !password) {
+          throw new Error(`email/password fields not found; snapshot head: ${currentSnapshot.slice(0, 400)}`);
+        }
+        return { snap: currentSnapshot, emailMatch: email, passMatch: password };
+      });
+    } catch (e) {
+      throw new Error(`${e.message}\n${readinessDiagnostics([])}`);
     }
+    const { snap, emailMatch, passMatch } = form;
     const submitMatch = snap.match(/button[^\n]*(登\s*入|Sign\s*in|Log\s*in)[^\n]*\[.*?ref=(e\d+)\]/);
     ab('fill', '@' + emailMatch[2], account.email);
     ab('fill', '@' + passMatch[2], account.password);
@@ -171,7 +426,8 @@ function login() {
     } else {
       ab('press', 'Enter');
     }
-    ab('wait', '--load', 'networkidle');
+    if (notContains) waitForUrlNotContaining(notContains, 'login redirect readiness');
+    else waitForDocumentReady('post-login document readiness');
   } else {
     throw new Error(`Unsupported auth.type: ${authType}`);
   }
@@ -194,11 +450,17 @@ function runSetup() {
     const s = steps[i];
     console.log(`[setup ${i + 1}/${steps.length}] ${s.action}`);
     if (s.action === 'goto') {
-      ab('open', joinUrl(baseUrl, s.url));
-      ab('wait', '--load', 'networkidle');
+      withReadinessDiagnostics(`setup step ${i + 1}: navigation failed`, [], () =>
+        ab('open', joinUrl(baseUrl, s.url))
+      );
+      waitForDocumentReady(`setup step ${i + 1}: document readiness`, s);
     } else if (s.action === 'wait') {
-      if (s.ms) ab('wait', String(s.ms));
-      else if (s.for === 'networkidle') ab('wait', '--load', 'networkidle');
+      if (s.ms !== undefined) {
+        sleep(positiveInteger(s.ms, undefined, `setup step ${i + 1}.ms`));
+      }
+      else if (s.for === 'networkidle') {
+        waitForDocumentReady(`setup step ${i + 1}: document readiness`, s);
+      }
     } else if (s.action === 'click' || s.action === 'fill' || s.action === 'press') {
       if (s.action === 'press') {
         ab('press', s.key || 'Enter');
@@ -209,17 +471,47 @@ function runSetup() {
       const selector = s.selector;
       if (!selector) throw new Error(`setup step ${i + 1}: ${s.action} requires selector`);
       if (s.action === 'click') {
-        // Try direct click by selector first; fallback to snapshot + ref resolution
-        try {
-          ab('click', selector);
-        } catch (e) {
-          // Fallback: snapshot and find by text
-          const snap = ab('snapshot', '-i');
-          const escaped = selector.replace(/^text=/, '').replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
-          const re = new RegExp(`\\[.*?ref=(e\\d+)\\][^\\n]*"${escaped}"|"${escaped}"[^\\n]*\\[.*?ref=(e\\d+)\\]`);
-          const m = snap.match(re);
-          if (!m) throw new Error(`setup step ${i + 1}: selector "${selector}" not found`);
-          ab('click', '@' + (m[1] || m[2]));
+        const stepTimeoutMs = positiveInteger(
+          s.timeout_ms,
+          readiness.timeoutMs,
+          `setup step ${i + 1}.timeout_ms`
+        );
+        const stepStartedAt = Date.now();
+        if (s.ensure !== undefined && s.ensure !== 'open') {
+          throw new Error(`setup step ${i + 1}: click ensure must be "open"`);
+        }
+        if (s.ensure === 'open' && !s.postcondition) {
+          throw new Error(`setup step ${i + 1}: ensure "open" requires postcondition`);
+        }
+        const remainingStepMs = () =>
+          Math.max(1, stepTimeoutMs - (Date.now() - stepStartedAt));
+        const alreadyOpen =
+          s.ensure === 'open' &&
+          withReadinessDiagnostics(
+            `setup step ${i + 1}: postcondition probe failed`,
+            [s.postcondition],
+            () => withCommandTimeout(remainingStepMs(), () => selectorsExist([s.postcondition]))
+          );
+        if (alreadyOpen) {
+          console.log(`[setup ${i + 1}/${steps.length}] already open (${s.postcondition}) — skipping click`);
+          continue;
+        }
+        waitForActionableTarget(
+          selector,
+          `setup step ${i + 1}: selector "${selector}" readiness`,
+          { ...s, timeout_ms: remainingStepMs() }
+        );
+        withReadinessDiagnostics(
+          `setup step ${i + 1}: click failed`,
+          [selector],
+          () => withCommandTimeout(remainingStepMs(), () => ab('click', selector))
+        );
+        if (s.postcondition) {
+          waitForSelectors(
+            [s.postcondition],
+            `setup step ${i + 1}: postcondition "${s.postcondition}"`,
+            { ...s, timeout_ms: remainingStepMs() }
+          );
         }
       } else {
         ab('fill', selector, s.value || '');
@@ -381,7 +673,30 @@ function writeReport(results) {
 try {
   login();
   runSetup();
-  const results = runChecks();
+  const checkSelectors = doc.checks.map((check) => check.selector);
+  console.log(`[readiness] waiting for ${new Set(checkSelectors).size} check selector(s)`);
+  let results;
+  try {
+    waitForSelectors(checkSelectors, 'check selector readiness');
+    results = runChecks();
+  } catch (e) {
+    console.error(`[readiness timeout]\n${e.message}`);
+    let missing = checkSelectors;
+    try {
+      const finalState = probeSelectors(checkSelectors);
+      if (Array.isArray(finalState?.missing)) missing = finalState.missing;
+    } catch {
+      // Preserve every declared selector as unresolved if the final probe itself fails.
+    }
+    results = doc.checks.map((check) => ({
+      name: check.name,
+      selector: check.selector,
+      error: missing.includes(check.selector)
+        ? `selector not found: ${check.selector}`
+        : `check readiness incomplete; missing selectors: ${missing.join(', ')}`,
+      rows: [],
+    }));
+  }
   const { overall } = writeReport(results);
   process.exit(overall === 'PASS' ? 0 : 1);
 } catch (e) {
