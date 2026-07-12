@@ -1,4 +1,4 @@
-# Ship-Flow — Auditable Autonomous Feature Delivery for AI Coding Agents (v0.8.3)
+# Ship-Flow — Auditable Autonomous Feature Delivery for AI Coding Agents (v0.9.0)
 
 A scaffolding plugin for captain-directed autonomous work across multi-stage pipelines. This README is written from claude 4.7's perspective — explaining **why** the flow is shaped this way, not how to use each skill (SKILL.md files document the how).
 
