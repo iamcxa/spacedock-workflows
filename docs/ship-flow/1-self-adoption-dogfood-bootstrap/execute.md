@@ -176,38 +176,23 @@ with zero protection, no error.
 
 ### Full local gate re-run (post-fix, this session)
 
-| Check | Command | Result |
-|---|---|---|
-| doc-impact-gate unit tests | `bash plugins/ship-flow/lib/__tests__/test-doc-impact-gate.sh` | 32/32 pass |
-| CI-scope unit tests | `bash plugins/ship-flow/lib/__tests__/test-ship-flow-ci-scope.sh` | 8/8 pass |
-| Shell suite | `for f in plugins/ship-flow/lib/__tests__/test-*.sh; do bash "$f"; done` | 101/103 pass — 2 pre-existing fails (`test-archived-corpus-invariants.sh`, `test-merged-pr-closeout-reconciler.sh`), identical to base `fb59795` |
-| Node suite | `node --test plugins/ship-flow/bin/*.test.mjs` | 79/79 pass |
-| Invariants | `CI=true bash plugins/ship-flow/bin/check-invariants.sh` | exit 1; zero `WARN [Principle 5b]` lines; 5 FAIL lines — see deviation below |
-| No-dangling | `bash scripts/check-no-dangling.sh` | PASS |
-| Version triple | `bash scripts/check-version-triple.sh` | PASS |
-| Whitespace | `git diff --check fb59795 HEAD` | clean |
+`test-doc-impact-gate.sh` 32/32, `test-ship-flow-ci-scope.sh` 8/8, shell
+suite 101/103 (2 pre-existing fails, identical to base `fb59795`), node
+suite 79/79, `CI=true check-invariants.sh` zero `WARN [Principle 5b]` /
+5 FAIL lines (deviation below), `check-no-dangling.sh` PASS,
+`check-version-triple.sh` PASS, `git diff --check fb59795 HEAD` clean.
 
-**Deviation — check-invariants.sh has 5 FAIL lines, not the expected 2.**
-The 2 known `C14` lines (historical shape-stage commits `695addea`,
-`0d0ca53e`) are present as expected, plus 3 more: `C11`
-panel-coverage-header and `C12` deferred-to-todo-footer (verify.md missing
-`## Panel Coverage` / `## Deferred to TODO` sections) and `C15`
-artifact-verbosity (verify.md body is 173 lines, cap 120). Independently
-verified via a scratch `git worktree add --detach`: all 3 already fire at
-the dispatch base `fb59795`, and even at the original verify-stage commit
-`553a471` (verify.md at 156 lines, before the codex-gate-findings section
-was appended) — pre-existing on verify.md, predating this cycle's work
-entirely. `git diff --stat fb59795 HEAD` confirms verify.md is not among
-the 7 files this cycle touched. Per this dispatch's explicit "verify.md NOT
-touched (re-verify owns it)" instruction, not fixed here — flagged for
-FO/re-verify visibility.
+**Deviation (pre-existing, resolved by verify cycle-2 — see index.md
+`Stage Report: verify (cycle 2)`):** check-invariants.sh showed 3 extra
+FAILs (`C11`/`C12`/`C15`) on verify.md beyond the 2 known `C14` lines,
+independently confirmed to predate this cycle's 7 touched files (verify.md
+untouched here per this dispatch's scope). Not fixed in execute — that was
+verify-owned work, closed in cycle 2.
 
-No other deviations; no scope growth beyond the 3 named P1 fixes (7 files
-total: `.github/workflows/ship-flow-invariants.yml`,
-`plugins/ship-flow/bin/doc-impact-gate.sh`,
-`plugins/ship-flow/lib/__tests__/test-doc-impact-gate.sh`,
-`plugins/ship-flow/lib/__tests__/test-ship-flow-ci-scope.sh`, and 3 new
-fixture files under `plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/`).
+No other deviations; no scope growth beyond the 3 named P1 fixes (7 files:
+`.github/workflows/ship-flow-invariants.yml`, `bin/doc-impact-gate.sh`,
+`lib/__tests__/test-doc-impact-gate.sh`, `test-ship-flow-ci-scope.sh`, 3
+new fixtures under `lib/__tests__/fixtures/doc-impact-gate/`).
 
 </details>
 
@@ -267,28 +252,49 @@ Whole gate goes dark: exit 0, zero output, zero enforcement.
 
 ### Full local gate re-run (post-fix, this session)
 
-| Check | Result |
-|---|---|
-| `test-doc-impact-gate.sh` | 43/43 |
-| `test-ship-flow-ci-scope.sh` | 8/8 (unchanged) |
-| Shell suite (103 files) | 101/103 — 2 pre-existing fails (`test-archived-corpus-invariants.sh`, `test-merged-pr-closeout-reconciler.sh`), identical to base `6d338e4` |
-| `node --test bin/*.test.mjs` | 79/79 |
-| `CI=true check-invariants.sh` | 2 known `C14` + 1 pre-existing `C15` on verify.md — see deviation |
-| `check-no-dangling.sh` | PASS |
-| `check-version-triple.sh` | PASS |
-| `git diff --check 6d338e4 HEAD` | clean |
+`test-doc-impact-gate.sh` 43/43, `test-ship-flow-ci-scope.sh` 8/8
+(unchanged), shell suite 101/103 (2 pre-existing fails, identical to base
+`6d338e4`), node suite 79/79, `CI=true check-invariants.sh` 2 known `C14`
++ 1 pre-existing `C15` on verify.md (deviation below),
+`check-no-dangling.sh` PASS, `check-version-triple.sh` PASS,
+`git diff --check 6d338e4 HEAD` clean.
 
-**Deviation — check-invariants.sh's 3rd FAIL (`C15` on verify.md, body 131
-lines > cap 120) is pre-existing, not introduced here.** Confirmed live
-against the unmodified worktree before any edit this cycle — it comes from
-`6d338e4` itself (cycle-2's feedback-routing commit) appending round-2
-findings to verify.md, growing it past the cap. `git diff --stat 6d338e4
-HEAD` confirms verify.md is not among the 5 files this cycle touched
-(`bin/doc-impact-gate.sh`, `lib/__tests__/test-doc-impact-gate.sh`, 3 new
-fixtures under `lib/__tests__/fixtures/doc-impact-gate/`). Per this
-dispatch's "verify.md NOT touched (re-verify owns it)" instruction, not
-fixed here — same disposition as cycle-2's analogous deviation.
+**Deviation (pre-existing, resolved by verify cycle-3 — see index.md
+`Stage Report: verify (cycle 3)`):** check-invariants.sh showed 1 extra
+`C15` FAIL on verify.md beyond the 2 known `C14` lines, independently
+confirmed to predate this cycle's 5 touched files (verify.md untouched
+here). Not fixed in execute — verify-owned work, closed in cycle 3.
 
 No scope growth beyond the 2 named residual fixes.
 
 </details>
+
+## Cycle-4 Fix (codex-gate round-3 P1 — coupling-map key guard)
+
+Codex-gate round 3: the zero-rows fail-closed guard only fired once
+`couplings_key_seen=1` — a missing/misspelled `couplings:` key (FO repro:
+`coupling:` singular) never entered the block, so the whole gate went dark
+with silent exit 0. Full finding: verify.md `codex-gate-findings` Round 3.
+Captain-authorized bounded cycle-4 ("cycle-4 go"), scope locked to this
+one finding.
+
+- RED (pre-fix, live): Block 15 added to `test-doc-impact-gate.sh`
+  (missing-key + misspelled-key fixtures) → 43 passed, 4 failed against
+  the unfixed parser; FO's exact repro confirmed exit 0, zero enforcement.
+- Fix: `bin/doc-impact-gate.sh` requires exactly one recognized
+  `couplings:` key before the existing zero-rows check runs; hard-errors
+  exit 2 naming the map otherwise.
+- GREEN (post-fix, live): same repro → exit 2, `ERROR: ... does not
+  declare a recognized top-level 'couplings:' key.`
+  `test-doc-impact-gate.sh` 43/43→**47/47**.
+- Full local gate re-run: `test-ship-flow-ci-scope.sh` 8/8,
+  shell suite 101/103 (2 pre-existing fails, unchanged), `node --test`
+  79/79, `CI=true check-invariants.sh` only 2 known `C14` lines,
+  `check-no-dangling.sh` PASS, `check-version-triple.sh` PASS,
+  `git diff --check` clean.
+- Commit: `76d486e`.
+
+No scope growth beyond the 1 named fix (4 files: `bin/doc-impact-gate.sh`,
+`lib/__tests__/test-doc-impact-gate.sh`, 2 new fixtures under
+`lib/__tests__/fixtures/doc-impact-gate/`). verify.md and index.md
+frontmatter not touched.
