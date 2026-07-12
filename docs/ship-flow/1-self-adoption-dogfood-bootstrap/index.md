@@ -392,7 +392,7 @@ review.md + pr-body.md are new artifacts closing AC-3 and preparing the shipping
 - status: passed
 - commit_count: 1 (review.md + pr-body.md + this stage report)
 - new_findings: 0
-| 4 | 2026-07-12 | PR #14 CI red: C14 exemption helper misfires on Linux (SIGPIPE+pipefail race in printf-pipe-grep on 47KB parent index.md; FO-diagnosed, rerun-confirmed deterministic) — captain authorized bounded c5 ("c5 go") | execute (c5, PR-CI feedback; scope locked to the helper) | check-invariants.sh `_entity_bodytable_no_stage_outputs` false-negative exemption on large entities; sibling pipeline has reverse false-exempt latent bug | pending |
+| 4 | 2026-07-12 | PR #14 CI red: C14 exemption helper misfires on Linux (SIGPIPE+pipefail race in printf-pipe-grep on 47KB parent index.md; FO-diagnosed, rerun-confirmed deterministic) — captain authorized bounded c5 ("c5 go") | execute (c5, PR-CI feedback; scope locked to the helper) | check-invariants.sh `_entity_bodytable_no_stage_outputs` false-negative exemption on large entities; sibling pipeline has reverse false-exempt latent bug | resolved — 8b66a79 pipe-free rewrite (RED 3/3 both directions -> GREEN); PR #14 CI invariants SUCCESS on head 8046518 (run 29179142857 rerun lineage superseded); archived-corpus flake cured by same fix |
 
 ## Stage Report: execute (cycle 5)
 
