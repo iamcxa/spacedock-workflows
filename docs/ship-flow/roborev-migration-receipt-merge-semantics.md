@@ -512,7 +512,7 @@ graph LR
 - route: `design` (`domain: schema`, `design_required: true`,
   `contract_decision_required: true`).
 
-## Shape Report
+## Stage Report: shape
 
 - DONE: Cut migration identity to one commit-bound, workflow-local operation:
   explicit parent-qualified source paths converge on one result path; content
