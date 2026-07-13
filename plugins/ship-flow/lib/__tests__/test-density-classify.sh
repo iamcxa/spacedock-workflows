@@ -351,11 +351,49 @@ assert_empty_file "$DONE_STDOUT" "T1-h: done traversal failure rejects partial c
 assert_file_contains "$DONE_STDERR" "fake-find: injected done traversal failure" "T1-h: done preserves raw stderr"
 assert_file_contains "$DONE_STDERR" "ERROR: density traversal S3 done precedents failed (rc 23)" "T1-h: done emits traversal context"
 
+# Case (i): an unpruned, nonmatching skill is a valid zero-hit traversal
+NONMATCH_DIR="$(make_vacuum_fixture)"
+mkdir -p "$NONMATCH_DIR/plugins/unrelated"
+cat >"$NONMATCH_DIR/plugins/unrelated/SKILL.md" <<'EOF'
+unrelated-workflow
+EOF
+
+NONMATCH_STDOUT="$TEST_TMP_ROOT/nonmatch.stdout"
+NONMATCH_STDERR="$TEST_TMP_ROOT/nonmatch.stderr"
+bash "$CLASSIFIER" --entity="$NONMATCH_DIR/index.md" \
+  >"$NONMATCH_STDOUT" 2>"$NONMATCH_STDERR"
+NONMATCH_STATUS=$?
+assert_eq "0" "$NONMATCH_STATUS" "T1-i: nonmatching skill traversal exits 0"
+assert_empty_file "$NONMATCH_STDERR" "T1-i: nonmatching skill traversal emits empty stderr"
+assert_eq "vacuum" "$(<"$NONMATCH_STDOUT")" "T1-i: nonmatching skill remains vacuum"
+
+NONMATCH_HIGH_STDOUT="$TEST_TMP_ROOT/nonmatch-is-high.stdout"
+NONMATCH_HIGH_STDERR="$TEST_TMP_ROOT/nonmatch-is-high.stderr"
+bash "$CLASSIFIER" --is-high --entity="$NONMATCH_DIR/index.md" \
+  >"$NONMATCH_HIGH_STDOUT" 2>"$NONMATCH_HIGH_STDERR"
+NONMATCH_HIGH_STATUS=$?
+assert_eq "1" "$NONMATCH_HIGH_STATUS" "T1-i: nonmatching skill --is-high exits 1, not 2"
+assert_empty_file "$NONMATCH_HIGH_STDOUT" "T1-i: nonmatching skill --is-high emits no classification"
+assert_empty_file "$NONMATCH_HIGH_STDERR" "T1-i: nonmatching skill --is-high emits empty stderr"
+
+# Case (j): a grep operational error remains a producer failure
+GREP_ERROR_DIR="$(make_vacuum_fixture)"
+mkdir -p "$GREP_ERROR_DIR/plugins/broken/SKILL.md"
+GREP_ERROR_STDOUT="$TEST_TMP_ROOT/grep-error.stdout"
+GREP_ERROR_STDERR="$TEST_TMP_ROOT/grep-error.stderr"
+bash "$CLASSIFIER" --entity="$GREP_ERROR_DIR/index.md" \
+  >"$GREP_ERROR_STDOUT" 2>"$GREP_ERROR_STDERR"
+GREP_ERROR_STATUS=$?
+assert_eq "2" "$GREP_ERROR_STATUS" "T1-j: grep operational error exits 2"
+assert_empty_file "$GREP_ERROR_STDOUT" "T1-j: grep operational error rejects classification"
+assert_file_contains "$GREP_ERROR_STDERR" "SKILL.md" "T1-j: grep operational error preserves raw stderr"
+assert_file_contains "$GREP_ERROR_STDERR" "ERROR: density traversal S2 plugin skills failed" "T1-j: grep operational error emits S2 context"
+
 # Cleanup
 rm -rf \
   "$HIGH_DIR" "$LOW_DIR" "$VAC_DIR" "$CLEAN_TWIN_DIR" "$DECOY_TWIN_DIR" \
   "$ARCHIVE_DECOY_DIR" "$DONE_DECOY_DIR" "$MARKER_BASE" "$ERROR_DIR" \
-  "$TEST_TMP_ROOT" 2>/dev/null || true
+  "$NONMATCH_DIR" "$GREP_ERROR_DIR" "$TEST_TMP_ROOT" 2>/dev/null || true
 rm -f \
   "$CLEAN_STDERR" "$DECOY_STDERR" "$ARCHIVE_DECOY_STDOUT" \
   "$ARCHIVE_DECOY_STDERR" "$DONE_DECOY_STDOUT" "$DONE_DECOY_STDERR" \

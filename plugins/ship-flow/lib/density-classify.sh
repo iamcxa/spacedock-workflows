@@ -202,7 +202,16 @@ if [ -d "$REPO_ROOT/plugins" ]; then
     "S2 plugin skills" \
     "$REPO_ROOT/plugins" \
     "$S2_CAPTURE" \
-    -name "SKILL.md" -exec grep -l "$WF_NAME" {} +
+    -name "SKILL.md" -exec sh -c '
+      pattern=$1
+      shift
+      grep -l "$pattern" "$@"
+      grep_status=$?
+      case "$grep_status" in
+        0|1) exit 0 ;;
+        *) exit "$grep_status" ;;
+      esac
+    ' sh "$WF_NAME" {} +
   CAPTURE_STATUS=$?
   [ "$CAPTURE_STATUS" -eq 0 ] || exit "$CAPTURE_STATUS"
 
