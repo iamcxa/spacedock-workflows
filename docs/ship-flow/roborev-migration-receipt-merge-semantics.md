@@ -203,10 +203,13 @@ not begin until design ratifies them.
    C14 first computes no-rename entity-path diffs for every direct parent and
    checks raw mapping coverage before applying inheritance. Once a receipt
    names a source path for a result-bearing logical feature, every direct parent
-   where that named source path disappears into the result must either be in
+   where that named source path exists in the parent but is absent from the
+   merge result must either be in
    the receipt's source set or classify that deletion as an independent
    `retire`; it cannot be split into a new feature and hidden by another
-   parent's absence. An omission fails `receipt-incomplete`.
+   parent's absence. A parent whose same source path remains in the result has
+   no deletion candidate and needs no operation row. An omission fails
+   `receipt-incomplete`.
    C14 then applies the explicit mappings and forms one logical feature from
    the result path plus exactly those mapped source paths. Other unmapped paths
    remain separate logical features. It normalizes each feature across all
@@ -257,6 +260,11 @@ not begin until design ratifies them.
    equivalence waiver for cherry-pick/backport histories, never inferred from
    ID, layout, content, or patch similarity; a false alias has the same stated
    trust limit as a false independent disposition.
+9. Every source in one multi-parent `migrate` row must carry the same computed
+   generation key. Explicit migrations may preserve that one key across
+   different parent paths, but may not choose among divergent keys. Divergent
+   generations must be reconciled at one exact path or pre-aligned before the
+   cross-path migration; otherwise C14 fails `generation-conflict`.
 
 #### Provisional semantic envelope for design ratification
 
@@ -277,8 +285,12 @@ All paths are normalized repository-relative paths under the declared
 or README target. A source classification key is `(parent_oid, path)` and may
 occur exactly once per commit; the same path string in different parents may be
 classified separately. A result path may occur in only one operation. The
-number of operation rows cannot exceed the changed entity-path count. Unknown version,
-unknown field, malformed row, duplicate classification, listed parent not in
+number of non-`reconcile` operation rows cannot exceed the changed entity-path
+count. `reconcile` is exempt because identical-content parents can have
+different computed generations without a Git path diff; it is instead capped
+at one row per exact result path whose direct parents expose at least two
+generation keys. Unknown version, unknown field, malformed row, duplicate
+classification, listed parent not in
 the commit's parent set, missing before blob, missing after blob, or wrong
 workflow fails before status validation. Design owns the exact line-length and
 message-size spelling; the shaped bound is 8 KiB per row and 64 KiB total
@@ -286,12 +298,12 @@ receipt carrier, with an earlier changed-path-count cap.
 One operation cannot list more sources than the commit has parents.
 For `reconcile`, C14 resolves each listed parent's computed generation at
 `after_path`; users never transcribe generation keys. The source set must cover
-every divergent generation at the path, all resolved source statuses must be
-identical, and the result inherits the selected parent's key and status. A
-missing, duplicate, or partial alias—or divergent statuses—fails
-`generation-conflict`. Statuses must be pre-aligned through their own legal
-workflow transitions, or the non-selected generation must be retired before
-reconciliation; aliasing never authorizes a downgrade or discard.
+every divergent generation at the path, and the result inherits the selected
+parent's key and already validated status. Non-selected statuses follow the
+same inherited-state rule as same-generation parents: they are not
+source-to-result edges, while an unvalidated selected status fails before
+aliasing. A missing, duplicate, or partial alias fails `generation-conflict`.
+Aliasing never authorizes a new status.
 
 The provided emitter is a convenience and preflight validator, not an
 authority. Because C14 cannot authenticate its caller, manually authored syntax
@@ -316,6 +328,11 @@ before activation must rebase onto the new main and repair its still-unmerged
 in-range commits; Git similarity is not retained as a grandfather path. After
 the review range is selected, a missing required parent/tree object fails loud
 rather than being treated as absence.
+
+Receipt v1 is provisional and unimplemented until design ratification and the
+activation commit; therefore no deployed v1 `reconcile` row exists to migrate.
+Any incompatible schema change after activation requires a new version rather
+than reinterpretation of accepted rows.
 
 `origin/main` is the existing C14 protected-target contract and remains fixed
 for this repair; configurable release/hotfix targets are separate policy work,
@@ -357,9 +374,12 @@ migration.
 For merge commit `M`, define each entity path state in every parent as
 `absent` or `present(status)`. Apply a valid M1 source mapping only to the
 parents explicitly listed by that operation. A source path named anywhere in
-that operation is also a raw-coverage probe in every unlisted parent; its
-presence there must be explicitly classified before logical normalization.
-Other unlisted old-path occupants are unrelated and remain separate features.
+that operation is also a raw-coverage probe in every unlisted parent only when
+that path is absent from the merge result; parent presence then represents a
+deletion and must be explicitly classified before logical normalization. If
+the merge result retains that same path, it is an unchanged separate feature,
+not a deletion candidate. Other unlisted old-path occupants are unrelated and
+remain separate features.
 For a result-bearing feature, an exact result-path occupant in an unlisted
 parent is the same workflow path slot and participates unless that path is
 already claimed by a different operation, which fails `receipt-conflict`.
@@ -386,8 +406,10 @@ retirement provenance in another parent's scan state or complete coverage in a
 older, newer, or cherry-picked generation changes no obligation. Without that
 proof or explicit alias, the merge fails `generation-conflict` and must
 pre-align the parents. A valid `reconcile` makes the result carry the selected
-generation key; because all sources must already share one status, it neither
-discards progress nor authorizes a status edge.
+generation key and its already validated status. Non-selected statuses are
+handled exactly like non-matching same-generation parent states: selecting a
+validated parent state is inheritance, while aliasing cannot create a novel
+status.
 Generation equality never follows from equal path, ID, layout, status, or body;
 it follows only from the shared baseline/create key carried through explicit
 migrations or an explicit `reconcile` waiver.
@@ -420,7 +442,9 @@ Per parent, normalization is order-independent:
 Different listed parents may provide different old paths in the same operation;
 their explicit parent-qualified mappings normalize to one logical comparison
 set. A named source path found in an unlisted parent triggers raw coverage; an
-unnamed old path remains unrelated and cannot create an inferred identity.
+unnamed old path remains unrelated and cannot create an inferred identity. The
+probe triggers only when the named source path is absent from the result; an
+unchanged retained path needs no receipt.
 
 1. **Inherited:** if `M`'s present result state equals the state in any direct
    normalized parent, the result is inherited. An absent result is inherited
@@ -512,8 +536,12 @@ absent parent with unavailable or unvalidated required history fails loud.
   complete explicit `reconcile` alias, otherwise it fails
   `generation-conflict`. Cherry-picked/backported creates with different commit
   keys fail without the alias and pass with a complete alias selecting either
-  generation when all statuses match; divergent statuses fail until legally
-  pre-aligned or independently retired. No content/ID inference is accepted.
+  generation when the selected status has validated provenance. Divergent
+  non-selected statuses follow ordinary inherited-state semantics; a novel or
+  unvalidated selected status fails. No content/ID inference is accepted.
+  Identical-content divergent parents prove `reconcile` remains allowed when
+  Git reports zero changed entity paths, while more than one row for that exact
+  divergent path fails the dedicated cap.
 - **W1 compatibility:** a pre-contract migration reachable only in main history
   is not scanned; an unmerged in-range legacy migration fails with an actionable
   amend/split diagnostic rather than falling back to similarity.
@@ -537,6 +565,9 @@ absent parent with unavailable or unvalidated required history fails loud.
   both source edges to pass and fails when either edge is illegal. Design is the
   immediate next stage and must ratify the policy before plan, so these
   execute-stage assertions have no dependency cycle.
+  A multi-parent migration with one shared generation across different old
+  paths preserves that key; divergent source generation keys fail before any
+  result key can be selected.
 - **W4:** After design ratifies the legality policy and execute implements all
   W1-W3 assertions, run targeted C14 fixtures and the unmodified full
   invariant/shell/Node gates; those local gates do not inspect the sibling
@@ -548,7 +579,10 @@ absent parent with unavailable or unvalidated required history fails loud.
   this pitch neither edits nor bypasses it. The advisory panel is invoked once
   at W4 after that receipt; it is not a per-commit CI check, so earlier developer
   commits keep their ordinary local/CI signal rather than producing expected
-  red panel runs.
+  red panel runs. FO invokes and records the panel's job ID plus reviewed SHA in
+  the verify artifact, and ship-review refuses a GO verdict without that exact
+  receipt. This is Ship-Flow enforcement, not a new required GitHub status
+  check or hook.
 
 ## Mechanism-to-Value Evidence Matrix
 
@@ -817,12 +851,20 @@ graph LR
   returned FAIL. Their valid gaps are absorbed: source uniqueness is keyed by
   `(parent_oid,path)`, so different parents can classify the same string;
   reconcile users list parent OIDs while C14 resolves volatile generation keys;
-  aliases require equal statuses; rewritten parents are emitter-refreshed; and
+  aliases were initially constrained to equal statuses; rewritten parents are emitter-refreshed; and
   W4 is a one-time post-prerequisite panel, not a per-commit red CI check. The
   alleged same-generation inherited-status bypass is rejected with an explicit
   provenance proof: the matching parent's status is already validated in the
   topological scan or trusted at the boundary, while a novel result still takes
   the every-parent legality path.
+- REVIEW: Direct Gemini/agy and RoboRev/Gemini job 52 reviewed `0088bf7` and
+  returned FAIL. Their valid gaps are absorbed: multi-parent migration requires
+  one shared generation key; raw coverage ignores unchanged retained source
+  paths; `reconcile` has a dedicated divergent-path cap even with zero Git
+  content changes; selected-status provenance follows same-generation
+  inheritance; v1 has no pre-activation compatibility burden. W4 now names its
+  FO invocation, artifact receipt, and ship-review refusal while deliberately
+  remaining outside required CI/hooks.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
