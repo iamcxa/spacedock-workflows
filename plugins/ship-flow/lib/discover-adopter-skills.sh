@@ -6,6 +6,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+. "${SCRIPT_DIR}/discovery-exclusions.sh"
+
 ROOT="."
 
 usage() {
@@ -59,7 +62,7 @@ has_dependency() {
 }
 
 find_pruned() {
-  find "$ROOT" \
+  ship_flow_discovery_find "$ROOT" \
     \( \
       -path "$ROOT/.git" -o \
       -path "$ROOT/node_modules" -o \

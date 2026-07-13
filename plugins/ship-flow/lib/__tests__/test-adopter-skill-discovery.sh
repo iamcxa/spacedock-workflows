@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 DISCOVERY_SCRIPT="${SCRIPT_DIR}/../discover-adopter-skills.sh"
 FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/adopter-skill-discovery/carlove-like"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
+TMP_ROOT="$(mktemp -d)"
+
+trap 'rm -rf "${TMP_ROOT}"' EXIT INT TERM
 
 PASS=0
 FAIL=0
@@ -57,6 +60,18 @@ check_stdout_not() {
   fi
 }
 
+run_discovery() {
+  local root="$1"
+  local stdout_file="$2"
+  local stderr_file="$3"
+
+  if "${DISCOVERY_SCRIPT}" --root="${root}" >"${stdout_file}" 2>"${stderr_file}"; then
+    RUN_DISCOVERY_STATUS=0
+  else
+    RUN_DISCOVERY_STATUS=$?
+  fi
+}
+
 echo "=== test-adopter-skill-discovery.sh ==="
 echo ""
 
@@ -103,6 +118,59 @@ check_stdout_not "ignored worktree/archive paths do not create Supabase routes" 
   "\"${DISCOVERY_SCRIPT}\" --root=\"${IGNORED_ONLY_ROOT}\""
 check "discovery helper explicitly prunes heavy generated/history directories" \
   "grep -q '.claude/worktrees' '${DISCOVERY_SCRIPT}' && grep -q '.worktrees' '${DISCOVERY_SCRIPT}' && grep -q 'docs/ship-flow/_archive' '${DISCOVERY_SCRIPT}'"
+
+echo "Block 2.6: discovery ignores nested fixture decoys without rejecting marker ancestors"
+CLEAN_TWIN_ROOT="${TMP_ROOT}/clean"
+DECOY_TWIN_ROOT="${TMP_ROOT}/decoy"
+mkdir -p \
+  "${CLEAN_TWIN_ROOT}" \
+  "${DECOY_TWIN_ROOT}/__tests__" \
+  "${DECOY_TWIN_ROOT}/test-fixtures"
+printf '%s\n' \
+  '{' \
+  '  "dependencies": {' \
+  '    "@refinedev/core": "5.0.0"' \
+  '  }' \
+  '}' >"${DECOY_TWIN_ROOT}/__tests__/package.json"
+printf '%s\n' \
+  '{' \
+  '  "dependencies": {' \
+  '    "expo": "latest"' \
+  '  }' \
+  '}' >"${DECOY_TWIN_ROOT}/test-fixtures/package.json"
+
+CLEAN_STDOUT="${TMP_ROOT}/clean.stdout"
+CLEAN_STDERR="${TMP_ROOT}/clean.stderr"
+DECOY_STDOUT="${TMP_ROOT}/decoy.stdout"
+DECOY_STDERR="${TMP_ROOT}/decoy.stderr"
+
+run_discovery "${CLEAN_TWIN_ROOT}" "${CLEAN_STDOUT}" "${CLEAN_STDERR}"
+CLEAN_STATUS="${RUN_DISCOVERY_STATUS}"
+run_discovery "${DECOY_TWIN_ROOT}" "${DECOY_STDOUT}" "${DECOY_STDERR}"
+DECOY_STATUS="${RUN_DISCOVERY_STATUS}"
+
+check "clean twin exits successfully" \
+  "[ '${CLEAN_STATUS}' -eq 0 ]"
+check "clean twin emits empty stderr" \
+  "[ ! -s '${CLEAN_STDERR}' ]"
+check "decoy twin exits successfully" \
+  "[ '${DECOY_STATUS}' -eq 0 ]"
+check "decoy twin emits empty stderr" \
+  "[ ! -s '${DECOY_STDERR}' ]"
+check "nested fixture decoys leave full YAML byte-identical to clean twin" \
+  "cmp -s '${CLEAN_STDOUT}' '${DECOY_STDOUT}'"
+
+MARKER_ANCESTOR_STDOUT="${TMP_ROOT}/marker-ancestor.stdout"
+MARKER_ANCESTOR_STDERR="${TMP_ROOT}/marker-ancestor.stderr"
+run_discovery "${FIXTURE_ROOT}" "${MARKER_ANCESTOR_STDOUT}" "${MARKER_ANCESTOR_STDERR}"
+MARKER_ANCESTOR_STATUS="${RUN_DISCOVERY_STATUS}"
+
+check "existing marker-ancestor fixture exits successfully" \
+  "[ '${MARKER_ANCESTOR_STATUS}' -eq 0 ]"
+check "existing marker-ancestor fixture emits empty stderr" \
+  "[ ! -s '${MARKER_ANCESTOR_STDERR}' ]"
+check "existing marker-ancestor fixture remains discoverable" \
+  "grep -q 'name: refine-web' '${MARKER_ANCESTOR_STDOUT}' && grep -q 'name: expo-mobile' '${MARKER_ANCESTOR_STDOUT}'"
 
 echo "Block 3: output is suitable for adopter config"
 check_stdout "output names the target adopter config path" \
