@@ -105,3 +105,16 @@ Revised the non-UI design to the EM's narrow delegated route, completed the
 missing walker audit, and supplied plan-ready RED/GREEN and one-shot acceptance
 constraints. No Captain decision remains; no implementation or status mutation
 was performed.
+
+## Stage Report: plan
+
+- DONE: Import all seven design constraints mechanically and write a lean plan.md (body <=200 lines) with runnable DCs, exact task paths, safe wave metadata, per-task skills/reviewer questions, and complete canonical/context routing receipts.
+  `plan.md` maps DC-1 through DC-7 onto four serial tasks; C4, C8, and C15 pass.
+- DONE: Define strict TDD ledger contracts: focused RED/GREEN nested decoys for both consumers, positive fixture-root behavior, exit-0/empty-stderr/intended-output assertions, helper consumer/single-definition invariants, and the README #24 guard; reserve the real repo-root discovery command for one post-GREEN execution only.
+  `tdd-ledger.txt` reports four valid records and persisted `tdd-ledger.jsonl` matches the current plan.
+- DONE: Run plan validators, persisted TDD ledger proof, invariants, placeholder/scope checks, and a fresh seven-factor cross-review.
+  Design/handoff/D-reference, ledger, full invariant, placeholder, diff, and context extraction checks pass; the replacement fresh reviewer returned seven-factor PROCEED and `skill-coverage: PASS`.
+
+### Summary
+
+Produced a bounded four-task implementation plan for one sourceable Bash helper, exactly two consumers, narrow invariants, and the documented one-shot acceptance stop gate. No implementation, status change, upstream filing, schema/API expansion, or worktree management was performed.
