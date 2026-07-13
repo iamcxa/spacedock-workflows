@@ -28,6 +28,10 @@
 #   The 4-tier enum is internal display only — not exposed at gate logic.
 set -uo pipefail
 
+DENSITY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=discovery-exclusions.sh
+. "$DENSITY_LIB_DIR/discovery-exclusions.sh"
+
 ENTITY=""
 DIRECTIVE=""
 IS_HIGH_MODE=0
@@ -138,7 +142,7 @@ if [ -d "$REPO_ROOT/$WORKFLOW_DIR" ]; then
   while IFS= read -r -d '' claude_file; do
     H="$(check_claude_positive "$claude_file")"
     CLAUDE_HITS=$((CLAUDE_HITS + H))
-  done < <(find "$REPO_ROOT/$WORKFLOW_DIR" -name "CLAUDE.md" -print0 2>/dev/null)
+  done < <(ship_flow_discovery_find "$REPO_ROOT/$WORKFLOW_DIR" -name "CLAUDE.md" -print0 2>/dev/null)
 fi
 [ "$CLAUDE_HITS" -ge 1 ] && S1=1
 
@@ -147,7 +151,7 @@ fi
 # and does not indicate this specific repo has the workflow skill installed).
 PLUGIN_HITS=0
 if [ -d "$REPO_ROOT/plugins" ]; then
-  PLUGIN_HITS="$({ find "$REPO_ROOT/plugins" -name "SKILL.md" -exec grep -l "$WF_NAME" {} + 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
+  PLUGIN_HITS="$({ ship_flow_discovery_find "$REPO_ROOT/plugins" -name "SKILL.md" -exec grep -l "$WF_NAME" {} + 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
 fi
 [ "$PLUGIN_HITS" -ge 1 ] && S2=1
 
@@ -156,10 +160,10 @@ ARCHIVE_HITS=0
 ARCHIVE_DIR="$REPO_ROOT/$WORKFLOW_DIR/_archive"
 DONE_DIR="$REPO_ROOT/$WORKFLOW_DIR/done"
 if [ -d "$ARCHIVE_DIR" ]; then
-  ARCHIVE_HITS="$({ find "$ARCHIVE_DIR" -name "*.md" 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
+  ARCHIVE_HITS="$({ ship_flow_discovery_find "$ARCHIVE_DIR" -name "*.md" -print 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
 fi
 if [ -d "$DONE_DIR" ]; then
-  DONE_HITS="$({ find "$DONE_DIR" -name "*.md" 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
+  DONE_HITS="$({ ship_flow_discovery_find "$DONE_DIR" -name "*.md" -print 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
   ARCHIVE_HITS=$((ARCHIVE_HITS + DONE_HITS))
 fi
 [ "$ARCHIVE_HITS" -ge 2 ] && S3=1
