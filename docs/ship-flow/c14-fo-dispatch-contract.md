@@ -6,7 +6,7 @@ started:
 completed:
 verdict:
 score:
-worktree:
+worktree: .claude/worktrees/c14-fo-dispatch-contract
 issue: "#30"
 pr:
 ---
