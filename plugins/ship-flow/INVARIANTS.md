@@ -558,11 +558,15 @@ Receipt schema requires **12 top-level keys** (validated at `write-fo-receipt.sh
 
 ---
 
-### Principle 15: Entity Status Mutation via advance-stage Primitive
+### Principle 15: Entity Status Mutation via Sanctioned Transition Receipts
 
-**Rule**: Any commit that mutates an entity's `status:` YAML frontmatter field on `docs/<workflow>/<id>-<slug>/index.md` (folder layout) or `docs/<workflow>/<id>-<slug>.md` (flat) MUST go through `plugins/ship-flow/lib/advance-stage.sh` (or its sub-helpers invoked by the same call chain). Direct YAML edit + manual `git commit` is forbidden.
+**Rule**: Any commit that mutates an entity's `status:` YAML frontmatter field on `docs/<workflow>/<id>-<slug>/index.md` (folder layout) or `docs/<workflow>/<id>-<slug>.md` (flat) MUST carry the receipt for one of two sanctioned transition owners. Stage entry is owned by the First Officer; stage completion is owned by `plugins/ship-flow/lib/advance-stage.sh` (or its sub-helpers invoked by the same call chain). Direct YAML edit + arbitrary manual `git commit` is forbidden.
 
-The detection signature is the substring `": advance status to "` injected into the commit message by `advance-stage.sh` line 122 (`--commit-as="${COMMIT_MSG}: advance status to ${NEW_STATUS}"`). Commits with a status mutation but lacking this signature substring are flagged as bypass.
+**Stage-entry receipt (FO)**: the commit **subject** must match `dispatch: <non-empty summary> entering <stage>` for a fresh worker or `advance: <non-empty summary> entering <stage>` for same-worker reuse, exactly as specified by the First Officer dispatch contract. C14 additionally requires every entity mutated by that commit to have resulting frontmatter `status: <stage>`. Subject-only matching plus after-state binding prevents body-text and wrong-stage lookalikes from being accepted.
+
+**Stage-completion receipt (`advance-stage.sh`)**: the commit message contains `": advance status to "`, injected by `advance-stage.sh` line 122 (`--commit-as="${COMMIT_MSG}: advance status to ${NEW_STATUS}"`). This completion-side signature and its enforcement remain unchanged.
+
+Commits with a status mutation but neither sanctioned receipt are flagged as bypass. The receipt grammar is the contract; commit hashes are never allowlisted.
 
 **Mutation** is defined as a changed `status:` value inside the YAML frontmatter block between a commit's first parent and the commit. Body-level `status:` examples are NOT mutations. Pure additions (NEW entity index.md from sharp-claim where no parent frontmatter status exists) are exempt.
 
@@ -570,13 +574,13 @@ The detection signature is the substring `": advance status to "` injected into 
 
 **Failure modes**:
 
-1. Direct YAML edit bypassing `advance-stage.sh` leaves `stage_outputs:` frontmatter blank. The next legitimate `advance-stage.sh` call's `render-stage-links` sub-step rebuilds the body table from `stage_outputs:` ONLY — silently nuking the body table rows. See MEMORY `advance-stage-destructive-on-legacy-bodies.md`. Evidence: pitch-106 commit `898d006c`.
+1. Direct YAML edit bypassing both sanctioned transition owners leaves no mechanically recognizable receipt. On completion-side entities, it can also leave `stage_outputs:` frontmatter blank; the next legitimate `advance-stage.sh` call's `render-stage-links` sub-step rebuilds the body table from `stage_outputs:` ONLY — silently nuking the body table rows. See MEMORY `advance-stage-destructive-on-legacy-bodies.md`. Evidence: pitch-106 commit `898d006c`.
 2. Cross-session race: two parallel sessions hand-editing different stages of the same entity index produce desynced frontmatter ↔ body table. `advance-stage.sh` serializes via `--if-hash` CAS; manual edits do not.
 3. Squash-merge intersession: if a feature branch contains bypass commits and is later squash-merged into main, the squash collapses the violations into a single commit on main. The C14 check scopes to `merge-base..HEAD` (branch-local) — this catches pre-merge but not post-squash retroactively. Acceptable trade-off: catch at PR time, before squash.
 
-**Grep check** (Tier A automated): `check_entity_status_via_advance_stage_only()` in `plugins/ship-flow/bin/check-invariants.sh`. Scans commits ahead of `git merge-base origin/main HEAD` for entity-index modifications; compares frontmatter `status:` before/after each changed entity file; flags any mutation whose commit message does NOT contain `: advance status to `. Skips gracefully when `origin/main` ref is absent (e.g., fresh test fixtures).
+**Grep check** (Tier A automated): `check_entity_status_via_advance_stage_only()` in `plugins/ship-flow/bin/check-invariants.sh` (legacy check name retained for compatibility). Scans commits ahead of `git merge-base origin/main HEAD` for entity-index modifications; compares frontmatter `status:` before/after each changed entity file; accepts a canonical FO subject only when its named stage matches every after-state, otherwise requires the existing `: advance status to ` completion receipt. Skips gracefully when `origin/main` ref is absent (e.g., fresh test fixtures).
 
-**v1 limitation — body-forgery false negative**: the substring match runs against the full commit message INCLUDING body, not subject-line-only. A committer aware of the signature can include `": advance status to "` in the body to bypass detection. v1 is calibrated for **accidental** bypass (the motivating evidence at pitch-106 was unintentional, not adversarial); v2 hardening (`docs/ship-flow/todos/enforce-advance-stage-primitive-only-v2-subject-only-match.md`) tightens to subject-line-only OR requires a commit trailer like `Stage-Advance-Tool: advance-stage.sh@<sha>`.
+**v1 limitation — completion body-forgery false negative**: the `advance-stage.sh` substring match still runs against the full commit message INCLUDING body. A committer aware of that completion signature can include `": advance status to "` in the body to bypass detection. FO stage-entry receipts do not share this limitation because they are subject-only and after-state-bound. v1 remains calibrated for **accidental** bypass; v2 hardening (`docs/ship-flow/todos/enforce-advance-stage-primitive-only-v2-subject-only-match.md`) tightens completion receipts to subject-line-only OR requires a commit trailer like `Stage-Advance-Tool: advance-stage.sh@<sha>`.
 
 **Source**: source pitch `enforce-advance-stage-primitive-only` (sharp 2026-05-15); source todo `docs/ship-flow/todos/enforce-advance-stage-primitive-only.md`; source evidence pitch-106 verify-stage D1 (commit `898d006c`).
 

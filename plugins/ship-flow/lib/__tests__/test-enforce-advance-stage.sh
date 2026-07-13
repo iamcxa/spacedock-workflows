@@ -282,6 +282,41 @@ EOF
   echo "$dir"
 }
 
+# Build the exact First Officer stage-entry history: an existing flat entity is
+# moved from draft to shape on a feature branch, and the supplied commit subject
+# is the only receipt C14 can inspect.
+setup_fo_dispatch_fixture() {
+  local mutation_msg="$1"
+  local dir
+  dir="$(mktemp -d)"
+  (
+    cd "$dir" || exit 1
+    git init -q -b main
+    git config user.email test@test
+    git config user.name test
+
+    mkdir -p docs/test-wf
+    cat > docs/test-wf/example-feature.md <<'EOF'
+---
+title: "Example Feature"
+status: draft
+started:
+---
+EOF
+    git add docs/test-wf/example-feature.md
+    git commit -qm "draft: add example feature"
+
+    git checkout -q -b feature
+    sed -i.bak 's/^status: draft$/status: shape/' docs/test-wf/example-feature.md
+    rm -f docs/test-wf/example-feature.md.bak
+    sed -i.bak 's/^started:$/started: 2026-07-12T13:48:06Z/' docs/test-wf/example-feature.md
+    rm -f docs/test-wf/example-feature.md.bak
+    git add docs/test-wf/example-feature.md
+    git commit -qm "$mutation_msg"
+  )
+  echo "$dir"
+}
+
 # Run only the new check against the fixture repo via --check mode.
 # Uses check-invariants.sh's existing single-check dispatch path.
 # shellcheck disable=SC2329 # invoked indirectly through assert_exit/eval cases below
@@ -494,6 +529,36 @@ echo "--- Case 13 (SIGPIPE repro, reverse direction): LARGE (~380KB) stage_outpu
 # from the marker-check pipe's own race, regressed separately by Case 12).
 TMP="$(setup_fixture "manual hand-edit status to plan" "stageoutputs-large" "edit")"
 assert_exit 1 "run_check_only '$TMP'" "Case-13 large stage_outputs manual edit still flagged (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 14: FO STAGE-ENTRY receipt (draft→shape, canonical subject + resulting stage) → PASS ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: example-feature entering shape")"
+assert_exit 0 "run_check_only '$TMP'" "Case-14 canonical FO draft-to-shape dispatch passes (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 15: FO LOOKALIKE receipt (non-canonical verb) → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: example-feature enters shape")"
+assert_exit 1 "run_check_only '$TMP'" "Case-15 FO dispatch receipt requires canonical entering grammar (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 16: FO LOOKALIKE receipt (wrong resulting stage) → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: example-feature entering plan")"
+assert_exit 1 "run_check_only '$TMP'" "Case-16 FO dispatch receipt must name the resulting stage (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 17: FO REUSE STAGE-ENTRY receipt (advance subject, exact resulting stage) → PASS ---"
+TMP="$(setup_fo_dispatch_fixture "advance: example-feature entering shape")"
+assert_exit 0 "run_check_only '$TMP'" "Case-17 canonical FO reuse-stage entry passes (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 18: FO LOOKALIKE receipt (whitespace-only summary) → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch:   entering shape")"
+assert_exit 1 "run_check_only '$TMP'" "Case-18 FO dispatch receipt requires a non-whitespace summary (exit 1)"
 rm -rf "$TMP"
 
 echo
