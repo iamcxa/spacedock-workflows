@@ -251,8 +251,9 @@ not begin until design ratifies them.
    and stage-entry/completion receipt checks still apply.
 8. Divergent computed generations at one exact path may converge only through
    already validated retirement provenance or one explicit `reconcile` row.
-   `reconcile` lists every parent generation at that path and selects exactly
-   one listed generation for the result. It is an explicit unauthenticated
+   `reconcile` lists every parent carrying a divergent generation at that path
+   and selects exactly one listed parent's generation for the result. It is an
+   explicit unauthenticated
    equivalence waiver for cherry-pick/backport histories, never inferred from
    ID, layout, content, or patch similarity; a false alias has the same stated
    trust limit as a false independent disposition.
@@ -267,31 +268,38 @@ parsing it must yield these fields. Design may change spelling, not meaning:
 | `version` | required, exactly `1` | required | required | required |
 | `operation` | `migrate` | `retire` | `create` | `reconcile` |
 | `workflow` | required workflow slug | required | required | required |
-| `sources[]` | non-empty `(parent_oid, before_path)` set; at most one source per parent; sole parent may be implicit | non-empty source set | forbidden | every divergent `(parent_oid, generation_key, path)` at one exact path |
-| `after_path` | required | forbidden | required | required; equal to every source path |
-| `selected_source` | forbidden | forbidden | forbidden | required; exactly one member of `sources[]` |
+| `sources[]` | non-empty `(parent_oid, before_path)` set; at most one source per parent; sole parent may be implicit | non-empty source set | forbidden | every divergent `parent_oid`; C14 resolves each computed generation at `after_path` |
+| `after_path` | required | forbidden | required | required; sole lookup/result path for every source parent |
+| `selected_source` | forbidden | forbidden | forbidden | required `parent_oid`; exactly one member of `sources[]` |
 
 All paths are normalized repository-relative paths under the declared
 `docs/<workflow>/` root: no absolute path, `..`, empty segment, workflow escape,
-or README target. A path may be classified exactly once per commit. The number
-of operation rows cannot exceed the changed entity-path count. Unknown version,
+or README target. A source classification key is `(parent_oid, path)` and may
+occur exactly once per commit; the same path string in different parents may be
+classified separately. A result path may occur in only one operation. The
+number of operation rows cannot exceed the changed entity-path count. Unknown version,
 unknown field, malformed row, duplicate classification, listed parent not in
 the commit's parent set, missing before blob, missing after blob, or wrong
 workflow fails before status validation. Design owns the exact line-length and
 message-size spelling; the shaped bound is 8 KiB per row and 64 KiB total
 receipt carrier, with an earlier changed-path-count cap.
 One operation cannot list more sources than the commit has parents.
-For `reconcile`, every listed generation key must equal C14's computed scan
-state for that parent/path, the source set must cover every divergent generation
-at the path, and the result inherits the selected source's key. Missing,
-invented, duplicate, or partial aliases fail `generation-conflict` before
-status validation.
+For `reconcile`, C14 resolves each listed parent's computed generation at
+`after_path`; users never transcribe generation keys. The source set must cover
+every divergent generation at the path, all resolved source statuses must be
+identical, and the result inherits the selected parent's key and status. A
+missing, duplicate, or partial alias—or divergent statuses—fails
+`generation-conflict`. Statuses must be pre-aligned through their own legal
+workflow transitions, or the non-selected generation must be retired before
+reconciliation; aliasing never authorizes a downgrade or discard.
 
 The provided emitter is a convenience and preflight validator, not an
 authority. Because C14 cannot authenticate its caller, manually authored syntax
 that is byte-for-byte semantically equivalent is accepted. Rebase or cherry-pick
 changes parent OIDs and therefore invalidates merge-source bindings; the emitter
-must refresh them before review rather than C14 guessing ancestry.
+must refresh them before review rather than C14 guessing ancestry. `reconcile`
+rows are refreshed from the rewritten parent OIDs and C14 recomputes their
+generation keys; no stale key is copied through the rewrite.
 
 #### Activation and legacy compatibility
 
@@ -378,7 +386,8 @@ retirement provenance in another parent's scan state or complete coverage in a
 older, newer, or cherry-picked generation changes no obligation. Without that
 proof or explicit alias, the merge fails `generation-conflict` and must
 pre-align the parents. A valid `reconcile` makes the result carry the selected
-generation key; it does not authorize any status edge.
+generation key; because all sources must already share one status, it neither
+discards progress nor authorizes a status edge.
 Generation equality never follows from equal path, ID, layout, status, or body;
 it follows only from the shared baseline/create key carried through explicit
 migrations or an explicit `reconcile` waiver.
@@ -425,6 +434,14 @@ unnamed old path remains unrelated and cannot create an inferred identity.
    source does not bypass `shape -> plan` validation merely because an unlisted
    parent already has the result path at `plan`. Any explicit operation row
    remains fully validated rather than being erased by inheritance.
+   For same-generation, same-path parents with different statuses and no
+   mapping, an inherited result also requires the matching parent's status
+   provenance: either its in-range transition already passed C14 earlier in the
+   topological scan or the status is the trusted boundary state. The
+   non-matching parent's status is not a source-to-result edge because the merge
+   selected another parent's already validated state; it cannot mask an
+   unvalidated matching state. If the result matches no validated parent state,
+   it is resolution-only and the ratified every-parent legality rule applies.
 2. **Pure addition:** a result is a pure addition only when the logical entity
    is absent from every parent at the result/source path and no migration
    receipt names a source in any parent.
@@ -479,7 +496,9 @@ absent parent with unavailable or unvalidated required history fails loud.
   independent retirement is accepted only as the documented structural waiver.
   The matrix includes a deletion where the result path already exists in every
   parent: the result is inherited, but the separate disappearing old path still
-  requires `migrate` or `retire` classification. It also includes
+  requires `migrate` or `retire` classification. The same path string may be
+  `(P1,path)` in a migration and `(P2,path)` in an independent retirement;
+  duplicating either parent-qualified key fails. It also includes
   `P1=present(shape), P2=absent-after-validated-retire, M=absent`: global
   normalization classifies the result as inherited absence and derives no
   duplicate retirement candidate. The negative twin makes P2 never-present
@@ -493,13 +512,17 @@ absent parent with unavailable or unvalidated required history fails loud.
   complete explicit `reconcile` alias, otherwise it fails
   `generation-conflict`. Cherry-picked/backported creates with different commit
   keys fail without the alias and pass with a complete alias selecting either
-  generation; no content/ID inference is accepted.
+  generation when all statuses match; divergent statuses fail until legally
+  pre-aligned or independently retired. No content/ID inference is accepted.
 - **W1 compatibility:** a pre-contract migration reachable only in main history
   is not scanned; an unmerged in-range legacy migration fails with an actionable
   amend/split diagnostic rather than falling back to similarity.
 - **W2:** A no-conflict merge and an absent-first-parent merge whose result
   equals the second parent pass without a merge transition receipt; the same
-  inherited transition is not reported twice.
+  inherited transition is not reported twice. A same-generation
+  `P1=shape, P2=plan, M=plan` case passes only after P2's `plan` provenance is
+  validated (or trusted at the boundary); an unvalidated matching state fails
+  before inheritance.
 - **W3:** Fixtures permute parent order and cover a result different from every
   parent. They also cover source-only, result-only, neither-path, and both-path
   collision normalization in listed parents, plus unrelated source-path
@@ -522,7 +545,10 @@ absent parent with unavailable or unvalidated required history fails loud.
   synthesis contains zero medium-or-higher finding. Before that final panel,
   FO must reconcile the stale
   `c14-fo-dispatch-contract` lifecycle through its sanctioned transition path;
-  this pitch neither edits nor bypasses it.
+  this pitch neither edits nor bypasses it. The advisory panel is invoked once
+  at W4 after that receipt; it is not a per-commit CI check, so earlier developer
+  commits keep their ordinary local/CI signal rather than producing expected
+  red panel runs.
 
 ## Mechanism-to-Value Evidence Matrix
 
@@ -787,6 +813,16 @@ graph LR
   ID/content inferred. Its FO deadlock premise is rejected: the sanctioned FO
   transition is a separate current-branch state commit available before the
   final panel, not a main-only post-merge action.
+- REVIEW: Direct Gemini/agy and RoboRev/Gemini job 51 reviewed `356aaae` and
+  returned FAIL. Their valid gaps are absorbed: source uniqueness is keyed by
+  `(parent_oid,path)`, so different parents can classify the same string;
+  reconcile users list parent OIDs while C14 resolves volatile generation keys;
+  aliases require equal statuses; rewritten parents are emitter-refreshed; and
+  W4 is a one-time post-prerequisite panel, not a per-commit red CI check. The
+  alleged same-generation inherited-status bypass is rejected with an explicit
+  provenance proof: the matching parent's status is already validated in the
+  topological scan or trusted at the boundary, while a novel result still takes
+  the every-parent legality path.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
