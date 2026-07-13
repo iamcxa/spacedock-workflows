@@ -6,7 +6,7 @@ started: 2026-07-12T13:48:06Z
 completed:
 verdict:
 score:
-worktree:
+worktree: .claude/worktrees/fixture-pollution-discovery-helpers
 issue: "#20"
 pr:
 ---
