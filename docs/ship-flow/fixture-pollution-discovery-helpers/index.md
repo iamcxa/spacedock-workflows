@@ -89,3 +89,19 @@ scope.
 - path: shape+sharp
 - open_contract_decisions_count: 3
 - domain_matches_count: 1
+
+## Stage Report: design (cycle 2)
+
+- DONE: Record the Science Officer route=narrow decisions as D1-D3 under the Captain's explicit delegation: sourceable Bash-only shared helper; requested-root-relative descendant __tests__/test-fixtures pruning; one-time complete walker audit plus simple single-definition/consumer invariant, without a permanent cross-language inventory framework.
+  `design.md` records D1-D3 and the complete current production candidate audit.
+- DONE: Replace PROMPT_CAPTAIN with a complete non-UI Hand-off to Plan: typed design_constraints for every D marker, open_decisions: [], focused RED/GREEN and first-real-run verification constraints, updated Design Report and Stage Report. Re-audit current recursive candidates including issues-to-contract.sh and sync-drift-check.mjs before any completeness claim.
+  Seven typed constraints resolve all D markers; both required candidates are classified.
+- DONE: Run applicable design validators and a fresh context-free read-only seven-factor review. Commit only design-stage artifacts; do not implement code, mutate entity status, advance stages, file upstream issues, or manage worktrees.
+  Three validators passed and the independent read-only reviewer returned PROCEED on all factors.
+
+### Summary
+
+Revised the non-UI design to the EM's narrow delegated route, completed the
+missing walker audit, and supplied plan-ready RED/GREEN and one-shot acceptance
+constraints. No Captain decision remains; no implementation or status mutation
+was performed.
