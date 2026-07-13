@@ -153,17 +153,21 @@ performed.
   marker invariant spans top-level `lib/*.sh` and `bin/*.sh` only, archive and
   done decoys regress independently, and controlled fake-`find` injection on
   focused roots proves adopter and density failures without repo-root discovery.
-- DONE: Preserve the frozen receipt unchanged and consumed as envelope-only,
-  record #21 and #24 only as existing evidence, and leave exactly AUTH-1 to the
-  Captain: authorize one materially revised first run or consume the Bet and
-  abandon/reconsider the helper strategy.
+- DONE: Preserve the frozen receipt unchanged, consumed, and
+  acceptance-invalid; record #21 and #24 only as existing evidence; and record
+  the Captain's AUTH-1 Option A selection. Exactly one new real repository-root
+  adopter-discovery run is authorized only after materially revised
+  implementation passes every focused fail-loud check. Any route, diagnostic,
+  or nonzero status routes directly to strategy-level `costly_no`, with no
+  additional patch or run.
 - DONE: Run design-only handoff, D-reference, and readiness validators. All
   passed; readiness correctly reported `skipped/no-risk-trigger`.
 - DONE: A fresh context-free read-only non-UI reviewer passed all seven factors
-  and returned PROMPT_CAPTAIN because AUTH-1 is deliberately Captain-owned.
+  and returned PROMPT_CAPTAIN while AUTH-1 was open. The Captain selected Option
+  A, so the resolved design gate verdict is PROCEED without changing D1-D4.
 
 ### Summary
 
 Cycle 3 closes the silent traversal-failure contract while keeping the helper
-narrow and Bash 3.2-compatible. Technical design is complete; only the
-Captain-owned one-run authorization remains open.
+narrow and Bash 3.2-compatible. Technical design and the one-run authorization
+are complete; the design gate may proceed.

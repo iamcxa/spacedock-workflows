@@ -6,7 +6,8 @@ sourceable pruning primitive remains sound, but every caller must distinguish a
 healthy empty traversal from a traversal error before accepting routing or a
 density value. D1-D3 preserve the delegated narrow design; D4 records the
 delegated fail-loud engineering contract. Exactly one authorization decision
-remains Captain-owned and plan must not proceed until it is answered.
+was Captain-owned; the Captain selected AUTH-1 Option A, so the design gate may
+proceed under the exact one-run and `costly_no` boundary below.
 
 ```yaml
 design-dispatch-manifest:
@@ -65,9 +66,8 @@ The Captain's Bet remains verbatim and is not weakened:
 
 The Science Officer's delegated technical judgment is to retain the helper,
 make traversal failure observable end to end, and close the invariant/test gaps
-before any further real-run authorization. Whether the already-consumed receipt
-permits exactly one materially revised first run is a risk-authorization choice,
-not an engineering detail, and remains open below.
+before any further real-run authorization. The Captain has now resolved the
+risk-authorization choice by selecting AUTH-1 Option A.
 
 ## Current Repository-wide Candidate Audit
 
@@ -184,18 +184,19 @@ only after every applicable traversal succeeds. `--is-high` retains 0=high and
 1=healthy not-high. Both modes reserve exit 2 for usage, setup, or traversal
 error; on exit 2 stderr is non-empty and stdout contains no classification.
 
-### Captain Authorization Required
+### Captain Authorization Resolution
 
-`AUTH-1` is the only open decision:
+The Captain selected `AUTH-1` Option A:
 
 | Option | Semantics | Consequence |
 | --- | --- | --- |
-| A — authorize one revised first run (**EM recommendation**) | Treat the old receipt as acceptance-invalid for incomplete code. After materially revised code passes every focused check, permit exactly one new real repository-root adopter-discovery run. | Any route, diagnostic, or nonzero result goes directly to strategy-level `costly_no`; there is no additional patch cycle or third run. |
+| A — authorize one revised first run (**selected; EM recommendation**) | Treat the old receipt as acceptance-invalid for incomplete code. Only after materially revised implementation passes every focused fail-loud check, permit exactly one new real repository-root adopter-discovery run. | Any route, diagnostic, or nonzero status goes directly to strategy-level `costly_no`; there is no additional patch or run. |
 | B — Bet consumed; abandon/reconsider | Treat the old run as consuming the Bet despite its observability gap. | Do not implement or execute another discovery attempt; reconsider the helper strategy at strategy level. |
 
-No stage worker may infer the Captain's selection. Until the Captain chooses A
-or B, plan/execute remain blocked and no real repository-root discovery may run
-or be emulated.
+Option B was not selected. The authorization does not permit a discovery run
+during design or plan: execute may consume it only after the materially revised
+implementation passes every focused fail-loud check. The authorization is then
+consumed by that one run regardless of result.
 
 ## Verification Strategy
 
@@ -230,9 +231,11 @@ discovery.
    and named/full invariant checks. Successful positive paths retain exit 0,
    intended stdout, and empty stderr.
 
-Only if the Captain selects AUTH-1 Option A may implementation, after all
-focused checks are GREEN, perform exactly one new real run. If the Captain
-selects Option B, no implementation run occurs and the strategy is reconsidered.
+The Captain selected AUTH-1 Option A. Only after materially revised
+implementation passes every focused fail-loud check may execute perform exactly
+one new real repository-root adopter-discovery run. Any route, diagnostic, or
+nonzero status routes directly to strategy-level `costly_no`, with no additional
+patch or run.
 
 ## Frozen Receipt Audit
 
@@ -245,17 +248,18 @@ The cycle-2 receipt is immutable and consumed:
   `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
 
 It proves only that static envelope. Because the executed caller could suppress
-a failed traversal into the same header-only result, it is not acceptance. This
-design cycle and its reviewer may read source and the frozen record but must not
-rerun, reconstruct, or emulate repository-root discovery. AUTH-1 governs only
-whether one materially revised future implementation receives a new run.
+a failed traversal into the same header-only result, it remains
+acceptance-invalid. This design cycle and its reviewer may read source and the
+frozen record but must not rerun, reconstruct, or emulate repository-root
+discovery. AUTH-1 Option A authorizes only one future run of the materially
+revised implementation after every focused fail-loud check passes.
 
 ### Artifact Bundle Manifest
 
 | Path | Type | Purpose |
 | --- | --- | --- |
-| `docs/ship-flow/fixture-pollution-discovery-helpers/design.md` | non-UI contract design | D1-D4, fail-loud contracts, focused verification, frozen-receipt audit, and Captain authorization gate. |
-| `docs/ship-flow/fixture-pollution-discovery-helpers/index.md` | design stage report | Cycle-3 completion inventory and PROMPT_CAPTAIN hand-off without status mutation. |
+| `docs/ship-flow/fixture-pollution-discovery-helpers/design.md` | non-UI contract design | D1-D4, fail-loud contracts, focused verification, frozen-receipt audit, and resolved Captain authorization. |
+| `docs/ship-flow/fixture-pollution-discovery-helpers/index.md` | design stage report | Cycle-3 completion inventory and PROCEED hand-off without status mutation. |
 
 ## Reverse Audit of Prior Stages
 
@@ -263,13 +267,13 @@ whether one materially revised future implementation receives a new run.
 - Shape C3 remains resolved by D3; cycle 3 makes the previously implicit
   production boundary exact: top-level `lib/*.sh` plus `bin/*.sh` only.
 - Verify DC-7 is resolved at the design-contract level by D4's observable
-  match/no-match/error and value/error contracts; acceptance itself remains
-  blocked on AUTH-1.
+  match/no-match/error and value/error contracts; AUTH-1 Option A authorizes one
+  post-focused-GREEN acceptance run.
 - Verify DC-4 routes to execute through D3's corrected invariant scope.
 - The density advisory routes to execute through independent archive and done
   regressions.
-- `open_design_questions` remains empty. AUTH-1 is a new risk-authorization
-  decision caused by the invalid receipt, not an unresolved technical design.
+- `open_design_questions` remains empty. AUTH-1 was a risk-authorization
+  decision caused by the invalid receipt and is now resolved as Option A.
 - No UI lane, theme indirection, or render-fidelity target applies.
 
 ## Design Readiness Review
@@ -306,21 +310,25 @@ returned no design defect and the following evidence:
 | DC adequacy | PASS | D4 closes verify DC-7; D3 closes DC-4; archive and done regress independently (`verify.md:31-33,112-119`; `design.md:110-126,205-228`). |
 | Canonical sync | PASS | PRODUCT/ARCHITECTURE skips match an internal Bash caller-contract repair (`design.md:36-47`; `ARCHITECTURE.md:54-109`). |
 | Reverse-audit previous stage | PASS | Shape C1-C3 and every verify-return item map to D1-D4 or execute evidence (`design.md:260-273`; `shape.md:48-53`). |
-| Constraint Coverage | PASS | All traversal paths, exact rc/diagnostics, lib+bin scope, independent branches, and receipt immutability are pinned; AUTH-1 is the sole open decision (`design.md:104-126,172-251,346-389`). |
+| Constraint Coverage | PASS | All traversal paths, exact rc/diagnostics, lib+bin scope, independent branches, and receipt immutability are pinned; AUTH-1 was the sole open decision (`design.md:104-126,172-251,346-389`). |
 
-Verdict: **PROMPT_CAPTAIN**.
+Original verdict: **PROMPT_CAPTAIN**.
 
-Coaching note: keep AUTH-1 strictly as risk authorization; the engineering
-contract is resolved and no worker may infer the Captain's selection.
+The Captain selected AUTH-1 Option A without changing D1-D4. Because all seven
+technical factors passed and `open_decisions` is now empty, the resolved design
+gate verdict is **PROCEED**.
+
+Coaching note: consume the one-run authorization only after every focused
+fail-loud check passes, and route any real-run failure directly to `costly_no`.
 
 ## Design Report
 
-- status: gaps-noted
+- status: passed
 - stage_cost: one Codex design worker plus one fresh read-only reviewer
 - iterations: 3 (cycle-2 narrow revision plus verify-return cycle)
 - contradictions_resolved: 4 technical decisions resolved
-- captain_decisions: 4 delegated technical decisions; 1 authorization pending
-- reviewer_verdict: PROMPT_CAPTAIN
+- captain_decisions: 4 delegated technical decisions; AUTH-1 Option A resolved
+- reviewer_verdict: PROCEED
 - Design Readiness Review: skipped - no risk trigger
 
 The installed `design-flow` delegate was unavailable, so this re-entry used the
@@ -330,12 +338,12 @@ framework.
 
 ### Metrics
 
-- status: gaps-noted
+- status: passed
 - duration_minutes: 30
 - iteration_count: 3
 - captain_decisions_count: 4
-- open_decisions_count: 1
-- reviewer_verdict: PROMPT_CAPTAIN
+- open_decisions_count: 0
+- reviewer_verdict: PROCEED
 
 <!-- section:hand-off-to-plan -->
 ### Hand-off to Plan
@@ -379,14 +387,16 @@ design_constraints:
     assertion: Preserve the existing docs/ship-flow/README.md workflow-dir guard and local tracker #24; keep dispatch duplication as issue #21 evidence only.
     rationale_decision: D3
     source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
-open_decisions:
+open_decisions: []
+resolved_decisions:
   - id: AUTH-1
     owner: Captain
-    question: Authorize exactly one materially revised first real repository-root run, or treat the Bet as consumed and abandon/reconsider the helper strategy?
-    options:
-      - authorize_one_revised_run_then_costly_no_on_failure
-      - bet_consumed_abandon_or_reconsider
-    em_recommendation: authorize_one_revised_run_then_costly_no_on_failure
+    selection: authorize_one_revised_run_then_costly_no_on_failure
+    receipt_status: prior_receipt_acceptance_invalid
+    precondition: materially revised implementation passes every focused fail-loud check
+    authorized_action: exactly one new real repository-root adopter-discovery run
+    failure_route: any route, diagnostic, or nonzero status routes directly to strategy-level costly_no
+    retry_policy: no additional patch or run
 artifact_paths:
   - path: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
   - path: docs/ship-flow/fixture-pollution-discovery-helpers/index.md
@@ -403,16 +413,18 @@ artifact_paths:
   top-level production `lib/*.sh` plus `bin/*.sh`, testing archive and done
   decoys independently, and injecting fake-`find` failures against focused
   fixture roots for adopter and all density traversal labels.
-- DONE: Preserve the consumed frozen receipt as immutable envelope-only audit,
-  prohibit design/reviewer discovery execution, and leave exactly AUTH-1 for
-  the Captain: authorize one materially revised run or consume the Bet and
-  abandon/reconsider.
+- DONE: Preserve the consumed frozen receipt as immutable envelope-only and
+  acceptance-invalid, prohibit design/reviewer discovery execution, and record
+  the Captain's AUTH-1 Option A selection: exactly one revised run after every
+  focused fail-loud check passes, then direct `costly_no` on any route,
+  diagnostic, or nonzero status with no additional patch or run.
 - DONE: Handoff schema, D-reference, and readiness validators passed; the fresh
   context-free non-UI reviewer passed all seven factors and returned
-  PROMPT_CAPTAIN because AUTH-1 is deliberately open.
+  PROMPT_CAPTAIN while AUTH-1 was open; the Captain's Option A selection resolves
+  the design gate to PROCEED without changing D1-D4.
 
 ### Summary
 
 The revised design keeps the narrow pruning primitive and closes the silent
 traversal-failure seams with caller-side capture and explicit exit contracts.
-Technical design is complete; AUTH-1 alone requires Captain authorization.
+Technical design and AUTH-1 authorization are complete; the gate may proceed.
