@@ -26,6 +26,7 @@ stage_outputs:
   execute: execute.md
   verify: verify.md
   review: review.md
+  ship: ship.md
 ---
 
 <!-- section:stage-artifact-links -->
@@ -37,6 +38,7 @@ stage_outputs:
 | execute | [execute.md](execute.md) |
 | verify | [verify.md](verify.md) |
 | review | [review.md](review.md) |
+| ship | [ship.md](ship.md) |
 <!-- /section:stage-artifact-links -->
 
 ## Problem
