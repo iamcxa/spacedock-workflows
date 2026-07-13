@@ -23,7 +23,6 @@
 <!-- section:later -->
 | Idea | Size | Claim | Source |
 | --- | --- | --- | --- |
-| fixture-pollution-discovery-helpers | S | spacedock status --discover and discover-adopter-skills.sh both match plugin test fixtures when run inside the plugin repo, emitting bogus workflow candidates / carlove-shaped routing; helpers need fixture-tree exclusion | pitch 1 |
 | shape-confirm-instance-awareness | S | shape-confirm.sh and allocate-id.sh ignore the workflow README id-style declaration, write legacy status sharp (3 sites), and never absorb an existing flat entity — confirm path should be instance-aware | pitch 1 |
 | root-readme-stale-claims | S | Root README still claims 0.7.0 adoption gap and spacedock 0.22.0; refresh compatibility/adoption prose once PRODUCT.md carries canonical positioning | pitch 1 |
 <!-- /section:later -->
@@ -45,4 +44,5 @@
 | Entity | Title | Shipped |
 | --- | --- | --- |
 | 1-self-adoption-dogfood-bootstrap | Self-adoption dogfood bootstrap — canonical docs + doc-impact gate | 2026-07-12 (PR #14) |
+| fixture-pollution-discovery-helpers | Fixture-tree exclusion for discovery helpers — fixture trees are pruned and traversal errors fail loud | 2026-07-13 (PR pending) |
 <!-- /section:shipped -->
