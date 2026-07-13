@@ -1,6 +1,6 @@
 ---
 title: Deterministic migration receipts and merge-parent semantics
-status: design
+status: plan
 source: "RoboRev job 40 exact-head review of C14"
 started: 2026-07-13T09:46:16Z
 completed:
