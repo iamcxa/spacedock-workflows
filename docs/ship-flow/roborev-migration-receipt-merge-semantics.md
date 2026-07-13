@@ -1,12 +1,12 @@
 ---
 title: Deterministic migration receipts and merge-parent semantics
-status: shape
+status: design
 source: "RoboRev job 40 exact-head review of C14"
 started: 2026-07-13T09:46:16Z
 completed:
 verdict:
 score:
-worktree:
+worktree: .worktrees/spacedock-ensign-roborev-migration-receipt-merge-semantics
 issue:
 pr:
 pattern: pitch
