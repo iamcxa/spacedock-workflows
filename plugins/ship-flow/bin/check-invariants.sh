@@ -129,6 +129,50 @@ check_preamble_regrowth() {
   return "$fail"
 }
 
+check_discovery_exclusions() {
+  local lib_dir="${ROOT}/plugins/ship-flow/lib"
+  local bin_dir="${ROOT}/plugins/ship-flow/bin"
+  local helper="${lib_dir}/discovery-exclusions.sh"
+  local consumers=(
+    "${lib_dir}/discover-adopter-skills.sh"
+    "${lib_dir}/density-classify.sh"
+  )
+  local fail=0
+  local consumer
+
+  if [ ! -f "$helper" ]; then
+    echo "ERROR [discovery-exclusions]: missing shared helper: $helper" >&2
+    fail=1
+  fi
+
+  for consumer in "${consumers[@]}"; do
+    if [ ! -f "$consumer" ]; then
+      echo "ERROR [discovery-exclusions]: missing direct consumer: $consumer" >&2
+      fail=1
+    elif ! grep -qE '^[[:space:]]*(source|\.)[[:space:]]+.*/discovery-exclusions\.sh' "$consumer"; then
+      echo "ERROR [discovery-exclusions]: direct consumer does not source discovery-exclusions.sh: $consumer" >&2
+      fail=1
+    fi
+  done
+
+  # Production marker definitions are top-level lib/bin scripts only. Do not
+  # recurse into __tests__/test-fixtures or infer consumers from unrelated find
+  # walkers.
+  local production_scripts=("${lib_dir}"/*.sh "${bin_dir}"/*.sh)
+  local marker marker_pattern production_count helper_count
+  for marker in __tests__ test-fixtures; do
+    marker_pattern="-name[[:space:]]+['\"]?${marker}(['\"]|[[:space:]]|$)"
+    production_count=$({ grep -hoE -- "$marker_pattern" "${production_scripts[@]}" 2>/dev/null || true; } | wc -l | tr -d ' ')
+    helper_count=$({ grep -oE -- "$marker_pattern" "$helper" 2>/dev/null || true; } | wc -l | tr -d ' ')
+    if [ "$production_count" != "1" ] || [ "$helper_count" != "1" ]; then
+      echo "ERROR [discovery-exclusions]: '-name $marker' must have exactly one production definition, in discovery-exclusions.sh (production=$production_count helper=$helper_count)" >&2
+      fail=1
+    fi
+  done
+
+  return "$fail"
+}
+
 check_section_tag_coverage() {
   # DC-8 — Principle 5a: every H2/H3 in active entity must be wrapped in <!-- section:tag --> pair.
   # Stack-based awk walker; nesting allowed (sharp-output → problem → scope).
@@ -1794,6 +1838,7 @@ if [ -n "$SINGLE_CHECK" ]; then
   case "$SINGLE_CHECK" in
     skill-count) check_skill_count; exit $? ;;
     preamble-regrowth) check_preamble_regrowth; exit $? ;;
+    discovery-exclusions) check_discovery_exclusions; exit $? ;;
     section-tag-coverage) check_section_tag_coverage; exit $? ;;
     flow-map-coverage) check_flow_map_coverage; exit $? ;;
     direct-read-static) check_direct_read_static; exit $? ;;
@@ -1852,6 +1897,7 @@ fi
 # Full run — all checks
 check_skill_count || FAIL=1
 check_preamble_regrowth || FAIL=1
+check_discovery_exclusions || FAIL=1
 check_section_tag_coverage || FAIL=1
 check_flow_map_coverage || FAIL=1
 check_direct_read_static || FAIL=1

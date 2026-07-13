@@ -230,6 +230,19 @@ dispatch the first officer or run it directly:
 spacedock claude
 ```
 
+### Instance discovery guard
+
+This repository contains workflow-shaped test fixtures. For every `spacedock
+status` call here, bypass auto-discovery and select the real instance explicitly:
+
+```sh
+spacedock status --workflow-dir docs/ship-flow <status arguments>
+```
+
+Track removal of this workaround in [#24](https://github.com/iamcxa/spacedock-workflows/issues/24).
+Until that issue is resolved, do not use `spacedock status --discover` to select
+this instance.
+
 ## Feature Template
 
 ```yaml
