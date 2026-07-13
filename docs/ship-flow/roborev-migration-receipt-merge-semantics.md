@@ -191,18 +191,23 @@ not begin until design ratifies them.
 4. A commit containing both unpaired entity deletions and additions in the same
    workflow is ambiguous. It must account for every path with either a
    migration pair or explicit independent `retire`/`create` disposition, or
-   split genuine retirement and creation into separate commits. Pure
-   addition-only and deletion-only commits retain their existing exemption.
+   split genuine retirement and creation into separate commits. In a
+   single-parent commit, pure addition-only and deletion-only histories retain
+   their existing exemption. Merge commits use the completeness rule below.
    Independent dispositions are an explicit structural waiver, not proof that
    two operations are unrelated. They prevent accidental ambiguity but cannot
    stop a committer who intentionally authors a false receipt under the current
    unauthenticated provenance contract.
 5. Completeness is derived, not self-declared. For every parent, C14 computes a
-   no-rename entity-path diff against the result. Across the workflow, if both
-   deletion and addition candidates exist, every deleted `(parent, path)` must
-   appear exactly once as a `migrate` source or `retire` source, and every added
-   result path must appear exactly once as a `migrate` result or `create`
-   result. Any unclassified candidate fails `receipt-incomplete`. A false
+   no-rename entity-path diff against the result. In a multi-parent commit it
+   first removes result paths whose exact `(existence, status)` is inherited
+   from any parent. It then requires every remaining deleted `(parent, path)`
+   to appear exactly once as a `migrate` source or `retire` source, regardless
+   of whether an addition also exists. Every remaining added result path is
+   deduplicated across parent diffs and appears exactly once as a `migrate`
+   result or `create` result. Any unclassified candidate fails
+   `receipt-incomplete`. An exact inherited result needs no operation receipt,
+   preserving ordinary merge behavior without duplicate receipts. A false
    independent disposition remains the explicit waiver above, but silent
    source-parent omission is impossible.
 6. Layout identity, equal frontmatter ID, and Git rename similarity may produce
@@ -331,6 +336,9 @@ parents with `M=present(plan)` are resolution-only and must prove the
 - **W1 completeness:** a merge omitting a parent-side deletion from its source
   set fails `receipt-incomplete`; explicitly classifying that candidate as
   independent retirement is accepted only as the documented structural waiver.
+  The matrix includes a deletion where the result path already exists in every
+  parent: the result is inherited, but the separate disappearing old path still
+  requires `migrate` or `retire` classification.
 - **W1 compatibility:** a pre-contract migration reachable only in main history
   is not scanned; an unmerged in-range legacy migration fails with an actionable
   amend/split diagnostic rather than falling back to similarity.
@@ -547,6 +555,11 @@ graph LR
   the candidate set, omissions fail `receipt-incomplete`, source count is
   bounded by parent count, and Shape Report language matches the explicit
   unauthenticated-waiver trust boundary.
+- REVIEW: Exact-commit RoboRev design job 44 reviewed `6c22082` and returned
+  FAIL. Its valid conditional-coverage gap is absorbed: merge deletions are
+  always classified, non-inherited result additions are deduplicated and
+  classified, exact inherited results remain receipt-free, and single-parent
+  pure add/delete exemptions are stated separately.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
@@ -560,7 +573,7 @@ decisions routed to design.
 ### Metrics
 
 - status: passed
-- duration_minutes: 70
+- duration_minutes: 76
 - iteration_count: 0
 - path: sharp-only
 - open_contract_decisions_count: 4
