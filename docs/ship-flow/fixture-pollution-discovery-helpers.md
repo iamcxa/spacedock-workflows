@@ -7,7 +7,7 @@ completed:
 verdict:
 score:
 worktree:
-issue:
+issue: "#20"
 pr:
 ---
 
