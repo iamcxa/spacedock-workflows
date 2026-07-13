@@ -118,3 +118,26 @@ was performed.
 ### Summary
 
 Produced a bounded four-task implementation plan for one sourceable Bash helper, exactly two consumers, narrow invariants, and the documented one-shot acceptance stop gate. No implementation, status change, upstream filing, schema/API expansion, or worktree management was performed.
+
+## Stage Report: verify
+
+- DONE: Independently verify DC-1 through DC-6 with scoped fresh commands, TDD-ledger/evidence audit, diff/plan parity, full invariant coverage, and verdict-bearing claim records. DC-7 is non-replayable: validate only the frozen first-run receipt, commit ordering, exact static envelope reconstruction/193-byte hash, stderr empty hash, and no-after code mutation; never rerun repo-root discovery.
+  Fresh Bash 3.2/focused suites, ledger, named/full invariants, static envelope hashes, ordering, and no-after mutation were checked; repo-root discovery reruns remained zero.
+- DONE: Run the complete mandatory source-diff panel and ownership matrix: general external, silent failure, testing, maintainability, security, adversarial/cross-model per available tier, and the registry-triggered intent check.
+  Valid read-only rows found two blockers and one warning; schema was correctly context-only, and unavailable Claude/Gemini coverage is explicit Tier B degradation.
+- DONE: Emit a <=120-body-line verify.md with required claim records, panel coverage, TDD audit, UAT, non-UI render status, review log, zero/actual deferred findings, and Hand-off to Review. Run verify validators/invariants and fresh process cross-review; commit verify artifacts only.
+  `verify.md` records required VERIFIED=6 / NOT VERIFIED=2, failed/VETO with design dominance, zero TODO deferrals, and process cross-review PROCEED for honest feedback routing.
+- FAILED: DC-4 required claim.
+  `check-invariants.sh:159` scans only `lib/*.sh`, so the D3 audited `lib/bin` single-definition boundary can false-pass; route to execute.
+- FAILED: DC-7 required claim.
+  `discover-adopter-skills.sh:77` suppresses traversal failures, so the exact frozen header-only receipt cannot prove the no-helper-error condition; route to design and VETO.
+- SKIPPED: Runtime server preflight and Captain UAT.
+  No API/UI/e2e surface exists; focused CLI fixture probes are the live behavior checks and render fidelity is not applicable.
+
+### Summary
+
+Verification preserved all green focused evidence but rejected two required
+claims that can false-pass. The dominant DC-7 observability gap returns to
+design, with the DC-4 invariant scope and density-test warning routed to
+execute; no status, receipt, acceptance rerun, issue filing, or code edit was
+performed.
