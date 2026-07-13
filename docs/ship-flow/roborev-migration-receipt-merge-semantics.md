@@ -246,22 +246,30 @@ not begin until design ratifies them.
 6. Layout identity, equal frontmatter ID, and Git rename similarity may produce
    diagnostics, but none may establish migration identity or authorize a
    transition.
-7. A migration receipt only correlates paths. If status changes across the
-   pair, the normal workflow-graph and stage-entry/completion receipt checks
-   still apply.
+7. A migration or generation-reconciliation receipt only correlates identity.
+   If status changes across any source/result pair, the normal workflow-graph
+   and stage-entry/completion receipt checks still apply.
+8. Divergent computed generations at one exact path may converge only through
+   already validated retirement provenance or one explicit `reconcile` row.
+   `reconcile` lists every parent generation at that path and selects exactly
+   one listed generation for the result. It is an explicit unauthenticated
+   equivalence waiver for cherry-pick/backport histories, never inferred from
+   ID, layout, content, or patch similarity; a false alias has the same stated
+   trust limit as a false independent disposition.
 
 #### Provisional semantic envelope for design ratification
 
 The carrier may be a commit trailer or another commit-bound surface, but after
 parsing it must yield these fields. Design may change spelling, not meaning:
 
-| Field | `migrate` | `retire` | `create` |
-| --- | --- | --- | --- |
-| `version` | required, exactly `1` | required | required |
-| `operation` | `migrate` | `retire` | `create` |
-| `workflow` | required workflow slug | required | required |
-| `sources[]` | non-empty `(parent_oid, before_path)` set; at most one source per parent; sole parent may be implicit | non-empty source set | forbidden |
-| `after_path` | required | forbidden | required |
+| Field | `migrate` | `retire` | `create` | `reconcile` |
+| --- | --- | --- | --- | --- |
+| `version` | required, exactly `1` | required | required | required |
+| `operation` | `migrate` | `retire` | `create` | `reconcile` |
+| `workflow` | required workflow slug | required | required | required |
+| `sources[]` | non-empty `(parent_oid, before_path)` set; at most one source per parent; sole parent may be implicit | non-empty source set | forbidden | every divergent `(parent_oid, generation_key, path)` at one exact path |
+| `after_path` | required | forbidden | required | required; equal to every source path |
+| `selected_source` | forbidden | forbidden | forbidden | required; exactly one member of `sources[]` |
 
 All paths are normalized repository-relative paths under the declared
 `docs/<workflow>/` root: no absolute path, `..`, empty segment, workflow escape,
@@ -273,6 +281,11 @@ workflow fails before status validation. Design owns the exact line-length and
 message-size spelling; the shaped bound is 8 KiB per row and 64 KiB total
 receipt carrier, with an earlier changed-path-count cap.
 One operation cannot list more sources than the commit has parents.
+For `reconcile`, every listed generation key must equal C14's computed scan
+state for that parent/path, the source set must cover every divergent generation
+at the path, and the result inherits the selected source's key. Missing,
+invented, duplicate, or partial aliases fail `generation-conflict` before
+status validation.
 
 The provided emitter is a convenience and preflight validator, not an
 authority. Because C14 cannot authenticate its caller, manually authored syntax
@@ -358,14 +371,17 @@ on its branch or choose an unoccupied target path before the merge, not infer
 identity from ID, layout, or content.
 
 When direct parents carry different computed generations at the same path,
-C14 normalizes each generation separately. A result selecting generation G2
-may retire older G1 without a duplicate merge receipt only when another
-parent's scan state carries G1's validated retirement; G2 is then inherited
-from its contributing parent. Without that exact generation-matched retirement
-proof, the merge fails `generation-conflict` and must pre-align the parents.
+C14 normalizes each generation separately. For result generation G-selected,
+every non-selected generation G-other must have either exact validated
+retirement provenance in another parent's scan state or complete coverage in a
+`reconcile` row that selects G-selected. This rule is symmetric: selecting an
+older, newer, or cherry-picked generation changes no obligation. Without that
+proof or explicit alias, the merge fails `generation-conflict` and must
+pre-align the parents. A valid `reconcile` makes the result carry the selected
+generation key; it does not authorize any status edge.
 Generation equality never follows from equal path, ID, layout, status, or body;
 it follows only from the shared baseline/create key carried through explicit
-migrations.
+migrations or an explicit `reconcile` waiver.
 
 “Relevant parents” means all direct Git parents of `M`, never a caller-selected
 subset. For one logical feature, each direct parent contributes exactly one
@@ -456,8 +472,8 @@ absent parent with unavailable or unvalidated required history fails loud.
   split commit.
 - **W1 trust boundary:** a same-ID or visually similar pair independently
   disposed as retire/create is accepted as an explicit unauthenticated waiver;
-  the fixture and documentation must call this intentional structural-policy
-  scope, not adversarial protection.
+  a false `reconcile` alias has the same limit. Fixtures and documentation must
+  call both intentional structural-policy scope, not adversarial protection.
 - **W1 completeness:** a merge omitting a parent-side deletion from its source
   set fails `receipt-incomplete`; explicitly classifying that candidate as
   independent retirement is accepted only as the documented structural waiver.
@@ -473,8 +489,11 @@ absent parent with unavailable or unvalidated required history fails loud.
   source mappings in all cases still undergo raw coverage, resolution,
   uniqueness, and collision validation. A baseline legacy entity receives the
   implicit boundary generation; a merge with G1/G2 at the same path passes only
-  when G1's exact retirement provenance is present, otherwise it fails
-  `generation-conflict`.
+  when every non-selected generation has exact retirement provenance or a
+  complete explicit `reconcile` alias, otherwise it fails
+  `generation-conflict`. Cherry-picked/backported creates with different commit
+  keys fail without the alias and pass with a complete alias selecting either
+  generation; no content/ID inference is accepted.
 - **W1 compatibility:** a pre-contract migration reachable only in main history
   is not scanned; an unmerged in-range legacy migration fails with an actionable
   amend/split diagnostic rather than falling back to similarity.
@@ -512,6 +531,7 @@ absent parent with unavailable or unvalidated required history fails loud.
 | Explicit parent-qualified source set is the only cross-path identity | A low-similarity intentional migration is correlated; unrelated delete/add content is never similarity-paired |
 | Mixed operations require pair or explicit dispositions | Legitimate retirement plus creation is distinguishable from accidental ambiguity; a false disposition is documented as an unauthenticated waiver, not hidden protection |
 | Raw mapping coverage precedes globally normalized all-parent logical states | An omitted named source fails before inheritance; a novel status stays resolution-only; only an already validated in-range retirement suppresses a duplicate retirement candidate |
+| Explicit generation reconciliation covers every divergent computed key | Cherry-picked creates can converge without ID/content inference, while a partial or invented alias fails `generation-conflict` |
 | Receipt correlation does not authorize status | A receipt-bearing skipped stage still fails the workflow graph |
 | Scan-bound activation | Existing main history is not retroactively rejected, while every still-unmerged ambiguous commit is repaired explicitly |
 | Result equal to any parent is inherited | Ordinary merge and absent-first-parent inheritance pass without duplicate receipt |
@@ -608,7 +628,10 @@ graph LR
   final advisory panel and W4/AC-3 cannot claim completion until the entity
   records the external sanctioned-transition receipt. No mock/ignore path is
   permitted because that would conceal the exact stale-state finding the
-  prerequisite exists to remove.
+  prerequisite exists to remove. The sanctioned FO transition writes a
+  separate state commit on the current feature branch before the final panel;
+  it does not require merge-to-main authority or wait for this implementation
+  to land, so the dependency is ordered rather than circular.
 - **Implementation base:** C14 branch through RoboRev job 40 / HEAD
   `d658eb5c`; design and plan must re-resolve the live head before editing.
 
@@ -650,8 +673,9 @@ graph LR
   1. Receipt carrier and canonical grammar, including the convenience emitter
      and how C14 distinguishes missing, duplicate, and malformed receipts while
      preserving the explicit non-authentication boundary and bounding parser
-     input. Ratify or amend the provisional semantic envelope, 8 KiB-row/64
-     KiB-total bounds, and rebase/cherry-pick refresh behavior.
+     input. Ratify or amend the provisional semantic envelope, including the
+     complete same-path `reconcile` alias, 8 KiB-row/64 KiB-total bounds, and
+     rebase/cherry-pick refresh behavior.
   2. Ratify the operation envelope for mixed additions/deletions: migration
      pairs plus independent retire/create dispositions, covering legacy flat,
      folder, no-ID, and ID-changing histories without implicit identity, plus
@@ -756,6 +780,13 @@ graph LR
   pass independently. Its proposed FO-dependency mock is rejected because live
   full invariants already pass without reading the sibling lifecycle state;
   only the final advisory panel waits for the real sanctioned receipt.
+- REVIEW: RoboRev/Gemini job 50 reviewed `4a337f9` and returned FAIL. Its
+  cherry-pick and asymmetric-generation findings are absorbed through a
+  complete explicit same-path `reconcile` alias and one symmetric obligation
+  for every non-selected generation; identity remains receipt-based rather than
+  ID/content inferred. Its FO deadlock premise is rejected: the sanctioned FO
+  transition is a separate current-branch state commit available before the
+  final panel, not a main-only post-merge action.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
