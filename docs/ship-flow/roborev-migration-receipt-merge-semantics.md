@@ -666,7 +666,12 @@ absent parent with unavailable or unvalidated required history fails loud.
   this pitch neither edits nor bypasses it. The advisory panel is invoked once
   at W4 after that receipt; it is not a per-commit CI check, so earlier developer
   commits keep their ordinary local/CI signal rather than producing expected
-  red panel runs. FO invokes and records the panel's job ID plus reviewed SHA in
+  red panel runs. Immediately before invocation, FO runs the clean worktree,
+  index, and untracked-file checks specified below; a failure prevents panel
+  creation and therefore produces no review receipt. Test and panel runners
+  must write transient output outside the repository or beneath an already
+  ignored path such as `.context/`; Ship-Flow does not dynamically exempt
+  untracked output. FO invokes and records the panel's job ID plus reviewed SHA in
   the verify artifact, and ship-review refuses a GO verdict without that exact
   receipt. This is Ship-Flow enforcement, not a new required GitHub status
   check or hook. The evidence/state commit that records the receipt may follow
@@ -690,8 +695,10 @@ absent parent with unavailable or unvalidated required history fails loud.
   implementation, test, and root-canonical path, together with exact validation
   of the recorded frozen-tree manifest, must prove the reviewed code tree
   unchanged. These commands are separate: committed allowlisted evidence cannot
-  hide staged, unstaged, or untracked implementation. Any failure or other
-  post-review change invalidates the panel and requires a fresh reviewed SHA.
+  hide staged, unstaged, or untracked implementation. Ship-review repeats the
+  clean checks after the allowlisted evidence/state commit and before accepting
+  its receipt. Any failure or other post-review change invalidates the panel and
+  requires a fresh reviewed SHA.
 
 ## Mechanism-to-Value Evidence Matrix
 
@@ -1001,6 +1008,15 @@ graph LR
   untracked local residue. Selecting the source whose status is inherited, or
   legally pre-aligning the intended generation, resolves the alleged reconcile
   deadlock without adding heuristic identity.
+- REVIEW: RoboRev/Gemini job 56 reviewed `3f4f8e4` and returned FAIL. Its valid
+  ordering concern is absorbed: FO clean-checks before creating the panel,
+  verification runners write transient output outside the repository or under
+  an ignored path, and ship-review repeats cleanliness after the receipt commit.
+  Its boundary override is rejected because the existing fail-loud
+  rebase/squash remedy intentionally prevents caller-selected scan exclusion.
+  Its shallow-clone premise is rejected because W4 is a one-time local FO panel
+  over the just-reviewed local head, not a CI job; a missing reviewed object
+  already fails the ancestor check and requires a fresh local panel.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
