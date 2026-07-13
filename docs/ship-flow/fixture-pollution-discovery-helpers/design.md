@@ -286,7 +286,7 @@ findings:
   - reviewer: routing-preflight
     severity: PASS
     route_to: plan
-    evidence: D1-D4 remain internal Bash mechanics with no data-model, public-interface, migration, UI, or multi-domain change.
+    evidence: D1-D4 remain internal Bash mechanics with no data-model, public-interface, storage-schema, UI, or multi-domain change.
 ```
 
 Design Readiness Review: skipped - no risk trigger. The separate fresh
@@ -294,20 +294,33 @@ seven-factor non-UI cross-review remains mandatory.
 
 ## Adversarial Cross-Review
 
-Pending fresh read-only review after validators. The reviewer must not run or
-emulate repository-root discovery and must assess feasibility, executable
-scope, quality, DC adequacy, canonical sync, reverse-audit coverage, and
-constraint coverage. Because AUTH-1 is deliberately open, the expected
-stage-gate verdict is PROMPT_CAPTAIN unless the reviewer finds a design VETO.
+A fresh context-free reviewer received the design, shape/verify authority, and
+static source paths under a read-only, no-tests, no-discovery contract. It
+returned no design defect and the following evidence:
+
+| Non-UI factor | Result | Evidence |
+| --- | --- | --- |
+| Feasibility | PASS | Bash 3.2 caller capture preserves raw status/diagnostics and rejects partial data (`design.md:118-150`), directly addressing adopter and all four density seams. |
+| Executable scope | PASS | One sourceable primitive, exactly two consumers, and narrow invariant/test changes are bounded (`design.md:97-126`, `design.md:343-392`). |
+| Quality | PASS | Adopter and density each have exact successful, healthy-negative, and operational-error conventions with no output on error (`design.md:152-185`). |
+| DC adequacy | PASS | D4 closes verify DC-7; D3 closes DC-4; archive and done regress independently (`verify.md:31-33,112-119`; `design.md:110-126,205-228`). |
+| Canonical sync | PASS | PRODUCT/ARCHITECTURE skips match an internal Bash caller-contract repair (`design.md:36-47`; `ARCHITECTURE.md:54-109`). |
+| Reverse-audit previous stage | PASS | Shape C1-C3 and every verify-return item map to D1-D4 or execute evidence (`design.md:260-273`; `shape.md:48-53`). |
+| Constraint Coverage | PASS | All traversal paths, exact rc/diagnostics, lib+bin scope, independent branches, and receipt immutability are pinned; AUTH-1 is the sole open decision (`design.md:104-126,172-251,346-389`). |
+
+Verdict: **PROMPT_CAPTAIN**.
+
+Coaching note: keep AUTH-1 strictly as risk authorization; the engineering
+contract is resolved and no worker may infer the Captain's selection.
 
 ## Design Report
 
 - status: gaps-noted
-- stage_cost: one Codex design worker; fresh reviewer pending
+- stage_cost: one Codex design worker plus one fresh read-only reviewer
 - iterations: 3 (cycle-2 narrow revision plus verify-return cycle)
 - contradictions_resolved: 4 technical decisions resolved
 - captain_decisions: 4 delegated technical decisions; 1 authorization pending
-- reviewer_verdict: PROMPT_CAPTAIN pending fresh review
+- reviewer_verdict: PROMPT_CAPTAIN
 - Design Readiness Review: skipped - no risk trigger
 
 The installed `design-flow` delegate was unavailable, so this re-entry used the
@@ -394,8 +407,9 @@ artifact_paths:
   prohibit design/reviewer discovery execution, and leave exactly AUTH-1 for
   the Captain: authorize one materially revised run or consume the Bet and
   abandon/reconsider.
-- PENDING: Fresh design validators and context-free non-UI cross-review; update
-  this report with evidence before commit.
+- DONE: Handoff schema, D-reference, and readiness validators passed; the fresh
+  context-free non-UI reviewer passed all seven factors and returned
+  PROMPT_CAPTAIN because AUTH-1 is deliberately open.
 
 ### Summary
 

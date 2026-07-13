@@ -141,3 +141,29 @@ claims that can false-pass. The dominant DC-7 observability gap returns to
 design, with the DC-4 invariant scope and density-test warning routed to
 execute; no status, receipt, acceptance rerun, issue filing, or code edit was
 performed.
+
+## Stage Report: design (cycle 3)
+
+- DONE: Preserve the narrow sourceable Bash-only pruning primitive and add an
+  end-to-end fail-loud caller contract. Adopter probes now design for explicit
+  match/no-match/error; density designs every S1/S2/S3 traversal as value/error;
+  any traversal failure must emit diagnostics, exit 2, and publish no accepted
+  YAML or classification.
+- DONE: Resolve the verify hand-off gaps in the revised design: the production
+  marker invariant spans top-level `lib/*.sh` and `bin/*.sh` only, archive and
+  done decoys regress independently, and controlled fake-`find` injection on
+  focused roots proves adopter and density failures without repo-root discovery.
+- DONE: Preserve the frozen receipt unchanged and consumed as envelope-only,
+  record #21 and #24 only as existing evidence, and leave exactly AUTH-1 to the
+  Captain: authorize one materially revised first run or consume the Bet and
+  abandon/reconsider the helper strategy.
+- DONE: Run design-only handoff, D-reference, and readiness validators. All
+  passed; readiness correctly reported `skipped/no-risk-trigger`.
+- DONE: A fresh context-free read-only non-UI reviewer passed all seven factors
+  and returned PROMPT_CAPTAIN because AUTH-1 is deliberately Captain-owned.
+
+### Summary
+
+Cycle 3 closes the silent traversal-failure contract while keeping the helper
+narrow and Bash 3.2-compatible. Technical design is complete; only the
+Captain-owned one-run authorization remains open.
