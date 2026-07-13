@@ -197,10 +197,18 @@ not begin until design ratifies them.
    two operations are unrelated. They prevent accidental ambiguity but cannot
    stop a committer who intentionally authors a false receipt under the current
    unauthenticated provenance contract.
-5. Layout identity, equal frontmatter ID, and Git rename similarity may produce
+5. Completeness is derived, not self-declared. For every parent, C14 computes a
+   no-rename entity-path diff against the result. Across the workflow, if both
+   deletion and addition candidates exist, every deleted `(parent, path)` must
+   appear exactly once as a `migrate` source or `retire` source, and every added
+   result path must appear exactly once as a `migrate` result or `create`
+   result. Any unclassified candidate fails `receipt-incomplete`. A false
+   independent disposition remains the explicit waiver above, but silent
+   source-parent omission is impossible.
+6. Layout identity, equal frontmatter ID, and Git rename similarity may produce
    diagnostics, but none may establish migration identity or authorize a
    transition.
-6. A migration receipt only correlates paths. If status changes across the
+7. A migration receipt only correlates paths. If status changes across the
    pair, the normal workflow-graph and stage-entry/completion receipt checks
    still apply.
 
@@ -214,7 +222,7 @@ parsing it must yield these fields. Design may change spelling, not meaning:
 | `version` | required, exactly `1` | required | required |
 | `operation` | `migrate` | `retire` | `create` |
 | `workflow` | required workflow slug | required | required |
-| `sources[]` | non-empty `(parent_oid, before_path)` set; sole parent may be implicit | non-empty source set | forbidden |
+| `sources[]` | non-empty `(parent_oid, before_path)` set; at most one source per parent; sole parent may be implicit | non-empty source set | forbidden |
 | `after_path` | required | forbidden | required |
 
 All paths are normalized repository-relative paths under the declared
@@ -226,6 +234,7 @@ the commit's parent set, missing before blob, missing after blob, or wrong
 workflow fails before status validation. Design owns the exact line-length and
 message-size spelling; the shaped bound is 8 KiB per row and 64 KiB total
 receipt carrier, with an earlier changed-path-count cap.
+One operation cannot list more sources than the commit has parents.
 
 The provided emitter is a convenience and preflight validator, not an
 authority. Because C14 cannot authenticate its caller, manually authored syntax
@@ -247,8 +256,9 @@ skip remains a separate C14 boundary.
 
 Diagnostics use stable categories so fixtures assert causes rather than prose:
 `receipt-missing`, `receipt-malformed`, `receipt-conflict`,
-`receipt-semantic-invalid`, `parent-unavailable`, `parent-path-collision`, and
-`transition-illegal`. Design supplies exact messages and carrier bounds.
+`receipt-semantic-invalid`, `receipt-incomplete`, `parent-unavailable`,
+`parent-path-collision`, and `transition-illegal`. Design supplies exact
+messages and carrier bounds.
 
 This is the smallest contract that both recognizes a simultaneous path/ID
 change and refuses to guess whether an unrelated deletion plus addition is a
@@ -318,6 +328,9 @@ parents with `M=present(plan)` are resolution-only and must prove the
   disposed as retire/create is accepted as an explicit unauthenticated waiver;
   the fixture and documentation must call this intentional structural-policy
   scope, not adversarial protection.
+- **W1 completeness:** a merge omitting a parent-side deletion from its source
+  set fails `receipt-incomplete`; explicitly classifying that candidate as
+  independent retirement is accepted only as the documented structural waiver.
 - **W1 compatibility:** a pre-contract migration reachable only in main history
   is not scanned; an unmerged in-range legacy migration fails with an actionable
   amend/split diagnostic rather than falling back to similarity.
@@ -341,6 +354,7 @@ parents with `M=present(plan)` are resolution-only and must prove the
 | --- | --- |
 | Explicit parent-qualified source set is the only cross-path identity | A low-similarity intentional migration is correlated; unrelated delete/add content is never similarity-paired |
 | Mixed operations require pair or explicit dispositions | Legitimate retirement plus creation is distinguishable from accidental ambiguity; a false disposition is documented as an unauthenticated waiver, not hidden protection |
+| Candidate coverage is computed from every parent diff | An omitted source parent fails `receipt-incomplete` instead of disappearing from transition validation |
 | Receipt correlation does not authorize status | A receipt-bearing skipped stage still fails the workflow graph |
 | Scan-bound activation | Existing main history is not retroactively rejected, while every still-unmerged ambiguous commit is repaired explicitly |
 | Result equal to any parent is inherited | Ordinary merge and absent-first-parent inheritance pass without duplicate receipt |
@@ -478,7 +492,7 @@ graph LR
   2. Ratify the operation envelope for mixed additions/deletions: migration
      pairs plus independent retire/create dispositions, covering legacy flat,
      folder, no-ID, and ID-changing histories without implicit identity, plus
-     the scan-bound activation policy.
+     computed candidate completeness and the scan-bound activation policy.
   3. Ratify per-parent normalization, especially explicit parent-qualified
      source sets, unlisted old-path occupants, both-source-and-result collision,
      deduplication, and missing parent/tree failure behavior.
@@ -497,8 +511,9 @@ graph LR
   similarity, layout, and ID inference are not authority.
 - DONE: Defined the ambiguity rule: mixed unpaired retirement/addition in one
   workflow must be paired, explicitly disposed as independent operations, or
-  split, preventing delete/add status evasion without breaking legitimate
-  atomic maintenance.
+  split. This distinguishes accidental ambiguity without breaking legitimate
+  atomic maintenance; deliberate false dispositions remain an explicit
+  unauthenticated waiver rather than claimed evasion protection.
 - DONE: Defined all-parent semantics for inherited, pure-addition, and
   resolution-only results, including RoboRev job 40's absent-first-parent case,
   per-parent source/result collision handling, and parent-order independence;
@@ -527,6 +542,11 @@ graph LR
   authoritative source mapping; manual syntax equals emitter output; the
   appetite is an explicit eight days; five reviewable children separate parser,
   emitter, operations, normalization, and legality; C5 owns canonical sync.
+- REVIEW: Exact-commit RoboRev design job 43 reviewed `6f0574c` and returned
+  FAIL. Its valid findings are absorbed: every-parent no-rename diffs now derive
+  the candidate set, omissions fail `receipt-incomplete`, source count is
+  bounded by parent count, and Shape Report language matches the explicit
+  unauthenticated-waiver trust boundary.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
@@ -540,7 +560,7 @@ decisions routed to design.
 ### Metrics
 
 - status: passed
-- duration_minutes: 61
+- duration_minutes: 70
 - iteration_count: 0
 - path: sharp-only
 - open_contract_decisions_count: 4
