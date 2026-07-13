@@ -205,6 +205,15 @@ not begin until design ratifies them.
    keys. If a probe encounters a key already owned by another operation, C14
    uses that operation's computed generation/state during global normalization
    but never classifies the key a second time.
+   One computed generation may occupy at most one path in the merge result. If
+   a source owned by `migrate` also appears at another retained result path with
+   the same computed generation, C14 fails `generation-split`; it may not copy
+   one lineage into two entities. If scan state proves the retained occupant is
+   a distinct generation, that occupant normalizes only from parents carrying
+   that distinct generation: a parent key already claimed by `migrate` is
+   absent for the retained occupant and cannot be reused by a second feature.
+   If generation distinctness cannot be proved, C14 fails closed rather than
+   using path, ID, layout, or content to choose an interpretation.
    C14 checks raw mapping coverage before applying inheritance. Once a receipt
    names a source path for a result-bearing logical feature, every direct parent
    where that named source path exists in the parent but is absent from the
@@ -316,13 +325,19 @@ One operation cannot list more sources than the commit has parents.
 For `reconcile`, C14 resolves each listed parent's computed generation at
 its listed source path; users never transcribe generation keys. The source set
 must cover every divergent generation claimed to converge on the result, and the result inherits the selected
-parent's key and already validated status. Every non-selected source whose
+parent's key. The result status must exactly equal that selected source's
+already validated status; a mismatch fails `generation-conflict` before any
+reconciliation check. Every non-selected source whose
 status differs from the selected result must pass the same design-ratified
 reconciliation legality check as a non-matching same-generation parent; it
 does not require a duplicate result receipt, but it is not exempt from
 legality. An unvalidated selected status fails before aliasing. A missing,
 duplicate, or partial alias fails `generation-conflict`. Aliasing never
 authorizes a new status.
+The maintainer therefore selects the source whose validated status the merge
+actually inherits. If a different lineage is intended, that generation must be
+legally advanced or fed back before the reconcile merge; `reconcile` cannot
+select one generation while borrowing another source's status.
 
 The provided emitter is a convenience and preflight validator, not an
 authority. Because C14 cannot authenticate its caller, manually authored syntax
@@ -366,17 +381,28 @@ order and carries forward only operation outcomes it has already validated.
 The carried state includes the current logical generation, so a later create at
 a reused path resets absence provenance. An in-range parent retirement can
 therefore supply inherited-absence proof only to the same generation at a later
-merge. A parent outside the selected range contributes its tree snapshot as the
-trusted baseline but no retroactive retirement proof; baseline absence is never
-enough to suppress an in-range retirement candidate. Criss-cross and octopus
-merges require no additional merge-base selection, and pre-activation commits
-are neither traversed for receipts nor failed for lacking them.
+merge. A direct parent outside the selected range must be an ancestor of the
+unique boundary; otherwise C14 fails `parent-out-of-range`. Pre-boundary
+history is not independently generation-tracked. For an entity path present in
+both that parent and the boundary tree, C14 projects the boundary generation
+key onto the parent snapshot while retaining the parent's actual status for
+reconciliation legality. If the parent has the path but the boundary does not,
+C14 fails `parent-baseline-divergence` because it cannot infer which retired
+legacy generation the snapshot represents; the branch must be rebased or
+pre-aligned. If the parent lacks a path that is present at the boundary, it
+contributes ordinary absence without retirement provenance. Thus baseline
+absence never suppresses an in-range retirement candidate, and the trusted
+projection never fabricates a pre-activation retirement. Criss-cross and
+octopus merges require no additional merge-base selection, and pre-activation
+commits are neither traversed for receipts nor failed for lacking them.
 
 Diagnostics use stable categories so fixtures assert causes rather than prose:
 `receipt-missing`, `receipt-malformed`, `receipt-conflict`,
 `receipt-semantic-invalid`, `receipt-incomplete`, `parent-unavailable`,
-`parent-path-collision`, `generation-conflict`, `scan-boundary-unavailable`,
-`scan-boundary-ambiguous`, and `transition-illegal`.
+`parent-path-collision`, `parent-out-of-range`,
+`parent-baseline-divergence`, `generation-conflict`, `generation-split`,
+`scan-boundary-unavailable`, `scan-boundary-ambiguous`, and
+`transition-illegal`.
 Design supplies exact messages and carrier bounds. Every
 completeness/collision diagnostic identifies
 the inspected merge OID, logical result path or absent-result unit, contributing
@@ -472,6 +498,12 @@ operation is excluded from candidate creation for this probe and contributes
 only its owner operation's computed state. Thus `(P1,pathA)` can belong only to
 `migrate` while `(P2,pathA)` belongs only to `retire`; neither operation
 reclassifies the other's key during normalization.
+The same ownership rule prevents entity splitting. If `(P1,pathA)` migrates to
+`pathB` while another parent retains `pathA`, a retained `pathA` carrying the
+same generation fails `generation-split`. A retained `pathA` carrying a proven
+distinct generation is a separate feature fed only by that distinct
+generation; `(P1,pathA)` remains owned by the migration and contributes absent
+to the retained feature. Unknown lineage fails closed.
 
 1. **Inherited:** if `M`'s present result state equals the state in any direct
    normalized parent, the result is inherited. An absent result is inherited
@@ -576,15 +608,27 @@ absent parent with unavailable or unvalidated required history fails loud.
   keys fail without the alias and pass with a complete alias selecting either
   generation when the selected status has validated provenance. Divergent
   non-selected statuses follow ordinary inherited-state semantics; a novel or
-  unvalidated selected status fails. No content/ID inference is accepted.
+  unvalidated selected status fails, and a result status different from the
+  selected source fails before reconciliation. No content/ID inference is
+  accepted.
   Identical-content divergent parents prove `reconcile` remains allowed when
   Git reports zero changed entity paths, while more than one row for that exact
   result path fails the dedicated cap. A cross-path cherry-pick/backport passes
   with every `(parent,path)` listed in one reconcile row and fails when any
   contributing key is omitted.
+- **W1 split and boundary projection:** a merge where P1 migrates generation G
+  from A to B while P2 retains G at A fails `generation-split`; replacing P2's
+  occupant with a proven distinct generation permits A and B while proving
+  P1/A feeds only B. An out-of-range parent must be an ancestor of the unique
+  boundary. Shared paths project the boundary generation but preserve the
+  parent's actual status; parent-only paths fail
+  `parent-baseline-divergence`, and boundary-only paths contribute absence
+  without retirement provenance.
 - **W1 compatibility:** a pre-contract migration reachable only in main history
   is not scanned; an unmerged in-range legacy migration fails with an actionable
-  amend/split diagnostic rather than falling back to similarity.
+  amend/split diagnostic rather than falling back to similarity. A merge parent
+  outside the scan range but not ancestral to the boundary fails
+  `parent-out-of-range` and instructs the owner to rebase or pre-align.
 - **W2:** A no-conflict merge and an absent-first-parent merge whose result
   equals the second parent pass without a merge transition receipt; the same
   inherited transition is not reported twice. A same-generation
@@ -636,10 +680,18 @@ absent parent with unavailable or unvalidated required history fails loud.
   file) are evidence paths for this check; root `ARCHITECTURE.md`, `PRODUCT.md`,
   `ROADMAP.md`, root/workflow README files, implementation, and tests are not
   allowlisted. Exact comparison rejects traversal-like names, symlink/submodule
-  indirection, and prefix lookalikes. Finally, `git diff --quiet` over all
-  implementation, test, and root-canonical paths plus the recorded frozen-tree
-  manifest must prove the reviewed code tree unchanged. Any other post-review
-  change invalidates the panel and requires a fresh reviewed SHA.
+  indirection, and prefix lookalikes. It rejects local residue as well:
+  `git diff --quiet` must prove the worktree equals the index,
+  `git diff --cached --quiet` must prove the index equals `HEAD`, and
+  `git status --porcelain=v1 -z --untracked-files=all` must return an empty
+  byte stream. Ignored paths such as `.context/` remain outside that last
+  command by Git's ordinary ignore semantics. Finally,
+  `git diff --quiet "$reviewed_sha" HEAD -- <protected-pathspecs>` over every
+  implementation, test, and root-canonical path, together with exact validation
+  of the recorded frozen-tree manifest, must prove the reviewed code tree
+  unchanged. These commands are separate: committed allowlisted evidence cannot
+  hide staged, unstaged, or untracked implementation. Any failure or other
+  post-review change invalidates the panel and requires a fresh reviewed SHA.
 
 ## Mechanism-to-Value Evidence Matrix
 
@@ -940,6 +992,15 @@ graph LR
   code-tree check. The requested fallback legality policy is rejected because
   design ratification is the intentional next captain-gated stage, not a
   missing implementation default.
+- REVIEW: RoboRev/Gemini job 55 reviewed `ed5a301` and returned
+  `SEVERITY_THRESHOLD_MET`; direct Gemini/agy found additional actionable edge
+  cases. Those gaps are absorbed: a reconciled result must exactly match its
+  selected source's validated status; a source cannot split one generation
+  across two result paths; pre-boundary parents use an explicit boundary
+  projection or fail closed; and W4 separately rejects staged, unstaged, and
+  untracked local residue. Selecting the source whose status is inherited, or
+  legally pre-aligning the intended generation, resolves the alleged reconcile
+  deadlock without adding heuristic identity.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
