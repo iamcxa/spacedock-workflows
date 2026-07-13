@@ -31,8 +31,8 @@ Verified by: a mechanically validated migration receipt or stable identity contr
 **AC-2 — Merge status validation distinguishes inherited state from resolution-only mutation across all parents.**
 Verified by: regression fixtures cover ordinary inherited merges, an entity absent from the first parent but present in another parent, and a resolution status that differs from every parent.
 
-**AC-3 — The C14 branch can produce a fresh exact-head RoboRev receipt with no medium-or-higher code finding.**
-Verified by: targeted C14 tests, full invariant/shell/Node gates, and a `code_completion` panel whose reviewed head equals the branch head.
+**AC-3 — After the FO-owned lifecycle prerequisite is reconciled, the C14 branch can produce a fresh exact-head RoboRev receipt with no medium-or-higher code finding.**
+Verified by: the prerequisite's sanctioned transition receipt, targeted C14 tests, full invariant/shell/Node gates, and a `code_completion` panel whose reviewed head equals the branch head.
 
 <!-- section:pm-skill-receipts -->
 ```yaml
@@ -219,9 +219,12 @@ not begin until design ratifies them.
      cross-path identity still requires an explicit `migrate` mapping.
    - An absent result derives a `retire` candidate unless at least one parent
      contributes an inherited-absence proof: a validated earlier retirement of
-     the same logical feature in the active scan range. Mere never-presence in
-     an older or unrelated parent has no feature lineage and cannot suppress a
-     retirement candidate.
+     the same logical generation in the active scan range. A generation starts
+     at a validated appearance/create outcome, survives explicit migrations,
+     and closes at its validated retirement. A later create at the same path
+     starts a new generation and cannot reuse the prior generation's retirement
+     proof. Mere never-presence in an older or unrelated parent has no feature
+     lineage and cannot suppress a retirement candidate.
    Explicit `migrate`, `retire`, and `create` rows are never discarded by this
    suppression: every supplied source/result is still resolved, classified
    exactly once, and checked for duplicate classification, omitted mapped
@@ -231,10 +234,11 @@ not begin until design ratifies them.
    reclassifying an inherited absence or a resolution-only status as an
    operation.
    This suppression cannot manufacture an unreviewed deletion: absence carries
-   lineage only from an already validated in-range retirement, never from
-   parent ordering, a missing path snapshot, or an unscanned legacy commit. A
-   missing parent, tree, or required in-range history segment fails loud; it
-   never counts as inherited absence.
+   lineage only from an already validated in-range retirement of the same
+   generation, never from a retired predecessor at a reused path, parent
+   ordering, a missing path snapshot, or an unscanned legacy commit. A missing
+   parent, tree, or required in-range history segment fails loud; it never
+   counts as inherited absence.
 6. Layout identity, equal frontmatter ID, and Git rename similarity may produce
    diagnostics, but none may establish migration identity or authorize a
    transition.
@@ -288,15 +292,24 @@ in-range commits; Git similarity is not retained as a grandfather path. After
 the review range is selected, a missing required parent/tree object fails loud
 rather than being treated as absence.
 
+`origin/main` is the existing C14 protected-target contract and remains fixed
+for this repair; configurable release/hotfix targets are separate policy work,
+not an implicit environment override. An ambiguous best-base failure names all
+candidate OIDs and instructs the branch owner to rebase or squash onto the
+protected target to restore one boundary. No override may select a convenient
+base and silently exclude commits from validation.
+
 The selected scan boundary, not a pairwise or octopus merge base, also bounds
 absence provenance. C14 validates commits in the selected range in topological
 order and carries forward only operation outcomes it has already validated.
-An in-range parent retirement can therefore supply inherited-absence proof to a
-later merge. A parent outside the selected range contributes its tree snapshot
-as the trusted baseline but no retroactive retirement proof; baseline absence
-is never enough to suppress an in-range retirement candidate. Criss-cross and
-octopus merges require no additional merge-base selection, and pre-activation
-commits are neither traversed for receipts nor failed for lacking them.
+The carried state includes the current logical generation, so a later create at
+a reused path resets absence provenance. An in-range parent retirement can
+therefore supply inherited-absence proof only to the same generation at a later
+merge. A parent outside the selected range contributes its tree snapshot as the
+trusted baseline but no retroactive retirement proof; baseline absence is never
+enough to suppress an in-range retirement candidate. Criss-cross and octopus
+merges require no additional merge-base selection, and pre-activation commits
+are neither traversed for receipts nor failed for lacking them.
 
 Diagnostics use stable categories so fixtures assert causes rather than prose:
 `receipt-missing`, `receipt-malformed`, `receipt-conflict`,
@@ -327,6 +340,18 @@ parent is the same workflow path slot and participates unless that path is
 already claimed by a different operation, which fails `receipt-conflict`.
 Frontmatter ID, content, and layout never override either exact-path continuity
 or an explicit parent-qualified mapping.
+
+C14 protects lifecycle state for that exact workflow path slot, not body
+identity or full-content provenance (A2). Two parent occupants at the same
+exact path are therefore one logical slot for C14 unless scan-state generation
+records prove a retire-then-create boundary; same-status body replacement is
+outside this repair. Conversely, a migration target occupied in an unlisted
+parent cannot be simultaneously retired and overwritten by claiming that path
+in a second operation: the claims fail `receipt-conflict`. This fail-closed
+case is intentional because multiple unrelated old entities converging on one
+result is out of scope. The actionable remedy is to pre-align/retire the target
+on its branch or choose an unoccupied target path before the merge, not infer
+identity from ID, layout, or content.
 
 “Relevant parents” means all direct Git parents of `M`, never a caller-selected
 subset. For one logical feature, each direct parent contributes exactly one
@@ -362,9 +387,13 @@ unnamed old path remains unrelated and cannot create an inferred identity.
    normalized parent, the result is inherited. An absent result is inherited
    only from a parent whose absence carries the validated in-range retirement
    provenance defined by M1.5; never-presence is not inheritable. C14 does not
-   require a duplicate transition or operation receipt on the merge commit.
-   Any explicit operation row remains fully validated rather than being erased
-   by inheritance.
+   require a duplicate transition or operation receipt for the matching
+   parent's unchanged state. Before applying that suppression, every explicitly
+   mapped source still validates its own source-status → result-status edge and
+   stage-entry/completion receipt under M1.7. Thus a mapped `shape` source does
+   not bypass `shape -> plan` validation merely because an unlisted parent
+   already has the result path at `plan`. Any explicit operation row remains
+   fully validated rather than being erased by inheritance.
 2. **Pure addition:** a result is a pure addition only when the logical entity
    is absent from every parent at the result/source path and no migration
    receipt names a source in any parent.
@@ -423,9 +452,11 @@ absent parent with unavailable or unvalidated required history fails loud.
   `P1=present(shape), P2=absent-after-validated-retire, M=absent`: global
   normalization classifies the result as inherited absence and derives no
   duplicate retirement candidate. The negative twin makes P2 never-present
-  and requires M to classify P1's deletion. Explicit source mappings in both
-  cases still undergo raw coverage, resolution, uniqueness, and collision
-  validation.
+  and requires M to classify P1's deletion. A second negative twin retires one
+  generation, recreates a new generation at the same path on P1, and proves the
+  old retirement cannot suppress deletion of the new generation. Explicit
+  source mappings in all cases still undergo raw coverage, resolution,
+  uniqueness, and collision validation.
 - **W1 compatibility:** a pre-contract migration reachable only in main history
   is not scanned; an unmerged in-range legacy migration fails with an actionable
   amend/split diagnostic rather than falling back to similarity.
@@ -440,8 +471,11 @@ absent parent with unavailable or unvalidated required history fails loud.
   resolution-only—not create or migrate. That classification fixture is
   executable independently. Its separate legality assertion, including the
   `shape -> plan` verdict, is explicitly deferred until design ratifies the
-  policy and supplies the final pass/fail matrix; planning remains blocked
-  until then.
+  policy and supplies the final pass/fail matrix. A mapped-source variant proves
+  M1.7 still validates the mapped source edge even when another parent already
+  has `present(plan)`. Design is the immediate next stage and must ratify the
+  policy before plan, so these execute-stage assertions have no dependency
+  cycle.
 - **W4:** After design ratifies the legality policy and execute implements all
   W1-W3 assertions, run targeted C14 fixtures and the unmodified full
   invariant/shell/Node gates, then a `code_completion` panel whose reviewed
@@ -547,7 +581,10 @@ graph LR
 - **Pre-final-panel FO dependency:** advance
   `c14-fo-dispatch-contract` through the sanctioned lifecycle mechanism so job
   40's third, non-code stale-state finding cannot contaminate AC-3. This shape
-  does not perform or simulate that transition.
+  does not perform or simulate that transition. It is a blocking prerequisite
+  owned by FO, not a child of this entity: design and implementation may
+  proceed, but W4/AC-3 cannot claim completion until the entity records the
+  external sanctioned-transition receipt.
 - **Implementation base:** C14 branch through RoboRev job 40 / HEAD
   `d658eb5c`; design and plan must re-resolve the live head before editing.
 
@@ -594,14 +631,17 @@ graph LR
   2. Ratify the operation envelope for mixed additions/deletions: migration
      pairs plus independent retire/create dispositions, covering legacy flat,
      folder, no-ID, and ID-changing histories without implicit identity, plus
-     computed candidate completeness and the scan-bound activation policy.
+     raw-before-normalized candidate completeness, generation-scoped retirement
+     provenance/reset, and the scan-bound activation policy.
   3. Ratify per-parent normalization, especially explicit parent-qualified
      source sets, unlisted old-path occupants, both-source-and-result collision,
-     deduplication, and missing parent/tree failure behavior.
+     fail-closed occupied migration targets, absent-result parent-specific
+     probes, deduplication, and missing parent/tree failure behavior.
   4. Ratify parent provenance and legality: compare direct legality from every
      present parent against graph reachability and a receipt-selected source
      with reconciliation checks; preserve parent-order independence and the
-     absent-first-parent outcome in every option.
+     absent-first-parent outcome in every option, while validating every mapped
+     source edge before inherited-result suppression.
 - `pm_framing_output`: this file's `pm-skill-receipts` section.
 - route: `design` (`domain: schema`, `design_required: true`,
   `contract_decision_required: true`).
@@ -673,6 +713,17 @@ graph LR
   continuity identifies the workflow slot, while only a parent-qualified
   receipt can establish cross-path identity; a separately claimed exact path
   fails `receipt-conflict` instead of invoking heuristic identity.
+- REVIEW: Exact-commit RoboRev/Gemini job 48 and direct Gemini/agy reviewed
+  `60a8f3c` and returned FAIL. Two valid bypasses are absorbed: inherited
+  absence is now generation-scoped so a reused path cannot borrow a predecessor
+  retirement, and every mapped source edge validates before inherited-result
+  suppression. The target-path collision is explicitly fail-closed with a
+  pre-align/unused-path remedy because simultaneous unrelated convergence is
+  out of scope. Suggestions for ID/content identity, dynamic protected targets,
+  or an ambiguous-base override are rejected as scope/authority violations;
+  scan-bound `origin/main`, exact path-slot lifecycle, and fail-loud unique-base
+  selection remain deliberate C14 boundaries. AC-3 now names its external
+  FO-owned lifecycle receipt as a blocking W4 prerequisite, not entity work.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
