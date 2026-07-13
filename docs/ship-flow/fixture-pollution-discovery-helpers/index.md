@@ -312,3 +312,42 @@ harvest lessons, and the immutable acceptance boundary preserved.
 - canonical_docs_updated_count: 1
 - canonical_docs_skipped_count: 3
 - pr_number: not-created
+
+## Current-Head Correction Report — post-acceptance density repair
+
+This report supersedes the earlier **current-head** six-path byte-identity
+predicate without rewriting the historical execute/verify/review receipts at
+the heads where they were true.
+
+- BLOCKED AT `904599d`: agy found that density S2
+  `-exec grep -l "$WF_NAME" {} +` turned a healthy no-match grep rc 1 into find
+  rc 1 and classifier rc 2; there was no unpruned nonmatching `SKILL.md`
+  regression case.
+- RED: the focused density suite exited 1. Primary observed rc2 instead of 0,
+  emitted no `vacuum`, and wrote 129 bytes to stderr; `--is-high` observed rc2
+  instead of 1 with 129-byte stderr. The new operational grep-error guard
+  already passed RED.
+- REPAIRED AT `fc6ef1e`: density blob
+  `e5c9e12f3c205b1c7364bdadfff69946361fb882` became
+  `7098af017e1632d2c54b6a3be9a9911464cc11c3`; its test blob
+  `fe67604f6f705f43287d4a140b0331cd07bf041d` became
+  `f6de6e98bf712231f11d2a7185f2f21a256e4178`. Bash syntax passes and the
+  focused suite is 51 OK / 0 FAIL, including healthy no-match primary
+  rc0/`vacuum`/empty stderr, `--is-high` rc1/no stdout/empty stderr, and real
+  grep error rc2/no classification/raw `SKILL.md` stderr plus S2 context.
+- DC-10 CLOSURE: the sole accepted command remains
+  `plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` at `09:39:05Z`,
+  bound to frozen `1b3871f8`. Its in-repo runtime closure is only helper blob
+  `ce0447c9792b31038b912daa21deaf97bb5a8748` and discover-adopter blob
+  `2c183a1cd5c178f3f8f2c5fe7432acfacd96becc`, both identical at frozen and
+  `fc6ef1e`; applicable `check-invariants.sh` isolation remains blob
+  `5d21b50ad24faa6b052a43e0964a333627a3df61`.
+- SPLIT EVIDENCE: the receipt proves only that sole discover-adopter launch
+  (rc0, stdout193, stderr0, routes0). Density is a separate post-acceptance
+  repair lane and does not inherit the receipt. Repository-root discovery,
+  emulation, reconstruction, and indirect invocation remain permanently
+  forbidden.
+- EM: `code/test repair fc6 closes agy findings 1-2; density suite is now
+  51/51; signal trap remains accepted nonblocking.`
+- MERGE-TIME GATES: final agy review and current-head CI are PENDING, not
+  passed. Merge remains held until both report clean.
