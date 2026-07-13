@@ -84,3 +84,44 @@ open_decisions: []
 next_action: "ship-final preflight after review artifact satisfies C15"
 
 ```
+
+## fo-20260713T110924Z-verify-proceed-final-coherence
+
+```yaml receipt
+receipt_id: fo-20260713T110924Z-verify-proceed-final-coherence
+created_at: "2026-07-13T11:09:24Z"
+actor: "first-officer"
+transition:
+  from: verify
+  to: ship
+  trigger: verify-proceed-final-coherence
+decision: self-approved
+verdict: PROCEED
+rule_source: plugins/ship-flow/skills/ship-verify/SKILL.md
+evidence:
+  verify_artifact: verify.md
+  claim_records: "required VERIFIED=11 NOT VERIFIED=0 INCONCLUSIVE=0"
+  final_coherence: "945bff9 aligns Quality Gate and Knowledge Capture with approved DC-10 isolation exception"
+  clean_scope: "six frozen paths byte-identical; shared check-invariants blob 5d21b50 with only three #20 hunks beyond origin/main"
+  cross_review_verdict: PROCEED
+  science_officer_em: "final review gate conditions resolved; bounded static confirmation PASS"
+  acceptance_receipt: "original frozen commit 1b3871f8; sole launch rc0 stdout193 stderr0 routes0; replay forbidden"
+preconditions:
+  - name: verify.md remains passed with eleven required claims
+    status: pass
+  - name: Quality Gate and DC-10 use one coherent isolation model
+    status: pass
+  - name: independent review and EM conditions are resolved
+    status: pass
+  - name: immutable sole-run receipt remains intact
+    status: pass
+blocker_scan:
+  stale_seven_path_claim: none
+  failed_static_recheck: none
+  unresolved_review_veto: none
+  receipt_integrity_issue: none
+  prompt_captain_required: false
+open_decisions: []
+next_action: "compose and gate the single PR body"
+
+```
