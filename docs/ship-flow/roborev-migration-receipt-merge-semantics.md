@@ -272,8 +272,9 @@ not begin until design ratifies them.
 9. Every source in one multi-parent `migrate` row must carry the same computed
    generation key. Explicit migrations may preserve that one key across
    different parent paths, but may not choose among divergent keys. Divergent
-   generations must be reconciled at one exact path or pre-aligned before the
-   cross-path migration; otherwise C14 fails `generation-conflict`.
+   generations must converge through one complete same- or cross-path
+   `reconcile` row, or be pre-aligned before a separate migration; otherwise
+   C14 fails `generation-conflict`.
 
 #### Provisional semantic envelope for design ratification
 
@@ -288,6 +289,13 @@ parsing it must yield these fields. Design may change spelling, not meaning:
 | `sources[]` | non-empty `(parent_oid, before_path)` set; at most one source per parent; sole parent may be implicit | non-empty source set | forbidden | every divergent `(parent_oid, before_path)`; C14 resolves each computed generation |
 | `after_path` | required | forbidden | required | required exact result path |
 | `selected_source` | forbidden | forbidden | forbidden | required `(parent_oid, before_path)`; exactly one member of `sources[]` |
+
+At the parsed-envelope boundary, every source is an object with exactly
+`parent_oid` and `before_path` keys; `selected_source` is one byte-identical
+object from `sources[]`. `parent_oid` is the repository's full lowercase hex
+object ID and `before_path` is the normalized string below. The design-ratified
+carrier grammar may encode the object as trailers or structured data, but may
+not invent delimiter-based tuple semantics or change these parsed fields.
 
 All paths are normalized repository-relative paths under the declared
 `docs/<workflow>/` root: no absolute path, `..`, empty segment, workflow escape,
@@ -308,11 +316,13 @@ One operation cannot list more sources than the commit has parents.
 For `reconcile`, C14 resolves each listed parent's computed generation at
 its listed source path; users never transcribe generation keys. The source set
 must cover every divergent generation claimed to converge on the result, and the result inherits the selected
-parent's key and already validated status. Non-selected statuses follow the
-same inherited-state rule as same-generation parents: they are not
-source-to-result edges, while an unvalidated selected status fails before
-aliasing. A missing, duplicate, or partial alias fails `generation-conflict`.
-Aliasing never authorizes a new status.
+parent's key and already validated status. Every non-selected source whose
+status differs from the selected result must pass the same design-ratified
+reconciliation legality check as a non-matching same-generation parent; it
+does not require a duplicate result receipt, but it is not exempt from
+legality. An unvalidated selected status fails before aliasing. A missing,
+duplicate, or partial alias fails `generation-conflict`. Aliasing never
+authorizes a new status.
 
 The provided emitter is a convenience and preflight validator, not an
 authority. Because C14 cannot authenticate its caller, manually authored syntax
@@ -420,8 +430,9 @@ proof or explicit alias, the merge fails `generation-conflict` and must
 pre-align the parents. A valid `reconcile` makes the result carry the selected
 generation key and its already validated status. Non-selected statuses are
 handled exactly like non-matching same-generation parent states: selecting a
-validated parent state is inheritance, while aliasing cannot create a novel
-status.
+validated parent state is inheritance without a duplicate result receipt, but
+every differing status still must pass the ratified reconciliation legality
+check. Aliasing cannot create a novel status.
 Generation equality never follows from equal path, ID, layout, status, or body;
 it follows only from the shared baseline/create key carried through explicit
 migrations or an explicit `reconcile` waiver.
@@ -495,8 +506,11 @@ reclassifies the other's key during normalization.
    from a present parent is a retirement unless a different parent's absence
    supplies validated retirement provenance, as M1.5 specifies.
 4. **Recommended legality rule:** the result must be a declared direct next or
-   feedback transition from every distinct present-parent status, and the merge
-   commit carries one transition receipt bound to the resulting stage. This is
+   feedback transition from every distinct present-parent status. A
+   resolution-only novel result carries one merge transition receipt bound to
+   the resulting stage. An inherited result uses the matching parent's already
+   validated/trusted status provenance and carries no duplicate receipt, while
+   every non-matching parent still undergoes the same legality check. This is
    fail-closed and parent-order-independent, but remains unratified because job
    40 proves first-parent-only wrong without proving direct-edge-from-every-parent
    is the only valid reconciliation policy.
@@ -509,6 +523,10 @@ reclassifies the other's key during normalization.
    parent cannot silently mask another. Until that ratification lands, implementation is blocked and the
    existing C14 behavior remains in force; “resolution-only” is a
    classification boundary, not permission to skip transition validation.
+   This is deliberate stage ordering, not a missing fallback: captain approval
+   advances this shaped contract to design, design ratifies one policy, and only
+   then may plan/execute implement it. A shape-stage fallback would silently
+   preempt the sole human contract gate this artifact exists to present.
 
 The job-40 absent-first-parent case therefore reduces deterministically:
 `P1=absent`, `P2=present(shape)`, `M=present(shape)` is inherited; the same
@@ -608,11 +626,20 @@ absent parent with unavailable or unvalidated required history fails loud.
   the verify artifact, and ship-review refuses a GO verdict without that exact
   receipt. This is Ship-Flow enforcement, not a new required GitHub status
   check or hook. The evidence/state commit that records the receipt may follow
-  the reviewed SHA; ship-review requires the reviewed SHA to be an ancestor of
-  current HEAD and requires `reviewed_sha..HEAD` to touch only FO-owned
-  workflow evidence/state paths, with zero implementation, test, or canonical
-  doc diff. Any other post-review change invalidates the panel and requires a
-  fresh reviewed SHA.
+  the reviewed SHA. Ship-review first runs
+  `git merge-base --is-ancestor "$reviewed_sha" HEAD`; failure, including a
+  rebase that orphaned the reviewed commit, requires a fresh panel. It then
+  parses `git diff --name-only -z --diff-filter=ACDMRTUXB "$reviewed_sha" HEAD`
+  as NUL-delimited repository tree paths and requires every path to equal one
+  state-backend-declared artifact for this entity's verify/review receipt or FO
+  state. Entity artifacts under `docs/ship-flow/<entity>` (or the inline entity
+  file) are evidence paths for this check; root `ARCHITECTURE.md`, `PRODUCT.md`,
+  `ROADMAP.md`, root/workflow README files, implementation, and tests are not
+  allowlisted. Exact comparison rejects traversal-like names, symlink/submodule
+  indirection, and prefix lookalikes. Finally, `git diff --quiet` over all
+  implementation, test, and root-canonical paths plus the recorded frozen-tree
+  manifest must prove the reviewed code tree unchanged. Any other post-review
+  change invalidates the panel and requires a fresh reviewed SHA.
 
 ## Mechanism-to-Value Evidence Matrix
 
@@ -903,6 +930,16 @@ graph LR
   same- or cross-path generations; post-panel evidence commits are permitted
   only with an ancestor reviewed SHA and zero implementation/test/canonical
   diff.
+- REVIEW: Direct Gemini/agy and RoboRev/Gemini job 54 reviewed `6dd1e85` and
+  returned FAIL. Their valid contradictions are absorbed: M1.9 now permits one
+  complete same- or cross-path reconcile; inherited and resolution-only results
+  share non-matching-parent legality but only the novel result needs a new
+  receipt; non-selected reconcile statuses follow that same rule; parsed source
+  objects have exact fields. Post-review verification now uses
+  `merge-base --is-ancestor`, NUL-safe exact artifact allowlisting, and a frozen
+  code-tree check. The requested fallback legality policy is rejected because
+  design ratification is the intentional next captain-gated stage, not a
+  missing implementation default.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
