@@ -131,6 +131,7 @@ check_preamble_regrowth() {
 
 check_discovery_exclusions() {
   local lib_dir="${ROOT}/plugins/ship-flow/lib"
+  local bin_dir="${ROOT}/plugins/ship-flow/bin"
   local helper="${lib_dir}/discovery-exclusions.sh"
   local consumers=(
     "${lib_dir}/discover-adopter-skills.sh"
@@ -154,9 +155,10 @@ check_discovery_exclusions() {
     fi
   done
 
-  # Production marker definitions are top-level lib scripts only. Do not recurse
-  # into __tests__/test-fixtures or infer consumers from unrelated find walkers.
-  local production_scripts=("${lib_dir}"/*.sh)
+  # Production marker definitions are top-level lib/bin scripts only. Do not
+  # recurse into __tests__/test-fixtures or infer consumers from unrelated find
+  # walkers.
+  local production_scripts=("${lib_dir}"/*.sh "${bin_dir}"/*.sh)
   local marker marker_pattern production_count helper_count
   for marker in __tests__ test-fixtures; do
     marker_pattern="-name[[:space:]]+['\"]?${marker}(['\"]|[[:space:]]|$)"

@@ -1238,11 +1238,26 @@ EOF
 echo density
 EOF
       ;;
-    duplicate-definition)
+    lib-duplicate)
       cat > "$d/plugins/ship-flow/lib/legacy-discovery.sh" <<'EOF'
 #!/usr/bin/env bash
 find "$1" \( -name __tests__ -o -name test-fixtures \) -prune
 EOF
+      ;;
+    bin-duplicate)
+      mkdir -p "$d/plugins/ship-flow/bin"
+      cat > "$d/plugins/ship-flow/bin/legacy-discovery.sh" <<'EOF'
+#!/usr/bin/env bash
+find "$1" \( -name __tests__ -o -name test-fixtures \) -prune
+EOF
+      ;;
+    nested-copy)
+      mkdir -p "$d/plugins/ship-flow/bin/__tests__/fixtures" \
+               "$d/plugins/ship-flow/bin/test-fixtures"
+      cp "$d/plugins/ship-flow/lib/discovery-exclusions.sh" \
+         "$d/plugins/ship-flow/bin/__tests__/fixtures/discovery-exclusions.sh"
+      cp "$d/plugins/ship-flow/lib/discovery-exclusions.sh" \
+         "$d/plugins/ship-flow/bin/test-fixtures/discovery-exclusions.sh"
       ;;
     *) rm -rf "$d"; return 2 ;;
   esac
@@ -1254,19 +1269,19 @@ EOF
   printf '%s' "$rc"
 }
 
-dc_discovery_exclusions_cases_match_contract() {
-  local good_rc missing_source_rc duplicate_definition_rc
-  good_rc="$(discovery_exclusions_fixture_rc good)"
-  missing_source_rc="$(discovery_exclusions_fixture_rc missing-source)"
-  duplicate_definition_rc="$(discovery_exclusions_fixture_rc duplicate-definition)"
-  [ "$good_rc" = "0" ] \
-    && [ "$missing_source_rc" = "1" ] \
-    && [ "$duplicate_definition_rc" = "1" ]
-}
-if dc_discovery_exclusions_cases_match_contract 2>/dev/null; then
-  echo "OK discovery-exclusions: direct consumers and one production definition site"
+DISCOVERY_GOOD_RC="$(discovery_exclusions_fixture_rc good)"
+DISCOVERY_MISSING_SOURCE_RC="$(discovery_exclusions_fixture_rc missing-source)"
+DISCOVERY_LIB_DUPLICATE_RC="$(discovery_exclusions_fixture_rc lib-duplicate)"
+DISCOVERY_BIN_DUPLICATE_RC="$(discovery_exclusions_fixture_rc bin-duplicate)"
+DISCOVERY_NESTED_COPY_RC="$(discovery_exclusions_fixture_rc nested-copy)"
+if [ "$DISCOVERY_GOOD_RC" = "0" ] \
+  && [ "$DISCOVERY_MISSING_SOURCE_RC" = "1" ] \
+  && [ "$DISCOVERY_LIB_DUPLICATE_RC" = "1" ] \
+  && [ "$DISCOVERY_BIN_DUPLICATE_RC" = "1" ] \
+  && [ "$DISCOVERY_NESTED_COPY_RC" = "0" ]; then
+  echo "OK discovery-exclusions: direct consumers and top-level lib/bin definition boundary"
 else
-  echo "FAIL discovery-exclusions: expected good=0 missing-source=1 duplicate-definition=1"; FAIL=1
+  echo "FAIL discovery-exclusions: expected good=0 missing-source=1 lib-duplicate=1 bin-duplicate=1 nested-copy=0; got good=$DISCOVERY_GOOD_RC missing-source=$DISCOVERY_MISSING_SOURCE_RC lib-duplicate=$DISCOVERY_LIB_DUPLICATE_RC bin-duplicate=$DISCOVERY_BIN_DUPLICATE_RC nested-copy=$DISCOVERY_NESTED_COPY_RC"; FAIL=1
 fi
 
 dc_visible_surface_map_contract_present() {
