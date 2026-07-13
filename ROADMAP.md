@@ -16,6 +16,7 @@
 <!-- section:next -->
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
+| 2-deterministic-manual-adopter-routing | Deterministic manual adopter skill routing | (pitch) | small-batch (2-3 days) |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
@@ -37,6 +38,9 @@
 | LLM semantic doc-verification as a required CI check | carlove R3 scar (2026-06-09): self-attested LLM signals are non-rerunnable and quota-bound; LLM judgment belongs in pipeline route-back or advisory surfaces |
 | Pre-push hook as the enforcement point | One-flag bypass (--no-verify), offline/quota DX hazards; CI is the authority and worker self-check covers early warning (pre-dispatch mod pattern) |
 | Extend shape-confirm.sh to honor id-style slug inside this pitch | Scope cut: numeric-prefixed slug at confirm is zero-code and carlove-congruent; the tooling fix is filed as the shape-confirm-instance-awareness todo instead |
+| Patch or retain the repository-scanning discovery helper | The captain rejected the helper strategy after repeated suppressible producer failures. |
+| Redesign density classification or upstream spacedock status --discover (#24) | Separate existing issues outside this 2-3 day appetite. |
+| Automatically migrate existing adopters or introduce multiple routing manifests | The selected contract keeps legacy configs readable and adds one canonical manual source. |
 <!-- /section:not-doing -->
 
 ## Shipped
