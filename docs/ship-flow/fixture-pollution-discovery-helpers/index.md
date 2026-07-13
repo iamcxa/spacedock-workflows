@@ -215,3 +215,41 @@ shared pruning primitive, repairs the exact top-level lib/bin invariant, and
 freezes the six source/test paths. After FO and EM released the acceptance
 clock, one real repository-root invocation produced the expected empty routing
 envelope with no diagnostics or routes; no replay is permitted.
+
+## Stage Report: verify (cycle 3)
+
+- DONE: Independently verify DC-1 through DC-9 with Bash 3.2 syntax, fresh
+  adopter 38/38 and density 41/41 suites, fixture/named/full invariants under
+  the repo-required Bash PATH, the four-record ledger, and exact plan/diff
+  parity. Eleven required quality/DC claim records are VERIFIED; none are NOT
+  VERIFIED or INCONCLUSIVE.
+- DONE: Verify DC-10 without replay. The immutable capture is 193 stdout bytes
+  with SHA `b038878f...aa53`, zero stderr bytes with SHA `e3b0c442...b855`, and
+  zero routes. The original frozen object `1b3871f8` exists in ordered T1-T3
+  history; all seven recorded source hashes match original/current content and
+  no frozen source path changed after the run.
+- DONE: Preserve the `09:35:46Z` parent/redirection failure as pre-launch
+  orchestration setup (`invocation_count=0`, AUTH-1 unconsumed) and the
+  `09:39:05Z` process as the sole real `invocation_count=1`. Repository-root
+  discovery/emulation and capture rewrites during verify remain zero.
+- DONE: Complete general, silent-failure, testing, maintainability, Bash
+  portability, invariant, security, acceptance-integrity, domain, and
+  adversarial review coverage. No blocker was found; the combined INT/TERM
+  cleanup-trap behavior remains an accepted nonblocking warning.
+- DONE: Emit a 240-raw-line verify.md with Tier B external-review degradation,
+  non-UI render/UAT handling, zero TODO deferrals, and a PROCEED hand-off.
+  Artifact verbosity, stage metrics, and commit diff-check pass.
+- BOUNDARY: The pre-artifact full invariant passed. After `status: passed`
+  landed, full invariant C13 requires an FO receipt; this ensign did not create
+  `fo-receipts.md` because dispatch permits only verify.md/index artifacts.
+  Receipt/state advancement remains FO-owned.
+- status: passed
+- stage_cost: one verifier plus one independent collaboration reviewer; Tier B
+  cross-model degradation accepted
+
+### Summary
+
+Cycle-3 verification reproduces all authorized behavior and invariant checks,
+validates the sole immutable acceptance envelope against the original frozen
+object without replay, and returns PROCEED with one nonblocking signal-cleanup
+note. No code, test, receipt, status, issue, capture, or worktree state changed.
