@@ -26,3 +26,16 @@ Verified by: the workflow/FO-facing process contract names the stage-entry recei
 
 **AC-4 — Dogfood baseline is restored without allowlists.**
 Verified by: the current branch passes invariants, the shell suite, and Node tests without commit-hash grandfathering or a forged `advance-stage.sh` signature.
+
+## Stage Report: execute
+
+- DONE: RED-first regression covers a legitimate FO draft-to-shape dispatch and preserves a failing arbitrary manual mutation case
+  Case 14 failed before implementation (expected 0, got 1); final targeted suite passes 18/18, including manual, malformed, wrong-stage, and whitespace-only-summary rejection cases.
+- DONE: A narrow sanctioned stage-entry receipt is aligned across implementation, invariant documentation, and FO-facing workflow process without hash allowlists or forged advance-stage signatures
+  Commit `f8fc638` accepts subject-only `dispatch|advance: <non-empty summary> entering <stage>` receipts only when every mutated entity after-status matches; completion-side `: advance status to ` remains unchanged.
+- DONE: Targeted C14 tests plus the full invariant, shell, and Node suites are run and reported with exact results
+  C14 targeted 18/18; `CI=true check-invariants.sh` exit 0 with C14 OK; canonical top-level shell loop 103/103 exit 0; Node 79/79 exit 0; shellcheck and `git diff --check` clean.
+
+### Summary
+
+C14 now recognizes the First Officer's fresh-dispatch and same-worker-reuse stage-entry receipts while binding the named stage to the actual entity after-state. The repair keeps arbitrary status edits and receipt lookalikes blocked, preserves completion-side `advance-stage.sh` enforcement, and restores the dogfood invariant baseline without commit allowlists.
