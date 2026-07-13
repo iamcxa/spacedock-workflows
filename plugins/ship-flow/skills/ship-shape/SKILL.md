@@ -10,7 +10,7 @@ argument-hint: "[--discuss] [directive-text | todo-tid | entity-id]"
 You run SHAPE. Output: `docs/<wf>/<id>-<slug>/shape.md`. Captain has ONE gate per run: confirm / refine / reject.
 
 **Shape Up vocabulary** (load-bearing — entity-body schema depends on these names):
-- **Pitch** — parent entity. Fields: `problem`, `appetite`, `children[]`, `rabbit_holes[]`, `deleted_from_shape[]`, `stated_assumptions[]`, `dag_mermaid`.
+- **Pitch** — parent entity. Fields: `problem`, `appetite`, `shape_mode`, `children[]`, `rabbit_holes[]`, `deleted_from_shape[]`, `stated_assumptions[]`, `dag_mermaid`.
 - **Appetite** — time budget (`small-batch` 2-3d / `medium-batch` 1-2w / `big-batch` 6w). Scope fits budget; budget does not flex.
 - **Rabbit hole** — follow-up captured to `docs/<wf>/todos/`. **Rejected alternative** — claim considered-then-rejected with reason (populates from brainstorming Q-loop or scope-cut during decompose). **Shaped child** — vertical E2E slice (`pattern: shaped-child`). **DAG** — mermaid child-dependency diagram; feeds FO Pitch Orchestration.
 
@@ -35,6 +35,8 @@ Run before any shape work. Stop and SendMessage(FO) if any check fails.
 1. **Mode C (skill-authoring)** — FIRST. Triggers: keywords `create/build/write/improve/modify a skill`, `SKILL.md`, `add a skill`; target paths `*/skills/*`, `*/SKILL.md`, `.claude/agents/*`; entity frontmatter `type: skill` or `domain: skill-authoring`.
 2. **Mode B (ambiguity)** — SECOND. After L0 subagent returns, `open_questions[]` length ≥ 3 → announce switch and run Mode B.
 3. **Default** — Mode A.
+
+Every proposal records that routing decision as `pitch.shape_mode`: `mode-a | mode-b | mode-c`. Absent defaults to `mode-a` for proposals created before this field existed. Any other value is invalid.
 
 ---
 
@@ -218,7 +220,7 @@ PM skills delegate framing discipline so shape stage doesn't reinvent. Invoke pe
 
 ### PM-Skill Receipt Guard (before compose)
 
-For non-trivial Mode A folder-layout proposals, emit exactly one `<!-- section:pm-skill-receipts -->` YAML block in `shape.md` before compose/proposal acceptance. `shape-confirm.sh --layout=folder` refuses proposal JSON that lacks both canonical `pitch.pm_skill_receipts` and legacy top-level `pm_skill_receipts`, validates the receipt before any write, then renders the same receipt block into `shape.md`.
+For non-trivial Mode A folder-layout proposals, emit exactly one `<!-- section:pm-skill-receipts -->` YAML block in `shape.md` before compose/proposal acceptance. `shape-confirm.sh --layout=folder` refuses a `pitch.shape_mode: mode-a` proposal (including an older proposal where the field is absent) that lacks both canonical `pitch.pm_skill_receipts` and legacy top-level `pm_skill_receipts`, validates the receipt before any write, then renders the same receipt block into `shape.md`. Mode B/C are Layer A exceptions: they do not require or render this Mode A receipt block.
 
 The receipt root is `pm_skill_receipts` with required fields `stage: ship-shape`, `mode: mode-a`, `appetite: small-batch | medium-batch | big-batch`, `compose_guard: passed`, and one row per required primary delegate: `problem-framing-canvas`, `opportunity-solution-tree`, `pol-probe-advisor`, and `press-release`. Each primary delegate row must set `required: true` and the expected phase: `problem-framing-canvas` → `intake-problem`, `opportunity-solution-tree` → `scope-decompose`, `pol-probe-advisor` → `assumption-extract`, `press-release` → `acceptance-outcome`. Optional supplement rows may set `required: false`; each row records `phase`, `delegate`, `required`, `status`, `evidence`, `fallback`, and `rationale`.
 
@@ -439,7 +441,7 @@ Stage continuation — SendMessage to named teammate (~10× faster than fresh di
 
 ## Proposal JSON schema (machine contract for shape-confirm.sh)
 
-Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acceptance_outcome` (≥50 chars, user-observable, mandatory), `appetite`, `pm_skill_receipts` (required for non-trivial Mode A folder-layout proposals; root includes `stage`, `mode`, `appetite`, `compose_guard`, and primary delegate rows), `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`, `pre_mortem` (mandatory on non-trivial pitch; object with `category` enum: `wrong-problem | wrong-dcs | wrong-framing-lens | hidden-dependency | over-conviction` and `one_liner` ≤30 words)), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). Legacy top-level `pm_skill_receipts` remains accepted by `shape-confirm.sh` for compatibility, but new proposals should write `pitch.pm_skill_receipts`. `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full semantics: `plugins/ship-flow/references/entity-body-schema.yaml`. `answers_density` (optional, `high | medium | low | vacuum`): emit when pre-classified; omit to defer lazy classification.
+Top-level keys: `pitch` (with `id`, `slug` kebab ≤40, `title`, `problem`, `acceptance_outcome` (≥50 chars, user-observable, mandatory), `appetite`, `shape_mode` (`mode-a | mode-b | mode-c`; absent defaults to `mode-a`; unknown values reject before writes), `pm_skill_receipts` (required for non-trivial Mode A folder-layout proposals; root includes `stage`, `mode`, `appetite`, `compose_guard`, and primary delegate rows), `stated_assumptions[]`, `dag_mermaid` — first line MUST start with `graph`, `pre_mortem` (mandatory on non-trivial pitch; object with `category` enum: `wrong-problem | wrong-dcs | wrong-framing-lens | hidden-dependency | over-conviction` and `one_liner` ≤30 words)), `children[]` (`id` = `<pitch.id>.<N>` dense no gaps, `slug`, `title`, `vertical_slice`, `depends_on[]` via child **slugs**), `rabbit_holes[]` (`slug`, `claim`, `domain`, `guess_files[]`), `deleted_from_shape[]` (`claim`, `reason` — semantically "rejected alternatives"; SHOULD have ≥1 on non-trivial pitch; empty = captain may have under-shaped, warrants cross-review PROMPT_CAPTAIN). Legacy top-level `pm_skill_receipts` remains accepted by `shape-confirm.sh` for compatibility, but new Mode A proposals should write `pitch.pm_skill_receipts`. Mode B/C proposals omit it. `stated_assumptions[]` item: `id`, `claim`, `verified_by` (`codebase-grep | lib-docs | web-search | design-contract | skill-source-read`), `verification` (bash), `confidence_at_shape` (0-100), `criticality` (`critical | important | nice-to-know`) — MUST have ≥1 `critical`. Full entity-body semantics: `plugins/ship-flow/references/entity-body-schema.yaml`. `answers_density` (optional, `high | medium | low | vacuum`): emit when pre-classified; omit to defer lazy classification.
 
 ---
 

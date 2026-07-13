@@ -132,8 +132,31 @@ proposal_without_pm_skill_receipts() {
     "appetite": "2 days",
     "problem": "Testing shape-confirm.sh",
     "acceptance_outcome": "Captain receives a working shape-confirm test suite that exercises the missing PM-skill receipt guard before mutation.",
+    "shape_mode": "mode-a",
     "stated_assumptions": [],
     "dag_mermaid": "graph LR\n  A --> B"
+  },
+  "children": [],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+proposal_without_mode_a_receipts() {
+  local shape_mode="$1"
+  cat <<EOF
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing shape-confirm.sh mode-aware receipt handling",
+    "acceptance_outcome": "Captain receives a truthful folder-layout shape artifact whose receipt block matches the selected ship-shape mode.",
+    "shape_mode": "${shape_mode}",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\\n  A --> B"
   },
   "children": [],
   "rabbit_holes": [],
@@ -485,6 +508,101 @@ else
 fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
+
+echo
+echo "--- DC-39: truthful non-Mode-A proposals do not fabricate Mode A receipts ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-mode-b.json"
+proposal_without_mode_a_receipts "mode-b" > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+DRY_RUN_OUTPUT="$(bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder --dry-run 2>&1)"
+DRY_RUN_EXIT=$?
+if [ "$DRY_RUN_EXIT" = "0" ]; then
+  echo "OK DC-39a Mode B folder dry-run succeeds without Mode A receipts"
+else
+  echo "FAIL DC-39a Mode B folder dry-run failed with exit $DRY_RUN_EXIT: $DRY_RUN_OUTPUT"
+  FAIL=1
+fi
+if ! printf '%s\n' "$DRY_RUN_OUTPUT" | grep -Eq 'child: .*null|rabbit: .*null|seq:'; then
+  echo "OK DC-39b zero arrays emit no phantom dry-run paths or seq boundary errors"
+else
+  echo "FAIL DC-39b zero arrays emitted a phantom dry-run path or seq boundary error"
+  FAIL=1
+fi
+assert_exit 0 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
+  "DC-39c Mode B folder real write succeeds without Mode A receipts"
+MODE_B_SHAPE="docs/ship-flow/090-test-pitch/shape.md"
+if [ -f "$MODE_B_SHAPE" ] && ! grep -q 'section:pm-skill-receipts' "$MODE_B_SHAPE"; then
+  echo "OK DC-39d Mode B shape.md omits the Mode A receipt block"
+else
+  echo "FAIL DC-39d Mode B shape.md missing or contains a fabricated Mode A receipt block"
+  FAIL=1
+fi
+if [ "$(find docs/ship-flow -mindepth 1 -maxdepth 1 -type d ! -name todos | wc -l | tr -d ' ')" = "1" ] && \
+   [ "$(find docs/ship-flow/todos -mindepth 1 -type f | wc -l | tr -d ' ')" = "0" ] && \
+   ! grep -qF '| null |' ROADMAP.md; then
+  echo "OK DC-39e zero arrays create no phantom child, todo, or ROADMAP rows"
+else
+  echo "FAIL DC-39e zero arrays created a phantom child, todo, or ROADMAP row"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-40: ship-shape mode contract rejects unknown values fail-closed ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-unknown-mode.json"
+proposal_without_mode_a_receipts "mode-z" > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 10 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder --dry-run" \
+  "DC-40a unknown shape mode exits 10"
+assert_stderr_contains "Error: pitch.shape_mode must be one of: mode-a, mode-b, mode-c" \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder --dry-run" \
+  "DC-40b unknown shape mode diagnostic names supported values"
+if [ ! -e "docs/ship-flow/090-test-pitch" ]; then
+  echo "OK DC-40c unknown shape mode rejects before mutation"
+else
+  echo "FAIL DC-40c unknown shape mode created pitch artifacts"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-41: Mode C is an explicit non-A ship-shape mode ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-mode-c.json"
+proposal_without_mode_a_receipts "mode-c" > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 0 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder --dry-run" \
+  "DC-41 Mode C folder dry-run succeeds without Mode A receipts"
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-42: visible ship-shape docs expose the proposal mode contract ---"
+SHIP_SHAPE_SKILL="${LIB_DIR}/../skills/ship-shape/SKILL.md"
+PLUGIN_README="${LIB_DIR}/../README.md"
+if grep -qF '`pitch.shape_mode`' "$SHIP_SHAPE_SKILL" && \
+   grep -qF '`mode-a | mode-b | mode-c`' "$SHIP_SHAPE_SKILL" && \
+   grep -qF 'Absent defaults to `mode-a`' "$SHIP_SHAPE_SKILL"; then
+  echo "OK DC-42a ship-shape proposal schema documents values and backward-compatible default"
+else
+  echo "FAIL DC-42a ship-shape proposal schema is missing shape_mode values/default"
+  FAIL=1
+fi
+if grep -qF '`pitch.shape_mode`' "$PLUGIN_README" && \
+   grep -qF 'Mode B/C' "$PLUGIN_README" && \
+   grep -qF 'do not render' "$PLUGIN_README"; then
+  echo "OK DC-42b plugin README documents mode-aware receipt behavior"
+else
+  echo "FAIL DC-42b plugin README is missing mode-aware receipt behavior"
+  FAIL=1
+fi
 
 # ── DC-101.1-6: answers_density emitted in folder layout (pitch-101 Task 2) ──
 echo

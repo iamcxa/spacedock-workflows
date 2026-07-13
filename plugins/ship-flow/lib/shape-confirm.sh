@@ -63,6 +63,7 @@ PITCH_APPETITE=$(yq --input-format=json '.pitch.appetite' "$PROPOSAL" | tr -d '"
 PITCH_PROBLEM=$(yq --input-format=json '.pitch.problem' "$PROPOSAL" | tr -d '"')
 PITCH_ACCEPTANCE_OUTCOME=$(yq --input-format=json '.pitch.acceptance_outcome' "$PROPOSAL" | tr -d '"')
 PITCH_ANSWERS_DENSITY=$(yq --input-format=json '.pitch.answers_density // ""' "$PROPOSAL" | tr -d '"')
+PITCH_SHAPE_MODE=$(yq --input-format=json '.pitch.shape_mode // "mode-a"' "$PROPOSAL" | tr -d '"')
 
 # pre_mortem block (entity 129.4): render the already-validated proposal.pitch.pre_mortem
 # into the pitch frontmatter so non-trivial pitches pass check-invariants.sh C1
@@ -81,6 +82,14 @@ fi
   exit 10
 }
 
+case "$PITCH_SHAPE_MODE" in
+  mode-a|mode-b|mode-c) ;;
+  *)
+    echo "Error: pitch.shape_mode must be one of: mode-a, mode-b, mode-c" >&2
+    exit 10
+    ;;
+esac
+
 # Acceptance Outcome required for pitches (Phase 100)
 if [ -z "$PITCH_ACCEPTANCE_OUTCOME" ] || [ "$PITCH_ACCEPTANCE_OUTCOME" = "null" ]; then
   echo "Error: pitch.acceptance_outcome is required (user-observable answer to 'what does captain GET?'). See docs/ship-flow/100-shape-acceptance-outcome-gate/shape.md" >&2
@@ -92,7 +101,7 @@ if [ "${#PITCH_ACCEPTANCE_OUTCOME}" -lt 50 ]; then
 fi
 
 PM_RECEIPTS_YAML=""
-if [ "$LAYOUT" = "folder" ]; then
+if [ "$LAYOUT" = "folder" ] && [ "$PITCH_SHAPE_MODE" = "mode-a" ]; then
   if ! yq --input-format=json -e '(.pitch.pm_skill_receipts // .pm_skill_receipts) != null' "$PROPOSAL" >/dev/null 2>&1; then
     echo "Error: pitch.pm_skill_receipts or top-level pm_skill_receipts is required for folder-layout Mode A shape proposals" >&2
     exit 10
@@ -148,7 +157,7 @@ fi
 
 CHILD_COUNT=$(yq --input-format=json '.children | length' "$PROPOSAL")
 CHILDREN_PATHS=()
-for i in $(seq 0 $((CHILD_COUNT - 1))); do
+for ((i = 0; i < CHILD_COUNT; i++)); do
   c_id=$(yq --input-format=json ".children[$i].id" "$PROPOSAL" | tr -d '"')
   c_slug=$(yq --input-format=json ".children[$i].slug" "$PROPOSAL" | tr -d '"')
   if [ "$LAYOUT" = "folder" ]; then
@@ -160,7 +169,7 @@ done
 
 RH_COUNT=$(yq --input-format=json '.rabbit_holes | length' "$PROPOSAL")
 RH_PATHS=()
-for i in $(seq 0 $((RH_COUNT - 1))); do
+for ((i = 0; i < RH_COUNT; i++)); do
   rh_slug=$(yq --input-format=json ".rabbit_holes[$i].slug" "$PROPOSAL" | tr -d '"')
   RH_PATHS+=("${TODO_DIR}/${rh_slug}.md")
 done
@@ -229,11 +238,15 @@ ${PITCH_PROBLEM}
 
 ${PITCH_ACCEPTANCE_OUTCOME}
 
-<!-- section:pm-skill-receipts -->
-\`\`\`yaml
-$(cat "$PM_RECEIPTS_YAML")
-\`\`\`
-<!-- /section:pm-skill-receipts -->
+$(
+  if [ "$PITCH_SHAPE_MODE" = "mode-a" ]; then
+    echo '<!-- section:pm-skill-receipts -->'
+    echo '```yaml'
+    cat "$PM_RECEIPTS_YAML"
+    echo '```'
+    echo '<!-- /section:pm-skill-receipts -->'
+  fi
+)
 
 ## Appetite
 
@@ -241,7 +254,7 @@ ${PITCH_APPETITE}
 
 ## Children
 
-$(for i in $(seq 0 $((CHILD_COUNT - 1))); do
+$(for ((i = 0; i < CHILD_COUNT; i++)); do
   c_id=$(yq --input-format=json ".children[$i].id" "$PROPOSAL" | tr -d '"')
   c_slug=$(yq --input-format=json ".children[$i].slug" "$PROPOSAL" | tr -d '"')
   echo "- ${c_id}-${c_slug}"
@@ -253,7 +266,7 @@ done)
 
 ## Rabbit Holes
 
-$(for i in $(seq 0 $((RH_COUNT - 1))); do
+$(for ((i = 0; i < RH_COUNT; i++)); do
   rh_slug=$(yq --input-format=json ".rabbit_holes[$i].slug" "$PROPOSAL" | tr -d '"')
   echo "- ${rh_slug}"
 done)
@@ -262,7 +275,9 @@ done)
 
 (fill in from deleted_from_shape)
 EOF
-  bash "$PM_RECEIPT_VALIDATOR" "$PITCH_SHAPE" >/dev/null || exit 10
+  if [ "$PITCH_SHAPE_MODE" = "mode-a" ]; then
+    bash "$PM_RECEIPT_VALIDATOR" "$PITCH_SHAPE" >/dev/null || exit 10
+  fi
   WRITTEN_FILES=("$PITCH_INDEX" "$PITCH_SHAPE")
 else
   cat > "$PITCH_PATH" <<EOF
@@ -289,7 +304,7 @@ EOF
 fi
 
 # 2. Write children entity files
-for i in $(seq 0 $((CHILD_COUNT - 1))); do
+for ((i = 0; i < CHILD_COUNT; i++)); do
   c_id=$(yq --input-format=json ".children[$i].id" "$PROPOSAL" | tr -d '"')
   c_slug=$(yq --input-format=json ".children[$i].slug" "$PROPOSAL" | tr -d '"')
   c_title=$(yq --input-format=json ".children[$i].title" "$PROPOSAL" | tr -d '"')
@@ -319,7 +334,7 @@ EOF
 done
 
 # 3. Write rabbit-hole todos
-for i in $(seq 0 $((RH_COUNT - 1))); do
+for ((i = 0; i < RH_COUNT; i++)); do
   rh_slug=$(yq --input-format=json ".rabbit_holes[$i].slug" "$PROPOSAL" | tr -d '"')
   rh_claim=$(yq --input-format=json ".rabbit_holes[$i].claim" "$PROPOSAL" | tr -d '"')
   rh_path="${TODO_DIR}/${rh_slug}.md"
@@ -345,7 +360,7 @@ echo "$ROW_NEXT" | bash "$PATCH_MAP" \
   --if-hash="$HASH" --mode=append --section=next --no-commit ROADMAP.md || exit 6
 
 # Patch 'later' section (each rabbit hole)
-for i in $(seq 0 $((RH_COUNT - 1))); do
+for ((i = 0; i < RH_COUNT; i++)); do
   rh_slug=$(yq --input-format=json ".rabbit_holes[$i].slug" "$PROPOSAL" | tr -d '"')
   rh_claim=$(yq --input-format=json ".rabbit_holes[$i].claim" "$PROPOSAL" | tr -d '"')
   row="| ${rh_slug} | S | ${rh_claim} | pitch ${PITCH_ID} |"
@@ -355,7 +370,7 @@ for i in $(seq 0 $((RH_COUNT - 1))); do
 done
 
 # Patch 'not-doing' section
-for i in $(seq 0 $((DEL_COUNT - 1))); do
+for ((i = 0; i < DEL_COUNT; i++)); do
   d_claim=$(yq --input-format=json ".deleted_from_shape[$i].claim" "$PROPOSAL" | tr -d '"')
   d_reason=$(yq --input-format=json ".deleted_from_shape[$i].reason" "$PROPOSAL" | tr -d '"')
   row="| ${d_claim} | ${d_reason} |"
