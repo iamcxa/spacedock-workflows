@@ -200,20 +200,27 @@ not begin until design ratifies them.
    unauthenticated provenance contract.
 5. Completeness is derived globally from M2's normalized all-parent logical
    states, not independently from each parent path diff and not self-declared.
-   C14 first computes no-rename entity-path diffs, applies every explicit
-   parent-qualified source mapping, and forms one logical feature from the
-   result path plus exactly those mapped source paths. Unmapped paths remain
-   separate logical features. It then normalizes that feature in every relevant
-   parent before deriving any operation candidate:
+   C14 first computes no-rename entity-path diffs for every direct parent and
+   checks raw mapping coverage before applying inheritance. Once a receipt
+   names a source path for a result-bearing logical feature, every direct parent
+   where that named source path disappears into the result must either be in
+   the receipt's source set or classify that deletion as an independent
+   `retire`; it cannot be split into a new feature and hidden by another
+   parent's absence. An omission fails `receipt-incomplete`.
+   C14 then applies the explicit mappings and forms one logical feature from
+   the result path plus exactly those mapped source paths. Other unmapped paths
+   remain separate logical features. It normalizes each feature across all
+   direct parents before deriving any remaining operation candidate:
    - A present result whose logical feature is absent from every parent is the
      only derived `create` candidate.
    - A present result for a logical feature present in any parent is inherited
      when its state matches a parent, or resolution-only when its status is
      novel. Status novelty never creates a `create` or `migrate` candidate;
      cross-path identity still requires an explicit `migrate` mapping.
-   - An absent result derives a `retire` candidate only when the logical feature
-     is present in every relevant normalized parent. If any relevant parent is
-     already absent, the absent result is inherited and suppresses the derived
+   - An absent result derives a `retire` candidate unless at least one parent
+     contributes an inherited-absence proof: a validated earlier retirement of
+     the same logical feature in the active scan range. Mere never-presence in
+     an older or unrelated parent has no feature lineage and cannot suppress a
      retirement candidate.
    Explicit `migrate`, `retire`, and `create` rows are never discarded by this
    suppression: every supplied source/result is still resolved, classified
@@ -223,12 +230,9 @@ not begin until design ratifies them.
    and collision rules while preventing a per-parent path diff from
    reclassifying an inherited absence or a resolution-only status as an
    operation.
-   This suppression cannot manufacture an unreviewed deletion. Relative to the
-   merge base, either the feature was already present—in which case every
-   absent parent must contain an earlier removal that C14 validates in that
-   parent's reachable in-range history—or it was absent and a present parent
-   introduced it branch-locally, in which case an absent merge result declines
-   that branch-local introduction rather than retiring a shared feature. A
+   This suppression cannot manufacture an unreviewed deletion: absence carries
+   lineage only from an already validated in-range retirement, never from
+   parent ordering, a missing path snapshot, or an unscanned legacy commit. A
    missing parent, tree, or required in-range history segment fails loud; it
    never counts as inherited absence.
 6. Layout identity, equal frontmatter ID, and Git rename similarity may produce
@@ -270,21 +274,37 @@ must refresh them before review rather than C14 guessing ancestry.
 
 #### Activation and legacy compatibility
 
-The new contract is scan-bound, not retroactive. C14 continues to inspect only
-`merge-base(origin/main, HEAD)..HEAD`; main-history migrations before the new
-checker lands are never revisited. Any in-range mixed delete/add commit is
+The new contract is scan-bound, not retroactive. C14 resolves
+`git merge-base --all origin/main HEAD`, requires exactly one boundary OID, and
+inspects only `boundary..HEAD`; when `origin/main` exists, zero boundaries fail
+`scan-boundary-unavailable` and multiple best boundaries fail
+`scan-boundary-ambiguous` rather than choosing nondeterministically. The
+existing no-`origin/main` fixture skip remains separate. Main-history
+migrations before the new checker lands are never revisited. Any in-range
+mixed delete/add commit is
 subject to v1 and must be amended with operation rows or split. A branch forked
 before activation must rebase onto the new main and repair its still-unmerged
 in-range commits; Git similarity is not retained as a grandfather path. After
 the review range is selected, a missing required parent/tree object fails loud
-rather than being treated as absence. The existing no-`origin/main` fixture
-skip remains a separate C14 boundary.
+rather than being treated as absence.
+
+The selected scan boundary, not a pairwise or octopus merge base, also bounds
+absence provenance. C14 validates commits in the selected range in topological
+order and carries forward only operation outcomes it has already validated.
+An in-range parent retirement can therefore supply inherited-absence proof to a
+later merge. A parent outside the selected range contributes its tree snapshot
+as the trusted baseline but no retroactive retirement proof; baseline absence
+is never enough to suppress an in-range retirement candidate. Criss-cross and
+octopus merges require no additional merge-base selection, and pre-activation
+commits are neither traversed for receipts nor failed for lacking them.
 
 Diagnostics use stable categories so fixtures assert causes rather than prose:
 `receipt-missing`, `receipt-malformed`, `receipt-conflict`,
 `receipt-semantic-invalid`, `receipt-incomplete`, `parent-unavailable`,
-`parent-path-collision`, and `transition-illegal`. Design supplies exact
-messages and carrier bounds. Every completeness/collision diagnostic identifies
+`parent-path-collision`, `scan-boundary-unavailable`,
+`scan-boundary-ambiguous`, and `transition-illegal`.
+Design supplies exact messages and carrier bounds. Every
+completeness/collision diagnostic identifies
 the inspected merge OID, logical result path or absent-result unit, contributing
 parent OID, authoritative lookup path, and derived candidate category, so an
 operator can repair the specific mapping rather than guess which parent diff
@@ -298,25 +318,33 @@ migration.
 
 For merge commit `M`, define each entity path state in every parent as
 `absent` or `present(status)`. Apply a valid M1 source mapping only to the
-parents explicitly listed by that operation. An unlisted source-path occupant
-is unrelated for C14 purposes and never enters the logical state set. A parent
-not listed as a source participates only if it already contains the exact
-result path.
+parents explicitly listed by that operation. A source path named anywhere in
+that operation is also a raw-coverage probe in every unlisted parent; its
+presence there must be explicitly classified before logical normalization.
+Other unlisted old-path occupants are unrelated and remain separate features.
+For a result-bearing feature, an exact result-path occupant in an unlisted
+parent is the same workflow path slot and participates unless that path is
+already claimed by a different operation, which fails `receipt-conflict`.
+Frontmatter ID, content, and layout never override either exact-path continuity
+or an explicit parent-qualified mapping.
 
 “Relevant parents” means all direct Git parents of `M`, never a caller-selected
 subset. For one logical feature, each direct parent contributes exactly one
 authoritative lookup: its explicitly listed source path when that parent is in
 the feature's migration/retirement mapping, otherwise the exact result path.
-For an absent-result retirement unit with no result path, the unit's one source
-path is looked up at that same path in every unlisted direct parent. Mapped
-source paths plus the result path define only that logical feature; an
-unmapped path is normalized as a separate feature and cannot be absorbed by
-similar content, status, or ID.
+For an absent-result operation that can name different source paths per parent,
+the lookup map is parent-specific: a listed parent uses its listed path; an
+unlisted parent probes every distinct source path named by that operation.
+Zero occupants normalize to absent, one to that occupant's state, and more than
+one fails `parent-path-collision`. Mapped source paths plus the result path
+define only that logical feature; an unmapped path is normalized separately
+and cannot be absorbed by similar content, status, or ID.
 
 Per parent, normalization is order-independent:
 
-1. For a listed parent, inspect its listed source path and the result path. For
-   an unlisted parent, inspect only the result path.
+1. For a listed parent, inspect its listed source path and any result path. For
+   an unlisted parent, inspect the exact result path for a result-bearing unit,
+   or apply the absent-result source-probe rule above.
 2. No authoritative path exists → logical state `absent`.
 3. Exactly one authoritative path exists → logical state `present(status)`.
 4. Both authoritative source and result paths exist in a listed parent → fail
@@ -327,17 +355,16 @@ Per parent, normalization is order-independent:
 
 Different listed parents may provide different old paths in the same operation;
 their explicit parent-qualified mappings normalize to one logical comparison
-set. An unlisted old path remains unrelated and cannot create a collision or a
-transition obligation.
+set. A named source path found in an unlisted parent triggers raw coverage; an
+unnamed old path remains unrelated and cannot create an inferred identity.
 
-1. **Inherited:** if `M`'s result state equals the state in any relevant
-   normalized parent, the result is inherited. This includes `absent`: when any
-   relevant parent is already absent and `M=absent`, completeness does not
-   derive a retirement candidate from another parent's presence. C14 does not
-   require a second transition or operation receipt on the merge commit, even
-   when the matching parent is not the first parent. Any explicit operation
-   row that is present remains fully validated rather than being erased by
-   inheritance.
+1. **Inherited:** if `M`'s present result state equals the state in any direct
+   normalized parent, the result is inherited. An absent result is inherited
+   only from a parent whose absence carries the validated in-range retirement
+   provenance defined by M1.5; never-presence is not inheritable. C14 does not
+   require a duplicate transition or operation receipt on the merge commit.
+   Any explicit operation row remains fully validated rather than being erased
+   by inheritance.
 2. **Pure addition:** a result is a pure addition only when the logical entity
    is absent from every parent at the result/source path and no migration
    receipt names a source in any parent.
@@ -345,8 +372,8 @@ transition obligation.
    present-parent state and the logical entity exists in at least one parent,
    the merge introduced a new status on an existing logical feature. It is not
    creation or migration. Absence contributes no graph edge. A result absent
-   from every present parent is a retirement only when no relevant parent is
-   already absent, as M1.5 specifies.
+   from a present parent is a retirement unless a different parent's absence
+   supplies validated retirement provenance, as M1.5 specifies.
 4. **Recommended legality rule:** the result must be a declared direct next or
    feedback transition from every distinct present-parent status, and the merge
    commit carries one transition receipt bound to the resulting stage. This is
@@ -369,12 +396,12 @@ parents with `M=present(plan)` are resolution-only and must prove the
 
 The complementary inherited-absence case is also global:
 `P1=present(shape)`, `P2=absent`, `M=absent` is inherited absence and derives
-no `retire` candidate. If the commit nevertheless carries an explicit retire
-row for P1, that row still must resolve P1's source and pass all classification
-and collision checks. The dogfood matrix proves both permitted provenance
-forms: the feature was absent at the merge base and introduced only on P1, or
-P2's in-range history contains the already-validated removal. An absent parent
-with unavailable or unvalidated required history fails loud.
+no duplicate `retire` candidate only when P2's in-range history contains the
+already validated retirement of that logical feature. If P2 merely never had
+the feature, P2 has no absence provenance and M must classify P1's deletion. If
+the merge nevertheless carries an explicit retire row, that row still must
+resolve every listed source and pass all coverage and collision checks. An
+absent parent with unavailable or unvalidated required history fails loud.
 
 ## Will-get dogfood checks
 
@@ -393,10 +420,12 @@ with unavailable or unvalidated required history fails loud.
   The matrix includes a deletion where the result path already exists in every
   parent: the result is inherited, but the separate disappearing old path still
   requires `migrate` or `retire` classification. It also includes
-  `P1=present(shape), P2=absent, M=absent`: global normalization classifies the
-  result as inherited absence and derives no retirement candidate, while an
-  explicit source mapping, when supplied, still undergoes normal resolution,
-  uniqueness, and collision validation.
+  `P1=present(shape), P2=absent-after-validated-retire, M=absent`: global
+  normalization classifies the result as inherited absence and derives no
+  duplicate retirement candidate. The negative twin makes P2 never-present
+  and requires M to classify P1's deletion. Explicit source mappings in both
+  cases still undergo raw coverage, resolution, uniqueness, and collision
+  validation.
 - **W1 compatibility:** a pre-contract migration reachable only in main history
   is not scanned; an unmerged in-range legacy migration fails with an actionable
   amend/split diagnostic rather than falling back to similarity.
@@ -413,11 +442,13 @@ with unavailable or unvalidated required history fails loud.
   `shape -> plan` verdict, is explicitly deferred until design ratifies the
   policy and supplies the final pass/fail matrix; planning remains blocked
   until then.
-- **W4:** Run targeted C14 fixtures, full invariant/shell/Node gates, then a
-  `code_completion` panel whose reviewed head equals branch HEAD and whose
-  synthesis contains zero medium-or-higher finding. Before that final panel,
-  FO must reconcile the stale `c14-fo-dispatch-contract` lifecycle through its
-  sanctioned transition path; this pitch neither edits nor bypasses it.
+- **W4:** After design ratifies the legality policy and execute implements all
+  W1-W3 assertions, run targeted C14 fixtures and the unmodified full
+  invariant/shell/Node gates, then a `code_completion` panel whose reviewed
+  head equals branch HEAD and whose synthesis contains zero medium-or-higher
+  finding. Before that final panel, FO must reconcile the stale
+  `c14-fo-dispatch-contract` lifecycle through its sanctioned transition path;
+  this pitch neither edits nor bypasses it.
 
 ## Mechanism-to-Value Evidence Matrix
 
@@ -425,7 +456,7 @@ with unavailable or unvalidated required history fails loud.
 | --- | --- |
 | Explicit parent-qualified source set is the only cross-path identity | A low-similarity intentional migration is correlated; unrelated delete/add content is never similarity-paired |
 | Mixed operations require pair or explicit dispositions | Legitimate retirement plus creation is distinguishable from accidental ambiguity; a false disposition is documented as an unauthenticated waiver, not hidden protection |
-| Candidate coverage is computed from globally normalized all-parent logical states | A novel status on an existing feature is resolution-only, while inherited absence suppresses a false retirement candidate without bypassing explicit mapping validation |
+| Raw mapping coverage precedes globally normalized all-parent logical states | An omitted named source fails before inheritance; a novel status stays resolution-only; only an already validated in-range retirement suppresses a duplicate retirement candidate |
 | Receipt correlation does not authorize status | A receipt-bearing skipped stage still fails the workflow graph |
 | Scan-bound activation | Existing main history is not retroactively rejected, while every still-unmerged ambiguous commit is repaired explicitly |
 | Result equal to any parent is inherited | Ordinary merge and absent-first-parent inheritance pass without duplicate receipt |
@@ -631,6 +662,17 @@ graph LR
   resolution-only implementation may bypass transition legality; W3 separates
   its executable classification assertion from design-deferred legality; and
   diagnostics identify the failing parent and logical unit.
+- REVIEW: Exact-commit RoboRev/Gemini job 47 and direct Gemini/agy reviewed
+  `f99df1a` and returned FAIL. Their valid contradictions are absorbed: raw
+  named-source coverage precedes inheritance; absent-result lookups are
+  parent-specific for multiple old paths; never-presence cannot suppress a
+  retirement; the existing scan range/topological pass bounds provenance and
+  avoids pairwise merge-base ambiguity; W4 runs only after design ratification.
+  Their proposed frontmatter-ID/layout check for an unlisted result path is
+  rejected because it contradicts M1's explicit identity boundary: exact-path
+  continuity identifies the workflow slot, while only a parent-qualified
+  receipt can establish cross-path identity; a separately claimed exact path
+  fails `receipt-conflict` instead of invoking heuristic identity.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
