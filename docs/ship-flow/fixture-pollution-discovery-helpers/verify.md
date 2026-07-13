@@ -9,7 +9,7 @@
 | Bash / focused behavior | `/bin/bash -n` rc 0; adopter 38/38; density 41/41 | PASS |
 | Invariants | fixture, named, and full rc 0 with `/opt/homebrew/bin` first | PASS |
 | Ledger / diff | ledger `status=pass records=4`; scoped `git diff --check` rc 0; six planned paths only | PASS |
-| Frozen source | original `1b3871f8` object exists; seven hashes match object/current; frozen-to-HEAD path diff rc 0 | PASS |
+| Frozen source | original `1b3871f8` object exists; six nonshared paths are byte-identical; shared `check-invariants.sh` blob `5d21b50ad24faa6b052a43e0964a333627a3df61` has only three #20 hunks and no new receipt/C14 surface beyond `origin/main` | PASS |
 
 <details>
 <summary>Verdict-bearing quality claim</summary>
@@ -164,7 +164,7 @@ mode: documented copy-paste procedures for bounded DC-1–DC-9 checks; immutable
 <!-- section:verify-knowledge-captures -->
 ### Knowledge Captures
 
-- `[D1]` Original frozen commit `1b3871f8` remains the receipt identity; later integration hashes are cherry-pick bookkeeping with byte-identical source paths.
+- `[D1]` Original frozen commit `1b3871f8` remains the receipt identity; six nonshared paths are byte-identical, while shared `check-invariants.sh` uses isolated blob `5d21b50ad24faa6b052a43e0964a333627a3df61` with only three #20 hunks and no new receipt/C14 surface beyond `origin/main`.
 - `[D1]` The earlier redirection failure is orchestration setup evidence, not an executable invocation; it remains recorded as count 0.
 <!-- /section:verify-knowledge-captures -->
 
