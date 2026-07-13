@@ -9,7 +9,7 @@ score:
 worktree: .claude/worktrees/issue20-clean
 issue: "#20"
 related_issue: "#24"
-pr:
+pr: "#32"
 pattern: pitch
 appetite: small-batch
 layout: folder
