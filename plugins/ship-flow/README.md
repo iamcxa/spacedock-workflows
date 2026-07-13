@@ -393,6 +393,8 @@ The cycle: plugin knowledge flows **down** to projects on adoption/sync, and pro
 | `/verify --full` | force full re-run UAT | same, fuller evidence | ❌ |
 | `/add-todos "<text>"` | rabbit hole / unexpected finding capture | todo entry in `docs/<wf>/todos/<slug>.md` | ❌ |
 
+`/shape` proposal JSON records the selected route in `pitch.shape_mode` (`mode-a`, `mode-b`, or `mode-c`; absent legacy values default to Mode A). Folder-layout Mode A keeps the validated PM-skill receipt requirement. Mode B/C are explicit Layer A exceptions and do not render a fabricated Mode A receipt block; unknown mode values fail before writes.
+
 **Escape hatches** built into /shape:
 - Directive `<80 chars` + contains `fix|typo|rename|bump|patch|bugfix|hotfix` as whole word → announce "shape unnecessary, run /ship directly" and exit.
 - Directive specifies concrete file paths / reproducible bug / typed acceptance → suggest `/ship <requirement>` path.
