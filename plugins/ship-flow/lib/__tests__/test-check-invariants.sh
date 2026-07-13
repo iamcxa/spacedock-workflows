@@ -1189,6 +1189,86 @@ else
   echo "FAIL DC-107b pm-skill-receipts named check should fail invalid receipt fixture"; FAIL=1
 fi
 
+# ========== discovery-exclusions: direct consumers + one production definition site ==========
+discovery_exclusions_fixture_rc() {
+  local variant="$1"
+  local d
+  d="$(create_mock_plugin_dir)" || return 1
+
+  cat > "$d/plugins/ship-flow/lib/discovery-exclusions.sh" <<'EOF'
+#!/usr/bin/env bash
+ship_flow_discovery_find() {
+  find "$1" -mindepth 1 \
+    \( -type d \( -name __tests__ -o -name test-fixtures \) -prune \) -o \
+    "${@:2}"
+}
+EOF
+
+  cat > "$d/plugins/ship-flow/lib/discover-adopter-skills.sh" <<'EOF'
+#!/usr/bin/env bash
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+. "${SCRIPT_DIR}/discovery-exclusions.sh"
+EOF
+
+  cat > "$d/plugins/ship-flow/lib/density-classify.sh" <<'EOF'
+#!/usr/bin/env bash
+DENSITY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DENSITY_LIB_DIR/discovery-exclusions.sh"
+EOF
+
+  # A generic recursive walker is not a discovery-exclusions consumer.
+  cat > "$d/plugins/ship-flow/lib/unrelated-walker.sh" <<'EOF'
+#!/usr/bin/env bash
+find "$1" -name '*.md' -print
+EOF
+
+  # Fixture copies of the marker definitions are not production definitions.
+  mkdir -p "$d/plugins/ship-flow/lib/__tests__/fixtures" \
+           "$d/plugins/ship-flow/lib/test-fixtures"
+  cp "$d/plugins/ship-flow/lib/discovery-exclusions.sh" \
+     "$d/plugins/ship-flow/lib/__tests__/fixtures/discovery-exclusions.sh"
+  cp "$d/plugins/ship-flow/lib/discovery-exclusions.sh" \
+     "$d/plugins/ship-flow/lib/test-fixtures/discovery-exclusions.sh"
+
+  case "$variant" in
+    good) ;;
+    missing-source)
+      cat > "$d/plugins/ship-flow/lib/density-classify.sh" <<'EOF'
+#!/usr/bin/env bash
+echo density
+EOF
+      ;;
+    duplicate-definition)
+      cat > "$d/plugins/ship-flow/lib/legacy-discovery.sh" <<'EOF'
+#!/usr/bin/env bash
+find "$1" \( -name __tests__ -o -name test-fixtures \) -prune
+EOF
+      ;;
+    *) rm -rf "$d"; return 2 ;;
+  esac
+
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check discovery-exclusions >/dev/null 2>&1
+  rc=$?
+  rm -rf "$d"
+  printf '%s' "$rc"
+}
+
+dc_discovery_exclusions_cases_match_contract() {
+  local good_rc missing_source_rc duplicate_definition_rc
+  good_rc="$(discovery_exclusions_fixture_rc good)"
+  missing_source_rc="$(discovery_exclusions_fixture_rc missing-source)"
+  duplicate_definition_rc="$(discovery_exclusions_fixture_rc duplicate-definition)"
+  [ "$good_rc" = "0" ] \
+    && [ "$missing_source_rc" = "1" ] \
+    && [ "$duplicate_definition_rc" = "1" ]
+}
+if dc_discovery_exclusions_cases_match_contract 2>/dev/null; then
+  echo "OK discovery-exclusions: direct consumers and one production definition site"
+else
+  echo "FAIL discovery-exclusions: expected good=0 missing-source=1 duplicate-definition=1"; FAIL=1
+fi
+
 dc_visible_surface_map_contract_present() {
   bash "$CHECK_SCRIPT" --check visible-surface-map-contract >/dev/null 2>&1
 }
