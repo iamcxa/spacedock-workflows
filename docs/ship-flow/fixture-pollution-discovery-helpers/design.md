@@ -1,22 +1,26 @@
 # Fixture-tree exclusion for discovery helpers — Design
 
-This is a non-UI contract/interface design revision. The Captain explicitly
-delegated C1-C3 engineering judgment to the Science Officer (EM); the EM routed
-the work `narrow` with high confidence. D1-D3 below record those delegated
-decisions, so no Captain product or risk decision remains and plan may proceed.
+This is the cycle-3 non-UI contract/interface design re-entry after verify
+VETO. The Science Officer judged `route=return`, `confidence=high`: the narrow
+sourceable pruning primitive remains sound, but every caller must distinguish a
+healthy empty traversal from a traversal error before accepting routing or a
+density value. D1-D3 preserve the delegated narrow design; D4 records the
+delegated fail-loud engineering contract. Exactly one authorization decision
+remains Captain-owned and plan must not proceed until it is answered.
 
 ```yaml
 design-dispatch-manifest:
   lanes:
     - lane: contract-interface
       role: contract/interface-designer
-      trigger: delegated_open_contract_decisions
-      decisions: [D1, D2, D3]
+      trigger: verify_veto_return
+      decisions: [D1, D2, D3, D4]
       required_skills:
         - ship-flow:ship-design
         - superpowers:brainstorming
       outputs:
         - docs/ship-flow/fixture-pollution-discovery-helpers/design.md
+        - docs/ship-flow/fixture-pollution-discovery-helpers/index.md
   integration:
     mode: single-designer
     owner: ship-design
@@ -33,142 +37,240 @@ design-dispatch-manifest:
 
 | Doc | Sections Read | Update Intent | Skip Rationale |
 | --- | --- | --- | --- |
-| `PRODUCT.md` | `Current Capabilities` | skip | This repairs an existing internal capability; it adds no durable product promise (`PRODUCT.md:7-18`). |
-| `ARCHITECTURE.md` | `containers`, `components`, `constraints`, `dependencies` | skip | A sourceable Bash primitive remains in the existing `lib/` boundary and preserves Bash 3.2 portability (`ARCHITECTURE.md:30-50`, `ARCHITECTURE.md:54-109`). |
+| `PRODUCT.md` | `Current Capabilities` | skip | This repairs an existing internal capability and adds no durable product promise (`PRODUCT.md:7-18`). |
+| `ARCHITECTURE.md` | `containers`, `components`, `constraints`, `dependencies` | skip | The primitive and caller-side capture stay inside the documented `lib/` Bash 3.2 boundary (`ARCHITECTURE.md:30-50`, `ARCHITECTURE.md:54-109`). |
 
-The implementation-stage documentation delta is intentionally limited to
-`docs/ship-flow/README.md`: add the explicit `--workflow-dir docs/ship-flow`
-guard and link local tracker `#24`. No canonical product or component boundary
-changes.
+The already-landed `docs/ship-flow/README.md` guard and tracker `#24` remain the
+only documentation delta. Absolute linked-worktree dispatch duplication stays
+known evidence under `#21`. This cycle does not file, implement, or widen either
+issue and does not change PRODUCT, ARCHITECTURE, ROADMAP, status, receipts, or
+worktree state.
 
-## Canonical Problem and Delegation
+## Canonical Problem and Verify Return
 
-The acceptance outcome remains the first real repository-root run with zero
-fixture-derived routing and no helper error (`shape.md:48-53`). The Captain's
-Bet is preserved verbatim:
+The shape outcome still requires a real repository-root run with zero
+fixture-derived routing and no helper error (`shape.md:48-53`). Verify proved
+that the frozen cycle-2 run cannot establish the second half: adopter discovery
+suppresses `find` diagnostics at `discover-adopter-skills.sh:64-77` and consumes
+nonzero traversal status as an ordinary false route predicate. Density has the
+same class of ambiguity: S1 loses the process-substitution producer status at
+`density-classify.sh:141-146`; S2 and both S3 branches suppress/fallback a
+failed producer into a healthy zero count at `density-classify.sh:152-168`.
+
+The Captain's Bet remains verbatim and is not weakened:
 
 > ship-flow helpers 不再有不正確的運作問題，如果處理完仍有問題則表示用 helper 這條路可能策略不對
 >
 > 修完後第一次真實執行且零錯誤 routing
 
-The Science Officer reviewed the prior C1-C3 trade-offs under the Captain's
-explicit delegation and selected the narrow route: sourceable Bash only,
-requested-root-relative marker pruning, and a one-time complete audit plus
-small invariants. Executable/non-shell modes and a permanent recursive-walker
-classification framework are deferred until an actual consumer makes either
-necessary.
+The Science Officer's delegated technical judgment is to retain the helper,
+make traversal failure observable end to end, and close the invariant/test gaps
+before any further real-run authorization. Whether the already-consumed receipt
+permits exactly one materially revised first run is a risk-authorization choice,
+not an engineering detail, and remains open below.
 
 ## Current Repository-wide Candidate Audit
 
-Audit baseline: branch head `f55b154` before this design-only revision. The
-one-time audit searched production `plugins/ship-flow/lib/` and
-`plugins/ship-flow/bin/` sources (excluding tests and methodology prose) for
-shell `find`/recursive grep/`rg --files`/`git ls-files`, JavaScript directory
-reads and recursive walkers, and Python `glob`/`walk` forms. Every hit was read
-to classify its actual normal-operation reach; this record is the deliverable,
-not a checked-in detector or classification framework.
+Cycle-3 static re-entry baseline: branch head `b7f7078`. The cycle-2 one-time
+audit remains the deliverable; it is not replaced by a detector or inventory.
+Static source reading confirms the complete qualifying set remains exactly the
+two consumers below and identifies their current error-observability seams.
 
-| Surface | Actual reach | Decision |
+| Surface | Actual reach and current seam | Decision |
 | --- | --- | --- |
-| `lib/discover-adopter-skills.sh:46-74` | Recursively inspects the requested repository root and lets nested content emit routing. | Qualifying consumer; source the shared helper. |
-| `lib/density-classify.sh:125-165` | Recursively inspects workflow guidance, repo-local plugin skills, and precedent trees; nested decoys can alter S1-S3. | Qualifying consumer; all four `find` traversals source/use the shared helper. |
+| `lib/discover-adopter-skills.sh:49-77` | Recursively inspects the requested root. Every route probe funnels through `find_pruned`, whose `2>/dev/null` plus boolean call sites collapse error into no match. | Qualifying consumer; retain shared pruning and add explicit match/no-match/error handling. |
+| `lib/density-classify.sh:123-169` | Four traversals feed S1, S2, archive, and done. Process substitution or `pipeline || echo 0` hides producer failure. | Qualifying consumer; capture and validate each traversal before deriving a signal or classification. |
 | `lib/issues-to-contract.sh:79-96` | Python globbing is fixed to active entities and `_archive` at depth zero/one beneath the requested workflow directory. | Bounded dedup scan; does not consume the helper. |
-| `bin/sync-drift-check.mjs:25-44,346,389` | `readdir` lists immediate files only in exact plugin/adopter `_mods` and script directories; it never descends. | Shallow manifest comparison; does not consume the helper. |
+| `bin/sync-drift-check.mjs:25-44,346,389` | `readdir` lists immediate files only in exact plugin/adopter `_mods` and script directories. | Shallow manifest comparison; does not consume the helper. |
 | `bin/ship-flow-lint.mjs:67-83` | Recurses only inside the explicitly selected workflow directory to lint Markdown. | Bounded validator; does not consume the helper. |
 | `bin/stale-worktree-cleanup-planner.sh:303-314` | Finds `index.md` at exact depth two inside the selected workflow directory. | Bounded entity scan; does not consume the helper. |
 | `bin/debrief-boundary-resolver.sh:88-103` | Finds `index.md` at exact depth two inside the selected workflow directory. | Bounded entity matcher; does not consume the helper. |
 | `lib/query-entity-history.sh:230-233` | Finds archived `index.md` at exact depth two in the selected archive directory. | Bounded history query; does not consume the helper. |
-| `bin/check-invariants.sh:108-129,290-304,1703-1716` | Recursively validates the plugin's skill sources; fixture mode deliberately scans the supplied fixture workflow root. | Invariant/explicit-fixture behavior; pruning would change its contract. |
-| `bin/ship-capture.sh:9-11` | `grep -r` receives shell-expanded `docs/*/README.md` file arguments, not a repository directory. | Syntactic false positive; no recursive repository reach. |
-| `lib/rebase-resolve-additive.sh:48` | `git ls-files -u` reads unmerged index entries only. | Syntactic false positive; no filesystem discovery. |
-
-Conclusion: the complete current qualifying set is exactly
-`discover-adopter-skills.sh` and `density-classify.sh`. The two candidates the
-prior cycle omitted, `issues-to-contract.sh` and `sync-drift-check.mjs`, are now
-explicitly classified with source evidence.
+| `bin/check-invariants.sh:108-129,290-304,1703-1716` | Recursively validates plugin skill sources; fixture mode deliberately scans the supplied fixture root. | Invariant/explicit-fixture behavior; pruning would change its contract. |
+| `bin/ship-capture.sh:9-11` | `grep -r` receives shell-expanded README file arguments, not a repository directory. | Syntactic false positive. |
+| `lib/rebase-resolve-additive.sh:48` | `git ls-files -u` reads unmerged index entries only. | Syntactic false positive. |
 
 ## Design Output
 
 ### Captain Decisions
 
 **D1|Captain decision**: Under the Captain's explicit delegation to the Science
-Officer, choose C1-A: add one namespaced, sourceable Bash-only helper at
-`plugins/ship-flow/lib/discovery-exclusions.sh`. It exposes a
-`ship_flow_discovery_find <requested-root> <find-expression...>` contract; both
-known Bash consumers source it. Do not add executable, config-loader, or
-non-shell consumption modes until a real consumer exists.
+Officer, preserve C1-A: one namespaced, sourceable Bash-only helper at
+`plugins/ship-flow/lib/discovery-exclusions.sh`, exposing
+`ship_flow_discovery_find <requested-root> <find-expression...>`. Do not add an
+executable mode, config loader, non-shell adapter, or generic discovery
+framework. The verify return does not invalidate this primitive.
 
-**D2|Captain decision**: Under the same delegation, choose C2-A: prune only
+**D2|Captain decision**: Under the same delegation, preserve C2-A: prune only
 descendant directory segments named `__tests__` or `test-fixtures`, evaluated
-relative to the requested root. The requested root is never rejected because
-its own name or any ancestor contains a marker. Do not generically exclude
-`fixtures`, `test`, or `tests`, and do not derive policy from `.gitignore`.
+relative to the requested root. Never reject the requested root because of its
+own name or an ancestor marker. Do not generically exclude `fixtures`, `test`,
+or `tests`, and do not derive policy from `.gitignore`.
 
-**D3|Captain decision**: Under the same delegation, choose constrained C3-A:
-record this complete current audit, directly assert that both known consumers
-source the helper, and add one simple invariant that exclusion-marker
-definitions (`-name __tests__` / `-name test-fixtures`, or their constant
-equivalent) occur only in the helper. Do not build a permanent multi-language
-recursive-primitive detector or checked-in classification inventory.
+**D3|Captain decision**: Under the same delegation, preserve constrained C3-A
+and close DC-4 narrowly. The one-time audit and two direct-consumer assertions
+remain sufficient. The marker single-definition invariant must inspect only
+top-level production `plugins/ship-flow/lib/*.sh` and
+`plugins/ship-flow/bin/*.sh`, excluding nested tests/fixtures, and require both
+marker definitions to occur exactly once in `discovery-exclusions.sh`. Do not
+add a permanent walker detector or checked-in classification inventory.
 
-### Helper Boundary
+**D4|Captain decision**: Under the Captain's delegated technical-design
+authority, add caller-side bounded capture as the fail-loud contract. The shared
+primitive returns raw `find` status and leaves diagnostics visible. Each caller
+captures traversal data to a temporary file, checks producer status before
+reading that data, normalizes any traversal failure to operational exit 2 with
+a contextual stderr diagnostic, and publishes no route envelope or density
+classification unless every required traversal succeeded. Healthy empty data
+remains distinct from error. Do not use process-substitution producer status,
+`pipeline || echo 0`, `grep -q` pipeline status, or a data-stream sentinel.
 
-The helper owns only the shared fixture-tree semantics. Each consumer retains
-its distinct search target, output, and existing non-fixture pruning. The
-function must be Bash 3.2-compatible, quote paths safely, preserve normal
-`find` predicate arguments, and use a root-relative traversal boundary such as
-`-mindepth 1` so a legitimate root located beneath
-`lib/__tests__/fixtures/**` remains discoverable.
+### Alternatives Considered
 
-### Verification Strategy
+| Approach | Trade-off | Judgment |
+| --- | --- | --- |
+| Caller-local bounded capture, explicit status check, then consume the file | Small Bash 3.2-compatible change; preserves raw diagnostics/status and avoids partial data acceptance. | **Selected by D4.** |
+| Recover pipeline/process-substitution status through `PIPESTATUS` or side channels | Brittle across the existing process substitutions, command substitutions, and early-closing `grep -q`; easy to conflate SIGPIPE/no-match/error. | Rejected. |
+| Expand the shared helper into an executable, generic capture protocol, or inventory service | Centralizes more mechanics but violates D1/YAGNI and adds an interface no current non-shell consumer needs. | Rejected. |
 
-Implementation begins with focused RED/GREEN regressions, not the real
-repository-root run:
+### Shared Primitive and Capture Boundary
 
-1. Extend `test-adopter-skill-discovery.sh` with twin clean/decoy roots. A
-   nested `__tests__` or `test-fixtures` subtree contains route-shaped files;
-   before the fix the full YAML differs (RED), after the fix stdout is
-   byte-identical to the clean twin (GREEN). Both runs must exit 0 with empty
-   stderr.
-2. Extend `test-density-classify.sh` with a nested fixture decoy that changes a
-   density signal before the fix (RED) but leaves the clean twin's intended
-   classification unchanged after the fix (GREEN). Both runs must exit 0 with
-   empty stderr.
-3. Preserve positive fixture-root behavior. Run discovery from the existing
-   `lib/__tests__/fixtures/adopter-skill-discovery/carlove-like` root and add an
-   equivalent density fixture whose requested root or ancestor contains a
-   marker; legitimate signals below that root still produce the existing
-   output.
-4. Add direct source assertions for both consumers and the single-definition
-   invariant. These are intentionally simple grep/source checks, not an
-   extensible walker detector.
-5. Verify `docs/ship-flow/README.md` contains the explicit
-   `--workflow-dir docs/ship-flow` guard and local tracker `#24`.
+`ship_flow_discovery_find` continues to own only root-relative marker pruning,
+safe path quoting, and forwarding of the caller's `find` expression. It must
+remain Bash 3.2-compatible and preserve raw `find` stdout, stderr, and status.
+It does not decide whether output means a route, count, or density signal.
 
-Only after all focused checks are GREEN, execute
-`plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` exactly once as the
-post-fix acceptance run. Capture exit status, stdout, and stderr; require exit
-0, empty stderr, and zero fixture-derived routes. Any unexpected route,
-non-empty stderr, or nonzero exit stops implementation and returns the helper
-strategy to design review; it is not permission for another patch iteration.
+Each top-level consumer creates one bounded scratch directory with `mktemp -d`,
+registers cleanup for normal and signal exits, and uses files inside it for
+sequential traversal capture. A capture attempt truncates its target first,
+runs the shared primitive with stdout redirected only to that file, and checks
+the command status directly. Stderr is not sent to `/dev/null`; on failure the
+caller also emits a stable context line naming the consumer and traversal plus
+the raw exit code. Partial capture data is discarded and never interpreted.
+Scratch creation failure is itself operational exit 2 with a diagnostic.
+
+### Adopter Discovery Contract
+
+The three local probe families (`has_path`, `has_file_name`, and
+`has_dependency`) use one tri-state contract:
+
+| Probe result | Meaning | Caller action |
+| --- | --- | --- |
+| 0 | traversal succeeded and capture is non-empty | predicate matched |
+| 1 | traversal succeeded and capture is empty | healthy no match; the next OR alternative may run |
+| 2 | traversal or capture setup failed | abort the script immediately; do not evaluate later alternatives |
+
+Route predicates must inspect this status explicitly rather than placing the
+probe directly in a boolean `if A || B` chain. Header and route text are built
+in a scratch output file and copied to stdout only after all route probes finish
+without error. Top-level exit 0 therefore means a complete YAML envelope, while
+exit 2 means operational failure, non-empty stderr, and no accepted envelope.
+Existing argument/root validation remains exit 2.
+
+### Density Value/Error Contract
+
+Every one of the four density traversals has an explicit value/error boundary:
+
+1. S1 captures NUL-delimited `CLAUDE.md` paths, verifies traversal success, and
+   only then feeds the file to the existing Bash 3.2 `read -d ''` loop. No
+   process substitution remains.
+2. S2 captures matching `SKILL.md` paths, verifies success, then computes the
+   count from the capture file. No producer pipeline determines success.
+3. S3 archive and S3 done each capture and count independently. Neither branch
+   may fallback to zero when its walk fails.
+
+Primary density mode prints exactly one of `high|medium|low|vacuum` and exits 0
+only after every applicable traversal succeeds. `--is-high` retains 0=high and
+1=healthy not-high. Both modes reserve exit 2 for usage, setup, or traversal
+error; on exit 2 stderr is non-empty and stdout contains no classification.
+
+### Captain Authorization Required
+
+`AUTH-1` is the only open decision:
+
+| Option | Semantics | Consequence |
+| --- | --- | --- |
+| A — authorize one revised first run (**EM recommendation**) | Treat the old receipt as acceptance-invalid for incomplete code. After materially revised code passes every focused check, permit exactly one new real repository-root adopter-discovery run. | Any route, diagnostic, or nonzero result goes directly to strategy-level `costly_no`; there is no additional patch cycle or third run. |
+| B — Bet consumed; abandon/reconsider | Treat the old run as consuming the Bet despite its observability gap. | Do not implement or execute another discovery attempt; reconsider the helper strategy at strategy level. |
+
+No stage worker may infer the Captain's selection. Until the Captain chooses A
+or B, plan/execute remain blocked and no real repository-root discovery may run
+or be emulated.
+
+## Verification Strategy
+
+Implementation begins with focused fixtures only; no test needs repo-root
+discovery.
+
+1. Preserve the existing adopter clean/decoy twin and marker-ancestor positive
+   cases, including exact successful YAML, exit 0, and empty stderr.
+2. Preserve density clean/decoy parity and marker-ancestor positive behavior.
+   Split the S3 regression so an archive-only decoy and a done-only decoy each
+   independently fail RED before pruning and remain `vacuum` GREEN. A combined
+   arrangement is insufficient evidence for either branch.
+3. Inject traversal failure with a focused fixture root and a controlled fake
+   `find` placed first on `PATH`. The fake delegates to the real `find` except
+   when its first root argument equals a test-selected fixture subtree; that
+   branch prints a deterministic diagnostic and exits nonzero. No fixture
+   derives or discovers the repository root.
+4. Adopter failure injection targets its focused fixture root and proves exact
+   top-level exit 2, non-empty stderr containing both injected and adopter
+   context, and empty stdout/no YAML envelope. This pins the shared tri-state
+   path used by all three probe families.
+5. Density failure injection targets S1, S2, S3 archive, and S3 done roots in
+   separate parameterized cases. Every case proves exact exit 2, non-empty
+   contextual stderr, and empty stdout/no classification. At least one case
+   also runs `--is-high` to prove traversal error is not misreported as normal
+   not-high exit 1.
+6. Extend the named invariant fixture with a duplicate marker definition in a
+   top-level `bin/*.sh` script and require failure, while the existing
+   top-level `lib/*.sh` duplicate also fails and nested fixture copies remain
+   excluded from the production count.
+7. Run Bash 3.2 syntax, focused adopter, focused density, invariant fixture,
+   and named/full invariant checks. Successful positive paths retain exit 0,
+   intended stdout, and empty stderr.
+
+Only if the Captain selects AUTH-1 Option A may implementation, after all
+focused checks are GREEN, perform exactly one new real run. If the Captain
+selects Option B, no implementation run occurs and the strategy is reconsidered.
+
+## Frozen Receipt Audit
+
+The cycle-2 receipt is immutable and consumed:
+
+- result: rc 0; routes 0; stdout 193 bytes; stderr 0 bytes;
+- stdout SHA-256:
+  `b038878f44c05b0e836f1e2c608cda76ab7f3d3890d16c13e7912acff55baa53`;
+- stderr SHA-256:
+  `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+It proves only that static envelope. Because the executed caller could suppress
+a failed traversal into the same header-only result, it is not acceptance. This
+design cycle and its reviewer may read source and the frozen record but must not
+rerun, reconstruct, or emulate repository-root discovery. AUTH-1 governs only
+whether one materially revised future implementation receives a new run.
 
 ### Artifact Bundle Manifest
 
 | Path | Type | Purpose |
 | --- | --- | --- |
-| `docs/ship-flow/fixture-pollution-discovery-helpers/design.md` | non-UI contract design | Delegated D1-D3 decisions, complete audit, verification contract, and structured plan hand-off. |
+| `docs/ship-flow/fixture-pollution-discovery-helpers/design.md` | non-UI contract design | D1-D4, fail-loud contracts, focused verification, frozen-receipt audit, and Captain authorization gate. |
+| `docs/ship-flow/fixture-pollution-discovery-helpers/index.md` | design stage report | Cycle-3 completion inventory and PROMPT_CAPTAIN hand-off without status mutation. |
 
-## Reverse Audit of Shape Hand-off
+## Reverse Audit of Prior Stages
 
-- `open_design_questions`: empty (`shape.md:244-245`).
-- C1 is resolved by D1 as sourceable Bash-only, explicitly deferring speculative
-  executable/non-shell modes.
-- C2 is resolved by D2 with exact root-relative descendant markers and explicit
-  non-markers.
-- C3 is resolved by D3 with one complete audit and two small invariants, without
-  a permanent classification framework.
-- No UI lane or token-indirection evidence exists; UI fidelity checks are not
-  applicable.
+- Shape C1 remains resolved by D1 and C2 by D2.
+- Shape C3 remains resolved by D3; cycle 3 makes the previously implicit
+  production boundary exact: top-level `lib/*.sh` plus `bin/*.sh` only.
+- Verify DC-7 is resolved at the design-contract level by D4's observable
+  match/no-match/error and value/error contracts; acceptance itself remains
+  blocked on AUTH-1.
+- Verify DC-4 routes to execute through D3's corrected invariant scope.
+- The density advisory routes to execute through independent archive and done
+  regressions.
+- `open_design_questions` remains empty. AUTH-1 is a new risk-authorization
+  decision caused by the invalid receipt, not an unresolved technical design.
+- No UI lane, theme indirection, or render-fidelity target applies.
 
 ## Design Readiness Review
 
@@ -184,7 +286,7 @@ findings:
   - reviewer: routing-preflight
     severity: PASS
     route_to: plan
-    evidence: D1-D3 narrow the internal contract without data-model, external interface, or multi-domain work.
+    evidence: D1-D4 remain internal Bash mechanics with no data-model, public-interface, migration, UI, or multi-domain change.
 ```
 
 Design Readiness Review: skipped - no risk trigger. The separate fresh
@@ -192,49 +294,35 @@ seven-factor non-UI cross-review remains mandatory.
 
 ## Adversarial Cross-Review
 
-The first fresh reviewer stalled without evidence and was interrupted. A
-replacement reviewer received only `design.md` and `shape.md`, performed a
-context-free read-only review, edited no files, and returned:
-
-| Non-UI factor | Result | Evidence |
-| --- | --- | --- |
-| Feasibility | PASS | The Bash 3.2 helper boundary, quoting, and root-relative `-mindepth 1` semantics are implementable (`design.md:114-121`). |
-| Executable scope | PASS | Consumers, focused tests, documentation delta, and one-shot acceptance command are explicit (`design.md:128-153`). |
-| Quality | PASS | RED/GREEN behavior covers stdout, stderr, exit status, positive fixture-root behavior, and the stop rule (`design.md:128-153`). |
-| DC adequacy | PASS | Seven typed constraints carry decision and source back-references; `open_decisions` is empty (Hand-off to Plan). |
-| Canonical sync | PASS | Shape and design consistently skip PRODUCT/ARCHITECTURE changes and require only the workflow README guard (`shape.md:191-199`; `design.md:32-42`). |
-| Reverse-audit previous stage | PASS | D1-D3 directly resolve shape C1-C3, including explicit deferrals (`shape.md:246-255`; `design.md:94-112,161-169`). |
-| Constraint Coverage | PASS | The complete audit classifies `issues-to-contract.sh` and `sync-drift-check.mjs`; every D marker is referenced and no decision remains open (`design.md:71-88`; Hand-off to Plan). |
-
-Verdict: **PROCEED**.
-
-Coaching note: keep plan mechanically faithful to the seven typed constraints,
-especially the root-relative positive-fixture case and one-shot repository-root
-acceptance gate.
+Pending fresh read-only review after validators. The reviewer must not run or
+emulate repository-root discovery and must assess feasibility, executable
+scope, quality, DC adequacy, canonical sync, reverse-audit coverage, and
+constraint coverage. Because AUTH-1 is deliberately open, the expected
+stage-gate verdict is PROMPT_CAPTAIN unless the reviewer finds a design VETO.
 
 ## Design Report
 
-- status: passed
-- stage_cost: $0.00 (single Codex design worker + fresh read-only reviewer)
-- iterations: 2 (initial prompt cycle + delegated narrow revision)
-- contradictions_resolved: 3
-- captain_decisions: 3 delegated through the Science Officer
-- reviewer_verdict: PROCEED
+- status: gaps-noted
+- stage_cost: one Codex design worker; fresh reviewer pending
+- iterations: 3 (cycle-2 narrow revision plus verify-return cycle)
+- contradictions_resolved: 4 technical decisions resolved
+- captain_decisions: 4 delegated technical decisions; 1 authorization pending
+- reviewer_verdict: PROMPT_CAPTAIN pending fresh review
 - Design Readiness Review: skipped - no risk trigger
 
-The installed `design-flow` delegate was unavailable, so the design used the
-documented `superpowers:brainstorming` fallback. The EM decision changed the
-prior recommendations materially: D1 rejects speculative executable support,
-and D3 replaces a permanent inventory framework with one complete audit plus
-small source invariants.
+The installed `design-flow` delegate was unavailable, so this re-entry used the
+documented `superpowers:brainstorming` fallback. D4 materially revises the
+caller contract without expanding the pruning primitive or introducing a new
+framework.
 
 ### Metrics
 
-- status: passed
-- duration_minutes: 25
-- iteration_count: 2
-- captain_decisions_count: 3
-- reviewer_verdict: PROCEED
+- status: gaps-noted
+- duration_minutes: 30
+- iteration_count: 3
+- captain_decisions_count: 4
+- open_decisions_count: 1
+- reviewer_verdict: PROMPT_CAPTAIN
 
 <!-- section:hand-off-to-plan -->
 ### Hand-off to Plan
@@ -243,7 +331,7 @@ small source invariants.
 design-skipped: false
 design_constraints:
   - type: contract
-    assertion: Create exactly one Bash 3.2-compatible namespaced sourceable helper at plugins/ship-flow/lib/discovery-exclusions.sh; do not add executable, declarative-loader, or non-shell modes.
+    assertion: Preserve exactly one Bash 3.2-compatible namespaced sourceable pruning helper at plugins/ship-flow/lib/discovery-exclusions.sh; do not add executable, declarative-loader, non-shell, or generic capture modes.
     rationale_decision: D1
     source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
   - type: filter-contract
@@ -251,42 +339,66 @@ design_constraints:
     rationale_decision: D2
     source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
   - type: contract
-    assertion: Both discover-adopter-skills.sh and all four density-classify.sh find traversals source and use the shared helper while retaining their consumer-specific non-fixture behavior.
+    assertion: Both discover-adopter-skills.sh and all four density-classify.sh traversals use the shared primitive while retaining consumer-specific expressions and behavior.
     rationale_decision: D3
     source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
   - type: contract
-    assertion: Add simple source invariants that both known consumers source the helper and exclusion-marker definitions exist only in that helper; do not add a permanent recursive-walker detector or classification inventory.
+    assertion: The marker single-definition invariant scans only top-level production plugins/ship-flow/lib/*.sh and plugins/ship-flow/bin/*.sh, rejects duplicates in either directory, excludes nested tests and fixtures, and adds no permanent walker detector or inventory.
     rationale_decision: D3
     source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
+  - type: contract
+    assertion: Adopter discovery uses bounded temporary capture and explicit 0=match, 1=healthy-no-match, 2=error probes; any traversal failure emits diagnostics, exits 2, aborts remaining route predicates, and publishes no YAML envelope.
+    rationale_decision: D4
+    source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
+  - type: contract
+    assertion: Density captures and validates S1, S2, S3 archive, and S3 done producers before consuming values; primary mode emits a class only on exit 0, --is-high keeps 1 for healthy not-high, and every traversal error emits diagnostics with exit 2 and no classification.
+    rationale_decision: D4
+    source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
   - type: filter-contract
-    assertion: Focused RED/GREEN twin-root tests cover nested fixture decoys for both consumers, preserve positive fixture-root discovery, keep intended stdout unchanged, and assert exit 0 plus empty stderr.
+    assertion: Focused tests preserve positive no-match, clean-decoy, and marker-ancestor behavior; archive-only and done-only density decoys regress independently.
     rationale_decision: D2
     source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
   - type: contract
-    assertion: Update docs/ship-flow/README.md with the explicit --workflow-dir docs/ship-flow guard and local tracker #24.
-    rationale_decision: D3
+    assertion: Controlled fake-find PATH injection on focused fixture roots proves adopter and each density traversal fail visibly with exact exit 2, non-empty contextual stderr, and no accepted output; no test discovers or runs against the repository root.
+    rationale_decision: D4
     source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
   - type: contract
-    assertion: Reserve discover-adopter-skills.sh --root=. for one post-fix acceptance execution after focused tests; unexpected routing, stderr, or nonzero exit stops work and returns to strategy review rather than triggering another patch.
+    assertion: Preserve the existing docs/ship-flow/README.md workflow-dir guard and local tracker #24; keep dispatch duplication as issue #21 evidence only.
     rationale_decision: D3
     source_artifact: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
-open_decisions: []
+open_decisions:
+  - id: AUTH-1
+    owner: Captain
+    question: Authorize exactly one materially revised first real repository-root run, or treat the Bet as consumed and abandon/reconsider the helper strategy?
+    options:
+      - authorize_one_revised_run_then_costly_no_on_failure
+      - bet_consumed_abandon_or_reconsider
+    em_recommendation: authorize_one_revised_run_then_costly_no_on_failure
 artifact_paths:
   - path: docs/ship-flow/fixture-pollution-discovery-helpers/design.md
+  - path: docs/ship-flow/fixture-pollution-discovery-helpers/index.md
 ```
 <!-- /section:hand-off-to-plan -->
 
-## Stage Report: design (cycle 2)
+## Stage Report: design (cycle 3)
 
-- DONE: Record the Science Officer route=narrow decisions as D1-D3 under the Captain's explicit delegation: sourceable Bash-only shared helper; requested-root-relative descendant __tests__/test-fixtures pruning; one-time complete walker audit plus simple single-definition/consumer invariant, without a permanent cross-language inventory framework.
-  D1-D3 and the complete audit above provide the decision and source evidence.
-- DONE: Replace PROMPT_CAPTAIN with a complete non-UI Hand-off to Plan: typed design_constraints for every D marker, open_decisions: [], focused RED/GREEN and first-real-run verification constraints, updated Design Report and Stage Report. Re-audit current recursive candidates including issues-to-contract.sh and sync-drift-check.mjs before any completeness claim.
-  The structured hand-off has seven typed constraints; the audit classifies both required candidates.
-- DONE: Run applicable design validators and a fresh context-free read-only seven-factor review. Commit only design-stage artifacts; do not implement code, mutate entity status, advance stages, file upstream issues, or manage worktrees.
-  Readiness skipped correctly; hand-off and D-reference validation passed; the fresh reviewer returned seven-factor PROCEED.
+- DONE: Preserve D1-D3 and add D4's Bash 3.2-safe bounded-capture contract so
+  adopter probes expose match/no-match/error and density exposes value/error;
+  traversal failure is diagnostic, exit 2, and never accepted as YAML or a
+  classification.
+- DONE: Resolve verify's DC-4 and density-test hand-off gaps by spanning only
+  top-level production `lib/*.sh` plus `bin/*.sh`, testing archive and done
+  decoys independently, and injecting fake-`find` failures against focused
+  fixture roots for adopter and all density traversal labels.
+- DONE: Preserve the consumed frozen receipt as immutable envelope-only audit,
+  prohibit design/reviewer discovery execution, and leave exactly AUTH-1 for
+  the Captain: authorize one materially revised run or consume the Bet and
+  abandon/reconsider.
+- PENDING: Fresh design validators and context-free non-UI cross-review; update
+  this report with evidence before commit.
 
 ### Summary
 
-Converted the blocked design into an FO-gated narrow contract under explicit
-delegation, completed the missing candidate audit, and supplied focused
-RED/GREEN plus one-shot acceptance constraints. No Captain input remains.
+The revised design keeps the narrow pruning primitive and closes the silent
+traversal-failure seams with caller-side capture and explicit exit contracts.
+Technical design is complete; AUTH-1 alone requires Captain authorization.
