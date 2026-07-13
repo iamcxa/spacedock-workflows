@@ -63,7 +63,16 @@ PITCH_APPETITE=$(yq --input-format=json '.pitch.appetite' "$PROPOSAL" | tr -d '"
 PITCH_PROBLEM=$(yq --input-format=json '.pitch.problem' "$PROPOSAL" | tr -d '"')
 PITCH_ACCEPTANCE_OUTCOME=$(yq --input-format=json '.pitch.acceptance_outcome' "$PROPOSAL" | tr -d '"')
 PITCH_ANSWERS_DENSITY=$(yq --input-format=json '.pitch.answers_density // ""' "$PROPOSAL" | tr -d '"')
-PITCH_SHAPE_MODE=$(yq --input-format=json '.pitch.shape_mode // "mode-a"' "$PROPOSAL" | tr -d '"')
+if yq --input-format=json -e '.pitch | has("shape_mode")' "$PROPOSAL" >/dev/null 2>&1; then
+  PITCH_SHAPE_MODE_TYPE=$(yq --input-format=json -r '.pitch.shape_mode | type' "$PROPOSAL")
+  if [ "$PITCH_SHAPE_MODE_TYPE" != "!!str" ]; then
+    echo "Error: pitch.shape_mode must be one of: mode-a, mode-b, mode-c" >&2
+    exit 10
+  fi
+  PITCH_SHAPE_MODE=$(yq --input-format=json -r '.pitch.shape_mode' "$PROPOSAL")
+else
+  PITCH_SHAPE_MODE="mode-a"
+fi
 
 # pre_mortem block (entity 129.4): render the already-validated proposal.pitch.pre_mortem
 # into the pitch frontmatter so non-trivial pitches pass check-invariants.sh C1
@@ -185,20 +194,26 @@ if [ "$DRY_RUN" = "1" ]; then
   else
     echo "  pitch: $PITCH_PATH"
   fi
-  for c in "${CHILDREN_PATHS[@]}"; do echo "  child: $c"; done
-  for r in "${RH_PATHS[@]}"; do echo "  rabbit: $r"; done
+  if [ "$CHILD_COUNT" -gt 0 ]; then
+    for c in "${CHILDREN_PATHS[@]}"; do echo "  child: $c"; done
+  fi
+  if [ "$RH_COUNT" -gt 0 ]; then
+    for r in "${RH_PATHS[@]}"; do echo "  rabbit: $r"; done
+  fi
   echo "Would patch: ROADMAP.md sections next, later, not-doing"
   exit 0
 fi
 
 # Duplicate todo refusal shares exit 10 with proposal validation failures: both
 # reject unsafe write input before the write phase mutates directories or files.
-for rh_path in "${RH_PATHS[@]}"; do
-  if [ -e "$rh_path" ]; then
-    echo "Error: rabbit-hole todo already exists, refusing to overwrite: $rh_path" >&2
-    exit 10
-  fi
-done
+if [ "$RH_COUNT" -gt 0 ]; then
+  for rh_path in "${RH_PATHS[@]}"; do
+    if [ -e "$rh_path" ]; then
+      echo "Error: rabbit-hole todo already exists, refusing to overwrite: $rh_path" >&2
+      exit 10
+    fi
+  done
+fi
 
 # === Real write phase ===
 mkdir -p "$ENTITY_DIR" "$TODO_DIR"

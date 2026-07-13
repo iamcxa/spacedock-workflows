@@ -132,7 +132,6 @@ proposal_without_pm_skill_receipts() {
     "appetite": "2 days",
     "problem": "Testing shape-confirm.sh",
     "acceptance_outcome": "Captain receives a working shape-confirm test suite that exercises the missing PM-skill receipt guard before mutation.",
-    "shape_mode": "mode-a",
     "stated_assumptions": [],
     "dag_mermaid": "graph LR\n  A --> B"
   },
@@ -155,6 +154,28 @@ proposal_without_mode_a_receipts() {
     "problem": "Testing shape-confirm.sh mode-aware receipt handling",
     "acceptance_outcome": "Captain receives a truthful folder-layout shape artifact whose receipt block matches the selected ship-shape mode.",
     "shape_mode": "${shape_mode}",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\\n  A --> B"
+  },
+  "children": [],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+proposal_with_raw_shape_mode() {
+  local raw_shape_mode="$1"
+  cat <<EOF
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing shape-confirm.sh shape_mode type validation",
+    "acceptance_outcome": "Captain receives a fail-closed shape proposal contract that rejects non-string mode values before any write occurs.",
+    "shape_mode": ${raw_shape_mode},
     "stated_assumptions": [],
     "dag_mermaid": "graph LR\\n  A --> B"
   },
@@ -472,6 +493,8 @@ echo "--- DC-37: missing PM-skill receipts reject before mutation ---"
 TMP="$(setup_fixture)"
 PROP="$TMP/proposal-no-receipts.json"
 proposal_without_pm_skill_receipts > "$PROP"
+EXPLICIT_MODE_A_PROP="$TMP/proposal-mode-a-no-receipts.json"
+proposal_without_mode_a_receipts "mode-a" > "$EXPLICIT_MODE_A_PROP"
 pushd "$TMP" >/dev/null || exit 1
 assert_exit 10 \
   "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
@@ -479,6 +502,9 @@ assert_exit 10 \
 assert_stderr_contains "Error: pitch.pm_skill_receipts or top-level pm_skill_receipts is required for folder-layout Mode A shape proposals" \
   "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder" \
   "DC-37a2 missing PM-skill receipts diagnostic names both accepted JSON locations"
+assert_exit 10 \
+  "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$EXPLICIT_MODE_A_PROP' --layout=folder" \
+  "DC-37a3 explicit Mode A also rejects missing PM-skill receipts"
 if [ ! -e "docs/ship-flow/090-test-pitch" ] && [ ! -e "docs/ship-flow/090-test-pitch.md" ]; then
   echo "OK DC-37b missing receipt refusal creates no pitch artifacts"
 else
@@ -570,6 +596,34 @@ else
 fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
+
+echo
+echo "--- DC-40.1: non-string and null shape modes reject as invalid modes ---"
+for case_name in false null number; do
+  case "$case_name" in
+    false) raw_shape_mode=false ;;
+    null) raw_shape_mode=null ;;
+    number) raw_shape_mode=7 ;;
+  esac
+  TMP="$(setup_fixture)"
+  PROP="$TMP/proposal-${case_name}-mode.json"
+  proposal_with_raw_shape_mode "$raw_shape_mode" > "$PROP"
+  pushd "$TMP" >/dev/null || exit 1
+  assert_exit 10 \
+    "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder --dry-run" \
+    "DC-40.1-${case_name} non-string/null shape mode exits 10"
+  assert_stderr_contains "Error: pitch.shape_mode must be one of: mode-a, mode-b, mode-c" \
+    "bash '${LIB_DIR}/shape-confirm.sh' --proposal='$PROP' --layout=folder --dry-run" \
+    "DC-40.1-${case_name}-diagnostic rejects before Mode A receipt handling"
+  if [ ! -e "docs/ship-flow/090-test-pitch" ]; then
+    echo "OK DC-40.1-${case_name}-mutation invalid shape mode creates no artifacts"
+  else
+    echo "FAIL DC-40.1-${case_name}-mutation invalid shape mode created artifacts"
+    FAIL=1
+  fi
+  popd >/dev/null || exit 1
+  rm -rf "$TMP"
+done
 
 echo
 echo "--- DC-41: Mode C is an explicit non-A ship-shape mode ---"
