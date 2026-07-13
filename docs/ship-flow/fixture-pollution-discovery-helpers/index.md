@@ -1,12 +1,12 @@
 ---
 title: Fixture-tree exclusion for discovery helpers
-status: verify
+status: ship
 source: todo fixture-pollution-discovery-helpers (pitch 1 harvest)
 started: 2026-07-12T13:48:06Z
 completed:
 verdict:
 score:
-worktree: .claude/worktrees/fixture-pollution-discovery-helpers
+worktree: .claude/worktrees/issue20-clean
 issue: "#20"
 related_issue: "#24"
 pr:
@@ -19,12 +19,24 @@ design_required: true
 contract_decision_required: true
 domain: schema
 harvest_required: true
+stage_outputs:
+  shape: shape.md
+  design: design.md
+  plan: plan.md
+  execute: execute.md
+  verify: verify.md
+  review: review.md
 ---
 
 <!-- section:stage-artifact-links -->
 | Stage | File |
-| --- | --- |
+|-------|------|
 | shape | [shape.md](shape.md) |
+| design | [design.md](design.md) |
+| plan | [plan.md](plan.md) |
+| execute | [execute.md](execute.md) |
+| verify | [verify.md](verify.md) |
+| review | [review.md](review.md) |
 <!-- /section:stage-artifact-links -->
 
 ## Problem
@@ -253,3 +265,48 @@ Cycle-3 verification reproduces all authorized behavior and invariant checks,
 validates the sole immutable acceptance envelope against the original frozen
 object without replay, and returns PROCEED with one nonblocking signal-cleanup
 note. No code, test, receipt, status, issue, capture, or worktree state changed.
+
+## Stage Report: review
+
+- DONE: Correct the verify UAT contract without executing it. DC-1 through
+  DC-9 now provide bounded copy-paste procedures and expected observables;
+  DC-10 is a read-only committed-object/hash/receipt audit that permanently
+  forbids repository-root replay, emulation, reconstruction, and indirect
+  invocation. Commits `faaad26`, `4e0c53d`, and `d7be3a4` record the clean
+  six-path identity plus the isolated `check-invariants.sh` blob exception.
+- DONE: Audit all canonical dispositions. `ARCHITECTURE.md`, `PRODUCT.md`,
+  and root `README.md` are explicit skips; `docs/ship-flow/README.md` preserves
+  the workflow-dir/#24 guard; ROADMAP commit `3c9f83e` moves the row from Later
+  to Shipped; no umbrella closeout applies because the pitch has no children.
+- DONE: Capture two bounded harvest candidates with exact DC/receipt evidence
+  and valid `promote-to-ship-verify.md` / `promote-to-ship-execute.md`
+  destinations. Preserve the accepted nonblocking INT/TERM cleanup warning as
+  a release note without reopening frozen source.
+- DONE: Obtain a fresh seven-factor cross-review `PROCEED` with no correction,
+  then a bounded DC-10 static recheck `PASS` after the EM-requested new-line
+  audit correction. Final EM judgment is proceed/high confidence.
+- DONE: Emit the slim review artifact and run the canonical-doc sync checker.
+  All seven checker outcomes pass with no blockers; final artifact commit is
+  `61b7293`.
+- BOUNDARY: The immutable cycle-3 receipt remains bound to original frozen
+  commit `1b3871f8`, sole launch count 1, rc 0, stdout 193 bytes, stderr 0
+  bytes, and routes 0; the pre-launch setup failure remains count 0. No test,
+  discovery, receipt/capture, issue, PR, push, or source mutation occurred.
+- status: passed
+- stage_cost: one clean review worker, one fresh seven-factor reviewer, one
+  bounded static recheck, and final Science Officer/EM judgment
+
+### Summary
+
+Review confirms the isolated issue #20 branch is ready for ship-final with a
+reproducible bounded UAT contract, explicit canonical outcomes, two reusable
+harvest lessons, and the immutable acceptance boundary preserved.
+
+### Metrics
+
+- status: passed
+- duration_minutes: 14
+- iteration_count: 2
+- canonical_docs_updated_count: 1
+- canonical_docs_skipped_count: 3
+- pr_number: not-created
