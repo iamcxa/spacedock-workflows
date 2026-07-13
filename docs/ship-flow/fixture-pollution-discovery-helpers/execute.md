@@ -1,146 +1,138 @@
 <!-- section:execute-report -->
-# Fixture-tree exclusion for discovery helpers — Execute
+# Fixture-tree exclusion for discovery helpers — Execute cycle 3
 
-started: 2026-07-13T06:39:05Z
-base_commit: b4e31e7ba1dd0210cc3f85301f8a49828a6eb195
-completed: 2026-07-13T07:39:29Z
-dispatch_scope: T1-T4 completed; single DC-7 receipt frozen for verify
+started: 2026-07-13T09:00:49Z
+base_commit: 086c5ff8454c435961e157f3955932e70db244cf
+source_frozen_commit: 1b3871f8cfb1f811813605e48f7c22922d686162
+completed: 2026-07-13T09:41:05Z
+dispatch_scope: serial T1-T3 repair, frozen review, then one FO/EM-released T4 invocation
 
 ## Execute Dispatch Manifest
 
-| Task | Parallel Group | Depends On | Owned Paths | Integration Owner | Dispatch Mode |
-|---|---|---|---|---|---|
-| T1 | serial | none | `discovery-exclusions.sh`, adopter consumer/test | executer | serial fresh worker |
-| T2 | serial | T1 | density consumer/test | executer | serial fresh worker |
-| T3 | serial | T1,T2 | invariant checker/test | executer | serial fresh worker |
-| T4 | serial | T1,T2,T3 | workflow README | executer | serial fresh worker after FO checkpoint |
+| Task | Group | Depends on | Owned paths | Mode |
+|---|---|---|---|---|
+| T1 | serial | none | adopter consumer/test | inline worker, dual TDD |
+| T2 | serial | T1 | density consumer/test | inline worker, dual TDD |
+| T3 | serial | T1,T2 | invariant checker/test | inline worker, dual TDD |
+| T4 | serial | T1-T3 + review | none; process/artifact evidence | FO/EM one-shot release |
 
 ## Execution Log
 
 | Task | Wave | Status | Files | Commit |
 |---|---|---|---|---|
-| T1 | W1 | DONE | helper, adopter consumer/test | `eddf14f` |
-| T2 | W2 | DONE | density consumer/test | `7d68203` |
-| T3 | W3 | DONE | invariant checker/test | `86f9213` |
-| T4 | W4 | DONE | workflow README | `b8b471e` |
+| T1 | W1 | DONE | adopter source/test | `ad24698` |
+| T2 | W2 | DONE | density source/test | `15b640f` |
+| T3 | W3 | DONE | invariant source/test | `1b3871f` |
+| T4 | W4 | DONE | process receipt; execute/index artifacts | N/A — process + artifact-only closeout |
 
 ## TDD Evidence
 
 ### T1
 
-- RED: `bash plugins/ship-flow/lib/__tests__/test-adopter-skill-discovery.sh` → rc 1, stderr 0 bytes, 25 passed / 1 expected twin-divergence failure; production untouched.
-- GREEN: same focused command → rc 0, stderr 0 bytes, 26 passed / 0 failed.
-- REFACTOR: `bash -n plugins/ship-flow/lib/discovery-exclusions.sh plugins/ship-flow/lib/discover-adopter-skills.sh && bash plugins/ship-flow/lib/__tests__/test-adopter-skill-discovery.sh` → rc 0, stderr 0 bytes, 26 passed / 0 failed.
+- RED: focused adopter suite rc 1; 26 baseline assertions passed and all 12 new fail-loud/short-circuit assertions failed for the expected masked rc 23, partial YAML, absent diagnostics, and continued probes.
+- GREEN: same suite rc 0, 38/38; all three probe families returned rc 2 with empty stdout, raw+context stderr, and logged short-circuit.
+- REFACTOR: Bash syntax, focused suite, and diff-check rc 0.
 
 ### T2
 
-- RED: `bash plugins/ship-flow/lib/__tests__/test-density-classify.sh` → rc 1, stderr 0 bytes; sole failure was clean `vacuum` versus nested-decoy `high`, with marker-ancestor controls passing.
-- GREEN: same focused command → rc 0, stderr 0 bytes; clean and decoy both `vacuum`, marker-ancestor remains `high`.
-- REFACTOR: `bash -n plugins/ship-flow/lib/density-classify.sh && bash plugins/ship-flow/lib/__tests__/test-density-classify.sh` → rc 0, stderr 0 bytes; exactly four helper calls.
+- RED: focused density suite rc 1; 22 baseline/positive assertions passed while S1/S2/archive/done exposed suppressed rc 23, continued traversal, emitted classification, or `--is-high` rc 1.
+- GREEN: same suite rc 0, 41/41; four producers fail rc 2 with no class, raw+label stderr, and independent two-file archive/done decoys remain `vacuum`.
+- REFACTOR: Bash syntax, focused suite, and diff-check rc 0.
 
 ### T3
 
-- RED: `bash plugins/ship-flow/lib/__tests__/test-check-invariants.sh` → rc 1, stderr 0 bytes; sole new failure was the missing named dispatcher, with good/missing/duplicate fixtures all returning rc 2 so adversarial cases could not false-pass.
-- GREEN: `bash plugins/ship-flow/lib/__tests__/test-check-invariants.sh && bash plugins/ship-flow/bin/check-invariants.sh --check discovery-exclusions` → rc 0, stderr 0 bytes.
-- REFACTOR: `bash -n plugins/ship-flow/bin/check-invariants.sh plugins/ship-flow/lib/__tests__/test-check-invariants.sh && bash plugins/ship-flow/lib/__tests__/test-check-invariants.sh` → rc 0, stderr 0 bytes.
+- RED: invariant fixture suite rc 1 solely because top-level bin duplicate returned 0; good=0, missing-source=1, lib-duplicate=1, nested-copy=0 were already correct.
+- GREEN/REFACTOR: fixture suite, named invariant, full invariant, Bash syntax, and diff-check rc 0; production scope is only top-level `lib/*.sh` plus `bin/*.sh`.
 
 ### T4
 
-- TDD: skip -- documentation plus one-shot acceptance orchestration.
-- README guard greps passed; all T1-T3 focused suites and the named invariant returned rc 0 with empty stderr before acceptance.
+- TDD: skip -- command-only immutable acceptance after frozen source review.
 
-## Self-Checks
+## Self-Checks and Reviews
 
-### T1
+| Check | Result |
+|---|---|
+| Bash 3.2.57 syntax over helper + six T1-T3 paths | PASS |
+| Adopter / density / invariant fixture suites | PASS — 38/38, 41/41, rc 0 |
+| Named / full invariant | PASS under prescribed PATH Bash |
+| TDD ledger | PASS — `status=pass records=4` |
+| Diff hygiene / frozen source status | PASS — clean |
+| Independent frozen-source review | GREEN — no blockers |
 
-- typecheck: PASS (`bash -n`; Bash 3.2.57)
-- lint: PASS (`git diff --check`); ShellCheck informational-only SC1091/SC2016 noted by worker
-- unit tests: PASS (26/26)
-- qa-only: N/A
-- critical-pass lite: PASS
-
-### T2
-
-- typecheck: PASS (`bash -n`; Bash 3.2.57)
-- lint: PASS (`git diff --check`)
-- unit tests: PASS (focused density suite)
-- qa-only: N/A
-- critical-pass lite: PASS
-
-### T3
-
-- typecheck: PASS (`bash -n`)
-- lint: PASS (`git diff --check`)
-- unit tests: PASS (focused invariant suite + named check)
-- qa-only: N/A
-- critical-pass lite: PASS
-
-### T4
-
-- typecheck: N/A (documentation only)
-- lint: PASS (`git diff --check`)
-- focused tests: PASS (four pre-acceptance checks, rc 0 / stderr 0)
-- reader-test: PASS
-- critical-pass lite: PASS
-
-## Reviews
-
-- T1 spec compliance: `SPEC_APPROVED`.
-- T1 code quality: `QUALITY_APPROVED`; original reviewer exceeded timebox, fresh circuit-breaker fallback approved with no blocking findings.
-- T2 spec compliance: one blocking test-contract finding fixed (direct decoy `vacuum` assertion), then `SPEC_APPROVED`.
-- T2 code quality: `QUALITY_APPROVED`; original reviewer exceeded timebox, fresh circuit-breaker fallback approved with no blocking findings.
-- T3 spec compliance: initial request for a fourth generic unknown-check test was rejected with exact-rc evidence; re-review returned `SPEC_APPROVED` without code change.
-- T3 code quality: `QUALITY_APPROVED` with no blocking findings.
-- T4 spec compliance: `SPEC_APPROVED`; reviewer consumed the frozen receipt without rerunning discovery.
-- T4 docs quality: `QUALITY_APPROVED`; reviewer consumed the frozen receipt without rerunning discovery.
-- Execute cross-review: initial reviewer stopped before inspection; fresh read-only fallback inspected the full plan/artifact/commit range and returned `PROCEED` without running tests or discovery.
+- External Claude review degraded on linked-worktree metadata, then timed out; bounded Codex CLI review also exceeded its verdict window. The collaboration fallback read the frozen source and returned GREEN.
+- Nonblocking reviewer note: combined `EXIT INT TERM` cleanup traps do not explicitly exit after a caught signal on Bash 3.2. EM retained this as a release-adjudication note; source stayed frozen.
+- `/bin/bash` 3.2 runtime of the repository-wide invariant reaches pre-existing `declare -A`; changed-file syntax/focused suites pass 3.2 and the plan-prescribed PATH Bash full invariant passes.
 
 ## Issues and Deviations
 
-- T1 implementer made one corrected read-only boundary mistake by consulting the parent Yangon checkout's design/plan before RED; no parent-checkout writes or commands occurred, and all subsequent reads/writes stayed in the dedicated worktree.
-- T2 first GREEN was rc 1 with clean `vacuum` versus decoy `low`; explicit `-print` on the two count-only helper expressions restored the original implicit-print behavior. One subsequent spec-review test-only fix added a direct decoy `vacuum` assertion. Shared fix iterations used: 2 of 3.
-- T3 converged without a correction; shared fix iterations remain 2 of 3.
-- Dispatch path-affinity required an explicit absolute linked-worktree path to avoid inherited parent-cwd ambiguity; recorded as issue `#21` evidence only, separate from acceptance and from tracker `#24`.
+- At `2026-07-13T09:35:46Z`, pre-launch setup failed with `mkdir: .context: No such file or directory`, followed verbatim by `zsh:8: no such file or directory: .context/issue20-t4-acceptance/stdout`; shell rc was 1.
+- EM adjudicated that failure as `invocation_count=0`: redirection failed before executable launch, AUTH-1 remained unconsumed, and one corrected setup/launch was released.
+- Corrected setup created the ignored parent/child, opened stdout/stderr on dedicated descriptors, and proved both targets writable before launch. No retry, loop, pipeline, emulation, or equivalent probe occurred.
 
 ## Execute UAT
 
-- T1-T3 checkpoint approved by FO after an independent focused rerun at 2026-07-13T07:27:13Z.
-- Commits: `eddf14f` (T1), `7d68203` (T2), `86f9213` (T3).
-- T4 preflight after the README guard:
-  - `bash plugins/ship-flow/lib/__tests__/test-adopter-skill-discovery.sh` → rc 0, stderr 0 bytes, 26 passed / 0 failed.
-  - `bash plugins/ship-flow/lib/__tests__/test-density-classify.sh` → rc 0, stderr 0 bytes; clean/decoy parity and marker-ancestor positive passed.
-  - `bash plugins/ship-flow/lib/__tests__/test-check-invariants.sh` → rc 0, stderr 0 bytes; discovery-exclusions and existing invariant cases passed.
-  - `bash plugins/ship-flow/bin/check-invariants.sh --check discovery-exclusions` → rc 0, stdout/stderr 0 bytes.
+| DC | Result | Evidence |
+|---|---|---|
+| DC-1 | PASS | helper unchanged from `086c5ff`; Bash 3.2 syntax rc 0 |
+| DC-2 | PASS | clean/decoy/marker-ancestor focused cases stay exact and stderr-empty |
+| DC-3 | PASS | two consumers; density has four caller-owned captures |
+| DC-4 | PASS | good/lib/bin/nested fixture matrix + named/full invariant |
+| DC-5 | PASS | adopter rc 2/raw+context/empty-output/short-circuit matrix |
+| DC-6 | PASS | S1/S2/archive/done rc 2 matrix, including `--is-high` |
+| DC-7 | PASS | independent two-file archive-only/done-only cases remain `vacuum` |
+| DC-8 | PASS | fake `find` delegates outside selected fixture roots; partial data rejected |
+| DC-9 | PASS | README/#24 and issue/status/receipt paths unchanged by T1-T3 |
+| DC-10 | PASS | sole corrected real invocation receipt below |
 
-### Immutable first repo-root receipt
+### Invalid cycle-2 receipt — preserved, not acceptance evidence
 
-- No equivalent repo-root discovery occurred before this invocation, and none ran afterward.
 - cwd: `/Users/kent/conductor/workspaces/spacedock-workflows/yangon/.claude/worktrees/fixture-pollution-discovery-helpers`
-- invocation: `rtk proxy plugins/ship-flow/lib/discover-adopter-skills.sh --root=.` (single invocation)
-- result: rc 0; routes 0; stdout 193 bytes; stderr 0 bytes.
-- stdout SHA-256: `b038878f44c05b0e836f1e2c608cda76ab7f3d3890d16c13e7912acff55baa53`
-- stderr SHA-256: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
-- stdout: `schema_version: "1.0"`; `target_path: .claude/ship-flow/skill-routing.yaml`; `source: discovered`; boundary declaration; empty `routing:`.
+- invocation: `rtk proxy plugins/ship-flow/lib/discover-adopter-skills.sh --root=.`
+- recorded result: rc 0; routes 0; stdout 193 bytes; stderr 0 bytes; stdout SHA `b038878f44c05b0e836f1e2c608cda76ab7f3d3890d16c13e7912acff55baa53`; stderr SHA `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+- recorded stdout: the five-line static schema/target/source/boundary/empty-routing envelope.
+- invalidation: the old caller suppressed traversal failures, so this consumed cycle-2 receipt could not prove healthy empty discovery and remains acceptance-invalid.
+
+### Immutable cycle-3 one-run receipt
+
+- capture: `.context/issue20-t4-acceptance/{stdout,stderr}` (ignored, linked-worktree local)
+- start/end: `2026-07-13T09:39:05Z` / `2026-07-13T09:39:05Z`
+- cwd: `/Users/kent/conductor/workspaces/spacedock-workflows/yangon/.claude/worktrees/fixture-pollution-discovery-helpers`
+- command: `plugins/ship-flow/lib/discover-adopter-skills.sh --root=.`
+- invocation_count: 1; process rc: 0; route_count: 0.
+- stdout: 193 bytes; SHA-256 `b038878f44c05b0e836f1e2c608cda76ab7f3d3890d16c13e7912acff55baa53`.
+- stderr: 0 bytes; SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`; body empty.
+- stdout body: `schema_version: "1.0"`; `target_path: .claude/ship-flow/skill-routing.yaml`; `source: discovered`; boundary declaration; empty `routing:`.
+- outcome: PROCEED — rc 0 AND stderr bytes 0 AND route count 0; repository-root discovery is permanently non-replayable after this receipt.
+
+### Frozen source hashes after the invocation
+
+- `e9d69edd792c64d9680b28b252d094b6cc4d7bb48dd29a542e9a549e17ca4b41` `discovery-exclusions.sh` (unchanged helper)
+- `08f715d779d880de10d978df084fb97e391d2231931e5835e54fb408091b8a04` `discover-adopter-skills.sh`
+- `43b699dc3a3b77e17f14e3329bbe6a89cf48db66c6c5743fcd54653afa5c20cf` `test-adopter-skill-discovery.sh`
+- `dd0d4630eec407b9dceab8be8c06760dcfc61ef3ea61aa55bcfbb5ac33412f52` `density-classify.sh`
+- `c3c61209a76167973af80aded66ce91c292b3e89275a716f0c1ec7102ab759dd` `test-density-classify.sh`
+- `8789fa3ddcee44c7630f95ea087337048d3e05244dbffac33b7faa5fa9ca67e1` `check-invariants.sh`
+- `8f37c1cd92f8879cb2ad9818669aa9f1f6f1a61457c1ef0aa887f6b888bc2534` `test-check-invariants.sh`
 
 ### Hand-off to Verify
 
-- commit_list: `git log b4e31e7..HEAD` → `eddf14f` T1, `7d68203` T2, `86f9213` T3, `b8b471e` T4.
-- dc_status: DC-1 PASS (sourceable Bash helper); DC-2 PASS (twin/ancestor tests); DC-3 PASS (two consumers/four density calls); DC-4 PASS (named invariant); DC-5 PASS (rc/stdout/stderr assertions); DC-6 PASS (README guard/#24); DC-7 PASS (immutable first-run receipt above).
-- deviations: T1 corrected read-only boundary error; T2 used two shared fix iterations; dispatch path-affinity recorded as #21 evidence. No scope expansion.
-- render_fidelity_evidence: N/A (non-UI).
-- skills_needed_used: T1-T3 used both TDD contracts plus test/best-practices; T4 used write-docs and verification-before-completion.
-- context_read_receipts: none — plan resolver reported no folder guidance files or skills.
+- commit_list: `ad24698` T1, `15b640f` T2, `1b3871f` T3; artifact-only closeout follows.
+- dc_status: DC-1 through DC-10 PASS with the commands/results above; never replay the repository-root invocation.
+- deviations: one adjudicated pre-launch setup failure with invocation_count=0; external-review transport degradation; nonblocking signal-trap note retained.
+- render_fidelity_evidence: N/A — non-UI.
+- skills_needed_used: T1-T3 used both TDD contracts plus test/best-practices; T4 used verification-before-completion and ship-execute.
+- context_read_receipts: none — plan resolver reported no folder guidance files/skills.
 
 ## Execute Report
 
 status: passed
-cross_review_verdict: PROCEED
-stage_cost: 4 fresh implementers plus independent spec/quality reviewers and bounded fallbacks; billing metadata unavailable
-summary: Shared fixture pruning now protects both audited consumers, is pinned by a named invariant, and has one frozen zero-route repo-root acceptance receipt.
+cross_review_verdict: GREEN
+stage_cost: three serial TDD tasks, frozen read-only review with bounded fallbacks, one EM-adjudicated pre-launch correction, one real acceptance invocation
+summary: Traversal failures are now observable and atomic, the invariant covers top-level lib/bin scripts, and the sole cycle-3 repository-root receipt proves a healthy empty result.
 
 ### Metrics
 
-duration_minutes: 60
+duration_minutes: 41
 iteration_count: 2
 task_count: 4
 tasks_done: 4

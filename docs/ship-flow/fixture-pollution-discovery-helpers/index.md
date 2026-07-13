@@ -171,3 +171,47 @@ performed.
 Cycle 3 closes the silent traversal-failure contract while keeping the helper
 narrow and Bash 3.2-compatible. Technical design and the one-run authorization
 are complete; the design gate may proceed.
+
+## Stage Report: execute (cycle 3)
+
+- DONE: Execute only T1, T2, and T3 from the cycle-3 plan, serially and with
+  strict RED/GREEN/refactor evidence. Preserve the existing
+  `discovery-exclusions.sh` primitive unchanged. Commit each task's owned
+  code/test paths only after its focused suite is GREEN.
+  T1 `ad24698`, T2 `15b640f`, and T3 `1b3871f` landed serially; focused
+  evidence is 38/38 adopter, 41/41 density, and GREEN fixture/named/full
+  invariants. The helper hash remained `e9d69edd...a4b41`.
+- DONE: After T1-T3, run the authorized focused/full preflight and obtain an
+  independent frozen-source diff review. Require all checks/review GREEN,
+  commit all six source/test paths, require clean source, and record the frozen
+  commit plus SHA-256 hashes for the unchanged helper and all six T1-T3 paths.
+  Bash 3.2 syntax, focused suites, fixture/named/full invariants, four-record
+  ledger, and diff hygiene passed; review returned GREEN/no blockers; frozen
+  commit is `1b3871f8cfb1f811813605e48f7c22922d686162`.
+- DONE: Stop and return T4_READY with exact RED/GREEN/check/review/commit/hash
+  evidence. Do not execute or emulate repo-root discovery, do not create the
+  new acceptance receipt, and do not write the final execute stage artifact
+  until FO separately releases T4.
+  T4_READY was returned before FO release; no prohibited invocation or
+  artifact write occurred in the T1-T3 checkpoint.
+- DONE: Consume the FO/EM-released one-run authorization exactly once after a
+  corrected, descriptor-validated capture setup.
+  The `09:35:46Z` redirection failure was adjudicated pre-launch with
+  `invocation_count=0`; the sole real run at `09:39:05Z` returned rc 0,
+  193 stdout bytes, 0 stderr bytes, and 0 routes.
+- DONE: Preserve the invalid cycle-2 receipt and record cycle-3 process,
+  review-degradation, nonblocking trap, frozen-source, and acceptance evidence
+  in artifact files only.
+  `execute.md` preserves both receipts and marks repository-root discovery
+  permanently non-replayable after the successful cycle-3 receipt.
+- status: passed
+- stage_cost: three serial TDD commits, bounded independent review, one
+  adjudicated pre-launch correction, one real invocation, artifact-only closeout
+
+### Summary
+
+Cycle 3 makes adopter and density traversal errors visible without changing the
+shared pruning primitive, repairs the exact top-level lib/bin invariant, and
+freezes the six source/test paths. After FO and EM released the acceptance
+clock, one real repository-root invocation produced the expected empty routing
+envelope with no diagnostics or routes; no replay is permitted.
