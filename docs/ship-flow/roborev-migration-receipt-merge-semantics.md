@@ -223,6 +223,14 @@ not begin until design ratifies them.
    and collision rules while preventing a per-parent path diff from
    reclassifying an inherited absence or a resolution-only status as an
    operation.
+   This suppression cannot manufacture an unreviewed deletion. Relative to the
+   merge base, either the feature was already present—in which case every
+   absent parent must contain an earlier removal that C14 validates in that
+   parent's reachable in-range history—or it was absent and a present parent
+   introduced it branch-locally, in which case an absent merge result declines
+   that branch-local introduction rather than retiring a shared feature. A
+   missing parent, tree, or required in-range history segment fails loud; it
+   never counts as inherited absence.
 6. Layout identity, equal frontmatter ID, and Git rename similarity may produce
    diagnostics, but none may establish migration identity or authorize a
    transition.
@@ -276,7 +284,11 @@ Diagnostics use stable categories so fixtures assert causes rather than prose:
 `receipt-missing`, `receipt-malformed`, `receipt-conflict`,
 `receipt-semantic-invalid`, `receipt-incomplete`, `parent-unavailable`,
 `parent-path-collision`, and `transition-illegal`. Design supplies exact
-messages and carrier bounds.
+messages and carrier bounds. Every completeness/collision diagnostic identifies
+the inspected merge OID, logical result path or absent-result unit, contributing
+parent OID, authoritative lookup path, and derived candidate category, so an
+operator can repair the specific mapping rather than guess which parent diff
+failed.
 
 This is the smallest contract that both recognizes a simultaneous path/ID
 change and refuses to guess whether an unrelated deletion plus addition is a
@@ -290,6 +302,16 @@ parents explicitly listed by that operation. An unlisted source-path occupant
 is unrelated for C14 purposes and never enters the logical state set. A parent
 not listed as a source participates only if it already contains the exact
 result path.
+
+“Relevant parents” means all direct Git parents of `M`, never a caller-selected
+subset. For one logical feature, each direct parent contributes exactly one
+authoritative lookup: its explicitly listed source path when that parent is in
+the feature's migration/retirement mapping, otherwise the exact result path.
+For an absent-result retirement unit with no result path, the unit's one source
+path is looked up at that same path in every unlisted direct parent. Mapped
+source paths plus the result path define only that logical feature; an
+unmapped path is normalized as a separate feature and cannot be absorbed by
+similar content, status, or ID.
 
 Per parent, normalization is order-independent:
 
@@ -336,7 +358,9 @@ transition obligation.
    plus explicit reconciliation checks for every other present parent. Plan
    must not choose. Any ratified option must have identical verdicts under
    parent permutation and cannot let one convenient parent silently mask
-   another.
+   another. Until that ratification lands, implementation is blocked and the
+   existing C14 behavior remains in force; “resolution-only” is a
+   classification boundary, not permission to skip transition validation.
 
 The job-40 absent-first-parent case therefore reduces deterministically:
 `P1=absent`, `P2=present(shape)`, `M=present(shape)` is inherited; the same
@@ -347,7 +371,10 @@ The complementary inherited-absence case is also global:
 `P1=present(shape)`, `P2=absent`, `M=absent` is inherited absence and derives
 no `retire` candidate. If the commit nevertheless carries an explicit retire
 row for P1, that row still must resolve P1's source and pass all classification
-and collision checks.
+and collision checks. The dogfood matrix proves both permitted provenance
+forms: the feature was absent at the merge base and introduced only on P1, or
+P2's in-range history contains the already-validated removal. An absent parent
+with unavailable or unvalidated required history fails loud.
 
 ## Will-get dogfood checks
 
@@ -381,9 +408,11 @@ and collision checks.
   collision normalization in listed parents, plus unrelated source-path
   occupants in unlisted parents. The matrix includes
   `P1=absent, P2=present(shape), M=present(plan)` and proves it is
-  resolution-only—not create or migrate—before applying the ratified
-  `shape -> plan` legality rule. The design-ratified legality policy supplies
-  the final pass/fail matrix; planning is blocked until then.
+  resolution-only—not create or migrate. That classification fixture is
+  executable independently. Its separate legality assertion, including the
+  `shape -> plan` verdict, is explicitly deferred until design ratifies the
+  policy and supplies the final pass/fail matrix; planning remains blocked
+  until then.
 - **W4:** Run targeted C14 fixtures, full invariant/shell/Node gates, then a
   `code_completion` panel whose reviewed head equals branch HEAD and whose
   synthesis contains zero medium-or-higher finding. Before that final panel,
@@ -595,6 +624,13 @@ graph LR
   always classified, non-inherited result additions are deduplicated and
   classified, exact inherited results remain receipt-free, and single-parent
   pure add/delete exemptions are stated separately.
+- REVIEW: Exact-commit RoboRev/Gemini design job 46 reviewed `fc9a872` and
+  returned FAIL. Its actionable findings are absorbed: relevant parents and
+  authoritative lookups are now exact; inherited absence is bounded by
+  merge-base provenance and fail-loud history availability; no provisional
+  resolution-only implementation may bypass transition legality; W3 separates
+  its executable classification assertion from design-deferred legality; and
+  diagnostics identify the failing parent and logical unit.
 - status: passed
 - stage_cost: solo shape artifact; no implementation work
 
