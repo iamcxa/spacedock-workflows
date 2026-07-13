@@ -72,7 +72,7 @@ status: passed
 stage_cost: one clean review worker, one fresh independent seven-factor reviewer, and final Science Officer/EM judgment
 verify_results: PASS; required claims 11/11; Tier B accepted; independent collaboration fallback passed; external Claude/Codex transports DEGRADED
 verify_uat_contract: `faaad26` + `4e0c53d` + `d7be3a4`; bounded copy-paste procedures for DC-1 through DC-9 and read-only clean-scope object/hash/receipt audit for DC-10; not executed during review
-canonical_sync_status: pending post-write checker
+canonical_sync_status: PASS — seven canonical-doc-sync checker outcomes passed with no blockers
 harvest_gate: required; two bounded reusable candidates captured
 review_scope: isolated branch `iamcxa/issue-20-fixture-discovery` from origin/main `38c588d`; issue #20 allowlist plus review metadata only
 acceptance_receipt: immutable cycle-3 receipt bound to original frozen commit `1b3871f8cfb1f811813605e48f7c22922d686162`; sole launch count 1, process rc 0, stdout 193 bytes, stderr 0 bytes, routes 0; pre-launch setup failure count 0
@@ -82,7 +82,7 @@ signal_warning: accepted nonblocking `EXIT INT TERM` cleanup semantics note carr
 cross_review: PROCEED — all seven factors pass; preserve DC-10 as immutable receipt-only evidence and retain the frozen-commit/blob binding through ship-final
 static_recheck: PASS — HEAD absence is limited to `_commit_has_fo_stage_entry_receipt`; only newly added diff lines reject that symbol or C14 beyond origin/main
 started_at: 2026-07-13T10:45:14Z
-completed_at: 2026-07-13T10:58:10Z
+completed_at: 2026-07-13T10:59:05Z
 
 ```yaml
 science_officer_em_upward_report:
@@ -103,7 +103,7 @@ stub_flags: none — plan hand-off records no stubs; no Captain acknowledgment i
 ### Metrics
 
 status: passed
-duration_minutes: 13
+duration_minutes: 14
 iteration_count: 2
 canonical_docs_updated_count: 1
 canonical_docs_skipped_count: 3
