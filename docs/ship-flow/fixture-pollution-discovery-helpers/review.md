@@ -70,6 +70,10 @@ Ratio: not available
 
 status: passed
 stage_cost: one clean review worker, one fresh independent seven-factor reviewer, and final Science Officer/EM judgment
+
+<details>
+<summary>Review evidence and Science Officer/EM judgment</summary>
+
 verify_results: PASS; required claims 11/11; Tier B accepted; independent collaboration fallback passed; external Claude/Codex transports DEGRADED
 verify_uat_contract: `faaad26` + `4e0c53d` + `d7be3a4`; bounded copy-paste procedures for DC-1 through DC-9 and read-only clean-scope object/hash/receipt audit for DC-10; not executed during review
 canonical_sync_status: PASS — seven canonical-doc-sync checker outcomes passed with no blockers
@@ -95,6 +99,8 @@ science_officer_em_upward_report:
   confidence: high
   fo_boundary: "FO owns workflow mechanics; EM owns judgment and recommendation."
 ```
+
+</details>
 
 ### Captain-Ack Audit
 
