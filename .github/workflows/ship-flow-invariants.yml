@@ -32,10 +32,11 @@ jobs:
         run: |
           BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
           EVENT_NAME="${{ github.event_name }}"
-          # Branch-creation push events set `before` to the all-zeros SHA —
-          # skip straight to the HEAD~1 fallback instead of a doomed diff.
+          # Branch-creation push events set `before` to the all-zeros SHA.
+          # Conservatively scan every tracked file: HEAD~1 would miss plugin
+          # changes from earlier commits in a multi-commit initial push.
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
-            CHANGED=$(git diff --name-only HEAD~1 HEAD)
+            CHANGED=$(git ls-files)
           elif ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
             echo "ERROR: event base commit is unavailable: $BASE" >&2
             exit 1
