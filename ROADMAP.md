@@ -9,7 +9,7 @@
 <!-- section:now -->
 | Entity | Title | Stage |
 | --- | --- | --- |
-| fixture-pollution-discovery-helpers | Fixture-tree exclusion for discovery helpers | shape |
+| 3-root-readme-stale-claims | Refresh root README stale compatibility claims | ship |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
@@ -18,7 +18,6 @@
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
 | 2-deterministic-manual-adopter-routing | Deterministic manual adopter skill routing | (pitch) | small-batch (2-3 days) |
-| 3-root-readme-stale-claims | Refresh root README stale compatibility claims | (pitch) | small-batch |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
@@ -52,4 +51,5 @@
 | Entity | Title | Shipped |
 | --- | --- | --- |
 | 1-self-adoption-dogfood-bootstrap | Self-adoption dogfood bootstrap — canonical docs + doc-impact gate | 2026-07-12 (PR #14) |
+| fixture-pollution-discovery-helpers | Fixture-tree exclusion for discovery helpers | 2026-07-15 (landed via PR #39; runtime-reconciled) |
 <!-- /section:shipped -->
