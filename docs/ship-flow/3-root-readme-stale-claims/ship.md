@@ -22,6 +22,7 @@ status: passed — implementation merged; terminal ship closeout pending
 stage_cost: one implementation worker, execute review, one verify remediation loop, two independent verify lenses, and merge-time CI
 started_at: 2026-07-14T17:40:11Z
 completed_at: 2026-07-14T18:11:04Z
+pr: #40
 summary: Root README prose is version-independent, canonical positioning points to PRODUCT, and the negative-grep gate fails closed on drift and scan errors.
 tasks: issue #22 only; #21 and plugin README model-era cleanup remain separate follow-ups
 verify: AC 3/3; focused fixtures 5/5; shell 104/104; Node 79/79; C1-C15, no-dangling, version-triple, and diff-check PASS
