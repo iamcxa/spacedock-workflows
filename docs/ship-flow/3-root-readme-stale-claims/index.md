@@ -1,7 +1,7 @@
 ---
 id: "3"
 title: "Refresh root README stale compatibility claims"
-status: design
+status: plan
 pattern: pitch
 appetite: "small-batch"
 shape_mode: mode-a
@@ -29,6 +29,7 @@ acceptance_outcome: "When onboarding readers open the repository README, they se
 stage_outputs:
   shape: shape.md
 
+  design: design.md
 pre_mortem:
   category: wrong-dcs
   one_liner: The grep misses a common version spelling, so README drift returns unnoticed.
@@ -38,4 +39,5 @@ pre_mortem:
 | Stage | File |
 |-------|------|
 | shape | [shape.md](shape.md) |
+| design | [design.md](design.md) |
 <!-- /section:stage-artifact-links -->
