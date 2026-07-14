@@ -36,6 +36,22 @@ under the First Officer contract. Do not bypass first-officer startup, status
 resolution, gate policy, or feedback routing because the input looks like a
 simple entity id.
 
+### First Officer stage-entry receipt
+
+The First Officer owns the status mutation that enters a stage. Its state
+commit is the durable stage-entry receipt and MUST use the canonical subject
+from the dispatch contract:
+
+- fresh dispatch: `dispatch: {slug-or-bounded-summary} entering {next_stage}`
+- same-worker reuse: `advance: {slug-or-bounded-summary} entering {next_stage}`
+
+The subject's final stage token MUST equal the resulting `status:` value for
+every entity mutated by that commit. Do not put this receipt only in the commit
+body, invent a lookalike verb, or forge the completion-side
+`: advance status to ` signature. Stage workers continue to use
+`advance-stage.sh` after producing their artifact; this entry receipt does not
+replace completion-side advancement.
+
 If requirements are vague enough to need clarification, route through
 first-officer-managed workflow state to `ship-flow:ship-shape` clarification; do not bypass first-officer by inventing a plan or executing inline.
 

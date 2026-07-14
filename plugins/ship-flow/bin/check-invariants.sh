@@ -129,6 +129,50 @@ check_preamble_regrowth() {
   return "$fail"
 }
 
+check_discovery_exclusions() {
+  local lib_dir="${ROOT}/plugins/ship-flow/lib"
+  local bin_dir="${ROOT}/plugins/ship-flow/bin"
+  local helper="${lib_dir}/discovery-exclusions.sh"
+  local consumers=(
+    "${lib_dir}/discover-adopter-skills.sh"
+    "${lib_dir}/density-classify.sh"
+  )
+  local fail=0
+  local consumer
+
+  if [ ! -f "$helper" ]; then
+    echo "ERROR [discovery-exclusions]: missing shared helper: $helper" >&2
+    fail=1
+  fi
+
+  for consumer in "${consumers[@]}"; do
+    if [ ! -f "$consumer" ]; then
+      echo "ERROR [discovery-exclusions]: missing direct consumer: $consumer" >&2
+      fail=1
+    elif ! grep -qE '^[[:space:]]*(source|\.)[[:space:]]+.*/discovery-exclusions\.sh' "$consumer"; then
+      echo "ERROR [discovery-exclusions]: direct consumer does not source discovery-exclusions.sh: $consumer" >&2
+      fail=1
+    fi
+  done
+
+  # Production marker definitions are top-level lib/bin scripts only. Do not
+  # recurse into __tests__/test-fixtures or infer consumers from unrelated find
+  # walkers.
+  local production_scripts=("${lib_dir}"/*.sh "${bin_dir}"/*.sh)
+  local marker marker_pattern production_count helper_count
+  for marker in __tests__ test-fixtures; do
+    marker_pattern="-name[[:space:]]+['\"]?${marker}(['\"]|[[:space:]]|$)"
+    production_count=$({ grep -hoE -- "$marker_pattern" "${production_scripts[@]}" 2>/dev/null || true; } | wc -l | tr -d ' ')
+    helper_count=$({ grep -oE -- "$marker_pattern" "$helper" 2>/dev/null || true; } | wc -l | tr -d ' ')
+    if [ "$production_count" != "1" ] || [ "$helper_count" != "1" ]; then
+      echo "ERROR [discovery-exclusions]: '-name $marker' must have exactly one production definition, in discovery-exclusions.sh (production=$production_count helper=$helper_count)" >&2
+      fail=1
+    fi
+  done
+
+  return "$fail"
+}
+
 check_section_tag_coverage() {
   # DC-8 — Principle 5a: every H2/H3 in active entity must be wrapped in <!-- section:tag --> pair.
   # Stack-based awk walker; nesting allowed (sharp-output → problem → scope).
@@ -1331,14 +1375,37 @@ _entity_bodytable_no_stage_outputs() {
   return 0     # table present, no stage_outputs → destructive case → exempt
 }
 
-# C14: Entity status mutation must go through lib/advance-stage.sh
-# ----------------------------------------------------------------
+# Returns 0 when <sha> carries the canonical First Officer stage-entry receipt
+# and every entity status mutated by that commit entered the receipt's stage.
+# Match the subject only: body text must not be able to manufacture the receipt.
+_commit_has_fo_stage_entry_receipt() {
+  local sha="$1"
+  shift
+  local subject entry_summary entry_stage path after_status
+  subject="$(git log -1 --format=%s "$sha")"
+  if [[ ! "$subject" =~ ^(dispatch|advance):[[:space:]]+(.+)[[:space:]]+entering[[:space:]]+([a-z][a-z0-9-]*)$ ]]; then
+    return 1
+  fi
+  entry_summary="${BASH_REMATCH[2]}"
+  entry_stage="${BASH_REMATCH[3]}"
+  [[ "$entry_summary" =~ [^[:space:]] ]] || return 1
+
+  [ "$#" -gt 0 ] || return 1
+  for path in "$@"; do
+    after_status="$(_frontmatter_status_at_rev_path "$sha" "$path")"
+    [ "$after_status" = "$entry_stage" ] || return 1
+  done
+  return 0
+}
+
+# C14: Entity status mutation must carry a sanctioned transition receipt
+# ----------------------------------------------------------------------
 # Scans commits on the current branch ahead of merge-base with origin/main.
 # For each commit modifying an entity index.md (folder layout) or flat
-# <id>-<slug>.md, if the frontmatter status value changes between the
-# commit's first parent and the commit, the commit message MUST contain the
-# substring ": advance status to " (injected by lib/advance-stage.sh line 122
-# when invoked legitimately).
+# <id>-<slug>.md, a frontmatter status change must carry either the completion
+# receipt injected by advance-stage.sh or the canonical subject-line receipt
+# written by the First Officer when entering a stage. FO receipts are accepted
+# only when every mutated entity's resulting status matches the named stage.
 #
 # Source pitch: enforce-advance-stage-primitive-only (sharp 2026-05-15).
 # Source evidence: pitch-106 commit 898d006c — direct YAML edit bypassed
@@ -1415,6 +1482,13 @@ check_entity_status_via_advance_stage_only() {
     done
     [ "$all_exempt" = "1" ] && continue
 
+    # First Officer stage-entry receipt. Fresh dispatch and same-worker reuse
+    # use different canonical verbs, but both end in `entering <stage>`. Keep
+    # this path subject-only and bind the named stage to every after-state.
+    if _commit_has_fo_stage_entry_receipt "$sha" "${mutated_paths[@]}"; then
+      continue
+    fi
+
     # Check commit message for advance-stage.sh signature.
     local msg
     msg="$(git log -1 --format=%B "$sha")"
@@ -1422,7 +1496,7 @@ check_entity_status_via_advance_stage_only() {
       *": advance status to "*) continue ;;
       *)
         violations=$((violations + 1))
-        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} mutated entity status: without advance-stage.sh signature. See plugins/ship-flow/INVARIANTS.md#principle-15." >&2
+        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} mutated entity status without a sanctioned stage-entry or advance-stage.sh receipt. See plugins/ship-flow/INVARIANTS.md#principle-15." >&2
         echo "       commit msg head: $(echo "$msg" | head -1)" >&2
         ;;
     esac
@@ -1794,6 +1868,7 @@ if [ -n "$SINGLE_CHECK" ]; then
   case "$SINGLE_CHECK" in
     skill-count) check_skill_count; exit $? ;;
     preamble-regrowth) check_preamble_regrowth; exit $? ;;
+    discovery-exclusions) check_discovery_exclusions; exit $? ;;
     section-tag-coverage) check_section_tag_coverage; exit $? ;;
     flow-map-coverage) check_flow_map_coverage; exit $? ;;
     direct-read-static) check_direct_read_static; exit $? ;;
@@ -1852,6 +1927,7 @@ fi
 # Full run — all checks
 check_skill_count || FAIL=1
 check_preamble_regrowth || FAIL=1
+check_discovery_exclusions || FAIL=1
 check_section_tag_coverage || FAIL=1
 check_flow_map_coverage || FAIL=1
 check_direct_read_static || FAIL=1

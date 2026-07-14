@@ -8,7 +8,7 @@
 #   bash density-classify.sh --help
 #
 # Stdout (primary mode): one of: high | medium | low | vacuum
-# Exit codes: 0=success, 1=not-high (--is-high mode), 2=usage error
+# Exit codes: 0=success, 1=not-high (--is-high mode), 2=usage/traversal error
 #
 # 4-signal decision tree (all signals are boolean):
 #   S1: CLAUDE.md hits ≥1 in entity's workflow area
@@ -27,6 +27,10 @@
 #   --is-high: exits 0 if classification=high, exits 1 otherwise
 #   The 4-tier enum is internal display only — not exposed at gate logic.
 set -uo pipefail
+
+DENSITY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=discovery-exclusions.sh
+. "$DENSITY_LIB_DIR/discovery-exclusions.sh"
 
 ENTITY=""
 DIRECTIVE=""
@@ -109,6 +113,43 @@ fi
 # Fallback: use cwd
 [ -z "$REPO_ROOT" ] && REPO_ROOT="$(pwd)"
 
+DENSITY_CAPTURE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ship-flow-density.XXXXXX")" || {
+  echo "ERROR: density classifier could not create bounded capture directory" >&2
+  exit 2
+}
+trap 'rm -rf "${DENSITY_CAPTURE_DIR}"' EXIT INT TERM
+
+TRAVERSAL_STDERR="${DENSITY_CAPTURE_DIR}/traversal.stderr"
+
+capture_traversal() {
+  local label="$1"
+  local requested_root="$2"
+  local capture_file="$3"
+  local producer_status
+  shift 3
+
+  : >"${capture_file}"
+  : >"${TRAVERSAL_STDERR}"
+
+  if ship_flow_discovery_find "${requested_root}" "$@" \
+    >"${capture_file}" 2>"${TRAVERSAL_STDERR}"; then
+    producer_status=0
+  else
+    producer_status=$?
+  fi
+
+  if [ "${producer_status}" -ne 0 ]; then
+    if [ -s "${TRAVERSAL_STDERR}" ]; then
+      cat "${TRAVERSAL_STDERR}" >&2
+    fi
+    printf 'ERROR: density traversal %s failed (rc %s): %s\n' \
+      "${label}" "${producer_status}" "${requested_root}" >&2
+    return 2
+  fi
+
+  return 0
+}
+
 # ── Signal evaluation ──────────────────────────────────────────────────────────
 
 S1=0  # CLAUDE.md hits ≥1
@@ -135,10 +176,19 @@ check_claude_positive() {
 HIT1="$(check_claude_positive "$REPO_ROOT/CLAUDE.md")"
 CLAUDE_HITS=$((CLAUDE_HITS + HIT1))
 if [ -d "$REPO_ROOT/$WORKFLOW_DIR" ]; then
+  S1_CAPTURE="${DENSITY_CAPTURE_DIR}/s1-claude-files"
+  capture_traversal \
+    "S1 workflow CLAUDE.md" \
+    "$REPO_ROOT/$WORKFLOW_DIR" \
+    "$S1_CAPTURE" \
+    -name "CLAUDE.md" -print0
+  CAPTURE_STATUS=$?
+  [ "$CAPTURE_STATUS" -eq 0 ] || exit "$CAPTURE_STATUS"
+
   while IFS= read -r -d '' claude_file; do
     H="$(check_claude_positive "$claude_file")"
     CLAUDE_HITS=$((CLAUDE_HITS + H))
-  done < <(find "$REPO_ROOT/$WORKFLOW_DIR" -name "CLAUDE.md" -print0 2>/dev/null)
+  done <"$S1_CAPTURE"
 fi
 [ "$CLAUDE_HITS" -ge 1 ] && S1=1
 
@@ -147,7 +197,18 @@ fi
 # and does not indicate this specific repo has the workflow skill installed).
 PLUGIN_HITS=0
 if [ -d "$REPO_ROOT/plugins" ]; then
-  PLUGIN_HITS="$({ find "$REPO_ROOT/plugins" -name "SKILL.md" -exec grep -l "$WF_NAME" {} + 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
+  S2_CAPTURE="${DENSITY_CAPTURE_DIR}/s2-plugin-skills"
+  capture_traversal \
+    "S2 plugin skills" \
+    "$REPO_ROOT/plugins" \
+    "$S2_CAPTURE" \
+    -name "SKILL.md" -exec grep -l "$WF_NAME" {} +
+  CAPTURE_STATUS=$?
+  [ "$CAPTURE_STATUS" -eq 0 ] || exit "$CAPTURE_STATUS"
+
+  while IFS= read -r _; do
+    PLUGIN_HITS=$((PLUGIN_HITS + 1))
+  done <"$S2_CAPTURE"
 fi
 [ "$PLUGIN_HITS" -ge 1 ] && S2=1
 
@@ -156,11 +217,32 @@ ARCHIVE_HITS=0
 ARCHIVE_DIR="$REPO_ROOT/$WORKFLOW_DIR/_archive"
 DONE_DIR="$REPO_ROOT/$WORKFLOW_DIR/done"
 if [ -d "$ARCHIVE_DIR" ]; then
-  ARCHIVE_HITS="$({ find "$ARCHIVE_DIR" -name "*.md" 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
+  ARCHIVE_CAPTURE="${DENSITY_CAPTURE_DIR}/s3-archive-precedents"
+  capture_traversal \
+    "S3 archive precedents" \
+    "$ARCHIVE_DIR" \
+    "$ARCHIVE_CAPTURE" \
+    -name "*.md" -print
+  CAPTURE_STATUS=$?
+  [ "$CAPTURE_STATUS" -eq 0 ] || exit "$CAPTURE_STATUS"
+
+  while IFS= read -r _; do
+    ARCHIVE_HITS=$((ARCHIVE_HITS + 1))
+  done <"$ARCHIVE_CAPTURE"
 fi
 if [ -d "$DONE_DIR" ]; then
-  DONE_HITS="$({ find "$DONE_DIR" -name "*.md" 2>/dev/null | wc -l | tr -d ' '; } || echo 0)"
-  ARCHIVE_HITS=$((ARCHIVE_HITS + DONE_HITS))
+  DONE_CAPTURE="${DENSITY_CAPTURE_DIR}/s3-done-precedents"
+  capture_traversal \
+    "S3 done precedents" \
+    "$DONE_DIR" \
+    "$DONE_CAPTURE" \
+    -name "*.md" -print
+  CAPTURE_STATUS=$?
+  [ "$CAPTURE_STATUS" -eq 0 ] || exit "$CAPTURE_STATUS"
+
+  while IFS= read -r _; do
+    ARCHIVE_HITS=$((ARCHIVE_HITS + 1))
+  done <"$DONE_CAPTURE"
 fi
 [ "$ARCHIVE_HITS" -ge 2 ] && S3=1
 

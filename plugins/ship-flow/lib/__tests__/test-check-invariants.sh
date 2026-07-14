@@ -1189,6 +1189,101 @@ else
   echo "FAIL DC-107b pm-skill-receipts named check should fail invalid receipt fixture"; FAIL=1
 fi
 
+# ========== discovery-exclusions: direct consumers + one production definition site ==========
+discovery_exclusions_fixture_rc() {
+  local variant="$1"
+  local d
+  d="$(create_mock_plugin_dir)" || return 1
+
+  cat > "$d/plugins/ship-flow/lib/discovery-exclusions.sh" <<'EOF'
+#!/usr/bin/env bash
+ship_flow_discovery_find() {
+  find "$1" -mindepth 1 \
+    \( -type d \( -name __tests__ -o -name test-fixtures \) -prune \) -o \
+    "${@:2}"
+}
+EOF
+
+  cat > "$d/plugins/ship-flow/lib/discover-adopter-skills.sh" <<'EOF'
+#!/usr/bin/env bash
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+. "${SCRIPT_DIR}/discovery-exclusions.sh"
+EOF
+
+  cat > "$d/plugins/ship-flow/lib/density-classify.sh" <<'EOF'
+#!/usr/bin/env bash
+DENSITY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DENSITY_LIB_DIR/discovery-exclusions.sh"
+EOF
+
+  # A generic recursive walker is not a discovery-exclusions consumer.
+  cat > "$d/plugins/ship-flow/lib/unrelated-walker.sh" <<'EOF'
+#!/usr/bin/env bash
+find "$1" -name '*.md' -print
+EOF
+
+  # Fixture copies of the marker definitions are not production definitions.
+  mkdir -p "$d/plugins/ship-flow/lib/__tests__/fixtures" \
+           "$d/plugins/ship-flow/lib/test-fixtures"
+  cp "$d/plugins/ship-flow/lib/discovery-exclusions.sh" \
+     "$d/plugins/ship-flow/lib/__tests__/fixtures/discovery-exclusions.sh"
+  cp "$d/plugins/ship-flow/lib/discovery-exclusions.sh" \
+     "$d/plugins/ship-flow/lib/test-fixtures/discovery-exclusions.sh"
+
+  case "$variant" in
+    good) ;;
+    missing-source)
+      cat > "$d/plugins/ship-flow/lib/density-classify.sh" <<'EOF'
+#!/usr/bin/env bash
+echo density
+EOF
+      ;;
+    lib-duplicate)
+      cat > "$d/plugins/ship-flow/lib/legacy-discovery.sh" <<'EOF'
+#!/usr/bin/env bash
+find "$1" \( -name __tests__ -o -name test-fixtures \) -prune
+EOF
+      ;;
+    bin-duplicate)
+      mkdir -p "$d/plugins/ship-flow/bin"
+      cat > "$d/plugins/ship-flow/bin/legacy-discovery.sh" <<'EOF'
+#!/usr/bin/env bash
+find "$1" \( -name __tests__ -o -name test-fixtures \) -prune
+EOF
+      ;;
+    nested-copy)
+      mkdir -p "$d/plugins/ship-flow/bin/__tests__/fixtures" \
+               "$d/plugins/ship-flow/bin/test-fixtures"
+      cp "$d/plugins/ship-flow/lib/discovery-exclusions.sh" \
+         "$d/plugins/ship-flow/bin/__tests__/fixtures/discovery-exclusions.sh"
+      cp "$d/plugins/ship-flow/lib/discovery-exclusions.sh" \
+         "$d/plugins/ship-flow/bin/test-fixtures/discovery-exclusions.sh"
+      ;;
+    *) rm -rf "$d"; return 2 ;;
+  esac
+
+  local rc
+  bash "$CHECK_SCRIPT" --test-fixture "$d" --check discovery-exclusions >/dev/null 2>&1
+  rc=$?
+  rm -rf "$d"
+  printf '%s' "$rc"
+}
+
+DISCOVERY_GOOD_RC="$(discovery_exclusions_fixture_rc good)"
+DISCOVERY_MISSING_SOURCE_RC="$(discovery_exclusions_fixture_rc missing-source)"
+DISCOVERY_LIB_DUPLICATE_RC="$(discovery_exclusions_fixture_rc lib-duplicate)"
+DISCOVERY_BIN_DUPLICATE_RC="$(discovery_exclusions_fixture_rc bin-duplicate)"
+DISCOVERY_NESTED_COPY_RC="$(discovery_exclusions_fixture_rc nested-copy)"
+if [ "$DISCOVERY_GOOD_RC" = "0" ] \
+  && [ "$DISCOVERY_MISSING_SOURCE_RC" = "1" ] \
+  && [ "$DISCOVERY_LIB_DUPLICATE_RC" = "1" ] \
+  && [ "$DISCOVERY_BIN_DUPLICATE_RC" = "1" ] \
+  && [ "$DISCOVERY_NESTED_COPY_RC" = "0" ]; then
+  echo "OK discovery-exclusions: direct consumers and top-level lib/bin definition boundary"
+else
+  echo "FAIL discovery-exclusions: expected good=0 missing-source=1 lib-duplicate=1 bin-duplicate=1 nested-copy=0; got good=$DISCOVERY_GOOD_RC missing-source=$DISCOVERY_MISSING_SOURCE_RC lib-duplicate=$DISCOVERY_LIB_DUPLICATE_RC bin-duplicate=$DISCOVERY_BIN_DUPLICATE_RC nested-copy=$DISCOVERY_NESTED_COPY_RC"; FAIL=1
+fi
+
 dc_visible_surface_map_contract_present() {
   bash "$CHECK_SCRIPT" --check visible-surface-map-contract >/dev/null 2>&1
 }
