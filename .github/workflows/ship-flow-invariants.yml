@@ -23,8 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history: the scope diff needs the PR base SHA (or the
-          # push-event before SHA) and HEAD~1, none of which exist at depth 1.
+          # Full history: the scope diff needs the merge base with the PR base
+          # SHA (or push-event before SHA) and HEAD~1, unavailable at depth 1.
           fetch-depth: 0
 
       - name: Detect changed-file scope
@@ -36,7 +36,7 @@ jobs:
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
             CHANGED=$(git diff --name-only HEAD~1 HEAD)
           else
-            CHANGED=$(git diff --name-only "$BASE" HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+            CHANGED=$(git diff --name-only "$BASE"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           fi
           echo "Changed files:"
           echo "$CHANGED"
