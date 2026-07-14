@@ -77,6 +77,35 @@ check "merge-base diff includes only the PR-authored file" \
 check "workflow computes changed scope from the merge base" \
   "grep -qF -- 'git diff --name-only \"\$BASE\"...HEAD' '${WORKFLOW}'"
 
+echo "Block 1.6: push scope compares the exact before/after trees"
+COMMON_SHA="$(git -C "$DIFF_REPO" merge-base main pr)"
+git -C "$DIFF_REPO" switch -q --detach "$COMMON_SHA"
+git -C "$DIFF_REPO" switch -qc push-old
+mkdir -p "${DIFF_REPO}/plugins/ship-flow"
+printf 'removed by replacement push\n' > "${DIFF_REPO}/plugins/ship-flow/removed.sh"
+git -C "$DIFF_REPO" add plugins/ship-flow/removed.sh
+git -C "$DIFF_REPO" commit -qm push-old-plugin
+PUSH_BEFORE_SHA="$(git -C "$DIFF_REPO" rev-parse HEAD)"
+git -C "$DIFF_REPO" switch -q --detach "$COMMON_SHA"
+git -C "$DIFF_REPO" switch -qc push-new
+printf 'replacement push\n' >> "${DIFF_REPO}/README.md"
+git -C "$DIFF_REPO" add README.md
+git -C "$DIFF_REPO" commit -qm push-new-readme
+
+git -C "$DIFF_REPO" diff --name-only "$PUSH_BEFORE_SHA" HEAD > "${TMP_DIR}/push-two-dot.txt"
+git -C "$DIFF_REPO" diff --name-only "$PUSH_BEFORE_SHA"...HEAD > "${TMP_DIR}/push-three-dot.txt"
+
+check "push two-dot reproduction includes the removed plugin file" \
+  "grep -qx 'plugins/ship-flow/removed.sh' '${TMP_DIR}/push-two-dot.txt'"
+check "push three-dot reproduction loses the removed plugin file" \
+  "! grep -q 'removed.sh' '${TMP_DIR}/push-three-dot.txt'"
+check "workflow uses merge-base diff only for pull requests" \
+  "grep -qF -- 'if [ \"\$EVENT_NAME\" = \"pull_request\" ]; then' '${WORKFLOW}' && grep -qF -- 'git diff --name-only \"\$BASE\"...HEAD' '${WORKFLOW}'"
+check "workflow uses exact before-to-head diff for pushes" \
+  "grep -qF -- 'git diff --name-only \"\$BASE\" HEAD' '${WORKFLOW}'"
+check "workflow fails closed when a nonzero event base is unavailable" \
+  "grep -qF -- 'git cat-file -e \"\${BASE}^{commit}\"' '${WORKFLOW}' && grep -qF -- 'exit 1' '${WORKFLOW}'"
+
 check "full suite is limited to plugin or workflow changes" \
   "awk '/Run full ship-flow shell test suite/{in_step=1} in_step && /^      - name: / && !/Run full ship-flow shell test suite/{in_step=0} in_step && /if: steps\\.ship_flow_scope\\.outputs\\.full_suite == '\\''true'\\''/{found=1} END{exit !found}' '${WORKFLOW}'"
 

@@ -304,10 +304,21 @@ artifact_paths: []
 <!-- /section:hand-off-to-plan -->
 EOF
 
+SHORT_LEGACY="${TMP_DIR}/short-legacy.md"
+cat > "$SHORT_LEGACY" <<'EOF'
+## Design Output
+
+### Hand-off to Plan
+
+1. Preserve the signed request contract from D1.
+<!-- /section:hand-off-to-plan -->
+EOF
+
 IMPORT_OUT="${TMP_DIR}/import.out"
 INDENTED_IMPORT_OUT="${TMP_DIR}/indented-import.out"
 REORDERED_QUOTED_IMPORT_OUT="${TMP_DIR}/reordered-quoted-import.out"
 EMPTY_STRUCTURED_OUT="${TMP_DIR}/empty-structured.out"
+SHORT_LEGACY_OUT="${TMP_DIR}/short-legacy.out"
 
 echo "Block 1: top-level YAML list design_constraints import 1:1"
 check "validator accepts domain constraint types" \
@@ -328,6 +339,8 @@ check "importer preserves explicit N/A visible surface row" \
   "grep -q 'explicit_na' '${IMPORT_OUT}' && grep -q 'decorative-rule' '${IMPORT_OUT}'"
 
 echo "Block 1.5: structurally empty imports emit a compact stub"
+check "validator accepts an explicitly empty structured hand-off" \
+  "bash '${VALIDATE_SCRIPT}' '${EMPTY_STRUCTURED}'"
 check "empty structured hand-off imports successfully" \
   "bash '${IMPORT_SCRIPT}' '${EMPTY_STRUCTURED}' > '${EMPTY_STRUCTURED_OUT}'"
 check "empty structured hand-off emits the compact status stub" \
@@ -336,6 +349,14 @@ check "empty structured hand-off emits no empty imported tables" \
   "! grep -q '^### Imported ' '${EMPTY_STRUCTURED_OUT}'"
 check "empty structured hand-off retains the C4 section contract" \
   "grep -q '^## Plan Imported Design DCs$' '${EMPTY_STRUCTURED_OUT}' && grep -q '^<!-- section:plan-imported-design-dcs -->$' '${EMPTY_STRUCTURED_OUT}' && grep -q '^<!-- /section:plan-imported-design-dcs -->$' '${EMPTY_STRUCTURED_OUT}'"
+
+echo "Block 1.6: short legacy prose is never discarded as structurally empty"
+check "validator treats a one-item legacy hand-off as migratable prose" \
+  "bash '${VALIDATE_SCRIPT}' '${SHORT_LEGACY}'"
+check "short legacy hand-off imports successfully" \
+  "bash '${IMPORT_SCRIPT}' '${SHORT_LEGACY}' > '${SHORT_LEGACY_OUT}'"
+check "short legacy hand-off emits MIGRATE-FIRST instead of the empty stub" \
+  "grep -q 'MIGRATE-FIRST' '${SHORT_LEGACY_OUT}' && ! grep -q 'no structured design DCs or visual targets' '${SHORT_LEGACY_OUT}'"
 
 echo "Block 2: malformed structured hand-off fails before partial import"
 check "validator rejects item missing type" \
