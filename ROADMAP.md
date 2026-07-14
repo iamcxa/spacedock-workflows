@@ -18,6 +18,7 @@
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
 | 2-deterministic-manual-adopter-routing | Deterministic manual adopter skill routing | (pitch) | small-batch (2-3 days) |
+| 3-root-readme-stale-claims | Refresh root README stale compatibility claims | (pitch) | small-batch |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
@@ -42,6 +43,8 @@
 | Patch or retain the repository-scanning discovery helper | The captain rejected the helper strategy after repeated suppressible producer failures. |
 | Redesign density classification or upstream spacedock status --discover (#24) | Separate existing issues outside this 2-3 day appetite. |
 | Automatically migrate existing adopters or introduce multiple routing manifests | The selected contract keeps legacy configs readable and adds one canonical manual source. |
+| Refresh README literals to the current release numbers | New hardcoded values would become stale again and preserve the same failure mode. |
+| Record README coupling without a negative grep | A coupling row documents ownership but does not mechanically reject version-shaped drift. |
 <!-- /section:not-doing -->
 
 ## Shipped
