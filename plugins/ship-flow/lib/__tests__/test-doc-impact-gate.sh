@@ -266,6 +266,254 @@ assert_exit "misspelled-key ('coupling:' singular) coupling map hard-errors (exi
 assert_contains "misspelled-key hard-error names the couplings map" "coupling-map-misspelled-key\.yaml" "${TMP_DIR}/misspelled-key.out"
 
 echo ""
+echo "Block 16: explicit inverse edge — contract doc without implementation change blocks"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-contract-doc-only.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bidirectional.yaml" \
+  > "${TMP_DIR}/contract-doc-only.out" 2>&1 && CONTRACT_DOC_RC=0 || CONTRACT_DOC_RC=$?
+printf '%s\n' "$CONTRACT_DOC_RC" > "${TMP_DIR}/contract-doc-only.exit"
+assert_exit "contract-doc-only change exits 1" 1 "${TMP_DIR}/contract-doc-only.exit"
+assert_contains "contract-doc-only change reports inverse-edge blocker" '^BLOCKER contribution-impact: helm-ledger-boundary \[doc-to-source\]' "${TMP_DIR}/contract-doc-only.out"
+
+echo ""
+echo "Block 17: explicit bidirectional edge — paired changes pass in both directions"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-contract-paired.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bidirectional.yaml" \
+  > "${TMP_DIR}/contract-paired.out" 2>&1 && CONTRACT_PAIRED_RC=0 || CONTRACT_PAIRED_RC=$?
+printf '%s\n' "$CONTRACT_PAIRED_RC" > "${TMP_DIR}/contract-paired.exit"
+assert_exit "paired contract change exits 0" 0 "${TMP_DIR}/contract-paired.exit"
+assert_contains "paired contract change satisfies source-to-doc" '^PASS helm-ledger-boundary: coupled doc touched' "${TMP_DIR}/contract-paired.out"
+assert_contains "paired contract change satisfies doc-to-source" '^PASS contribution-impact: helm-ledger-boundary \[doc-to-source\]' "${TMP_DIR}/contract-paired.out"
+
+echo ""
+echo "Block 18: legacy rows remain one-way unless inverse is declared"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-contract-doc-only.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_MAP}" \
+  > "${TMP_DIR}/legacy-doc-only.out" 2>&1 && LEGACY_DOC_RC=0 || LEGACY_DOC_RC=$?
+printf '%s\n' "$LEGACY_DOC_RC" > "${TMP_DIR}/legacy-doc-only.exit"
+assert_exit "legacy doc-only change remains a silent pass" 0 "${TMP_DIR}/legacy-doc-only.exit"
+assert_not_contains "legacy doc-only change emits no inverse blocker" '^BLOCKER contribution-impact:' "${TMP_DIR}/legacy-doc-only.out"
+
+echo ""
+echo "Block 19: row-scoped exemptGlobs excludes only the declared generated path"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-generated-only.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bidirectional.yaml" \
+  > "${TMP_DIR}/generated-exempt.out" 2>&1 && GENERATED_EXEMPT_RC=0 || GENERATED_EXEMPT_RC=$?
+printf '%s\n' "$GENERATED_EXEMPT_RC" > "${TMP_DIR}/generated-exempt.exit"
+assert_exit "declared generated path is exempt" 0 "${TMP_DIR}/generated-exempt.exit"
+assert_not_contains "declared generated path emits no blocker" '^BLOCKER ' "${TMP_DIR}/generated-exempt.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-schema-only.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bidirectional.yaml" \
+  > "${TMP_DIR}/non-exempt-schema.out" 2>&1 && NON_EXEMPT_RC=0 || NON_EXEMPT_RC=$?
+printf '%s\n' "$NON_EXEMPT_RC" > "${TMP_DIR}/non-exempt-schema.exit"
+assert_exit "neighboring non-exempt schema still blocks" 1 "${TMP_DIR}/non-exempt-schema.exit"
+assert_contains "neighboring non-exempt schema reports doc-impact" '^BLOCKER doc-impact: helm-ledger-boundary' "${TMP_DIR}/non-exempt-schema.out"
+
+echo ""
+echo "Block 20: scoped declaration applies only to the named row and direction"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-contract-doc-only.txt" \
+  "--declaration=contribution-impact: none [helm-ledger-boundary:doc-to-source] — wording-only clarification with no schema semantic change" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bidirectional.yaml" \
+  > "${TMP_DIR}/scoped-exemption.out" 2>&1 && SCOPED_EXEMPT_RC=0 || SCOPED_EXEMPT_RC=$?
+printf '%s\n' "$SCOPED_EXEMPT_RC" > "${TMP_DIR}/scoped-exemption.exit"
+assert_exit "strong scoped declaration exits 0" 0 "${TMP_DIR}/scoped-exemption.exit"
+assert_contains "strong scoped declaration is named in PASS" '^PASS contribution-impact: helm-ledger-boundary \[doc-to-source\] scoped exemption accepted' "${TMP_DIR}/scoped-exemption.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-contract-doc-only.txt" \
+  "--declaration=contribution-impact: none [other-row:doc-to-source] — wording-only clarification with no schema semantic change" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bidirectional.yaml" \
+  > "${TMP_DIR}/wrong-scope.out" 2>&1 && WRONG_SCOPE_RC=0 || WRONG_SCOPE_RC=$?
+printf '%s\n' "$WRONG_SCOPE_RC" > "${TMP_DIR}/wrong-scope.exit"
+assert_exit "wrong-row declaration does not waive inverse edge" 1 "${TMP_DIR}/wrong-scope.exit"
+
+echo ""
+echo "Block 21: protected deletes or renames fail closed"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-missing-source-paired.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bidirectional.yaml" \
+  > "${TMP_DIR}/missing-source.out" 2>&1 && MISSING_SOURCE_RC=0 || MISSING_SOURCE_RC=$?
+printf '%s\n' "$MISSING_SOURCE_RC" > "${TMP_DIR}/missing-source.exit"
+assert_exit "missing protected source exits 1 despite paired path list" 1 "${TMP_DIR}/missing-source.exit"
+assert_contains "missing source blocker names protected path" '^BLOCKER contribution-impact: helm-ledger-boundary \[protected-path\].*renamed-away\.schema\.json is missing' "${TMP_DIR}/missing-source.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-missing-doc-paired.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-missing-doc.yaml" \
+  > "${TMP_DIR}/missing-doc.out" 2>&1 && MISSING_DOC_RC=0 || MISSING_DOC_RC=$?
+printf '%s\n' "$MISSING_DOC_RC" > "${TMP_DIR}/missing-doc.exit"
+assert_exit "missing protected doc exits 1 despite paired path list" 1 "${TMP_DIR}/missing-doc.exit"
+assert_contains "missing doc blocker names protected path" '^BLOCKER contribution-impact: helm-ledger-boundary \[protected-path\].*renamed-away\.md is missing' "${TMP_DIR}/missing-doc.out"
+
+echo ""
+echo "Block 22: malformed direction and exemption entries fail closed"
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-schema-only.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bad-direction.yaml" \
+  > "${TMP_DIR}/bad-direction.out" 2>&1 && BAD_DIRECTION_RC=0 || BAD_DIRECTION_RC=$?
+printf '%s\n' "$BAD_DIRECTION_RC" > "${TMP_DIR}/bad-direction.exit"
+assert_exit "unsupported direction hard-errors" 2 "${TMP_DIR}/bad-direction.exit"
+assert_contains "unsupported direction error names value" 'guess-the-inverse' "${TMP_DIR}/bad-direction.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-schema-only.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bad-exemptions.yaml" \
+  > "${TMP_DIR}/bad-exemptions.out" 2>&1 && BAD_EXEMPT_RC=0 || BAD_EXEMPT_RC=$?
+printf '%s\n' "$BAD_EXEMPT_RC" > "${TMP_DIR}/bad-exemptions.exit"
+assert_exit "block-list exemptions hard-error" 2 "${TMP_DIR}/bad-exemptions.exit"
+assert_contains "block-list exemption error names offending content" 'generated/\*\*' "${TMP_DIR}/bad-exemptions.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-schema-only.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bad-name.yaml" \
+  > "${TMP_DIR}/bad-name.out" 2>&1 && BAD_NAME_RC=0 || BAD_NAME_RC=$?
+printf '%s\n' "$BAD_NAME_RC" > "${TMP_DIR}/bad-name.exit"
+assert_exit "unsafe row name hard-errors before declaration matching" 2 "${TMP_DIR}/bad-name.exit"
+assert_contains "unsafe row name error explains slug grammar" 'letters, numbers, dot, underscore, and hyphen' "${TMP_DIR}/bad-name.out"
+
+echo ""
+echo "Block 23: schema_version is required, unique, well-formed, and supported"
+for case_name in unknown-version missing-version duplicate-version malformed-version legacy-with-advanced-fields; do
+  "${CHECKER}" \
+    "--changed=${FIXTURE_ROOT}/changed-helm-contract-paired.txt" \
+    "--declaration=" \
+    "--coupling-map=${FIXTURE_ROOT}/coupling-map-${case_name}.yaml" \
+    > "${TMP_DIR}/${case_name}.out" 2>&1 && VERSION_RC=0 || VERSION_RC=$?
+  printf '%s\n' "$VERSION_RC" > "${TMP_DIR}/${case_name}.exit"
+  assert_exit "${case_name} map hard-errors before accepting a valid pair" 2 "${TMP_DIR}/${case_name}.exit"
+done
+assert_contains "unknown version error names rejected value" '99\.0' "${TMP_DIR}/unknown-version.out"
+assert_contains "missing version error names schema_version" 'schema_version' "${TMP_DIR}/missing-version.out"
+assert_contains "duplicate version error reports exact count" 'exactly one.*schema_version' "${TMP_DIR}/duplicate-version.out"
+assert_contains "malformed version error explains quoted grammar" 'quoted' "${TMP_DIR}/malformed-version.out"
+assert_contains "1.0 advanced fields error names version boundary" 'schema_version 1\.0.*directions/exemptGlobs' "${TMP_DIR}/legacy-with-advanced-fields.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-doc-touched.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_MAP}" \
+  > "${TMP_DIR}/supported-v1.out" 2>&1 && SUPPORTED_V1_RC=0 || SUPPORTED_V1_RC=$?
+printf '%s\n' "$SUPPORTED_V1_RC" > "${TMP_DIR}/supported-v1.exit"
+assert_exit "supported legacy schema_version 1.0 still passes" 0 "${TMP_DIR}/supported-v1.exit"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-contract-paired.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-bidirectional.yaml" \
+  > "${TMP_DIR}/supported-v1-1.out" 2>&1 && SUPPORTED_V1_1_RC=0 || SUPPORTED_V1_1_RC=$?
+printf '%s\n' "$SUPPORTED_V1_1_RC" > "${TMP_DIR}/supported-v1-1.exit"
+assert_exit "supported schema_version 1.1 passes bidirectional pair" 0 "${TMP_DIR}/supported-v1-1.exit"
+
+echo ""
+echo "Block 24: map weakening requires a scoped contract migration"
+for weakening in row-removed direction-removed globs-removed; do
+  "${CHECKER}" \
+    "--changed=${FIXTURE_ROOT}/changed-unrelated.txt" \
+    "--declaration=" \
+    "--coupling-map=${FIXTURE_ROOT}/coupling-map-migration-${weakening}.yaml" \
+    "--base-coupling-map=${FIXTURE_ROOT}/coupling-map-migration-base.yaml" \
+    > "${TMP_DIR}/migration-${weakening}.out" 2>&1 && MIGRATION_RC=0 || MIGRATION_RC=$?
+  printf '%s\n' "$MIGRATION_RC" > "${TMP_DIR}/migration-${weakening}.exit"
+  assert_exit "${weakening} fails closed without migration declaration" 1 "${TMP_DIR}/migration-${weakening}.exit"
+  assert_contains "${weakening} blocker names scoped migration" 'contract-migration: ledger\.contract' "${TMP_DIR}/migration-${weakening}.out"
+done
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-unrelated.txt" \
+  "--declaration=contract-migration: ledger.contract — reviewed ecosystem migration with downstream consumers" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-migration-row-removed.yaml" \
+  "--base-coupling-map=${FIXTURE_ROOT}/coupling-map-migration-base.yaml" \
+  > "${TMP_DIR}/migration-dotted-waiver.out" 2>&1 && DOTTED_MIGRATION_RC=0 || DOTTED_MIGRATION_RC=$?
+printf '%s\n' "$DOTTED_MIGRATION_RC" > "${TMP_DIR}/migration-dotted-waiver.exit"
+assert_exit "dotted row migration uses literal row matching and passes" 0 "${TMP_DIR}/migration-dotted-waiver.exit"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-unrelated.txt" \
+  "--declaration=" \
+  "--base-coupling-map=${FIXTURE_ROOT}/coupling-map-migration-base.yaml" \
+  --head-map-absent \
+  > "${TMP_DIR}/migration-map-deleted.out" 2>&1 && MAP_DELETED_RC=0 || MAP_DELETED_RC=$?
+printf '%s\n' "$MAP_DELETED_RC" > "${TMP_DIR}/migration-map-deleted.exit"
+assert_exit "deleted head map fails closed against every base row" 1 "${TMP_DIR}/migration-map-deleted.exit"
+assert_contains "deleted map blocker includes dotted row" 'contract-migration: ledger\.contract' "${TMP_DIR}/migration-map-deleted.out"
+assert_contains "deleted map blocker includes stable row" 'contract-migration: stable-row' "${TMP_DIR}/migration-map-deleted.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-schema-only.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-exemption-broadened.yaml" \
+  "--base-coupling-map=${FIXTURE_ROOT}/coupling-map-exemption-base.yaml" \
+  > "${TMP_DIR}/migration-added-exemption.out" 2>&1 && ADDED_EXEMPT_RC=0 || ADDED_EXEMPT_RC=$?
+printf '%s\n' "$ADDED_EXEMPT_RC" > "${TMP_DIR}/migration-added-exemption.exit"
+assert_exit "new broad exemption cannot bypass a protected source-only change" 1 "${TMP_DIR}/migration-added-exemption.exit"
+assert_contains "new exemption blocker requires scoped migration" 'contract-migration: helm-ledger-boundary' "${TMP_DIR}/migration-added-exemption.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-schema-only.txt" \
+  "--declaration=contract-migration: helm-ledger-boundary — reviewed broad exemption for generated ledger inputs" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-exemption-broadened.yaml" \
+  "--base-coupling-map=${FIXTURE_ROOT}/coupling-map-exemption-base.yaml" \
+  > "${TMP_DIR}/migration-added-exemption-accepted.out" 2>&1 && ADDED_EXEMPT_OK_RC=0 || ADDED_EXEMPT_OK_RC=$?
+printf '%s\n' "$ADDED_EXEMPT_OK_RC" > "${TMP_DIR}/migration-added-exemption-accepted.exit"
+assert_exit "exact migration declaration permits reviewed exemption weakening" 0 "${TMP_DIR}/migration-added-exemption-accepted.exit"
+
+for bad_declaration in \
+  'contract-migration: ledger.contract - invalid ASCII separator reason' \
+  'contract-migration: ledger.contract : invalid colon separator reason' \
+  'contract-migration: ledger.contract | invalid pipe separator reason' \
+  'contract-migration: ledger.contract —missing required space after em dash' \
+  'Example: contract-migration: ledger.contract — prefixed declaration must fail' \
+  '"contract-migration: ledger.contract — quoted declaration must fail"'; do
+  "${CHECKER}" \
+    "--changed=${FIXTURE_ROOT}/changed-unrelated.txt" \
+    "--declaration=${bad_declaration}" \
+    "--coupling-map=${FIXTURE_ROOT}/coupling-map-migration-row-removed.yaml" \
+    "--base-coupling-map=${FIXTURE_ROOT}/coupling-map-migration-base.yaml" \
+    > "${TMP_DIR}/migration-bad-grammar-${RANDOM}.out" 2>&1 && BAD_MIGRATION_RC=0 || BAD_MIGRATION_RC=$?
+  printf '%s\n' "$BAD_MIGRATION_RC" > "${TMP_DIR}/migration-bad-grammar.exit"
+  assert_exit "non-exact migration declaration is rejected: ${bad_declaration}" 1 "${TMP_DIR}/migration-bad-grammar.exit"
+done
+
+echo ""
+echo "Block 25: duplicate rows/keys and brace globs fail closed"
+for malformed in duplicate-row duplicate-key brace-glob; do
+  "${CHECKER}" \
+    "--changed=${FIXTURE_ROOT}/changed-unrelated.txt" \
+    "--declaration=" \
+    "--coupling-map=${FIXTURE_ROOT}/coupling-map-${malformed}.yaml" \
+    > "${TMP_DIR}/${malformed}.out" 2>&1 && MALFORMED_RC=0 || MALFORMED_RC=$?
+  printf '%s\n' "$MALFORMED_RC" > "${TMP_DIR}/${malformed}.exit"
+  assert_exit "${malformed} map hard-errors" 2 "${TMP_DIR}/${malformed}.exit"
+done
+assert_contains "duplicate row error is explicit" 'duplicate.*row.*duplicate\.row' "${TMP_DIR}/duplicate-row.out"
+assert_contains "duplicate key error is explicit" 'duplicate.*srcGlobs' "${TMP_DIR}/duplicate-key.out"
+assert_contains "brace glob rejection is explicit" 'brace.*glob.*unsupported' "${TMP_DIR}/brace-glob.out"
+
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-helm-contract-doc-only.txt" \
+  "--declaration=contribution-impact: none [helmXledgerXboundary:doc-to-source] — wrong literal row must not match dotted name" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-dotted-row.yaml" \
+  > "${TMP_DIR}/dotted-row-false-match.out" 2>&1 && DOTTED_FALSE_RC=0 || DOTTED_FALSE_RC=$?
+printf '%s\n' "$DOTTED_FALSE_RC" > "${TMP_DIR}/dotted-row-false-match.exit"
+assert_exit "ERE metacharacters in row names cannot widen scoped waiver matching" 1 "${TMP_DIR}/dotted-row-false-match.exit"
+
+echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 
 if [ "${FAIL}" -gt 0 ]; then

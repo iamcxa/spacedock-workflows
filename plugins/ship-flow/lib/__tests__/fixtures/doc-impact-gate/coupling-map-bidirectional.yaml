@@ -1,0 +1,10 @@
+# Test fixture: Helm adopter contract surface. The adopter-specific paths are
+# fixture data only; Ship Flow owns the generic direction/exemption semantics.
+schema_version: "1.1"
+couplings:
+  - name: helm-ledger-boundary
+    srcGlobs: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/*.schema.json", "plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/**/*.schema.json"]
+    docPaths: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/docs/ledger/boundary-contract.md"]
+    directions: ["source-to-doc", "doc-to-source"]
+    exemptGlobs: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/generated/**"]
+    rationale: "Helm's Ledger contract schema and boundary guide are one contribution surface."

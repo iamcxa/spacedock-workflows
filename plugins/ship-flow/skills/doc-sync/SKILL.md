@@ -69,9 +69,11 @@ Group added lines by source file and cap the diff summary at 2000 characters.
    - `bin/*.sh` and `lib/*.sh`: CLI contracts, flags, artifact writers, validators, sync primitives.
    - `hooks/*`: hook event types, matchers, warning behavior.
    - `references/**/*`, `registry/*.yaml`, and `workflow-template.yaml`: schema and workflow defaults.
+   - `CONTRIBUTING.md`, `_mods/contribution-contract.md`, and `references/doc-coupling-map.yaml`: bidirectional contribution edges, scoped exemptions, and FO/CI enforcement.
    - `README.md` and `INVARIANTS.md`: canonical rationale and grep-enforced rules.
 3. Inventory doc targets listed in Doc Structure.
 4. Cross-reference every Source Map entry against its doc target. Include diff-added behavior in the coverage check.
+   For contribution rows, audit both declared directions and compare the effective merge-base map with HEAD. Never infer an inverse edge when `doc-to-source` is absent, never accept an exemption outside that row's `exemptGlobs` or scoped declaration, and require the exact standalone `contract-migration: <row> — <reason>` before removing a base row, direction, or source/doc glob, or adding/broadening an exemption. Removing an exemption strengthens the contract and does not require migration.
 5. Run orphan detection against the full Source Map, even when `--section` is used. Any discovered source file without a Source Map row is a Critical gap.
 6. Classify gaps:
    - Critical: stage contract, invariant, workflow schema, hook behavior, release gate, or shell flag has no doc target coverage.
