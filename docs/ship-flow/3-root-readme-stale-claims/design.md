@@ -22,10 +22,5 @@ reviewer_verdict: PROCEED
 <!-- section:hand-off-to-plan -->
 ```yaml
 design-skipped: true
-design_constraints: []
-open_decisions: []
-artifact_paths: []
-render_fidelity_targets: []
-whole_page_visual_targets: []
 ```
 <!-- /section:hand-off-to-plan -->
