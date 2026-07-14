@@ -9,7 +9,7 @@
 <!-- section:now -->
 | Entity | Title | Stage |
 | --- | --- | --- |
-| 3-root-readme-stale-claims | Refresh root README stale compatibility claims | verify |
+| 3-root-readme-stale-claims | Refresh root README stale compatibility claims | ship |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
