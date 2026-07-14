@@ -1,8 +1,8 @@
 ---
 title: Align C14 with First Officer stage-entry transitions
-status: draft
+status: shape
 source: blocker discovered while starting issue #20
-started:
+started: 2026-07-14T08:07:52Z
 completed:
 verdict:
 score:
