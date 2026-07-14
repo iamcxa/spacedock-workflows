@@ -138,6 +138,12 @@ runtime_checks_count: 188
 blocking_findings_count: 0
 warning_findings_count: 0
 
+## Captain Gate Decision
+
+decision: approved
+approved_at: 2026-07-14T17:13:13Z
+scope: advance this feature from verify into review; no push, PR, merge, or issue closure authorized.
+
 ## Deferred to TODO
 
 Deferred to TODO: 0 findings. No issue, todo, PR, or remote state was mutated during verify.
