@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # check-version-triple.sh — verify version consistency across the three canonical sites
-# for the ship-flow plugin, and that repository points to the standalone repo.
-# Exits 0 (PASS) only when all three versions match AND repository is clean.
+# for the ship-flow plugin, that repository points to the standalone repo, and
+# that the root README does not duplicate release-version claims.
+# Exits 0 (PASS) only when all checks pass.
 
 set -euo pipefail
 
@@ -10,6 +11,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN_JSON="$REPO_ROOT/plugins/ship-flow/.claude-plugin/plugin.json"
 README="$REPO_ROOT/plugins/ship-flow/README.md"
 MARKETPLACE_JSON="$REPO_ROOT/.claude-plugin/marketplace.json"
+ROOT_README="$REPO_ROOT/README.md"
 
 FAIL=0
 
@@ -40,6 +42,16 @@ if echo "$REPO" | grep -qE '(spacedock-dev|/spacebridge$)'; then
   FAIL=1
 else
   echo "OK  : repository is clean"
+fi
+
+# --- Keep root documentation independent of any particular release ---
+VERSION_LITERAL_PATTERN='(^|[^[:alnum:]_])v?[0-9]+\.[0-9]+(\.([0-9]+|x))?([^[:alnum:]_]|$)'
+if ROOT_README_VERSION_LINES=$(grep -nE -- "$VERSION_LITERAL_PATTERN" "$ROOT_README"); then
+  echo "FAIL: root README contains version-shaped literal"
+  echo "$ROOT_README_VERSION_LINES"
+  FAIL=1
+else
+  echo "OK  : root README is version-independent"
 fi
 
 if [ "$FAIL" -eq 0 ]; then
