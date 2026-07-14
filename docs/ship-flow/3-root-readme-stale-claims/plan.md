@@ -51,12 +51,12 @@ No design DCs to import. Plan proceeds without UI or render-fidelity work.
 <!-- section:canonical-doc-actions -->
 ### Canonical Doc Actions
 
-| Doc | Action | Rationale |
-| --- | --- | --- |
-| `README.md` | update | This is the stale front-door surface and must link canonical positioning. |
-| `PRODUCT.md` | skip | It already carries the canonical positioning; no capability changes. |
-| `ARCHITECTURE.md` | skip | The change extends an existing mechanical gate without changing component boundaries or dependencies. |
-| `ROADMAP.md` | defer to terminal closeout | Shape already moved the entity to Next; final row synchronization belongs to review/ship. |
+| Doc | Action | Source | Rationale |
+| --- | --- | --- | --- |
+| `README.md` | update | touched-files | This is the stale front-door surface and must link canonical positioning. |
+| `PRODUCT.md` | skip | plan | It already carries the canonical positioning; no capability changes. |
+| `ARCHITECTURE.md` | skip | plan | The change extends an existing mechanical gate without changing component boundaries or dependencies. |
+| `ROADMAP.md` | update | plan | Shape moved the entity into the active queue; review must synchronize its current stage while merge closeout remains terminal. |
 <!-- /section:canonical-doc-actions -->
 
 <!-- section:plan -->
