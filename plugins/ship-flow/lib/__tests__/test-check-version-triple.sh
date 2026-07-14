@@ -100,11 +100,27 @@ assert_version_drift_fails() {
   fi
 }
 
+assert_missing_readme_fails() {
+  local output_file="${TMP_ROOT}/missing-root-readme.out"
+
+  rm -f "${FIXTURE_ROOT}/README.md"
+
+  run_checker "${output_file}"
+  if [ "${CHECKER_STATUS}" -ne 0 ] && \
+    grep -Fq 'FAIL: unable to scan root README for version-shaped literals' "${output_file}"; then
+    pass "missing root README is an operational failure"
+  else
+    fail "missing root README is an operational failure (exit ${CHECKER_STATUS})"
+    sed 's/^/    /' "${output_file}"
+  fi
+}
+
 echo "=== test-check-version-triple.sh ==="
 assert_clean_readme_passes
 assert_version_drift_fails "bare-semver" "0.7.0"
 assert_version_drift_fails "v-prefixed-minor" "v0.7"
 assert_version_drift_fails "x-series" "0.7.x"
+assert_missing_readme_fails
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
