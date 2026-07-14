@@ -23,3 +23,18 @@ Verified by: `grep -rn "sharp" plugins/ship-flow/lib/shape-confirm.sh plugins/sh
 
 **AC-3 — confirm absorbs an existing flat entity.**
 Verified by: fixture with a pre-existing flat `{slug}.md` (captain-authored ACs in body) — confirm migrates body content into the folder entity and retires the flat file in the same ceremony; test asserts no content loss.
+
+## Reconciliation (2026-07-15)
+
+PR #33 is not superseding coverage for this entity. Its mode-aware change covers
+`pitch.shape_mode` receipt behavior for Mode A/B/C, not workflow-instance
+`id-style` behavior. Fresh isolated runtime probes leave all three ACs open:
+
+- AC-1: a slug-style proposal without a numeric `pitch.id` still exits 10.
+- AC-2: `shape-confirm.sh` still writes `status: sharp` at three sites; the
+  entity schema enum and live plugin README vocabulary still expose `sharp`.
+- AC-3: confirming beside a pre-existing flat entity creates the folder while
+  leaving the flat file and its captain-authored AC body in place.
+
+Residual scope therefore remains the original three ACs with no narrowing by
+PR #33. Captain approved retaining the full entity scope.
