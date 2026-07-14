@@ -31,12 +31,22 @@ jobs:
         id: ship_flow_scope
         run: |
           BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          EVENT_NAME="${{ github.event_name }}"
           # Branch-creation push events set `before` to the all-zeros SHA —
           # skip straight to the HEAD~1 fallback instead of a doomed diff.
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
             CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          elif ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "ERROR: event base commit is unavailable: $BASE" >&2
+            exit 1
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            # PR scope is the topic branch relative to its merge base. This
+            # excludes base-only changes added after the branch diverged.
+            CHANGED=$(git diff --name-only "$BASE"...HEAD)
           else
-            CHANGED=$(git diff --name-only "$BASE"...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+            # Push scope is the exact before/after tree delta. Three-dot would
+            # lose old-side removals on a non-fast-forward push.
+            CHANGED=$(git diff --name-only "$BASE" HEAD)
           fi
           echo "Changed files:"
           echo "$CHANGED"

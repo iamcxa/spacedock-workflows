@@ -66,10 +66,22 @@ PROSE_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*[0-9]+\.[[:space:]]' || t
 
 FAIL=0
 
-if [ "$STRUCTURED_HINTS" -lt 2 ] && [ "$PROSE_HINTS" -gt 2 ]; then
+if [ "$STRUCTURED_HINTS" -lt 2 ] && [ "$PROSE_HINTS" -gt 0 ]; then
   echo "WARN handoff-schema: prose format detected — schema validation skipped." >&2
   echo "  Migration: bash plugins/ship-flow/lib/migrate-design-constraints.sh $DESIGN" >&2
   echo "  Until migrated, structured field validation cannot run; D{N} reference check (validate-d-references.sh) still works." >&2
+  exit 0
+fi
+
+# Non-UI hand-offs may intentionally carry no design DCs. Accept the compact
+# C4 shape only when every declared importable collection is explicitly `[]`;
+# do not infer emptiness from missing fields, null-style keys, or parse failure.
+IMPORTABLE_DECL_COUNT=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*(design_constraints|visible_surface_map|render_fidelity_targets|whole_page_visual_targets):' || true)
+EXPLICIT_EMPTY_IMPORTABLE_COUNT=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*(design_constraints|visible_surface_map|render_fidelity_targets|whole_page_visual_targets):[[:space:]]*\[[[:space:]]*\][[:space:]]*$' || true)
+if [ "$AFFECTS_UI_TRUE" = "0" ] \
+  && [ "$IMPORTABLE_DECL_COUNT" -gt 0 ] \
+  && [ "$IMPORTABLE_DECL_COUNT" -eq "$EXPLICIT_EMPTY_IMPORTABLE_COUNT" ]; then
+  echo "OK handoff-schema: explicitly empty structured design collections"
   exit 0
 fi
 

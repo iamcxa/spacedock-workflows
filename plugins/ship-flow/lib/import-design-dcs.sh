@@ -46,11 +46,37 @@ if [ -z "$HANDOFF" ]; then
   exit 1
 fi
 
-# Detect the C4-required but structurally empty case before emitting the normal
-# multi-table body. Section markers and the H2 remain so C4 can recognize the
-# import contract; the generated content itself collapses to one status line.
+# Detect legacy prose before considering the compact structured-empty path. A
+# short legacy hand-off is still content and must never be discarded as empty.
 STRUCTURED_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]+(type|assertion|rationale_decision|selector|css_property|expected_value):' || true)
 PROSE_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*[0-9]+\.[[:space:]]' || true)
+
+if [ "$STRUCTURED_HINTS" -lt 2 ] && [ "$PROSE_HINTS" -gt 0 ]; then
+  cat <<EOF
+## Plan Imported Design DCs
+
+<!-- section:plan-imported-design-dcs -->
+**Status**: ⚠️ MIGRATE-FIRST — hand-off in legacy prose format. Run:
+
+\`\`\`bash
+bash plugins/ship-flow/lib/migrate-design-constraints.sh $ENTITY_FILE
+\`\`\`
+
+After migration, rerun this script to populate this section. Plan stage may proceed
+inline by reading the prose hand-off directly, but mechanical DC import + verify
+Step 3.6 ui-verify integration require structured format.
+
+<!-- /section:plan-imported-design-dcs -->
+EOF
+  exit 0
+fi
+
+# Detect the C4-required but structurally empty case before emitting the normal
+# multi-table body. Every declared importable collection must be an explicit
+# empty array; a missing, prose, null, or unparsed structure stays on the normal
+# fail-loud/migration path instead of being guessed empty.
+IMPORTABLE_DECL_COUNT=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*(design_constraints|visible_surface_map|render_fidelity_targets|whole_page_visual_targets):' || true)
+EXPLICIT_EMPTY_IMPORTABLE_COUNT=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*(design_constraints|visible_surface_map|render_fidelity_targets|whole_page_visual_targets):[[:space:]]*\[[[:space:]]*\][[:space:]]*$' || true)
 IMPORTABLE_ITEM_COUNT=$(echo "$HANDOFF" | awk '
   /^[[:space:]]*(design_constraints|visible_surface_map|render_fidelity_targets|whole_page_visual_targets):/ { in_importable=1; next }
   /^[[:space:]]*(open_decisions|artifact_paths|storyboard_frames):/ { in_importable=0 }
@@ -59,7 +85,8 @@ IMPORTABLE_ITEM_COUNT=$(echo "$HANDOFF" | awk '
 ')
 
 if ! echo "$HANDOFF" | grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' \
-  && [ "$PROSE_HINTS" -le 2 ] \
+  && [ "$IMPORTABLE_DECL_COUNT" -gt 0 ] \
+  && [ "$IMPORTABLE_DECL_COUNT" -eq "$EXPLICIT_EMPTY_IMPORTABLE_COUNT" ] \
   && [ "$IMPORTABLE_ITEM_COUNT" -eq 0 ]; then
   cat <<'EOF'
 ## Plan Imported Design DCs
@@ -86,23 +113,6 @@ if echo "$HANDOFF" | grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:spac
 **Status**: design-skipped (entity has `affects_ui: false`; design stage bypassed by shape Phase 8).
 
 No design DCs to import. Plan proceeds without UI/render-fidelity DC imports.
-
-<!-- /section:plan-imported-design-dcs -->
-EOF
-  exit 0
-fi
-
-if [ "$STRUCTURED_HINTS" -lt 2 ] && [ "$PROSE_HINTS" -gt 2 ]; then
-  cat <<EOF
-**Status**: ⚠️ MIGRATE-FIRST — hand-off in legacy prose format. Run:
-
-\`\`\`bash
-bash plugins/ship-flow/lib/migrate-design-constraints.sh $ENTITY_FILE
-\`\`\`
-
-After migration, rerun this script to populate this section. Plan stage may proceed
-inline by reading the prose hand-off directly, but mechanical DC import + verify
-Step 3.6 ui-verify integration require structured format.
 
 <!-- /section:plan-imported-design-dcs -->
 EOF
