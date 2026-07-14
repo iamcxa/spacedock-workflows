@@ -1,15 +1,15 @@
 ---
 title: Fixture-tree exclusion for discovery helpers
-status: verify
+status: done
 source: todo fixture-pollution-discovery-helpers (pitch 1 harvest)
 started: 2026-07-12T13:48:06Z
-completed:
-verdict:
+completed: 2026-07-14T16:34:07Z
+verdict: PASSED
 score:
 worktree: .claude/worktrees/fixture-pollution-discovery-helpers
 issue: "#20"
 related_issue: "#24"
-pr:
+pr: "#39"
 pattern: pitch
 appetite: small-batch
 layout: folder
@@ -19,6 +19,7 @@ design_required: true
 contract_decision_required: true
 domain: schema
 harvest_required: true
+archived: 2026-07-14T16:34:07Z
 ---
 
 <!-- section:stage-artifact-links -->
@@ -253,3 +254,14 @@ Cycle-3 verification reproduces all authorized behavior and invariant checks,
 validates the sole immutable acceptance envelope against the original frozen
 object without replay, and returns PROCEED with one nonblocking signal-cleanup
 note. No code, test, receipt, status, issue, capture, or worktree state changed.
+
+## Reconciliation (2026-07-15)
+
+Captain adjudication records this entity as landed and re-verified, not rejected.
+PR #32 was closed without merge after its costly-no verdict; the corrected source
+commits later entered `main` through PR #39 ancestry. A fresh repository-root
+`discover-adopter-skills.sh --root=.` run returned exit 0, 193 stdout bytes,
+zero stderr bytes, and zero routing rows. Focused adopter discovery and density
+classification suites passed 38/38 and 41/41 respectively. The instance README
+retains the explicit `--workflow-dir docs/ship-flow` guard and local tracker #24;
+no upstream issue was posted during reconciliation.
