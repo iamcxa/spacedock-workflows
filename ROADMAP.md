@@ -27,7 +27,6 @@
 | Idea | Size | Claim | Source |
 | --- | --- | --- | --- |
 | shape-confirm-instance-awareness | S | shape-confirm.sh and allocate-id.sh ignore the workflow README id-style declaration, write legacy status sharp (3 sites), and never absorb an existing flat entity — confirm path should be instance-aware | pitch 1 |
-| root-readme-stale-claims | S | Root README still claims 0.7.0 adoption gap and spacedock 0.22.0; refresh compatibility/adoption prose once PRODUCT.md carries canonical positioning | pitch 1 |
 | plugin-readme-model-era-refactor | S | Plugin README still model-era-anchored (4.7 voice) + stale | (todo) |
 <!-- /section:later -->
 
