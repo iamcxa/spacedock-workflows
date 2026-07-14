@@ -1,12 +1,12 @@
 ---
 title: Align C14 with First Officer stage-entry transitions
-status: plan
+status: execute
 source: blocker discovered while starting issue #20
 started: 2026-07-14T08:07:52Z
 completed:
 verdict:
 score:
-worktree: .claude/worktrees/c14-fo-dispatch-contract
+worktree: .claude/worktrees/c14-fo-dispatch-contract-narrow
 issue: "#30"
 pr:
 ---
