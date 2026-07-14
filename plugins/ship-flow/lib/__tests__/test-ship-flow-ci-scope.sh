@@ -10,6 +10,8 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/ship-flow-invariants.yml"
 PASS=0
 FAIL=0
 ERRORS=()
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 check() {
   local desc="$1"
@@ -42,6 +44,38 @@ check "every checkout step fetches full history (fetch-depth: 0) for the scope d
 
 check "scope diff keeps a HEAD~1 fallback for unusable base SHAs" \
   "grep -qF -- 'git diff --name-only HEAD~1 HEAD' '${WORKFLOW}'"
+
+echo "Block 1.5: PR scope uses the merge base when the base branch advanced"
+DIFF_REPO="${TMP_DIR}/diverged"
+git init -q "$DIFF_REPO"
+git -C "$DIFF_REPO" config user.email ci-scope@example.com
+git -C "$DIFF_REPO" config user.name ci-scope-test
+git -C "$DIFF_REPO" branch -M main
+printf 'common\n' > "${DIFF_REPO}/README.md"
+git -C "$DIFF_REPO" add README.md
+git -C "$DIFF_REPO" commit -qm common
+git -C "$DIFF_REPO" switch -qc pr
+git -C "$DIFF_REPO" switch -q main
+mkdir -p "${DIFF_REPO}/plugins/ship-flow"
+printf 'base-only\n' > "${DIFF_REPO}/plugins/ship-flow/base-only.sh"
+git -C "$DIFF_REPO" add plugins/ship-flow/base-only.sh
+git -C "$DIFF_REPO" commit -qm base-advanced
+BASE_SHA="$(git -C "$DIFF_REPO" rev-parse HEAD)"
+git -C "$DIFF_REPO" switch -q pr
+mkdir -p "${DIFF_REPO}/docs"
+printf 'pr-only\n' > "${DIFF_REPO}/docs/pr-only.md"
+git -C "$DIFF_REPO" add docs/pr-only.md
+git -C "$DIFF_REPO" commit -qm pr-change
+
+git -C "$DIFF_REPO" diff --name-only "$BASE_SHA" HEAD > "${TMP_DIR}/two-dot.txt"
+git -C "$DIFF_REPO" diff --name-only "$BASE_SHA"...HEAD > "${TMP_DIR}/three-dot.txt"
+
+check "two-dot reproduction includes the base-only plugin file" \
+  "grep -qx 'plugins/ship-flow/base-only.sh' '${TMP_DIR}/two-dot.txt'"
+check "merge-base diff includes only the PR-authored file" \
+  "grep -qx 'docs/pr-only.md' '${TMP_DIR}/three-dot.txt' && ! grep -q 'base-only' '${TMP_DIR}/three-dot.txt'"
+check "workflow computes changed scope from the merge base" \
+  "grep -qF -- 'git diff --name-only \"\$BASE\"...HEAD' '${WORKFLOW}'"
 
 check "full suite is limited to plugin or workflow changes" \
   "awk '/Run full ship-flow shell test suite/{in_step=1} in_step && /^      - name: / && !/Run full ship-flow shell test suite/{in_step=0} in_step && /if: steps\\.ship_flow_scope\\.outputs\\.full_suite == '\\''true'\\''/{found=1} END{exit !found}' '${WORKFLOW}'"
