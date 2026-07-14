@@ -34,6 +34,7 @@ stage_outputs:
   execute: execute.md
   verify: verify.md
   review: review.md
+  ship: ship.md
 pre_mortem:
   category: wrong-dcs
   one_liner: The grep misses a common version spelling, so README drift returns unnoticed.
@@ -48,4 +49,5 @@ pre_mortem:
 | execute | [execute.md](execute.md) |
 | verify | [verify.md](verify.md) |
 | review | [review.md](review.md) |
+| ship | [ship.md](ship.md) |
 <!-- /section:stage-artifact-links -->
