@@ -1,7 +1,7 @@
 ---
 id: "3"
 title: "Refresh root README stale compatibility claims"
-status: verify
+status: ship
 pattern: pitch
 appetite: "small-batch"
 shape_mode: mode-a
@@ -33,6 +33,7 @@ stage_outputs:
   plan: plan.md
   execute: execute.md
   verify: verify.md
+  review: review.md
 pre_mortem:
   category: wrong-dcs
   one_liner: The grep misses a common version spelling, so README drift returns unnoticed.
@@ -46,4 +47,5 @@ pre_mortem:
 | plan | [plan.md](plan.md) |
 | execute | [execute.md](execute.md) |
 | verify | [verify.md](verify.md) |
+| review | [review.md](review.md) |
 <!-- /section:stage-artifact-links -->
