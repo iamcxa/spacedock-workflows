@@ -46,13 +46,27 @@ fi
 
 # --- Keep root documentation independent of any particular release ---
 VERSION_LITERAL_PATTERN='(^|[^[:alnum:]_])v?[0-9]+\.[0-9]+(\.([0-9]+|x))?([^[:alnum:]_]|$)'
-if ROOT_README_VERSION_LINES=$(grep -nE -- "$VERSION_LITERAL_PATTERN" "$ROOT_README"); then
-  echo "FAIL: root README contains version-shaped literal"
-  echo "$ROOT_README_VERSION_LINES"
-  FAIL=1
+if ROOT_README_SCAN_OUTPUT=$(grep -nE -- "$VERSION_LITERAL_PATTERN" "$ROOT_README" 2>&1); then
+  ROOT_README_SCAN_STATUS=0
 else
-  echo "OK  : root README is version-independent"
+  ROOT_README_SCAN_STATUS=$?
 fi
+
+case "$ROOT_README_SCAN_STATUS" in
+  0)
+    echo "FAIL: root README contains version-shaped literal"
+    echo "$ROOT_README_SCAN_OUTPUT"
+    FAIL=1
+    ;;
+  1)
+    echo "OK  : root README is version-independent"
+    ;;
+  *)
+    echo "FAIL: unable to scan root README for version-shaped literals"
+    echo "$ROOT_README_SCAN_OUTPUT"
+    FAIL=1
+    ;;
+esac
 
 if [ "$FAIL" -eq 0 ]; then
   echo "PASS: all checks OK"
