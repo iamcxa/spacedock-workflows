@@ -42,8 +42,8 @@ check "workflow detects changed-file scope before full suite" \
 check "every checkout step fetches full history (fetch-depth: 0) for the scope diff" \
   "awk '/- uses: actions\\/checkout/{if (in_step && !has_fd) bad=1; in_step=1; has_fd=0; steps++; next} in_step && /^      - /{if (!has_fd) bad=1; in_step=0} in_step && /^[[:space:]]*fetch-depth:[[:space:]]*0([[:space:]]|$)/{has_fd=1} END{if (in_step && !has_fd) bad=1; exit !(steps >= 1 && !bad)}' '${WORKFLOW}'"
 
-check "scope diff keeps a HEAD~1 fallback for unusable base SHAs" \
-  "grep -qF -- 'git diff --name-only HEAD~1 HEAD' '${WORKFLOW}'"
+check "branch-creation push scope conservatively scans every tracked file" \
+  "grep -qF -- 'CHANGED=\$(git ls-files)' '${WORKFLOW}'"
 
 echo "Block 1.5: PR scope uses the merge base when the base branch advanced"
 DIFF_REPO="${TMP_DIR}/diverged"
@@ -105,6 +105,23 @@ check "workflow uses exact before-to-head diff for pushes" \
   "grep -qF -- 'git diff --name-only \"\$BASE\" HEAD' '${WORKFLOW}'"
 check "workflow fails closed when a nonzero event base is unavailable" \
   "grep -qF -- 'git cat-file -e \"\${BASE}^{commit}\"' '${WORKFLOW}' && grep -qF -- 'exit 1' '${WORKFLOW}'"
+
+git -C "$DIFF_REPO" switch -q --detach "$COMMON_SHA"
+git -C "$DIFF_REPO" switch -qc branch-create
+mkdir -p "${DIFF_REPO}/plugins/ship-flow"
+printf 'new plugin file\n' > "${DIFF_REPO}/plugins/ship-flow/new.sh"
+git -C "$DIFF_REPO" add plugins/ship-flow/new.sh
+git -C "$DIFF_REPO" commit -qm branch-create-plugin
+printf 'later docs commit\n' >> "${DIFF_REPO}/README.md"
+git -C "$DIFF_REPO" add README.md
+git -C "$DIFF_REPO" commit -qm branch-create-readme
+git -C "$DIFF_REPO" diff --name-only HEAD~1 HEAD > "${TMP_DIR}/branch-create-head-one.txt"
+git -C "$DIFF_REPO" ls-files > "${TMP_DIR}/branch-create-all.txt"
+
+check "HEAD~1 reproduction misses an earlier branch-creation plugin change" \
+  "! grep -q 'plugins/ship-flow/new.sh' '${TMP_DIR}/branch-create-head-one.txt'"
+check "conservative branch-creation scan includes the plugin file" \
+  "grep -qx 'plugins/ship-flow/new.sh' '${TMP_DIR}/branch-create-all.txt'"
 
 check "full suite is limited to plugin or workflow changes" \
   "awk '/Run full ship-flow shell test suite/{in_step=1} in_step && /^      - name: / && !/Run full ship-flow shell test suite/{in_step=0} in_step && /if: steps\\.ship_flow_scope\\.outputs\\.full_suite == '\\''true'\\''/{found=1} END{exit !found}' '${WORKFLOW}'"
