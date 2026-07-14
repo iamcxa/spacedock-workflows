@@ -46,6 +46,31 @@ if [ -z "$HANDOFF" ]; then
   exit 1
 fi
 
+# Detect the C4-required but structurally empty case before emitting the normal
+# multi-table body. Section markers and the H2 remain so C4 can recognize the
+# import contract; the generated content itself collapses to one status line.
+STRUCTURED_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]+(type|assertion|rationale_decision|selector|css_property|expected_value):' || true)
+PROSE_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*[0-9]+\.[[:space:]]' || true)
+IMPORTABLE_ITEM_COUNT=$(echo "$HANDOFF" | awk '
+  /^[[:space:]]*(design_constraints|visible_surface_map|render_fidelity_targets|whole_page_visual_targets):/ { in_importable=1; next }
+  /^[[:space:]]*(open_decisions|artifact_paths|storyboard_frames):/ { in_importable=0 }
+  in_importable && /^[[:space:]]*-[[:space:]]*[A-Za-z_]+:/ { n++ }
+  END { print n+0 }
+')
+
+if ! echo "$HANDOFF" | grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true' \
+  && [ "$PROSE_HINTS" -le 2 ] \
+  && [ "$IMPORTABLE_ITEM_COUNT" -eq 0 ]; then
+  cat <<'EOF'
+## Plan Imported Design DCs
+
+<!-- section:plan-imported-design-dcs -->
+**Status**: no structured design DCs or visual targets to import.
+<!-- /section:plan-imported-design-dcs -->
+EOF
+  exit 0
+fi
+
 # Header
 cat <<'HEADER'
 ## Plan Imported Design DCs
@@ -66,10 +91,6 @@ No design DCs to import. Plan proceeds without UI/render-fidelity DC imports.
 EOF
   exit 0
 fi
-
-# Format detection
-STRUCTURED_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]+(type|assertion|rationale_decision|selector|css_property|expected_value):' || true)
-PROSE_HINTS=$(echo "$HANDOFF" | grep -cE '^[[:space:]]*[0-9]+\.[[:space:]]' || true)
 
 if [ "$STRUCTURED_HINTS" -lt 2 ] && [ "$PROSE_HINTS" -gt 2 ]; then
   cat <<EOF
