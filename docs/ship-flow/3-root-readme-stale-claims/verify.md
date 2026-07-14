@@ -150,7 +150,7 @@ Deferred to TODO: 0 findings. No issue, todo, PR, or remote state was mutated du
 
 ### Hand-off to Review
 
-- `verify_verdict`: passed, pending captain gate.
+- `verify_verdict`: passed; captain gate approved at 2026-07-14T17:13:13Z.
 - `blocking_issues`: []
 - `canonical_doc_actions`: README update verified; PRODUCT/ARCHITECTURE skips confirmed; ROADMAP closeout remains later work.
 - `render_fidelity_status`: not-applicable.
