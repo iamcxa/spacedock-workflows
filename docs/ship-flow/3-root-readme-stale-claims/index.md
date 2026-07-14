@@ -38,6 +38,7 @@ stage_outputs:
 pre_mortem:
   category: wrong-dcs
   one_liner: The grep misses a common version spelling, so README drift returns unnoticed.
+pr: "#40"
 ---
 
 <!-- section:stage-artifact-links -->
