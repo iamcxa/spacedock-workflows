@@ -94,6 +94,8 @@ bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/import-design-dcs.sh" <entity
 ```
 The script reads structured `### Hand-off to Plan`, emits `## Plan Imported Design DCs` table directly. Falls back to MIGRATE-FIRST notice when entity is in legacy prose format. **Do NOT manually transcribe** — that's the LLM-drift mode this script eliminates.
 
+**C15 accounting:** body-line counts exclude content inside balanced standalone `<details>...</details>` blocks; the plan cap and its 2× raw-total backstop remain unchanged.
+
 Pre-import validation (run in this order):
 - `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/check-design-readiness-review.sh" <entity-folder>/design.md` — risk-gated design readiness check. If it reports `status=blocked`, stop before planning. If it reports `status=warn`, continue only after preserving the warning in `## Plan Report`.
 - `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/validate-handoff-schema.sh" <entity-folder>` — structural check

@@ -289,9 +289,25 @@ render_fidelity_targets: []
 <!-- /section:hand-off-to-plan -->
 EOF
 
+EMPTY_STRUCTURED="${TMP_DIR}/empty-structured.md"
+cat > "$EMPTY_STRUCTURED" <<'EOF'
+## Design Output
+
+### Hand-off to Plan
+
+design_constraints: []
+visible_surface_map: []
+render_fidelity_targets: []
+whole_page_visual_targets: []
+open_decisions: []
+artifact_paths: []
+<!-- /section:hand-off-to-plan -->
+EOF
+
 IMPORT_OUT="${TMP_DIR}/import.out"
 INDENTED_IMPORT_OUT="${TMP_DIR}/indented-import.out"
 REORDERED_QUOTED_IMPORT_OUT="${TMP_DIR}/reordered-quoted-import.out"
+EMPTY_STRUCTURED_OUT="${TMP_DIR}/empty-structured.out"
 
 echo "Block 1: top-level YAML list design_constraints import 1:1"
 check "validator accepts domain constraint types" \
@@ -310,6 +326,16 @@ check "importer preserves mapped visible surface row" \
   "grep -q 'flow-control' '${IMPORT_OUT}'"
 check "importer preserves explicit N/A visible surface row" \
   "grep -q 'explicit_na' '${IMPORT_OUT}' && grep -q 'decorative-rule' '${IMPORT_OUT}'"
+
+echo "Block 1.5: structurally empty imports emit a compact stub"
+check "empty structured hand-off imports successfully" \
+  "bash '${IMPORT_SCRIPT}' '${EMPTY_STRUCTURED}' > '${EMPTY_STRUCTURED_OUT}'"
+check "empty structured hand-off emits the compact status stub" \
+  "grep -qx '\*\*Status\*\*: no structured design DCs or visual targets to import\.' '${EMPTY_STRUCTURED_OUT}'"
+check "empty structured hand-off emits no empty imported tables" \
+  "! grep -q '^### Imported ' '${EMPTY_STRUCTURED_OUT}'"
+check "empty structured hand-off retains the C4 section contract" \
+  "grep -q '^## Plan Imported Design DCs$' '${EMPTY_STRUCTURED_OUT}' && grep -q '^<!-- section:plan-imported-design-dcs -->$' '${EMPTY_STRUCTURED_OUT}' && grep -q '^<!-- /section:plan-imported-design-dcs -->$' '${EMPTY_STRUCTURED_OUT}'"
 
 echo "Block 2: malformed structured hand-off fails before partial import"
 check "validator rejects item missing type" \
