@@ -18,8 +18,8 @@ Ratio: not available
 
 ### Verdict
 
-status: passed — implementation merged; terminal ship closeout pending
-stage_cost: one implementation worker, execute review, one verify remediation loop, two independent verify lenses, and merge-time CI
+status: shipped
+stage_cost: $0.00 (unavailable in current FO runtime)
 started_at: 2026-07-14T17:40:11Z
 completed_at: 2026-07-14T18:11:04Z
 pr: #40
