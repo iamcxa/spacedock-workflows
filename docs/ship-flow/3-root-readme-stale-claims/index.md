@@ -1,7 +1,7 @@
 ---
 id: "3"
 title: "Refresh root README stale compatibility claims"
-status: sharp
+status: design
 pattern: pitch
 appetite: "small-batch"
 shape_mode: mode-a
