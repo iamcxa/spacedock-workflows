@@ -4,7 +4,7 @@ A Claude marketplace repo for spacedock workflow plugins. The first — and curr
 
 ## What is ship-flow?
 
-Ship-flow is a staged feature-delivery pipeline for autonomous Claude Code agents: shape → design → plan → execute → verify → review → ship. See `plugins/ship-flow/` for full documentation.
+See [PRODUCT.md](PRODUCT.md) for canonical product positioning and current capabilities. For installation, adoption, and operating guidance, see the [ship-flow plugin documentation](plugins/ship-flow/).
 
 ## Install
 
@@ -15,15 +15,15 @@ Ship-flow is a staged feature-delivery pipeline for autonomous Claude Code agent
 
 ## Compatibility
 
-> **Entry bridge is Codex-capable; full ship-flow pipeline execution under Codex is unverified this release.**
+> **The entry bridge supports Claude Code, Codex, and Pi; full ship-flow pipeline execution under Codex remains unverified.**
 
-The `/ship` entry point delegates to `spacedock:first-officer`, which is tri-platform (Claude Code, Codex, Pi) in spacedock 0.22.0 — so the entry bridge itself is Codex-capable. Ship-flow's own stage-dispatch skills (ship-execute, ship-shape ensign dispatch, etc.) use Claude Code-specific primitives (hooks, slash commands, SendMessage, worktrees) and have NOT been verified end-to-end under Codex in 0.7.0. Full ship-flow pipeline execution under Codex is unverified, not unsupported-by-design. Codex functionalization of the full pipeline is a tracked later milestone.
+The `/ship` entry point delegates to `spacedock:first-officer`, whose entry bridge supports all three platforms. Ship-flow's stage-dispatch skills still use Claude Code-specific primitives such as hooks, slash commands, agent messaging, and worktrees, and have not been verified end-to-end under Codex. Full pipeline execution under Codex is therefore unverified, not unsupported by design. See [PRODUCT.md](PRODUCT.md) for canonical product positioning and current capabilities.
 
-## Adoption gap — 0.7.0 is not self-contained
+## Adoption requirements
 
-> **Adoption is not self-contained in 0.7.0 — requires spacebridge or manual scaffold (see `plugins/ship-flow` adoption notes).**
+> **Installing the plugin alone does not commission a working pipeline.**
 
-The 0.7.x series assumes a commissioned workflow directory (`docs/ship-flow/`), a spacedock orchestration layer, and optionally the spacebridge UI. A bare `/plugin install ship-flow` into an empty repo will not produce a working pipeline without the surrounding scaffold. See `plugins/ship-flow/skills/ship-onboard/` for the onboarding skill and adoption prerequisites.
+Ship-flow assumes a commissioned workflow directory, a Spacedock orchestration layer, and optionally the spacebridge UI. Installing it into an empty repository does not create that surrounding scaffold. See the [ship-flow onboarding guidance](plugins/ship-flow/skills/ship-onboard/) for adoption prerequisites.
 
 ## Release
 
@@ -31,4 +31,4 @@ Maintainers: see `scripts/plugin-release.sh` for the transactional version bump 
 
 ## License
 
-Apache-2.0
+See the [machine-readable plugin metadata](plugins/ship-flow/.claude-plugin/plugin.json) for licensing terms.
