@@ -8,7 +8,9 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
@@ -18,6 +20,12 @@ REPOSITORY_RE = re.compile(r"^[^/\s]+/[^/\s]+$")
 WORKFLOW_RE = re.compile(r"^docs/[^/]+$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 PHASES = ("prepared", "awaiting_closeout_pr", "applied", "complete")
+LANDING_STRATEGIES = ("rebase", "squash", "merge_commit")
+STRATEGY_EVIDENCE = "topology+ordered-patch-ids+aggregate-patch-digest"
+RFC3339_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
+)
+BASE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 
 def fail(reason: str, detail: str) -> NoReturn:
@@ -57,6 +65,300 @@ def require_hash(value: Any, label: str) -> str:
     if not isinstance(value, str) or not SHA256_RE.fullmatch(value):
         fail("closeout-sentinel-invalid", f"{label} must be lowercase sha256")
     return value
+
+
+def require_full_sha(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not SHA40_RE.fullmatch(value):
+        fail("closeout-sentinel-invalid", f"{label} must be lowercase full sha")
+    return value
+
+
+def require_full_sha_array(
+    value: Any, label: str, *, expected_length: int, unique: bool = False
+) -> list[str]:
+    if not isinstance(value, list) or len(value) != expected_length:
+        fail(
+            "closeout-sentinel-invalid",
+            f"{label} must contain exactly {expected_length} entries",
+        )
+    checked = [require_full_sha(item, f"{label} entry") for item in value]
+    if unique and len(set(checked)) != len(checked):
+        fail("closeout-sentinel-invalid", f"{label} entries must be unique")
+    return checked
+
+
+def validate_landing_proof(
+    landing: dict[str, Any], identity: dict[str, Any]
+) -> None:
+    require_exact_keys(
+        landing,
+        {
+            "schema_version",
+            "repository",
+            "base_ref",
+            "implementation_pr",
+            "provider_merged_at",
+            "landing_anchor",
+            "base_before",
+            "strategy",
+            "strategy_evidence",
+            "pr_commit_count",
+            "source_commit_patch_ids",
+            "source_patch_digest",
+            "landing_commits",
+            "landing_commit_patch_ids",
+            "landing_patch_digest",
+            "first_landing_commit",
+            "last_landing_commit",
+            "method_source",
+        },
+        "landing_proof",
+    )
+    if (
+        isinstance(landing["schema_version"], bool)
+        or not isinstance(landing["schema_version"], int)
+        or landing["schema_version"] != 1
+    ):
+        fail("closeout-sentinel-invalid", "landing_proof schema_version must be 1")
+    if landing["repository"] != identity["repository"]:
+        fail("closeout-sentinel-invalid", "landing_proof repository must match identity")
+    if landing["implementation_pr"] != identity["implementation_pr"]:
+        fail(
+            "closeout-sentinel-invalid",
+            "landing_proof implementation_pr must match identity",
+        )
+    base_ref = landing["base_ref"]
+    if (
+        not isinstance(base_ref, str)
+        or not BASE_REF_RE.fullmatch(base_ref)
+        or ".." in base_ref
+        or "//" in base_ref
+        or base_ref.endswith(("/", "."))
+    ):
+        fail("closeout-sentinel-invalid", "landing_proof base_ref is invalid")
+    merged_at = landing["provider_merged_at"]
+    if not isinstance(merged_at, str) or not RFC3339_RE.fullmatch(merged_at):
+        fail("closeout-sentinel-invalid", "provider_merged_at must be RFC3339")
+    try:
+        parsed_merged_at = datetime.fromisoformat(merged_at.replace("Z", "+00:00"))
+    except ValueError:
+        fail("closeout-sentinel-invalid", "provider_merged_at must be RFC3339")
+    if parsed_merged_at.tzinfo is None:
+        fail("closeout-sentinel-invalid", "provider_merged_at must include timezone")
+
+    anchor = require_full_sha(landing["landing_anchor"], "landing_anchor")
+    require_full_sha(landing["base_before"], "base_before")
+    strategy = landing["strategy"]
+    if strategy not in LANDING_STRATEGIES:
+        fail("closeout-sentinel-invalid", "landing strategy is invalid")
+    if landing["strategy_evidence"] != STRATEGY_EVIDENCE:
+        fail("closeout-sentinel-invalid", "landing strategy_evidence is invalid")
+    method_source = landing["method_source"]
+    if method_source not in ("topology", "intent-discriminator"):
+        fail("closeout-sentinel-invalid", "landing method_source is invalid")
+    commit_count = landing["pr_commit_count"]
+    if isinstance(commit_count, bool) or not isinstance(commit_count, int) or commit_count < 1:
+        fail("closeout-sentinel-invalid", "pr_commit_count must be positive integer")
+    require_full_sha_array(
+        landing["source_commit_patch_ids"],
+        "source_commit_patch_ids",
+        expected_length=commit_count,
+    )
+    source_patch_digest = require_hash(
+        landing["source_patch_digest"], "source_patch_digest"
+    )
+
+    landing_commit_count = 1 if strategy == "squash" else commit_count
+    if strategy == "merge_commit":
+        landing_commit_count += 1
+    landing_commits = require_full_sha_array(
+        landing["landing_commits"],
+        "landing_commits",
+        expected_length=landing_commit_count,
+        unique=True,
+    )
+    landing_patch_count = 1 if strategy == "squash" else commit_count
+    landing_patch_ids = require_full_sha_array(
+        landing["landing_commit_patch_ids"],
+        "landing_commit_patch_ids",
+        expected_length=landing_patch_count,
+    )
+    landing_patch_digest = require_hash(
+        landing["landing_patch_digest"], "landing_patch_digest"
+    )
+    if source_patch_digest != landing_patch_digest:
+        fail(
+            "closeout-sentinel-invalid",
+            "source and landing aggregate patch digests must match",
+        )
+    source_patch_ids = landing["source_commit_patch_ids"]
+    if strategy in ("rebase", "merge_commit") and source_patch_ids != landing_patch_ids:
+        fail(
+            "closeout-sentinel-invalid",
+            "rebase/merge landing patch IDs must equal ordered source patch IDs",
+        )
+    first = require_full_sha(landing["first_landing_commit"], "first_landing_commit")
+    last = require_full_sha(landing["last_landing_commit"], "last_landing_commit")
+    if first != landing_commits[0] or last != landing_commits[-1]:
+        fail(
+            "closeout-sentinel-invalid",
+            "first/last landing commits must match the ordered landing set",
+        )
+    if anchor != last:
+        fail("closeout-sentinel-invalid", "landing_anchor must equal last_landing_commit")
+
+
+def git_output(
+    repo_root: Path, args: list[str], *, input_bytes: bytes | None = None
+) -> bytes:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), *args],
+            input=input_bytes,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as exc:
+        fail("closeout-sentinel-invalid", f"cannot execute Git proof: {exc}")
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        fail(
+            "closeout-sentinel-invalid",
+            f"Git proof command failed ({' '.join(args)}): {detail}",
+        )
+    return result.stdout
+
+
+def patch_id_from_bytes(patch: bytes) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "patch-id", "--stable"],
+            input=patch,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as exc:
+        fail("closeout-sentinel-invalid", f"cannot execute Git patch proof: {exc}")
+    fields = result.stdout.decode("ascii", errors="replace").split()
+    if result.returncode != 0 or not fields or not SHA40_RE.fullmatch(fields[0]):
+        fail("closeout-sentinel-invalid", "Git patch identity is unavailable")
+    return fields[0]
+
+
+def commit_patch_id(repo_root: Path, commit: str) -> str:
+    patch = git_output(
+        repo_root, ["show", "--format=", "--no-ext-diff", "--binary", commit]
+    )
+    return patch_id_from_bytes(patch)
+
+
+def aggregate_patch_digest(repo_root: Path, base_before: str, anchor: str) -> str:
+    patch = git_output(
+        repo_root, ["diff", "--no-ext-diff", "--binary", base_before, anchor]
+    )
+    patch_id = patch_id_from_bytes(patch)
+    return sha256_hex(f"{patch_id}\n".encode("ascii"))
+
+
+def validate_landing_proof_against_git(
+    receipt: dict[str, Any], repo_root: Path
+) -> None:
+    landing = receipt["landing_proof"]
+    anchor = landing["landing_anchor"]
+    base_before = landing["base_before"]
+    base_ref = landing["base_ref"]
+    for label, commit in (("landing_anchor", anchor), ("base_before", base_before)):
+        git_output(repo_root, ["cat-file", "-e", f"{commit}^{{commit}}"])
+    git_output(repo_root, ["rev-parse", "--verify", f"{base_ref}^{{commit}}"])
+    try:
+        reachable = subprocess.run(
+            ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", anchor, base_ref],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as exc:
+        fail("closeout-sentinel-invalid", f"cannot execute Git reachability proof: {exc}")
+    if reachable.returncode != 0:
+        fail(
+            "closeout-sentinel-invalid",
+            "landing_anchor is not reachable from landing_proof.base_ref",
+        )
+
+    parent_fields = git_output(repo_root, ["rev-list", "--parents", "-n", "1", anchor]).decode().split()
+    parents = parent_fields[1:]
+    strategy = landing["strategy"]
+    recorded_commits = landing["landing_commits"]
+    if strategy == "rebase":
+        if len(parents) != 1:
+            fail("closeout-sentinel-invalid", "rebase anchor must have one parent")
+        derived_commits = git_output(
+            repo_root,
+            ["rev-list", "--first-parent", "--reverse", f"{base_before}..{anchor}"],
+        ).decode().splitlines()
+        patch_commits = derived_commits
+    elif strategy == "squash":
+        if len(parents) != 1 or parents[0] != base_before:
+            fail(
+                "closeout-sentinel-invalid",
+                "squash anchor parent must equal base_before",
+            )
+        derived_commits = [anchor]
+        patch_commits = derived_commits
+    else:
+        if len(parents) != 2 or parents[0] != base_before:
+            fail(
+                "closeout-sentinel-invalid",
+                "merge_commit anchor first parent must equal base_before",
+            )
+        topic_commits = git_output(
+            repo_root,
+            ["rev-list", "--reverse", "--topo-order", f"{base_before}..{parents[1]}"],
+        ).decode().splitlines()
+        derived_commits = [*topic_commits, anchor]
+        patch_commits = topic_commits
+    if derived_commits != recorded_commits:
+        fail(
+            "closeout-sentinel-invalid",
+            "landing_commits do not equal the strategy-derived ordered Git set",
+        )
+    derived_patch_ids = [commit_patch_id(repo_root, commit) for commit in patch_commits]
+    if derived_patch_ids != landing["landing_commit_patch_ids"]:
+        fail(
+            "closeout-sentinel-invalid",
+            "landing_commit_patch_ids do not match landed Git commits",
+        )
+    if aggregate_patch_digest(repo_root, base_before, anchor) != landing["landing_patch_digest"]:
+        fail(
+            "closeout-sentinel-invalid",
+            "landing_patch_digest does not match the landed Git range",
+        )
+
+
+def validate_git_worktree_root(repo_root: Path) -> Path:
+    root = Path(os.path.abspath(repo_root))
+    if not root.is_dir():
+        fail(
+            "closeout-sentinel-invalid",
+            "landing proof repository root is not a directory",
+        )
+    top_level = git_output(root, ["rev-parse", "--show-toplevel"])
+    try:
+        actual_root = Path(top_level.decode("utf-8").strip()).resolve()
+        expected_root = root.resolve()
+    except (OSError, UnicodeError) as exc:
+        fail(
+            "closeout-sentinel-invalid",
+            f"landing proof repository root cannot be resolved: {exc}",
+        )
+    if actual_root != expected_root:
+        fail(
+            "closeout-sentinel-invalid",
+            "landing proof repository root must name the Git worktree root",
+        )
+    return root
 
 
 def closeout_id(identity: dict[str, Any]) -> str:
@@ -240,8 +542,12 @@ def validate(receipt: dict[str, Any], path: Path | None = None) -> None:
     if receipt["merge_method_intent"] not in (None, "rebase", "squash", "merge_commit"):
         fail("closeout-sentinel-invalid", "merge_method_intent is invalid")
     landing = require_object(receipt["landing_proof"], "landing_proof")
-    if not landing:
-        fail("closeout-sentinel-invalid", "landing_proof cannot be empty")
+    validate_landing_proof(landing, identity)
+    if landing["method_source"] == "intent-discriminator" and receipt["merge_method_intent"] != landing["strategy"]:
+        fail(
+            "closeout-sentinel-invalid",
+            "intent-discriminator landing must match merge_method_intent",
+        )
 
     transaction = require_object(receipt["transaction"], "transaction")
     require_exact_keys(transaction, {"phase", "generation", "closeout_pr", "main_commit"}, "transaction")
@@ -288,10 +594,34 @@ def validate(receipt: dict[str, Any], path: Path | None = None) -> None:
         if not isinstance(artifact["path"], str) or not artifact["path"]:
             fail("closeout-sentinel-invalid", f"outputs.{key}.path must be nonempty")
         require_hash(artifact["sha256"], f"outputs.{key}.sha256")
+    workflow = identity["workflow"]
+    entity_slug = identity["entity_slug"]
+    debrief_path = PurePosixPath(outputs["debrief"]["path"])
+    expected_debrief_parent = PurePosixPath(workflow) / "_debriefs"
+    if (
+        debrief_path.parent != expected_debrief_parent
+        or debrief_path.suffix != ".md"
+        or debrief_path.name == ".md"
+    ):
+        fail(
+            "closeout-sentinel-invalid",
+            "outputs.debrief.path must be a canonical workflow debrief Markdown file",
+        )
+    expected_archive = f"{workflow}/_archive/{entity_slug}"
+    if outputs["ship"]["path"] != f"{expected_archive}/ship.md":
+        fail("closeout-sentinel-invalid", "outputs.ship.path is not canonical")
+    if outputs["archived_entity"]["path"] != f"{expected_archive}/index.md":
+        fail("closeout-sentinel-invalid", "outputs.archived_entity.path is not canonical")
+    artifact_paths = [outputs[key]["path"] for key in ("debrief", "ship", "archived_entity")]
+    if len(set(artifact_paths)) != len(artifact_paths):
+        fail("closeout-sentinel-invalid", "output artifact role paths must be unique")
     roadmap = require_object(outputs["roadmap_row"], "outputs.roadmap_row")
     require_exact_keys(roadmap, {"identity", "sha256"}, "outputs.roadmap_row")
-    if not isinstance(roadmap["identity"], str) or not roadmap["identity"]:
-        fail("closeout-sentinel-invalid", "roadmap identity must be nonempty")
+    if roadmap["identity"] != entity_slug:
+        fail(
+            "closeout-sentinel-invalid",
+            "roadmap identity must equal identity.entity_slug",
+        )
     require_hash(roadmap["sha256"], "outputs.roadmap_row.sha256")
 
     payload = {key: receipt[key] for key in ("identity", "ownership_proof", "landing_proof", "outputs")}
@@ -305,6 +635,7 @@ def main() -> int:
     parser.add_argument("--receipt", required=True, type=Path)
     parser.add_argument("--previous", type=Path)
     parser.add_argument("--repo-root", type=Path)
+    parser.add_argument("--landing-proof-repo-root", type=Path)
     parser.add_argument("--verify-outputs", action="store_true")
     parser.add_argument("--verify-sources", action="store_true")
     parser.add_argument("--allow-any-path", action="store_true")
@@ -326,6 +657,10 @@ def main() -> int:
         )
         if Path(os.path.abspath(args.receipt)) != expected_path:
             fail("closeout-sentinel-invalid", "receipt is outside canonical _closeouts location")
+        proof_root = validate_git_worktree_root(
+            args.landing_proof_repo_root or args.repo_root
+        )
+        validate_landing_proof_against_git(receipt, proof_root)
     if args.verify_outputs:
         verify_output_bytes(receipt, args.repo_root)
     if args.verify_sources:

@@ -970,7 +970,7 @@ optional_terminal_head_matches() {
   printf '%s' "$shown" | python3 -c 'import json,sys; r=json.load(sys.stdin); t=r["transaction"]; raise SystemExit(0 if r["mode"]=="pull_request" and t["phase"]=="applied" and t["closeout_pr"]==int(sys.argv[1]) and r["proof_hash"]==sys.argv[2] else 1)' "$expected_pr" "$expected_proof" || return 1
   exported="$(mktemp -d)"
   git -C "$repo_root" archive "$deterministic_head" | tar -x -C "$exported"
-  python3 "$RECEIPT_VALIDATOR" --receipt "$exported/$receipt_relative" --repo-root "$exported" --verify-outputs >/dev/null 2>&1 || { rm -rf "$exported"; return 1; }
+  python3 "$RECEIPT_VALIDATOR" --receipt "$exported/$receipt_relative" --repo-root "$exported" --landing-proof-repo-root "$repo_root" --verify-outputs >/dev/null 2>&1 || { rm -rf "$exported"; return 1; }
   rm -rf "$exported"
 }
 

@@ -36,7 +36,63 @@ ownership_proof:
 mode: { type: enum, values: [direct, pull_request] }
 merge_method_intent: { type: nullable-enum, values: [rebase, squash, merge_commit] }
 deterministic_closeout_head: { type: string, format: "ship-closeout/<closeout_id>" }
-landing_proof: { type: object, min_properties: 1 }
+landing_proof:
+  type: object
+  exact_keys:
+    - schema_version
+    - repository
+    - base_ref
+    - implementation_pr
+    - provider_merged_at
+    - landing_anchor
+    - base_before
+    - strategy
+    - strategy_evidence
+    - pr_commit_count
+    - source_commit_patch_ids
+    - source_patch_digest
+    - landing_commits
+    - landing_commit_patch_ids
+    - landing_patch_digest
+    - first_landing_commit
+    - last_landing_commit
+    - method_source
+  fields:
+    schema_version: { type: integer, const: 1 }
+    repository: { type: string, invariant: "equals identity.repository" }
+    base_ref: { type: string, format: git-ref }
+    implementation_pr: { type: integer, minimum: 1, invariant: "equals identity.implementation_pr" }
+    provider_merged_at: { type: string, format: RFC3339-with-timezone }
+    landing_anchor: { type: 40-hex }
+    base_before: { type: 40-hex }
+    strategy: { type: enum, values: [rebase, squash, merge_commit] }
+    strategy_evidence: { type: const, value: "topology+ordered-patch-ids+aggregate-patch-digest" }
+    pr_commit_count: { type: integer, minimum: 1 }
+    source_commit_patch_ids: { type: array, items: 40-hex }
+    source_patch_digest: { type: sha256 }
+    landing_commits: { type: array, items: 40-hex, unique: true }
+    landing_commit_patch_ids: { type: array, items: 40-hex }
+    landing_patch_digest: { type: sha256 }
+    first_landing_commit: { type: 40-hex }
+    last_landing_commit: { type: 40-hex }
+    method_source: { type: enum, values: [topology, intent-discriminator] }
+  structural_invariants:
+    - "source_commit_patch_ids length equals pr_commit_count"
+    - "source_patch_digest equals landing_patch_digest"
+    - "rebase and merge_commit ordered source and landing patch IDs are equal"
+    - "squash has one landing commit and one landing patch ID"
+    - "rebase has pr_commit_count landing commits and patch IDs"
+    - "merge_commit has pr_commit_count plus one landing commits and pr_commit_count patch IDs"
+    - "first_landing_commit and last_landing_commit equal the ordered landing set boundaries"
+    - "landing_anchor equals last_landing_commit"
+    - "intent-discriminator requires merge_method_intent equal to strategy"
+  repository_invariants:
+    - "normal validation re-derives topology, ordered commits, patch IDs, and aggregate digest from Git"
+    - "landing_anchor and base_before exist as commits and landing_anchor is reachable from base_ref"
+    - "rebase ordered first-parent range from base_before through anchor equals landing_commits"
+    - "squash anchor has one parent equal to base_before"
+    - "merge_commit anchor has two parents, first parent equals base_before, and second-parent topic range plus anchor equals landing_commits"
+    - "Git-derived landing patch IDs and aggregate digest equal the receipt"
 transaction:
   phase: { type: enum, values: [prepared, awaiting_closeout_pr, applied, complete] }
   generation: { type: integer, minimum: 1 }
@@ -58,8 +114,18 @@ pull_request_merge_proof:
   excludes: "transaction.main_commit; that field remains the implementation PR authoritative landing_anchor"
 outputs:
   exact_keys: [debrief, ship, archived_entity, roadmap_row]
-  artifact: { fields: { path: string, sha256: sha256 } }
-  roadmap_row: { fields: { identity: string, sha256: sha256 } }
+  artifact:
+    exact_keys: [path, sha256]
+    fields: { path: string, sha256: sha256 }
+  canonical_roles:
+    debrief: "<workflow>/_debriefs/<nonempty>.md"
+    ship: "<workflow>/_archive/<entity_slug>/ship.md"
+    archived_entity: "<workflow>/_archive/<entity_slug>/index.md"
+    uniqueness: "debrief, ship, and archived_entity paths are pairwise distinct"
+  roadmap_row:
+    exact_keys: [identity, sha256]
+    fields: { identity: entity_slug, sha256: sha256 }
+    invariant: "roadmap_row.identity equals identity.entity_slug"
 proof_hash:
   algorithm: sha256
   canonical_payload_keys: [identity, ownership_proof, landing_proof, outputs]
@@ -69,6 +135,8 @@ sentinel_validation_order:
   - proof hash and exact artifact hashes from landed bytes
   - ordinary entity resolution
 validator_modes:
+  normal: "requires --repo-root for canonical receipt/output bytes and repository-backed landing proof verification; --landing-proof-repo-root may explicitly name a separate authoritative Git worktree and otherwise defaults to --repo-root"
+  allow_any_path: "fixture-only structural mode; skips canonical path and Git proof but not schema, payload, phase, or requested byte checks"
   verify_sources: "hash <repo-root>/<workflow>/<entity_slug>/{index,review,ship}.md against ownership_proof.source_hashes before merge"
   verify_outputs: "resolve safe repo-relative output paths, hash landed files, then parse exactly one Markdown table row inside the bounded Shipped section whose cell equals roadmap_row.identity and hash the exact original selected line bytes excluding its line terminator"
   path_safety: "reject absolute paths, traversal, missing files, resolved paths outside repo root, and every symlink component including aliases that still resolve inside the repo"

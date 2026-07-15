@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &>/dev/null && pwd)"
 HELPER="${PLUGIN_ROOT}/lib/apply-closeout-bundle.sh"
+LANDING_RESOLVER="${PLUGIN_ROOT}/lib/resolve-landing-envelope.sh"
 
 PASS=0
 FAIL=0
@@ -71,6 +72,7 @@ setup_repo() {
 
 make_bundle() {
   local repo="$1" bundle="$2"
+  local proof_anchor proof_envelope
   mkdir -p "$bundle/docs/ship-flow/_debriefs" "$bundle/docs/ship-flow/_archive/widget-closeout" "$bundle/docs/ship-flow/_closeouts"
   printf '%s\n' '# Widget closeout debrief' '' '## Outcome' 'Merged and reconciled.' '' '## Reconciliation' 'First: 1111111' 'Last: 2222222' '' '## Todo Closure' 'No open todos.' >"$bundle/docs/ship-flow/_debriefs/2026-07-15-01.md"
   printf '%s\n' '---' 'slug: widget-closeout' 'title: Widget closeout' 'status: done' 'pr: "#40"' 'worktree:' 'completed: 2026-07-15T00:00:00Z' 'verdict: PASSED' 'archived: 2026-07-15T00:00:00Z' 'closeout_owner: true' '---' '' '# Widget closeout' >"$bundle/docs/ship-flow/_archive/widget-closeout/index.md"
@@ -81,19 +83,44 @@ make_bundle() {
     { print }
   ' "$repo/ROADMAP.md" >"$bundle/ROADMAP.md"
 
-  python3 - "$repo" "$bundle" <<'PY'
+  printf '%s\n' 'canonical landing proof fixture' >"$repo/landing-proof-fixture.txt"
+  git -C "$repo" add -- landing-proof-fixture.txt
+  git -C "$repo" commit -qm 'fixture: canonical landing proof'
+  proof_anchor="$(git -C "$repo" rev-parse HEAD)"
+  proof_envelope="${bundle}.landing-proof.env"
+  "$LANDING_RESOLVER" \
+    --repo-dir "$repo" \
+    --repository example/repo \
+    --base-ref main \
+    --implementation-pr 40 \
+    --provider-merged-at 2026-07-15T00:00:00Z \
+    --landing-anchor "$proof_anchor" \
+    --source-commits "$proof_anchor" \
+    --pr-commit-count 1 \
+    --merge-method-intent rebase >"$proof_envelope"
+
+  python3 - "$repo" "$bundle" "$proof_envelope" <<'PY'
 import hashlib,json,pathlib,sys
-repo,bundle=map(pathlib.Path,sys.argv[1:])
+repo,bundle,envelope=map(pathlib.Path,sys.argv[1:])
 ident={"provider":"github","repository":"example/repo","workflow":"docs/ship-flow","entity_slug":"widget-closeout","implementation_pr":40}
 cid=hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"widget-closeout",b"40"))).hexdigest()
 def h(path): return hashlib.sha256(path.read_bytes()).hexdigest()
+landing={}
+for line in envelope.read_text().splitlines():
+    key,value=line.split("=",1)
+    if key in {"schema_version","implementation_pr","pr_commit_count"}:
+        landing[key]=int(value)
+    elif key in {"source_commit_patch_ids","landing_commits","landing_commit_patch_ids"}:
+        landing[key]=value.split(",")
+    else:
+        landing[key]=value
 row="| widget-closeout | Widget closeout | 2026-07-15 |"
 r={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":ident,
  "ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{
    "index":h(repo/"docs/ship-flow/widget-closeout/index.md"),"review":h(repo/"docs/ship-flow/widget-closeout/review.md"),"ship":h(repo/"docs/ship-flow/widget-closeout/ship.md")}},
  "mode":"direct","merge_method_intent":"rebase","deterministic_closeout_head":"ship-closeout/"+cid,
- "landing_proof":{"schema_version":1,"strategy":"rebase","landing_anchor":"b"*40,"landing_commits":["a"*40,"b"*40]},
- "transaction":{"phase":"applied","generation":2,"closeout_pr":None,"main_commit":"b"*40},
+ "landing_proof":landing,
+ "transaction":{"phase":"applied","generation":2,"closeout_pr":None,"main_commit":landing["landing_anchor"]},
  "outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-07-15-01.md","sha256":h(bundle/"docs/ship-flow/_debriefs/2026-07-15-01.md")},
   "ship":{"path":"docs/ship-flow/_archive/widget-closeout/ship.md","sha256":h(bundle/"docs/ship-flow/_archive/widget-closeout/ship.md")},
   "archived_entity":{"path":"docs/ship-flow/_archive/widget-closeout/index.md","sha256":h(bundle/"docs/ship-flow/_archive/widget-closeout/index.md")},
