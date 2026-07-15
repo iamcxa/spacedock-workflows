@@ -358,6 +358,17 @@ printf '%s\n' "$MISSING_DOC_RC" > "${TMP_DIR}/missing-doc.exit"
 assert_exit "missing protected doc exits 1 despite paired path list" 1 "${TMP_DIR}/missing-doc.exit"
 assert_contains "missing doc blocker names protected path" '^BLOCKER contribution-impact: helm-ledger-boundary \[protected-path\].*renamed-away\.md is missing' "${TMP_DIR}/missing-doc.out"
 
+"${CHECKER}" \
+  "--changed=${FIXTURE_ROOT}/changed-legacy-missing-paired.txt" \
+  "--changed-status=${FIXTURE_ROOT}/changed-legacy-missing-paired.status.txt" \
+  "--declaration=" \
+  "--coupling-map=${FIXTURE_ROOT}/coupling-map-legacy-missing-paired.yaml" \
+  > "${TMP_DIR}/legacy-missing-paired.out" 2>&1 && LEGACY_MISSING_PAIRED_RC=0 || LEGACY_MISSING_PAIRED_RC=$?
+printf '%s\n' "$LEGACY_MISSING_PAIRED_RC" > "${TMP_DIR}/legacy-missing-paired.exit"
+assert_exit "legacy paired source+doc deletion fails closed" 1 "${TMP_DIR}/legacy-missing-paired.exit"
+assert_contains "legacy paired deletion names protected source" '^BLOCKER contribution-impact: legacy-paired-delete \[protected-path\].*legacy-renamed-away\.schema\.json is missing' "${TMP_DIR}/legacy-missing-paired.out"
+assert_contains "legacy paired deletion names protected doc" '^BLOCKER contribution-impact: legacy-paired-delete \[protected-path\].*legacy-renamed-away\.md is missing' "${TMP_DIR}/legacy-missing-paired.out"
+
 echo ""
 echo "Block 22: malformed direction and exemption entries fail closed"
 "${CHECKER}" \

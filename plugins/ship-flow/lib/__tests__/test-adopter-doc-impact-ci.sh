@@ -27,12 +27,12 @@ check() {
 }
 
 run_fixture_gate() {
-  local changed="$1" output="$2" rc_file="$3" rc=0
+  local changed="$1" output="$2" rc_file="$3" declaration="${4:-}" rc=0
   (
     cd "$FIXTURE"
     bash .claude/ship-flow/doc-impact-gate.sh \
       "--changed=${changed}" \
-      "--declaration="
+      "--declaration=${declaration}"
   ) > "$output" 2>&1 || rc=$?
   printf '%s\n' "$rc" > "$rc_file"
 }
@@ -117,7 +117,7 @@ check "workflow has a lightweight doc-impact job independent from plugin full-su
 check "workflow falls back to plugin checker only for its source repo and fails when adopter bundle is incomplete" \
   "grep -qF 'plugins/ship-flow/bin/doc-impact-gate.sh' '${WORKFLOW}' && grep -q 'map.*checker.*absent\|checker.*required' '${WORKFLOW}'"
 check "lightweight job preserves rename sources and reads PR declaration through env" \
-  "awk '/^  doc_impact:/{in_job=1} in_job && /^  [a-zA-Z0-9_-]+:/{if (seen) in_job=0; seen=1} in_job && /git diff --no-renames --name-only/{diff=1} in_job && /PR_BODY:.*github.event.pull_request.body/{body=1} END{exit !(diff && body)}' '${WORKFLOW}'"
+  "awk '/^  doc_impact:/{in_job=1} in_job && /^  [a-zA-Z0-9_-]+:/{if (seen) in_job=0; seen=1} in_job && /git diff --no-renames --name-only/{names=1} in_job && /git diff --no-renames --name-status/{status=1} in_job && /PR_BODY:.*github.event.pull_request.body/{body=1} END{exit !(names && status && body)}' '${WORKFLOW}'"
 check "CI extracts the effective base map and passes base/head semantics to the checker" \
   "grep -qF 'git show \"\${MERGE_BASE}:\${ADOPTER_MAP}\"' '${WORKFLOW}' && grep -qF -- '--base-coupling-map=\$BASE_COUPLING_MAP' '${WORKFLOW}' && grep -qF -- '--head-map-absent' '${WORKFLOW}'"
 MAP_WITH_PLUGIN_REPO="${TMP_DIR}/map-with-plugin-repo"
@@ -190,6 +190,16 @@ check "adopter-only contract doc change reaches inverse blocker" \
 run_fixture_gate changed-paired.txt "${TMP_DIR}/paired.out" "${TMP_DIR}/paired.rc"
 check "paired adopter-only change passes both declared directions" \
   "test \"\$(cat '${TMP_DIR}/paired.rc')\" = 0 && grep -q '^PASS adopter-ledger-contract: coupled doc touched' '${TMP_DIR}/paired.out' && grep -q '^PASS contribution-impact: adopter-ledger-contract \\[doc-to-source\\]' '${TMP_DIR}/paired.out'"
+
+run_fixture_gate changed-code-only.txt "${TMP_DIR}/fallback-strong-waiver.out" "${TMP_DIR}/fallback-strong-waiver.rc" \
+  "doc-impact: none — generated provider schema remains byte-identical to the reviewed contract"
+check "self-contained adopter fallback accepts a concrete source-to-doc waiver" \
+  "test \"\$(cat '${TMP_DIR}/fallback-strong-waiver.rc')\" = 0 && grep -q 'declaration accepted' '${TMP_DIR}/fallback-strong-waiver.out'"
+
+run_fixture_gate changed-code-only.txt "${TMP_DIR}/fallback-weak-waiver.out" "${TMP_DIR}/fallback-weak-waiver.rc" \
+  "doc-impact: none — skip"
+check "self-contained adopter fallback rejects a weak source-to-doc waiver" \
+  "test \"\$(cat '${TMP_DIR}/fallback-weak-waiver.rc')\" = 1 && grep -q '^BLOCKER doc-impact:' '${TMP_DIR}/fallback-weak-waiver.out'"
 
 CALLER_REPO="${TMP_DIR}/caller-repo"
 mkdir -p "$CALLER_REPO"

@@ -11,7 +11,7 @@
 # semantic judgment in the required path.
 #
 # Usage:
-#   doc-impact-gate.sh --changed=<file-of-paths> --declaration=<text> [--coupling-map=<path>] [--base-coupling-map=<path>]
+#   doc-impact-gate.sh --changed=<file-of-paths> [--changed-status=<name-status-file>] --declaration=<text> [--coupling-map=<path>] [--base-coupling-map=<path>]
 #
 # Coupling map resolution order: --coupling-map override >
 # .claude/ship-flow/doc-coupling.yaml (adopter override) >
@@ -75,11 +75,12 @@ else
 fi
 
 usage() {
-  echo "Usage: doc-impact-gate.sh --changed=<file-of-paths> --declaration=<text> [--coupling-map=<path>] [--base-coupling-map=<path>]" >&2
+  echo "Usage: doc-impact-gate.sh --changed=<file-of-paths> [--changed-status=<name-status-file>] --declaration=<text> [--coupling-map=<path>] [--base-coupling-map=<path>]" >&2
   echo "Read-only mechanical coupling gate. No write mode is available." >&2
 }
 
 CHANGED_FILE=""
+CHANGED_STATUS_FILE=""
 DECLARATION=""
 COUPLING_MAP_OVERRIDE=""
 BASE_COUPLING_MAP=""
@@ -100,6 +101,7 @@ for arg in "$@"; do
       exit 2
       ;;
     --changed=*) CHANGED_FILE="${arg#--changed=}" ;;
+    --changed-status=*) CHANGED_STATUS_FILE="${arg#--changed-status=}" ;;
     --declaration=*) DECLARATION="${arg#--declaration=}" ;;
     --coupling-map=*) COUPLING_MAP_OVERRIDE="${arg#--coupling-map=}" ;;
     --base-coupling-map=*) BASE_COUPLING_MAP="${arg#--base-coupling-map=}" ;;
@@ -124,6 +126,10 @@ fi
 
 if [ ! -f "$CHANGED_FILE" ]; then
   echo "ERROR: --changed file not found: $CHANGED_FILE" >&2
+  exit 2
+fi
+if [ -n "$CHANGED_STATUS_FILE" ] && [ ! -f "$CHANGED_STATUS_FILE" ]; then
+  echo "ERROR: --changed-status file not found: $CHANGED_STATUS_FILE" >&2
   exit 2
 fi
 
@@ -363,7 +369,18 @@ emit_missing_path_blockers() {
   while IFS= read -r file; do
     [ -n "$file" ] || continue
     if any_glob_in_csv_matches_files "$src_csv" "$file" > /dev/null || any_doc_in_csv_touched "$docs_csv" "$file"; then
-      if [ ! -e "$file" ]; then
+      local deleted=false status_path="" status_code=""
+      if [ -n "$CHANGED_STATUS_FILE" ]; then
+        while IFS=$'\t' read -r status_code status_path _; do
+          if [ "$status_code" = "D" ] && [ "$status_path" = "$file" ]; then
+            deleted=true
+            break
+          fi
+        done < "$CHANGED_STATUS_FILE"
+      elif [ ! -e "$file" ]; then
+        deleted=true
+      fi
+      if [ "$deleted" = "true" ]; then
         emit_blocker "contribution-impact: ${name} [protected-path] — ${file} is missing; update the coupling row for a rename or add a narrow exemptGlobs entry for an intentional deletion"
         missing=1
       fi
@@ -381,7 +398,7 @@ process_row() {
   row_changed_files_csv="$(filter_exempt_paths "$CHANGED_FILES_CSV" "$exempt_globs_csv")"
   non_doc_files_csv="$(exclude_doc_paths "$row_changed_files_csv" "$docs_csv")"
 
-  if [ "$directions_csv" != "source-to-doc" ]; then
+  if [ "$directions_csv" != "source-to-doc" ] || [ -n "$CHANGED_STATUS_FILE" ]; then
     emit_missing_path_blockers "$name" "$src_csv" "$docs_csv" "$row_changed_files_csv" || true
   fi
 

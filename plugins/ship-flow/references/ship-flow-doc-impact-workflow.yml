@@ -33,8 +33,10 @@ jobs:
           CHECKER=.claude/ship-flow/doc-impact-gate.sh
           BASE_MAP=/tmp/ship_flow_base_doc_coupling.yaml
           CHANGED=/tmp/ship_flow_doc_impact_changed_files.txt
+          CHANGED_STATUS=/tmp/ship_flow_doc_impact_changed_status.txt
           ARGS=()
           git diff --no-renames --name-only "$MERGE_BASE"...HEAD > "$CHANGED"
+          git diff --no-renames --name-status "$MERGE_BASE"...HEAD > "$CHANGED_STATUS"
 
           if git cat-file -e "${MERGE_BASE}:${MAP}" 2>/dev/null; then
             git show "${MERGE_BASE}:${MAP}" > "$BASE_MAP"
@@ -55,5 +57,6 @@ jobs:
 
           bash "$CHECKER" \
             "--changed=$CHANGED" \
+            "--changed-status=$CHANGED_STATUS" \
             "--declaration=$PR_BODY" \
             "${ARGS[@]}"

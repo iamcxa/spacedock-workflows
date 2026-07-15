@@ -35,6 +35,7 @@ mkdir -p .context/ship-flow
 BASE_MAP=.context/ship-flow/base-doc-coupling.yaml
 BASE_ADOPTER_EXISTS=false
 SOURCE_REPO_OWNS_DEFAULTS=false
+GATE_REQUIRED=true
 MAP_ARGS=()
 if git cat-file -e "HEAD:${SOURCE_CHECKER_TREE}" 2>/dev/null &&
    git cat-file -e "HEAD:${SOURCE_MAP_TREE}" 2>/dev/null; then
@@ -68,23 +69,34 @@ elif [ "$BASE_ADOPTER_EXISTS" = "true" ]; then
 elif [ "$SOURCE_REPO_OWNS_DEFAULTS" = "true" ] && [ -f "$SOURCE_CHECKER" ]; then
   CHECKER="$SOURCE_CHECKER"
   RESOLVED_MAP=plugin-default
-else
-  echo "BLOCKED: no adopter contribution bundle and this repository is not the Ship Flow source repo with an owned checker/map." >&2
+elif git diff --no-renames --name-only "$BASE"...HEAD | grep -q '^plugins/ship-flow/'; then
+  echo "BLOCKED: plugin contribution paths changed but the source checker is absent: $SOURCE_CHECKER_TREE" >&2
   exit 2
+else
+  GATE_REQUIRED=false
+  CHECKER=
+  RESOLVED_MAP=not-adopted
 fi
-printf 'Resolved contribution contract: checker=%s map=%s\n' "$CHECKER" "$RESOLVED_MAP"
+printf 'Resolved contribution contract: gate_required=%s checker=%s map=%s\n' "$GATE_REQUIRED" "$CHECKER" "$RESOLVED_MAP"
+if [ "$GATE_REQUIRED" = "false" ]; then
+  echo "Contribution contract not adopted and no plugin contribution paths changed; skipped."
+fi
 # contribution-contract-resolver:end
 
 git diff --no-renames --name-only "$BASE"...HEAD > .context/ship-flow/changed-files.txt
-bash "$CHECKER" \
-  --changed=.context/ship-flow/changed-files.txt \
-  --declaration="$(cat <entity-folder>/execute.md)" \
-  "${MAP_ARGS[@]}"
+git diff --no-renames --name-status "$BASE"...HEAD > .context/ship-flow/changed-status.txt
+if [ "$GATE_REQUIRED" = "true" ]; then
+  bash "$CHECKER" \
+    --changed=.context/ship-flow/changed-files.txt \
+    --changed-status=.context/ship-flow/changed-status.txt \
+    --declaration="$(cat <entity-folder>/execute.md)" \
+    "${MAP_ARGS[@]}"
+fi
 ```
 
 Exit 1 means a declared edge is incomplete. Return the task to execute for a paired code/schema and contract-doc change, or require the exact scoped waiver from `CONTRIBUTING.md`. Exit 2 means the map or invocation is invalid and is BLOCKED until repaired. Record the command and result in `review.md`; do not replace gate output with worker self-attestation.
 
-When a waiver is used locally, the exact standalone declaration must also appear in the eventual PR body because generic CI reads the PR body. A path deletion or rename remains blocked until the coupling row moves with it or a narrow row-local exemption is reviewed.
+When a waiver is used locally, the exact standalone declaration must also appear in the eventual PR body because generic CI reads the PR body. The merge-base caller passes both name-only and name-status evidence, so a path deletion or rename remains blocked for legacy and bidirectional rows until the coupling row moves with it or a narrow row-local exemption is reviewed.
 
 ## Boundary
 
@@ -92,4 +104,4 @@ Ship Flow owns the generic mechanism, direction vocabulary, and review timing. T
 
 When `.claude/ship-flow/doc-coupling.yaml` exists, the adopted `.claude/ship-flow/doc-impact-gate.sh` is unconditionally required beside it. It is the exact self-contained copy of Ship Flow's canonical checker, not an adopter reimplementation. The presence of a plugin source tree never substitutes for a missing adopted checker; a missing or deleted checker is BLOCKED until it is re-copied during onboarding or upgrade.
 
-When no adopter map exists, only the Ship Flow source repository may fall back to `${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/doc-impact-gate.sh`; the resolver proves that boundary by requiring both the canonical checker path and default map path in the current repository's `HEAD` tree. An externally installed marketplace plugin does not establish source-repository ownership. The source-repository checker resolves its bundled default map. This is the same boundary CI applies.
+When no adopter map exists, only the Ship Flow source repository may fall back to `${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/doc-impact-gate.sh`; the resolver proves that boundary by requiring both the canonical checker path and default map path in the current repository's `HEAD` tree. An externally installed marketplace plugin does not establish source-repository ownership. A repository that has not adopted the bundle is a no-op unless the pull request changes `plugins/ship-flow/` paths without the source checker, which fails closed. The source-repository checker resolves its bundled default map. This is the same boundary CI applies.

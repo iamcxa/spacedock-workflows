@@ -66,7 +66,7 @@ A waiver for another row or direction does not apply. Prefer a paired change. Us
 
 ## Deletes and renames
 
-For a bidirectional row, a changed protected path that does not exist in the checkout is treated as a delete or rename and fails closed. Update the coupling row in the same change when a path moves. For an intentional deletion with no replacement, add a narrow `exemptGlobs` entry and explain the boundary change in review evidence; never use a broad repository-level exemption.
+For every declared row, the caller supplies `git diff --no-renames --name-status` evidence. A protected `D` path is treated as a delete or the removed side of a rename and fails closed, including legacy source-to-doc rows whose source and doc are deleted together. Update the coupling row in the same change when a path moves. For an intentional deletion with no replacement, add a narrow `exemptGlobs` entry and explain the boundary change in review evidence; never use a broad repository-level exemption.
 
 ## Local check
 
@@ -74,8 +74,10 @@ From the repository root:
 
 ```bash
 git diff --no-renames --name-only <base>...HEAD > .context/ship-flow-changed-files.txt
+git diff --no-renames --name-status <base>...HEAD > .context/ship-flow-changed-status.txt
 bash .claude/ship-flow/doc-impact-gate.sh \
   --changed=.context/ship-flow-changed-files.txt \
+  --changed-status=.context/ship-flow-changed-status.txt \
   --declaration="$(cat <entity-folder>/execute.md)"
 ```
 

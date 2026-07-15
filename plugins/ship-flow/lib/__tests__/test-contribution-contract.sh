@@ -32,8 +32,8 @@ extract_fo_resolver() {
 }
 
 run_fo_resolver() {
-  local repo="$1" output="$2" rc_file="$3" plugin_root="${4:-}" rc=0
-  (cd "$repo" && BASE_REF=HEAD CLAUDE_PLUGIN_ROOT="$plugin_root" bash "$FO_RESOLVER") > "$output" 2>&1 || rc=$?
+  local repo="$1" output="$2" rc_file="$3" plugin_root="${4:-}" base_ref="${5:-HEAD}" rc=0
+  (cd "$repo" && BASE_REF="$base_ref" CLAUDE_PLUGIN_ROOT="$plugin_root" bash "$FO_RESOLVER") > "$output" 2>&1 || rc=$?
   printf '%s\n' "$rc" > "$rc_file"
 }
 
@@ -105,12 +105,23 @@ touch "$MARKETPLACE_PLUGIN/bin/doc-impact-gate.sh"
 printf '%s\n' 'schema_version: "1.0"' 'couplings:' '  - name: marketplace-row' '    srcGlobs: ["src/**"]' '    docPaths: ["docs/source.md"]' > "$MARKETPLACE_PLUGIN/references/doc-coupling-map.yaml"
 commit_fo_repo "$MARKETPLACE_REPO"
 run_fo_resolver "$MARKETPLACE_REPO" "${TMP_DIR}/fo-marketplace.out" "${TMP_DIR}/fo-marketplace.rc" "$MARKETPLACE_PLUGIN"
-check "FO blocks marketplace-installed plugin fallback when adopter has no map" \
-  "test \"\$(cat '${TMP_DIR}/fo-marketplace.rc')\" = 2 && grep -qi 'BLOCKED.*source repo' '${TMP_DIR}/fo-marketplace.out'"
+check "FO skips an unadopted repository exactly as generic CI does" \
+  "test \"\$(cat '${TMP_DIR}/fo-marketplace.rc')\" = 0 && grep -q 'gate_required=false' '${TMP_DIR}/fo-marketplace.out' && grep -qi 'not adopted.*skipped' '${TMP_DIR}/fo-marketplace.out'"
+
+mkdir -p "$MARKETPLACE_REPO/plugins/ship-flow"
+printf 'changed plugin contribution path\n' > "$MARKETPLACE_REPO/plugins/ship-flow/README.md"
+(
+  cd "$MARKETPLACE_REPO"
+  git add plugins/ship-flow/README.md
+  git commit -qm 'test: change plugin contribution path without source checker'
+)
+run_fo_resolver "$MARKETPLACE_REPO" "${TMP_DIR}/fo-plugin-change.out" "${TMP_DIR}/fo-plugin-change.rc" "$MARKETPLACE_PLUGIN" HEAD~1
+check "FO blocks plugin contribution paths when the source checker is absent" \
+  "test \"\$(cat '${TMP_DIR}/fo-plugin-change.rc')\" = 2 && grep -qi 'plugin contribution paths changed.*source checker.*absent' '${TMP_DIR}/fo-plugin-change.out'"
 check "FO requires an explicit PR base and passes effective base/head map semantics" \
   "grep -q 'BASE_REF' '${PLUGIN_ROOT}/_mods/contribution-contract.md' && grep -q 'git merge-base.*BASE_REF' '${PLUGIN_ROOT}/_mods/contribution-contract.md' && grep -q -- '--base-coupling-map' '${PLUGIN_ROOT}/_mods/contribution-contract.md' && grep -q -- '--head-map-absent' '${PLUGIN_ROOT}/_mods/contribution-contract.md' && ! grep -q 'origin/main' '${PLUGIN_ROOT}/_mods/contribution-contract.md'"
 check "contributor and FO commands preserve rename source paths" \
-  "grep -q 'git diff --no-renames --name-only' '${PLUGIN_ROOT}/CONTRIBUTING.md' && grep -q 'git diff --no-renames --name-only' '${PLUGIN_ROOT}/_mods/contribution-contract.md'"
+  "grep -q 'git diff --no-renames --name-only' '${PLUGIN_ROOT}/CONTRIBUTING.md' && grep -q 'git diff --no-renames --name-status' '${PLUGIN_ROOT}/CONTRIBUTING.md' && grep -q 'git diff --no-renames --name-only' '${PLUGIN_ROOT}/_mods/contribution-contract.md' && grep -q 'git diff --no-renames --name-status' '${PLUGIN_ROOT}/_mods/contribution-contract.md'"
 check "onboarding and contribution docs require the self-contained adopter checker bundle" \
   "grep -qF '.claude/ship-flow/doc-impact-gate.sh' '${PLUGIN_ROOT}/CONTRIBUTING.md' && grep -qF '.claude/ship-flow/doc-impact-gate.sh' '${PLUGIN_ROOT}/skills/ship-onboard/SKILL.md' && grep -qF 'references/ship-flow-doc-impact-workflow.yml' '${PLUGIN_ROOT}/skills/ship-onboard/SKILL.md' && test -f '${PLUGIN_ROOT}/references/ship-flow-doc-impact-workflow.yml' && grep -qi 'without.*plugin tree\|without relying on a vendored plugin tree' '${PLUGIN_ROOT}/CONTRIBUTING.md' '${PLUGIN_ROOT}/skills/ship-onboard/SKILL.md'"
 check "mod keeps adopter content out of generic plugin" \

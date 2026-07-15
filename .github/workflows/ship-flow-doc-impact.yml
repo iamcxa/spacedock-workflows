@@ -30,6 +30,7 @@ jobs:
           [ -n "$MERGE_BASE" ] || { echo "ERROR: resolved merge base is empty." >&2; exit 1; }
           CHANGED=$(git diff --no-renames --name-only "$MERGE_BASE"...HEAD)
           printf '%s\n' "$CHANGED" > /tmp/ship_flow_doc_impact_changed_files.txt
+          git diff --no-renames --name-status "$MERGE_BASE"...HEAD > /tmp/ship_flow_doc_impact_changed_status.txt
 
           ADOPTER_MAP=.claude/ship-flow/doc-coupling.yaml
           ADOPTER_CHECKER=.claude/ship-flow/doc-impact-gate.sh
@@ -106,5 +107,6 @@ jobs:
           fi
           bash "$CHECKER" \
             --changed=/tmp/ship_flow_doc_impact_changed_files.txt \
+            --changed-status=/tmp/ship_flow_doc_impact_changed_status.txt \
             --declaration="$PR_BODY" \
             "${MAP_ARGS[@]}"
