@@ -10,7 +10,9 @@ Manages the PR lifecycle for workflow entities processed in worktree stages. Pus
 
 ## Hook: startup
 
-Scan all entity files (in the workflow directory only, not `_archive/`) for entities with a non-empty `pr` field and a non-terminal status. For each, extract the PR number (strip any `#`, `owner/repo#` prefix) and check: `gh pr view {number} --json state --jq '.state'`.
+Run `plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh` before the ordinary entity scan for every validated `docs/ship-flow/_closeouts/*.json` receipt in `awaiting_closeout_pr`, `applied`, or `complete`. Route by the receipt's path-derived entity identity, deterministic closeout head, and recorded closeout PR. This sentinel-first pass is authoritative even when the active entity path is already absent: an OPEN exact-head PR remains `closeout-pr-awaiting-merge`; a MERGED exact-head PR is `closeout-pr-terminal-noop` only after the landed receipt and all output hashes validate. Never classify a closeout PR from title or body.
+
+After receipt recovery, scan all entity files (in the workflow directory only, not `_archive/`) for entities with a non-empty `pr` field and a non-terminal status. For each, extract the PR number (strip any `#`, `owner/repo#` prefix) and delegate the state decision to the same reconciler; direct mode is the default.
 
 If `MERGED`, advance the entity to its terminal stage. Because a `mod-block` may be set while the PR is pending, the clear and the terminalization are two separate `--set` calls (the mechanism refuses combining `mod-block=` with terminal fields):
 1. `spacedock status --workflow-dir {dir} --set {slug} mod-block=` when a `mod-block` is set (skip when empty);
@@ -28,7 +30,7 @@ Provider scope: the v1 reconciler supports GitHub `gh` and fixture-backed tests 
 
 ## Hook: idle
 
-Check PR-pending entities using the same logic as the startup hook: scan entity files for non-empty `pr` and non-terminal status, run `gh pr view` for each, and advance merged PRs (two-step `mod-block=` clear then terminalize). This is the workflow's PR-pending scan: the generic event loop fires this idle hook and owns no PR scan of its own, so a workflow with no `pr-merge` mod never reaches for `gh` in its loop. Report any advanced entities to the captain.
+Repeat the startup ordering: reconcile validated `_closeouts` receipts first, then scan ordinary PR-pending entities. The generic event loop fires this idle hook and owns no PR scan of its own, so a workflow with no `pr-merge` mod never reaches for `gh` in its loop. The reconciler owns terminal projection and idempotency; this mod only schedules calls and reports outcomes to the captain.
 
 ## Hook: merge
 

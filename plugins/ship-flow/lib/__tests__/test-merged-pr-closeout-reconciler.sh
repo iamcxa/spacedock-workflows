@@ -391,6 +391,14 @@ run_helper_with_path() {
   echo "$rc"
 }
 
+run_helper_for_workflow() {
+  local repo="$1" workflow="$2" output="$3"
+  shift 3
+  local rc=0
+  STATUS_BIN="$STATUS_BIN" "$HELPER" --workflow-dir "${repo}/${workflow}" "$@" >"$output" 2>&1 || rc=$?
+  echo "$rc"
+}
+
 run_runtime_regression_cases() {
   # NOTE: the prior cache-glob version-selection cases ("resolves from active
   # plugin cache" / "chooses newest spacedock version across cache roots") were
@@ -1103,7 +1111,299 @@ EOF
 }
 
 run_scope_guard() {
-  assert_not_contains "helper has no forbidden git/gh mutation commands" 'git branch -D|git push --delete|gh pr (create|merge)|git merge' "$HELPER"
+  assert_not_contains "helper has no forbidden merge/delete mutation commands" 'git branch -D|git push --delete|gh pr merge|git merge' "$HELPER"
+}
+
+case_selected() {
+  [ -z "${SHIP_FLOW_CLOSEOUT_CASE:-}" ] && return 0
+  case ",${SHIP_FLOW_CLOSEOUT_CASE:-}," in
+    *",$1,"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+run_optional_pr_red_case() {
+  local repo="$TMP_DIR/optional-pr-red-repo" rc before after fixture cid
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ""
+  mkdir -p "$repo/docs/ship-flow/_closeouts"
+  cid="$(python3 - "$repo/docs/ship-flow/_closeouts" <<'PY'
+import hashlib,json,pathlib,sys
+root=pathlib.Path(sys.argv[1]); h="a"*64
+identity={"provider":"github","repository":"example/repo","workflow":"docs/ship-flow","entity_slug":"merged-fixture-entity","implementation_pr":131}
+cid=hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"merged-fixture-entity",b"131"))).hexdigest()
+r={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":identity,
+"ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{"index":h,"review":h,"ship":h}},
+"mode":"pull_request","merge_method_intent":None,"deterministic_closeout_head":"ship-closeout/"+cid,
+"landing_proof":{"landing_anchor":"b"*40,"strategy":"rebase"},
+"transaction":{"phase":"awaiting_closeout_pr","generation":2,"closeout_pr":141,"main_commit":None},
+"outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-05-06-01.md","sha256":h},"ship":{"path":"docs/ship-flow/_archive/merged-fixture-entity/ship.md","sha256":h},"archived_entity":{"path":"docs/ship-flow/_archive/merged-fixture-entity/index.md","sha256":h},"roadmap_row":{"identity":"merged-fixture-entity","sha256":h}}}
+payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}
+r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+(root/(cid+".json")).write_text(json.dumps(r,sort_keys=True,indent=2)+"\n"); print(cid)
+PY
+)"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/_closeouts
+  git -C "$repo" commit -qm "fixture: optional PR awaiting checkpoint"
+  git -C "$repo" rm -qr -- docs/ship-flow/merged-fixture-entity
+  git -C "$repo" commit -qm "fixture: lose active entity after checkpoint"
+  fixture="$TMP_DIR/pr-optional-open-dynamic.env"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' 'merged_at=2026-05-06T00:00:00Z' \
+    'head_ref=ship-merged-fixture-entity' 'base_ref=main' 'url=https://github.com/example/repo/pull/131' \
+    'closeout_pr_number=141' 'closeout_pr_state=OPEN' "closeout_pr_head=ship-closeout/${cid}" >"$fixture"
+  before="$(hash_tree "${repo}/docs/ship-flow")"
+  rc="$(run_helper "$repo" "$TMP_DIR/optional-pr-red.out" \
+    --entity merged-fixture-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture" \
+    --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    optional: /' "$TMP_DIR/optional-pr-red.out"; fi
+  after="$(hash_tree "${repo}/docs/ship-flow")"
+  assert_exit "awaiting receipt with absent active entity rejects invalid terminal head" 2 "$rc"
+  assert_contains "absent active entity requires valid exact terminal head" '^reason=closeout-sentinel-invalid$' "$TMP_DIR/optional-pr-red.out"
+  if [ "$before" = "$after" ]; then
+    record_pass "optional PR preflight failure preserves workflow bytes"
+  else
+    record_fail "optional PR preflight failure preserves workflow bytes"
+  fi
+  perl -0pi -e 's/closeout_pr_state=OPEN/closeout_pr_state=MERGED/' "$fixture"
+  rc="$(run_helper "$repo" "$TMP_DIR/optional-awaiting-merged.out" \
+    --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit "awaiting receipt cannot claim terminal MERGED without landed bytes" 2 "$rc"
+  assert_contains "awaiting MERGED reports missing landed sentinel" '^reason=closeout-sentinel-missing$' "$TMP_DIR/optional-awaiting-merged.out"
+}
+
+run_optional_creation_red_contract() {
+  assert_contains "optional PR flow has a dedicated checkpoint/create owner" '^reconcile_pull_request_bundle\(\)' "$HELPER"
+  assert_contains "optional PR flow exposes prepared checkpoint crash recovery" 'SHIP_FLOW_CLOSEOUT_FAILPOINT.*after-prepared' "$HELPER"
+  assert_contains "optional PR flow searches the exact deterministic head" 'gh pr list .*--head.*deterministic' "$HELPER"
+  assert_contains "optional PR provider query binds exact head OID" 'headRefOid' "$HELPER"
+  assert_contains "optional PR provider query binds draft state" 'isDraft' "$HELPER"
+  assert_contains "optional PR flow can create the single exact-head PR" 'gh pr create .*--head' "$HELPER"
+}
+
+run_optional_creation_case() {
+  local repo="$TMP_DIR/optional-creation-repo" fixture="$TMP_DIR/pr-optional-create.env"
+  local registry="$TMP_DIR/optional-pr-registry" pr_log="$TMP_DIR/optional-pr.log" bundle_log="$TMP_DIR/optional-bundle.log"
+  local base source_one source_two anchor cid deterministic_head rc receipt before_rerun merged_head seed_sha terminal_sha
+  local rejected_repo rejected_fixture rejected_registry rejected_log rejected_bundle rejected_before rejected_seed registry_before state expected_rc expected_reason
+  setup_repo "$repo"
+  printf '%s\n' '.worktrees/' >"$repo/.gitignore"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' '| merged-fixture-entity | Merged fixture entity |' '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  mkdir -p "$repo/docs/ship-flow/_debriefs"
+  git -C "$repo" add -- .gitignore ROADMAP.md
+  git -C "$repo" commit -qm 'fixture: optional roadmap'
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb implementation-topic "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' ''
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$repo/docs/ship-flow/merged-fixture-entity/review.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/merged-fixture-entity/review.md
+  git -C "$repo" commit -qm 'implementation: optional reviewed entity'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' '- Optional closeout proof is retained.' '' '### Verdict' 'merge_method_intent: rebase' 'pr: "#131"' >"$repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$repo" commit -qm 'implementation: optional ship evidence'
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" "$source_two" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  cid="$(python3 - <<'PY'
+import hashlib
+print(hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"merged-fixture-entity",b"131"))).hexdigest())
+PY
+)"
+  deterministic_head="ship-closeout/$cid"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' 'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=implementation-topic' 'base_ref=main' 'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_one,$source_two" 'pr_commit_count=2' \
+    'closeout_pr_number=141' 'closeout_pr_state=OPEN' "closeout_pr_head=$deterministic_head" >"$fixture"
+
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-prepared run_helper "$repo" "$TMP_DIR/optional-after-prepared.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'optional injected after-prepared stop' 1 "$rc"
+  receipt="$repo/docs/ship-flow/_closeouts/$cid.json"
+  assert_file_exists 'optional prepared receipt committed before create' "$receipt"
+  if [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["transaction"]["phase"])' "$receipt")" = prepared ]; then record_pass 'optional first checkpoint phase is prepared'; else record_fail 'optional first checkpoint phase is prepared'; fi
+  if [ ! -e "$registry" ] && [ ! -e "$pr_log" ]; then record_pass 'optional prepared crash precedes external create'; else record_fail 'optional prepared crash precedes external create'; fi
+  assert_file_exists 'optional prepared crash keeps active entity' "$repo/docs/ship-flow/merged-fixture-entity/index.md"
+
+  for state in CLOSED MERGED; do
+    rejected_repo="$TMP_DIR/optional-discovered-${state}-repo"
+    rejected_fixture="$TMP_DIR/optional-discovered-${state}.env"
+    rejected_registry="$TMP_DIR/optional-discovered-${state}.registry"
+    rejected_log="$TMP_DIR/optional-discovered-${state}.pr.log"
+    rejected_bundle="$TMP_DIR/optional-discovered-${state}.bundle.log"
+    git clone -q "$repo" "$rejected_repo"
+    git -C "$rejected_repo" config user.email test@example.test
+    git -C "$rejected_repo" config user.name 'Ship Flow Test'
+    git -C "$rejected_repo" checkout -qb "$deterministic_head"
+    git -C "$rejected_repo" rm -q -- "docs/ship-flow/_closeouts/$cid.json"
+    git -C "$rejected_repo" commit -qm 'fixture: discovered closeout seed'
+    rejected_seed="$(git -C "$rejected_repo" rev-parse HEAD)"
+    git -C "$rejected_repo" checkout -q main
+    cp "$fixture" "$rejected_fixture"
+    perl -0pi -e "s/closeout_pr_state=OPEN/closeout_pr_state=${state}/" "$rejected_fixture"
+    printf 'number=141\nhead=%s\nstate=%s\nlocal_oid=%s\nremote_oid=%s\nis_draft=true\n' "$deterministic_head" "$state" "$rejected_seed" "$rejected_seed" >"$rejected_registry"
+    rejected_before="$(git -C "$rejected_repo" rev-parse HEAD)"
+    registry_before="$(git hash-object "$rejected_registry")"
+    if [ "$state" = CLOSED ]; then expected_rc=1; expected_reason=closeout-pr-awaiting-merge; else expected_rc=2; expected_reason=closeout-sentinel-missing; fi
+    rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$rejected_registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$rejected_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$rejected_bundle" run_helper "$rejected_repo" "$TMP_DIR/optional-discovered-${state}.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$rejected_fixture" --closeout-mode pull-request)"
+    assert_exit "optional discovered ${state} PR stops before recovery mutation" "$expected_rc" "$rc"
+    assert_contains "optional discovered ${state} PR reports stable reason" "^reason=${expected_reason}$" "$TMP_DIR/optional-discovered-${state}.out"
+    if [ "$rejected_before" = "$(git -C "$rejected_repo" rev-parse HEAD)" ] && [ "$rejected_seed" = "$(git -C "$rejected_repo" rev-parse "$deterministic_head")" ] && [ "$registry_before" = "$(git hash-object "$rejected_registry")" ] && [ ! -e "$rejected_log" ] && [ ! -e "$rejected_bundle" ] && [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["transaction"]["phase"])' "$rejected_repo/docs/ship-flow/_closeouts/$cid.json")" = prepared ]; then
+      record_pass "optional discovered ${state} PR preserves checkpoint, refs, provider bytes, and logs"
+    else
+      record_fail "optional discovered ${state} PR preserves checkpoint, refs, provider bytes, and logs"
+    fi
+  done
+
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAIL_ONCE=seed-push SHIP_FLOW_CLOSEOUT_FAIL_ONCE_MARKER="$TMP_DIR/optional-seed-push.once" run_helper "$repo" "$TMP_DIR/optional-seed-push-fail.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'optional seed publication fails once before PR creation' 1 "$rc"
+  if [ "$(awk -F= '$1=="remote_oid"{print $2; exit}' "$registry" 2>/dev/null || true)" = "" ] && [ ! -e "$pr_log" ]; then record_pass 'optional failed seed publication records no remote OID or PR'; else record_fail 'optional failed seed publication records no remote OID or PR'; fi
+
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAIL_ONCE=seed-push SHIP_FLOW_CLOSEOUT_FAIL_ONCE_MARKER="$TMP_DIR/optional-seed-push.once" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-pr-create run_helper "$repo" "$TMP_DIR/optional-after-create.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  if [ "$rc" != 1 ]; then sed 's/^/    optional-after-create: /' "$TMP_DIR/optional-after-create.out"; fi
+  assert_exit 'optional injected after-create stop' 1 "$rc"
+  if [ "$(grep -c '^create 141 ' "$pr_log" 2>/dev/null || true)" = 1 ]; then record_pass 'optional exact-head PR created once'; else record_fail 'optional exact-head PR created once'; fi
+  if [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["transaction"]["phase"])' "$receipt")" = prepared ]; then record_pass 'optional after-create crash leaves prepared checkpoint'; else record_fail 'optional after-create crash leaves prepared checkpoint'; fi
+  seed_sha="$(git -C "$repo" rev-parse "$deterministic_head")"
+  if git -C "$repo" diff-tree --no-commit-id --name-status -r "$seed_sha" | grep -q "^D[[:space:]]*docs/ship-flow/_closeouts/$cid.json$"; then record_pass 'optional deterministic seed has a real receipt-deletion tree diff'; else record_fail 'optional deterministic seed has a real receipt-deletion tree diff'; fi
+  if [ "$(awk -F= '$1=="local_oid"{print $2; exit}' "$registry")" = "$seed_sha" ] && [ "$(awk -F= '$1=="remote_oid"{print $2; exit}' "$registry")" = "$seed_sha" ] && [ "$(awk -F= '$1=="is_draft"{print $2; exit}' "$registry")" = true ]; then record_pass 'optional registry binds seed local and remote OID as draft'; else record_fail 'optional registry binds seed local and remote OID as draft'; fi
+
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting run_helper "$repo" "$TMP_DIR/optional-after-awaiting.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'optional injected after-awaiting stop' 1 "$rc"
+  if [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["transaction"]["phase"])' "$receipt")" = awaiting_closeout_pr ]; then record_pass 'optional awaiting checkpoint binds PR before terminal head'; else record_fail 'optional awaiting checkpoint binds PR before terminal head'; fi
+  if [ ! -e "$bundle_log" ]; then record_pass 'optional after-awaiting crash precedes bundle application'; else record_fail 'optional after-awaiting crash precedes bundle application'; fi
+
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAIL_ONCE=terminal-push SHIP_FLOW_CLOSEOUT_FAIL_ONCE_MARKER="$TMP_DIR/optional-terminal-push.once" run_helper "$repo" "$TMP_DIR/optional-terminal-push-fail.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'optional terminal publication fails once after local terminal update' 1 "$rc"
+  terminal_sha="$(git -C "$repo" rev-parse "$deterministic_head")"
+  if [ "$terminal_sha" != "$seed_sha" ] && [ "$(awk -F= '$1=="local_oid"{print $2; exit}' "$registry")" = "$terminal_sha" ] && [ "$(awk -F= '$1=="remote_oid"{print $2; exit}' "$registry")" = "$seed_sha" ] && [ "$(awk -F= '$1=="is_draft"{print $2; exit}' "$registry")" = true ]; then record_pass 'optional failed terminal publication preserves remote seed and draft'; else record_fail 'optional failed terminal publication preserves remote seed and draft'; fi
+
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAIL_ONCE=ready SHIP_FLOW_CLOSEOUT_FAIL_ONCE_MARKER="$TMP_DIR/optional-ready.once" run_helper "$repo" "$TMP_DIR/optional-ready-fail.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'optional ready transition fails once after terminal publication' 1 "$rc"
+  if [ "$(awk -F= '$1=="remote_oid"{print $2; exit}' "$registry")" = "$terminal_sha" ] && [ "$(awk -F= '$1=="is_draft"{print $2; exit}' "$registry")" = true ]; then record_pass 'optional failed ready transition retains published terminal draft'; else record_fail 'optional failed ready transition retains published terminal draft'; fi
+
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAIL_ONCE=ready SHIP_FLOW_CLOSEOUT_FAIL_ONCE_MARKER="$TMP_DIR/optional-ready.once" run_helper "$repo" "$TMP_DIR/optional-open.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    optional-create: /' "$TMP_DIR/optional-open.out"; fi
+  assert_exit 'optional creation resumes to awaiting' 0 "$rc"
+  assert_contains 'optional creation reports awaiting' '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/optional-open.out"
+  if [ "$(grep -c '^create 141 ' "$pr_log")" = 1 ]; then record_pass 'optional reentry does not duplicate PR'; else record_fail 'optional reentry does not duplicate PR'; fi
+  if [ "$(grep -c '^apply ' "$bundle_log")" = 1 ]; then record_pass 'optional terminal head invokes bundle exactly once'; else record_fail 'optional terminal head invokes bundle exactly once'; fi
+  if grep -q "^force-with-lease ${seed_sha} " "$pr_log"; then record_pass 'optional terminal update uses known seed force-with-lease'; else record_fail 'optional terminal update uses known seed force-with-lease'; fi
+  if [ "$(grep -c '^ready 141 ' "$pr_log")" = 1 ]; then record_pass 'optional PR becomes ready only after terminal validation'; else record_fail 'optional PR becomes ready only after terminal validation'; fi
+  if [ "$(awk -F= '$1=="local_oid"{print $2; exit}' "$registry")" = "$terminal_sha" ] && [ "$(awk -F= '$1=="remote_oid"{print $2; exit}' "$registry")" = "$terminal_sha" ] && [ "$(awk -F= '$1=="is_draft"{print $2; exit}' "$registry")" = false ]; then record_pass 'optional registry reaches exact remote terminal OID and non-draft'; else record_fail 'optional registry reaches exact remote terminal OID and non-draft'; fi
+  if python3 - "$receipt" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); t=r["transaction"]
+raise SystemExit(0 if r["mode"]=="pull_request" and t=={"phase":"awaiting_closeout_pr","generation":2,"closeout_pr":141,"main_commit":None} else 1)
+PY
+  then record_pass 'optional main checkpoint binds one awaiting PR'; else record_fail 'optional main checkpoint binds one awaiting PR'; fi
+  assert_file_exists 'optional OPEN keeps active entity nonterminal' "$repo/docs/ship-flow/merged-fixture-entity/index.md"
+  if git -C "$repo" show "$deterministic_head:docs/ship-flow/_closeouts/$cid.json" | python3 -c 'import json,sys; r=json.load(sys.stdin); t=r["transaction"]; raise SystemExit(0 if r["mode"]=="pull_request" and t["phase"]=="applied" and t["closeout_pr"]==141 and t["main_commit"]==r["landing_proof"]["landing_anchor"] else 1)'; then record_pass 'optional deterministic head carries applied sentinel'; else record_fail 'optional deterministic head carries applied sentinel'; fi
+
+  before_rerun="$(git -C "$repo" rev-parse HEAD)"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper "$repo" "$TMP_DIR/optional-open-rerun.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'optional OPEN rerun exits no-op' 0 "$rc"
+  if [ "$before_rerun" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$(grep -c '^apply ' "$bundle_log")" = 1 ] && [ "$(grep -c '^create 141 ' "$pr_log")" = 1 ]; then record_pass 'optional OPEN rerun is byte and side-effect no-op'; else record_fail 'optional OPEN rerun is byte and side-effect no-op'; fi
+
+  git -C "$repo" merge -q --no-ff "$deterministic_head" -m 'fixture: deterministic closeout PR merged'
+  perl -0pi -e 's/closeout_pr_state=OPEN/closeout_pr_state=MERGED/' "$fixture"
+  merged_head="$(git -C "$repo" rev-parse HEAD)"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper "$repo" "$TMP_DIR/optional-merged.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    optional-merged: /' "$TMP_DIR/optional-merged.out"; fi
+  assert_exit 'optional merged sentinel exits terminal no-op' 0 "$rc"
+  assert_contains 'optional merged sentinel classifies before entity lookup' '^reason=closeout-pr-terminal-noop$' "$TMP_DIR/optional-merged.out"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper "$repo" "$TMP_DIR/optional-merged-second.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'optional merged sentinel second invocation exits no-op' 0 "$rc"
+  assert_contains 'optional merged sentinel never recursively creates closeout' '^reason=closeout-pr-terminal-noop$' "$TMP_DIR/optional-merged-second.out"
+  if [ "$merged_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$(grep -c '^apply ' "$bundle_log")" = 1 ] && [ "$(grep -c '^create 141 ' "$pr_log")" = 1 ]; then record_pass 'optional merged first and second classification add no terminal commit or PR'; else record_fail 'optional merged first and second classification add no terminal commit or PR'; fi
+
+  local tampered_repo="$TMP_DIR/optional-merged-tampered-repo" tampered_receipt tampered_ship tampered_head
+  git clone -q "$repo" "$tampered_repo"
+  tampered_receipt="$tampered_repo/docs/ship-flow/_closeouts/$cid.json"
+  tampered_ship="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["outputs"]["ship"]["path"])' "$tampered_receipt")"
+  printf '%s\n' 'tampered sentinel output' >>"$tampered_repo/$tampered_ship"
+  tampered_head="$(git -C "$tampered_repo" rev-parse HEAD)"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" run_helper "$tampered_repo" "$TMP_DIR/optional-merged-tampered.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'optional tampered landed sentinel rejects' 1 "$rc"
+  assert_contains 'optional tampered landed sentinel reports payload mismatch' '^reason=closeout-sentinel-payload-mismatch$' "$TMP_DIR/optional-merged-tampered.out"
+  if [ "$tampered_head" = "$(git -C "$tampered_repo" rev-parse HEAD)" ]; then record_pass 'optional tampered sentinel preserves HEAD'; else record_fail 'optional tampered sentinel preserves HEAD'; fi
+}
+
+run_recursion_red_case() {
+  if python3 - "$HELPER" <<'PY'
+import pathlib,sys
+text=pathlib.Path(sys.argv[1]).read_text()
+scan=text.find("scan_closeout_receipts")
+lookup=text.find('active_resolve="$(resolve_entity')
+raise SystemExit(0 if 0 <= scan < lookup else 1)
+PY
+  then
+    record_pass "receipt-only sentinel scan precedes ordinary entity lookup"
+  else
+    record_fail "receipt-only sentinel scan precedes ordinary entity lookup"
+  fi
+}
+
+run_pr40_pr41_red_case() {
+  local fixture value
+  for fixture in pr40-rewritten-landing.env pr41-manual-outcome.env; do
+    if [ -f "${FIXTURE_ROOT}/${fixture}" ]; then
+      record_pass "frozen ${fixture} dogfood fixture exists"
+    else
+      record_fail "frozen ${fixture} dogfood fixture exists"
+    fi
+  done
+  value="$(awk -F= '$1=="landing_anchor"{print $2; exit}' "${FIXTURE_ROOT}/pr40-rewritten-landing.env")"
+  if [ "$value" = d6d3ce4195fec956f74d0ede3192d2380746f561 ]; then record_pass 'PR40 fixture freezes rewritten landing anchor'; else record_fail 'PR40 fixture freezes rewritten landing anchor'; fi
+  value="$(awk -F= '$1=="original_head"{print $2; exit}' "${FIXTURE_ROOT}/pr40-rewritten-landing.env")"
+  if [ "$value" = 987ddba6b22ac51bf59ec9c35936e06846c75613 ]; then record_pass 'PR40 fixture rejects original head as landing'; else record_fail 'PR40 fixture rejects original head as landing'; fi
+  value="$(awk -F= '$1=="landing_anchor"{print $2; exit}' "${FIXTURE_ROOT}/pr41-manual-outcome.env")"
+  if [ "$value" = 6c5a94b6ca3b25ec5c43d161d7e323eafaa0dbc2 ]; then record_pass 'PR41 fixture freezes manual landing anchor'; else record_fail 'PR41 fixture freezes manual landing anchor'; fi
+  value="$(awk -F= '$1=="original_head"{print $2; exit}' "${FIXTURE_ROOT}/pr41-manual-outcome.env")"
+  if [ "$value" = 49af1c2631440c698c96d957b1ab2fdb4247607f ]; then record_pass 'PR41 fixture rejects original head as landing'; else record_fail 'PR41 fixture rejects original head as landing'; fi
+}
+
+run_frozen_dogfood_case() {
+  local label="$1" slug="$2" frozen="$3" workflow="docs/dogfood-flow"
+  local repo="$TMP_DIR/dogfood-${1}-repo"
+  local dynamic="$TMP_DIR/dogfood-${label}.env" original count sources rc before first_head receipt expected_anchor expected_first expected_last
+  git clone -q "$(git -C "$PLUGIN_ROOT" rev-parse --show-toplevel)" "$repo"
+  git -C "$repo" config user.email test@example.test
+  git -C "$repo" config user.name 'Ship Flow Test'
+  git -C "$repo" checkout -q -B main HEAD
+  rm -rf "${repo:?}/${workflow:?}"
+  mkdir -p "$repo/$workflow/_mods" "$repo/$workflow/_debriefs"
+  write_workflow_readme "$repo/$workflow"
+  write_pr_merge_mod "$repo/$workflow"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' "| $slug | Merged fixture entity |" '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  write_entity "$repo/$workflow" "$slug" ship "#$(awk -F= '$1=="number"{print $2; exit}' "$frozen")" ''
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$repo/$workflow/$slug/review.md"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' "- Frozen ${label} closeout evidence retained." '' '### Verdict' 'merge_method_intent: rebase' >"$repo/$workflow/$slug/ship.md"
+  git -C "$repo" add -- ROADMAP.md "$workflow"
+  git -C "$repo" commit -qm "fixture: frozen ${label} closeout source"
+  original="$(awk -F= '$1=="original_head"{print $2; exit}' "$frozen")"
+  count="$(awk -F= '$1=="pr_commit_count"{print $2; exit}' "$frozen")"
+  sources="$(git -C "$repo" rev-list --reverse --first-parent --max-count="$count" "$original" | paste -sd, -)"
+  cp "$frozen" "$dynamic"; printf 'source_commits=%s\n' "$sources" >>"$dynamic"
+  before="$(git -C "$repo" rev-parse HEAD)"
+  rc="$(run_helper_for_workflow "$repo" "$workflow" "$TMP_DIR/dogfood-${label}-first.out" --entity "$slug" --pr-provider fixture --pr-fixture "$dynamic")"
+  if [ "$rc" != 0 ]; then sed "s/^/    ${label}: /" "$TMP_DIR/dogfood-${label}-first.out"; fi
+  assert_exit "${label} frozen first invocation terminalizes" 0 "$rc"
+  first_head="$(git -C "$repo" rev-parse HEAD)"
+  if [ "$(git -C "$repo" rev-list --count "${before}..${first_head}")" = 1 ]; then record_pass "${label} first invocation creates one terminal commit"; else record_fail "${label} first invocation creates one terminal commit"; fi
+  if [ "$(git -C "$repo" log -1 --format=%s)" = "ship(${slug}): advance status to done" ]; then record_pass "${label} first invocation uses one C14 bundle receipt"; else record_fail "${label} first invocation uses one C14 bundle receipt"; fi
+  receipt="$(find "$repo/$workflow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  expected_anchor="$(awk -F= '$1=="landing_anchor"{print $2; exit}' "$frozen")"; expected_first="$(awk -F= '$1=="first_landing_commit"{print $2; exit}' "$frozen")"; expected_last="$(awk -F= '$1=="last_landing_commit"{print $2; exit}' "$frozen")"
+  if [ -f "$receipt" ] && python3 - "$receipt" "$expected_anchor" "$expected_first" "$expected_last" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); landing=r["landing_proof"]
+raise SystemExit(0 if landing["landing_anchor"]==sys.argv[2] and landing["first_landing_commit"]==sys.argv[3] and landing["last_landing_commit"]==sys.argv[4] else 1)
+PY
+  then record_pass "${label} receipt freezes true rewritten landing boundaries"; else record_fail "${label} receipt freezes true rewritten landing boundaries"; fi
+  rc="$(run_helper_for_workflow "$repo" "$workflow" "$TMP_DIR/dogfood-${label}-second.out" --entity "$slug" --pr-provider fixture --pr-fixture "$dynamic")"
+  assert_exit "${label} frozen second invocation exits no-op" 0 "$rc"
+  if [ "$first_head" = "$(git -C "$repo" rev-parse HEAD)" ]; then record_pass "${label} second invocation is byte/hash no-op"; else record_fail "${label} second invocation is byte/hash no-op"; fi
 }
 
 run_doc_scope_cases() {
@@ -1142,6 +1442,17 @@ else
   run_idempotency_cases
   if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = direct-transaction ]; then
     run_direct_transaction_case
+  fi
+  if case_selected optional-pr; then
+    run_optional_pr_red_case
+    run_optional_creation_red_contract
+    run_optional_creation_case
+  fi
+  case_selected recursion && run_recursion_red_case
+  if case_selected pr40-pr41; then
+    run_pr40_pr41_red_case
+    run_frozen_dogfood_case pr40 dogfood-pr40 "${FIXTURE_ROOT}/pr40-rewritten-landing.env"
+    run_frozen_dogfood_case pr41 dogfood-pr41 "${FIXTURE_ROOT}/pr41-manual-outcome.env"
   fi
   run_scope_guard
   run_doc_scope_cases
