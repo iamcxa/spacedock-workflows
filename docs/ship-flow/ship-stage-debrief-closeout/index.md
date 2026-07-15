@@ -264,19 +264,23 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
   Two parallel panels found five unique blockers and two warnings; the fresh process cross-review returned PROCEED for the honest failed artifact and execute route, not for the implementation.
 - FAILED: Required integrated claims B1-B5 are NOT VERIFIED, so Verify VETOs and routes back to Execute without a proceed receipt or state advance.
   The blockers are incomplete-envelope legacy fallback, duplicate startup terminalization, loss of the full archived entity evidence tree, underconstrained receipt semantics, and post-commit signal rollback corruption; W1 accompanies the execute repair and W2 remains explicit hardening risk.
+- DONE: Re-enter Verify at valid entry `5523916`, preserve the round-1 record, and independently confirm feedback-cycle repairs B2/B3/B5/W1 with 1,286 focused assertions plus full C1-C15 green.
+  The round-2 pinned implementation snapshot is `d45d176..c0494e5`; green suites do not override uncovered integration paths.
+- FAILED: Round 2 VETOs on four required claims and routes back to Execute.
+  R2-B1 allows active legacy done/PASSED archive before native proof; R2-B2 permits self-rehashed squash source-patch forgery; R2-B3 accepts ROADMAP identity outside the first cell; R2-B4 can crash a valid young-repo squash during speculative rebase analysis. Same-user path-swap TOCTOU and O(E×R) receipt scanning remain non-blocking warnings.
 
 ### Summary
 
-Verification preserves the green focused evidence but rejects the implementation because uncovered integration branches can bypass or corrupt the native closeout contract. The authoritative evidence and five required `NOT VERIFIED` claims remain in [verify.md](verify.md).
+Verification preserves both VETO rounds. Cycle 1 repairs B2/B3/B5/W1, but round 2 rejects the implementation because four uncovered proof, projection, and topology paths still violate the native closeout contract. The authoritative history and current four required `NOT VERIFIED` claims remain in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 17
-- iteration_count: 1
-- blocking_findings_count: 5
+- duration_minutes: 26 across two rounds
+- iteration_count: 2
+- blocking_findings_count: 4 current (5 historical)
 - warning_findings_count: 2
-- reviewer_verdict: VETO; artifact cross-review PROCEED to execute
+- reviewer_verdict: VETO round 2; route execute
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles

@@ -1,12 +1,10 @@
 <!-- section:verify-report -->
 # Make debrief a native post-merge ship closeout — Verify
-
 <details>
 <summary>Snapshot provenance</summary>
 
 Implementation snapshot: `d45d176..c08c391`; execute report: `e0033eb`; verify entry: `7086f2d`. The later execute narrative is not implementation-object evidence.
 </details>
-
 <!-- section:verify-check-manifest -->
 ### Verify Check Manifest
 
@@ -218,7 +216,21 @@ runtime_checks_count: 951
 - `canonical_docs_touched`: plugin README and pr-merge mod were reviewed; PRODUCT/ARCHITECTURE/ROADMAP terminal edits remain ship-review-owned.
 - `render_fidelity_status`: not-applicable.
 <!-- /section:hand-off-to-review -->
-
+<details>
+<summary>Verify Round 2 — FAILED / VETO, route R2-B1–R2-B4 to execute</summary>
+<!-- section:verify-round-2 -->
+## Verify Round 2
+snapshot: `d45d176..c0494e5`; execute `c0494e5`; valid verify entry `5523916`; quality: 1,286 focused assertions plus full C1-C15 PASS.
+resolved_from_round_1: B2, B3, B5, W1; round-1 body above remains the historical record.
+- R2-B1 BLOCKING — active legacy done/PASSED archives before native proof (`merged-pr-closeout-reconciler.sh:1265-1279`); route execute.
+- R2-B2 BLOCKING — squash source patch IDs are not Git-rederived, so self-rehashed forgery passes (`validate-closeout-receipt.py:162-199,327-337`); route execute.
+- R2-B3 BLOCKING — ROADMAP identity matches any cell, not `cells[0]` (`validate-closeout-receipt.py:444-458`); route execute.
+- R2-B4 BLOCKING — young-repo squash can crash on speculative root-parent dereference (`resolve-landing-envelope.sh:281-305`); route execute.
+warnings: same-user path-swap TOCTOU; O(E×R) receipt scanning (effectively O(R²) when both grow); both non-blocking.
+status: failed; review: VETO; claim_records: required VERIFIED=1 NOT VERIFIED=4 INCONCLUSIVE=0; blocking_issues: R2-B1–R2-B4.
+hand_off: review must not proceed; no proceed receipt, status advance, push, PR, merge, archive, todo, or remote mutation.
+<!-- /section:verify-round-2 -->
+</details>
 <!-- section:deferred-to-todo -->
 ## Deferred to TODO
 
