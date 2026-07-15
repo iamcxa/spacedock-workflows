@@ -43,6 +43,7 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `bin/workflow-doctor.sh` | `README.md` (diagnostics) | `workflow-template.yaml` (workflow expectations) |
 | `bin/ship-capture.sh` | `README.md` (artifact capture helper) | `references/doc-format.md` |
 | `bin/debrief-boundary-resolver.sh` | `README.md` (debrief flow) | `references/debrief-schema.yaml` |
+| `bin/merged-pr-closeout-reconciler.sh` | `README.md` (post-merge direct/PR authority and recovery) | `references/closeout-receipt-schema.yaml` |
 | `bin/pr-feedback-rollback.sh` | `README.md` (PR feedback recovery) | `INVARIANTS.md` (rollback safety, if promoted) |
 | `bin/stale-worktree-cleanup-planner.sh` | `README.md` (cleanup planning) | `INVARIANTS.md` (non-destructive cleanup principle) |
 | `bin/semantic-review-policy.mjs` | `README.md` (semantic review policy boundary) | `workflow-template.yaml` (adopter policy example, if scaffolded) |
@@ -63,7 +64,21 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `lib/extract-section.sh` and `lib/write-section.sh` | `INVARIANTS.md` (section-mediated access) | `references/doc-format.md` |
 | `lib/extract-map.sh` and `lib/patch-map.sh` | `INVARIANTS.md` (canonical map CAS) | `references/flow-map-schema.yaml` |
 | `lib/generate-ui-verify-spec.sh` | `README.md` (UI verify integration) | `references/doc-format.md` |
+| `lib/resolve-landing-envelope.sh` | `README.md` (verified implementation landing proof) | `references/closeout-receipt-schema.yaml` |
+| `lib/persist-closeout-intent.sh` | `README.md` (owner and merge-method intent) | `references/entity-body-schema.yaml` |
+| `lib/apply-closeout-bundle.sh` | `README.md` (atomic terminal bundle) | `references/closeout-receipt-schema.yaml` |
+| `lib/validate-closeout-receipt.py` | `README.md` (receipt-first recovery and no-op rules) | `references/closeout-receipt-schema.yaml` |
 | `lib/*.sh` validators and resolvers | `README.md` (tooling reference) | Matching `references/*.yaml` schema |
+
+### Closeout Contract Suites -> Doc Targets
+
+| Source | Primary Doc Target | Secondary Doc Target |
+|--------|--------------------|----------------------|
+| `lib/__tests__/test-landing-envelope-resolver.sh` | `README.md` (landing proof grammar and failure boundary) | `references/closeout-receipt-schema.yaml` |
+| `lib/__tests__/test-closeout-receipt.sh` | `README.md` (receipt identity, phases, and proof binding) | `references/closeout-receipt-schema.yaml` |
+| `lib/__tests__/test-persist-closeout-intent.sh` and `lib/__tests__/test-ship-closeout-intent-contract.sh` | `README.md` (pre-merge ownership and method intent) | `references/entity-body-schema.yaml` |
+| `lib/__tests__/test-apply-closeout-bundle.sh` | `README.md` (atomic direct terminal projection) | `references/closeout-receipt-schema.yaml` |
+| `lib/__tests__/test-merged-pr-closeout-reconciler.sh` | `README.md` (direct/PR authority, recovery, recursion, and dogfood) | `references/closeout-receipt-schema.yaml` |
 
 ### Hooks, Schemas, and Workflow Sources -> Doc Targets
 
@@ -76,6 +91,7 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `references/entity-body-schema.yaml` | `README.md` (entity schema) | `workflow-template.yaml` |
 | `references/flow-map-schema.yaml` | `README.md` (canonical doc flow map) | `INVARIANTS.md` |
 | `references/debrief-schema.yaml` | `README.md` (debrief lifecycle) | `_debriefs-evidence/*.md` |
+| `references/closeout-receipt-schema.yaml` | `README.md` (post-merge closeout lifecycle) | `references/debrief-schema.yaml` (terminal debrief coupling) |
 | `references/stack-skill-map.yaml` | `README.md` (runtime/stack skill routing) | `skills/ship-runtime-detect/SKILL.md` |
 | `references/architecture-lens-triggers.yaml` | `README.md` (domain lens routing) | `skills/ship-design/SKILL.md` |
 | `references/domain-knowledge/README.md` | `README.md` (domain knowledge registry) | `skills/domain-registry/SKILL.md` |
@@ -94,6 +110,7 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `references/entity-body-schema.yaml` | Entity body schema | yes | Regenerable from schema changes. |
 | `references/flow-map-schema.yaml` | Canonical doc flow-map schema | yes | Regenerable from map schema changes. |
 | `references/debrief-schema.yaml` | Debrief schema | yes | Regenerable from schema changes. |
+| `references/closeout-receipt-schema.yaml` | Post-merge closeout receipt schema | yes | Sync identity, transaction phases, proof binding, and terminal output keys with the reconciler and focused contract suites. |
 | `references/stack-skill-map.yaml` | Stack/runtime skill routing map | yes | Regenerable from routing source. |
 | `references/architecture-lens-triggers.yaml` | Architecture lens triggers | yes | Regenerable from lens source files. |
 | `references/domain-knowledge/README.md` | Domain knowledge registry overview | partial | Preserve curated domain explanations. |

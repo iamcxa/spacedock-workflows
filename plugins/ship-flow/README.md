@@ -164,7 +164,7 @@ External skill libraries (GStack and similar) are categorized by how they may in
 |---|---|
 | `/ship` | **Naming collision** with ship-flow `ship` stage; functional overlap (version bump + PR) replaced by ship-flow `ship` stage |
 | `/review` | **Naming collision** + captain-interactive. Ship-flow does NOT invoke `/review`; instead the **content** (checklists) is snapshotted into `plugins/ship-flow/lib/review-checklists/` and ship-verify implements its own multi-specialist panel. |
-| `/land-and-deploy` | Post-merge deploy is repo's own concern (release-please / Fly.io / Vercel / Netlify / manual / none). ship-flow ends at PR creation. |
+| `/land-and-deploy` | Post-merge deployment is the repo's concern (release-please / Fly.io / Vercel / Netlify / manual / none). Ship Flow owns proof-backed entity closeout after the implementation PR merges, but not deployment. |
 | `/canary` | Same — post-deploy monitoring is repo's deploy-stack concern, not ship-flow's per-entity scope |
 | `/document-release` | Repo's release-notes mechanism (e.g., release-please auto-generates) owns this. Out of ship-flow per-entity scope. |
 | `/setup-deploy` | Repo-level deploy configuration, captain runs at repo onboarding (once), not per ship-flow entity |
@@ -199,7 +199,7 @@ concerns owned by repo, naming collision with ship-flow stages, or out-of-scope.
 
 **Post-merge deploy chain (repo's own concern, not ship-flow)**:
 - `/land-and-deploy`, `/canary`, `/document-release`, `/setup-deploy`
-- These belong to whatever post-merge automation the repo uses (release-please / Fly.io / Vercel / Netlify / manual / none). ship-flow ends at PR creation.
+- These belong to whatever post-merge automation the repo uses (release-please / Fly.io / Vercel / Netlify / manual / none). Ship Flow continues through entity closeout after the implementation PR merges; deployment and monitoring remain outside that closeout boundary.
 
 **Session-level safety (conflicts with worktree scope)**:
 - `/freeze`, `/unfreeze`, `/guard`, `/careful`
@@ -318,8 +318,58 @@ captain intent (vague / concept / issue)
      └── ship-final → ship.md + gh pr create
            │
            ▼
-     captain merge → pitch done, ROADMAP flip to shipped
+     captain merges implementation PR
+           │
+           ▼
+     proof-backed post-merge closeout
+           │
+           ▼
+     debrief + ship.md + archive + closeout receipt + ROADMAP Shipped
 ```
+
+### Post-merge closeout
+
+After the implementation PR reports `MERGED`, the First Officer runs `merged-pr-closeout-reconciler.sh` with the workflow directory and entity reference. The reconciler proves the authoritative landing topology and patch before it writes closeout state. `--closeout-mode direct` is the default; `--closeout-mode pull-request` is the optional reviewable path.
+
+Run either mode from the adopting repository on a clean, authoritative `main` worktree. The workflow directory must be inside that Git repository. For the native terminal bundle described here, the implementation PR must expose a complete merged landing envelope, and the `spacedock` status helper must be executable on `PATH` (or supplied through `STATUS_BIN` / `SHIP_FLOW_STATUS_BIN`). The default `gh` provider also requires an authenticated GitHub CLI.
+
+```bash
+# Claude supplies CLAUDE_PLUGIN_ROOT. A Codex/runtime caller exports
+# CODEX_PLUGIN_ROOT as the installed or cached ship-flow plugin root it resolved.
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-${CODEX_PLUGIN_ROOT:-}}"
+: "${PLUGIN_ROOT:?set CLAUDE_PLUGIN_ROOT or CODEX_PLUGIN_ROOT to the installed ship-flow plugin root}"
+test -f "$PLUGIN_ROOT/bin/merged-pr-closeout-reconciler.sh" || {
+  printf 'ship-flow reconciler not found under PLUGIN_ROOT=%s\n' "$PLUGIN_ROOT" >&2
+  exit 1
+}
+
+# Replace these two values with the adopted workflow directory and entity ref.
+WORKFLOW_DIR=docs/ship-flow
+ENTITY_REF=123-feature-slug
+
+# Direct terminal commit on local main (the default mode).
+bash "$PLUGIN_ROOT/bin/merged-pr-closeout-reconciler.sh" \
+  --workflow-dir "$WORKFLOW_DIR" \
+  --entity "$ENTITY_REF" \
+  --closeout-mode direct \
+  --pr-provider gh
+
+# Reviewable terminal publication through a deterministic closeout PR.
+bash "$PLUGIN_ROOT/bin/merged-pr-closeout-reconciler.sh" \
+  --workflow-dir "$WORKFLOW_DIR" \
+  --entity "$ENTITY_REF" \
+  --closeout-mode pull-request \
+  --pr-provider gh
+```
+
+Choose **direct** when repository policy permits the First Officer to create the terminal commit on clean authoritative `main`. Direct mode creates that commit locally; it does not push or otherwise publish it. Choose **pull-request** when terminal artifacts must be reviewed or published through protected-branch policy. That mode requires a writable `origin`, creates or resumes one deterministic closeout branch/PR, and remains awaiting until the exact non-draft head merges.
+
+- **Direct authority** — the atomic bundle helper lands the terminal projection on authoritative `main` in one Git commit.
+- **Pull-request authority** — the same bundle helper builds one deterministic closeout head. Authoritative `main` remains in `closeout-pr-awaiting-merge` until that exact non-draft head is merged and its landed receipt bytes validate.
+- **Terminal bundle** — final `ship.md`, schema-v1 debrief, archived entity, path-derived closeout receipt, and one ROADMAP `Shipped` row move together. The receipt's `transaction.main_commit` binds the implementation PR's verified landing anchor, not the projection commit or closeout-PR merge SHA.
+- **Resumability** — startup classifies validated awaiting or landed receipts before active-entity lookup. Reruns resume the same head/PR, stop on ambiguous or tampered proof, and return `closeout-pr-terminal-noop` only when the landed terminal bundle validates.
+
+Deployment, release-note work, and canary monitoring remain outside closeout authority. After the implementation PR merges, repository policy may start them independently—including concurrently while closeout is pending—rather than waiting for entity closeout.
 
 **Captain-in-loop** only at: `/shape` confirm gate, `/verify` BLOCKING findings, PR merge, explicit captain interrupt. All other transitions are autonomous (FO Discipline in INVARIANTS.md).
 
@@ -482,7 +532,7 @@ SendMessage(to: "verifier", message: "...verify brief with execute.md...")
 
 **Commissioning to a new repo (0.7.0 adoption note):** Adopting ship-flow is **not self-contained in 0.7.0**. The intended bridge is `spacebridge:workflow-adopt`, which discovers `workflow-template.yaml` and delegates to `spacedock:commission` to scaffold `docs/<wf>/README.md` with `entry-point:` frontmatter + initial `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` with section tags for `patch-map.sh`. This requires the `spacebridge` plugin. Without spacebridge: scaffold `docs/<wf>/` manually from `plugins/ship-flow/workflow-template.yaml`, or run `/spacedock:commission` with ship-flow directly. Self-contained adoption is a planned later milestone.
 
-**Debrief convention**: after each shipped pitch, run `spacedock:debrief` to write a session debrief under `docs/<wf>/_debriefs/<date>-<seq>.md`. Debriefs follow the schema in `references/debrief-schema.yaml` (required sections: `## Shipped`, `## Filed (backlog)`, `## Issues — Workflow`, `## Issues — Spacedock`, `## Non-PR commits (workflow-only)`, `## Observations`, `## Decisions`, `## What's Next`). When a session had review-loop churn, CI reruns, stale-head problems, or workflow surprise, apply `_mods/debrief-guardrail-harvest.md` and include `## Guardrail Harvest`. The `spacebridge:debrief-promote` skill aggregates cross-project debrief patterns and promotes STRONG signals back into plugin canonical docs.
+**Debrief convention**: native post-merge closeout writes the entity's required debrief under `docs/<wf>/_debriefs/<date>-<seq>.md` as part of the terminal bundle; do not run `spacedock:debrief` to supply that closeout artifact. Use `spacedock:debrief` only when an additional session-level learning record is useful. Both follow `references/debrief-schema.yaml` (required sections: `## Shipped`, `## Filed (backlog)`, `## Issues — Workflow`, `## Issues — Spacedock`, `## Non-PR commits (workflow-only)`, `## Observations`, `## Decisions`, `## What's Next`). When a session had review-loop churn, CI reruns, stale-head problems, or workflow surprise, apply `_mods/debrief-guardrail-harvest.md` to the additional learning record and include `## Guardrail Harvest`. The `spacebridge:debrief-promote` skill aggregates cross-project debrief patterns and promotes STRONG signals back into plugin canonical docs.
 
 **Canonical docs section-tagging contract** (required for Layer C primitive compatibility):
 ```markdown
