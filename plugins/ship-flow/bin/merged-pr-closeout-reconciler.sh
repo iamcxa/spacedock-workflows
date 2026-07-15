@@ -205,16 +205,27 @@ read_provider_fixture() {
   fi
 }
 
-read_provider_gh() {
+ensure_gh_repository() {
   command -v gh >/dev/null 2>&1 || reject_input "missing-gh" "gh CLI is not available"
-  local output repo_rc=0 pr_rc=0 gh_repo_root cdup
+  local resolved_repository repo_rc=0 gh_repo_root cdup
+  if [ -n "${repository:-}" ]; then
+    [[ "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] ||
+      reject_input landing-patch-equivalence-failed "authoritative GitHub repository identity is unavailable"
+    return 0
+  fi
   cdup="$(git -C "$workflow_dir" rev-parse --show-cdup 2>/dev/null || true)"
   gh_repo_root="${workflow_dir%/}/${cdup}"
-  repository="$(cd -L "$gh_repo_root" && gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)" || repo_rc=$?
-  if [ "$repo_rc" -ne 0 ] || [ -z "$repository" ] ||
-     ! [[ "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+  resolved_repository="$(cd -L "$gh_repo_root" && gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)" || repo_rc=$?
+  if [ "$repo_rc" -ne 0 ] || [ -z "$resolved_repository" ] ||
+     ! [[ "$resolved_repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
     reject_input landing-patch-equivalence-failed "authoritative GitHub repository identity is unavailable"
   fi
+  repository="$resolved_repository"
+}
+
+read_provider_gh() {
+  local output pr_rc=0
+  ensure_gh_repository
   output="$(gh pr view "$pr_number" --repo "$repository" \
     --json number,state,mergedAt,headRefName,baseRefName,url,mergeCommit,commits \
     --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")", "landing_anchor=\(.mergeCommit.oid // "")", "source_commits=\([.commits[].oid] | join(","))", "pr_commit_count=\(.commits | length)"] | .[]')" || pr_rc=$?
@@ -402,17 +413,25 @@ acquire_source_objects() {
 }
 
 prepare_receipt_source_commits() {
-  local receipt_path="$1" receipt_strategy receipt_pr structural_out structural_rc=0
+  local receipt_path="$1" receipt_strategy receipt_pr receipt_repository structural_out structural_rc=0
+  local receipt_repository_fold repository_fold
   structural_out="$(mktemp)"
   python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --allow-any-path >"$structural_out" 2>&1 || structural_rc=$?
   if [ "$structural_rc" -ne 0 ]; then cat "$structural_out"; rm -f "$structural_out"; return "$structural_rc"; fi
   rm -f "$structural_out"
-  IFS=$'\t' read -r receipt_strategy receipt_pr < <(python3 - "$receipt_path" <<'PY'
+  IFS=$'\t' read -r receipt_strategy receipt_pr receipt_repository < <(python3 - "$receipt_path" <<'PY'
 import json,sys
 r=json.load(open(sys.argv[1]))
-print(r["landing_proof"]["strategy"],r["identity"]["implementation_pr"],sep="\t")
+print(r["landing_proof"]["strategy"],r["identity"]["implementation_pr"],r["identity"]["repository"],sep="\t")
 PY
 )
+  if [ "$pr_provider" = gh ]; then
+    ensure_gh_repository
+    receipt_repository_fold="$(printf '%s' "$receipt_repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+    repository_fold="$(printf '%s' "$repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+    [ "$receipt_repository_fold" = "$repository_fold" ] ||
+      reject_input closeout-sentinel-identity-mismatch "receipt repository differs from the authoritative GitHub repository"
+  fi
   [ "$receipt_strategy" = squash ] || return 0
   if [ -z "${source_commits:-}" ] || [ "${pr_number:-}" != "$receipt_pr" ]; then
     pr_number="$receipt_pr"
@@ -620,8 +639,8 @@ read_closeout_pr_fixture() {
 
 read_closeout_pr_gh() {
   local number="$1" output
-  command -v gh >/dev/null 2>&1 || reject_input missing-gh "gh CLI is not available"
-  output="$(gh pr view "$number" --json number,state,headRefName,headRefOid,isDraft --jq '[.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")')" ||
+  ensure_gh_repository
+  output="$(gh pr view "$number" --repo "$repository" --json number,state,headRefName,headRefOid,isDraft --jq '[.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")')" ||
     prompt_captain closeout-pr-awaiting-merge "deterministic closeout PR cannot be resolved"
   IFS='|' read -r closeout_pr_number closeout_pr_state closeout_pr_head closeout_pr_remote_oid closeout_pr_is_draft <<<"$output"
 }
@@ -1167,7 +1186,8 @@ resolve_or_create_closeout_pr() {
     fi
     return 0
   fi
-  found="$(gh pr list --head "$deterministic_head" --state all --json number,state,headRefName,headRefOid,isDraft --jq '.[] | [.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")')"
+  ensure_gh_repository
+  found="$(gh pr list --head "$deterministic_head" --state all --json number,state,headRefName,headRefOid,isDraft --jq '.[] | [.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")' --repo "$repository")"
   count="$(printf '%s\n' "$found" | awk 'NF{n++} END{print n+0}')"
   [ "$count" -le 1 ] || reject_input closeout-checkpoint-conflict "multiple PRs use the deterministic closeout head"
   if [ "$count" = 1 ]; then
@@ -1179,7 +1199,7 @@ resolve_or_create_closeout_pr() {
     return 0
   fi
   ensure_initial_closeout_head "$deterministic_head" "$receipt_relative"
-  created_url="$(gh pr create --draft --head "$deterministic_head" --base "$base_ref" --title "Close out: $title" --body "Receipt-bound post-merge closeout for implementation PR #${pr_number}.")"
+  created_url="$(gh pr create --draft --head "$deterministic_head" --base "$base_ref" --title "Close out: $title" --body "Receipt-bound post-merge closeout for implementation PR #${pr_number}." --repo "$repository")"
   created_url="${created_url%/}"; created_tail="${created_url##*/}"
   closeout_pr_number="$(normalize_pr_number "$created_tail" || true)"
   [ -n "$closeout_pr_number" ] || reject_input closeout-checkpoint-conflict "created closeout PR number cannot be parsed"
@@ -1247,7 +1267,8 @@ PY
   if [ "$closeout_pr_is_draft" = true ]; then
     fail_once ready
     if [ "$pr_provider" = gh ]; then
-      gh pr ready "$bound_pr" >/dev/null
+      ensure_gh_repository
+      gh pr ready "$bound_pr" --repo "$repository" >/dev/null
     else
       [ -z "${SHIP_FLOW_CLOSEOUT_PR_LOG:-}" ] || printf 'ready %s %s\n' "$bound_pr" "$terminal_sha" >>"$SHIP_FLOW_CLOSEOUT_PR_LOG"
       set_registry_field "$registry" is_draft false

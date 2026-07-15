@@ -739,7 +739,22 @@ field() {
   awk -F= -v key="$1" '$1==key{sub(/^[^=]*=/, ""); print; exit}' "$SHIP_FLOW_R3_PROVIDER_FILE"
 }
 
+require_repo_binding() {
+  local expected="${SHIP_FLOW_R3_EXPECT_REPOSITORY:-$(field repository)}" seen="" previous=""
+  for arg in "$@"; do
+    if [ "$previous" = --repo ]; then seen="$arg"; break; fi
+    previous="$arg"
+  done
+  if [ -z "$seen" ] || [ "$seen" != "$expected" ]; then
+    printf 'provider repository binding mismatch: expected=%s actual=%s args=%s\n' \
+      "$expected" "${seen:-missing}" "$*" >&2
+    exit 64
+  fi
+  [ -z "${SHIP_FLOW_R3_GH_REPO_LOG:-}" ] || printf 'repo=%s args=%s\n' "$seen" "$*" >>"$SHIP_FLOW_R3_GH_REPO_LOG"
+}
+
 if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
+  require_repo_binding "$@"
   printf '%s\n' \
     'provider=gh' \
     "number=$(field number)" \
@@ -755,12 +770,29 @@ if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
 fi
 
 if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 141 ]; then
+  require_repo_binding "$@"
   printf '%s|%s|%s|%s|%s\n' \
     "$(field closeout_pr_number)" \
     "$(field closeout_pr_state)" \
     "$(field closeout_pr_head)" \
     "$(field closeout_pr_remote_oid)" \
     "$(field closeout_pr_is_draft)"
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = list ]; then
+  require_repo_binding "$@"
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = create ]; then
+  require_repo_binding "$@"
+  printf '%s\n' 'https://github.com/example/repo/pull/141'
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = ready ] && [ "${3:-}" = 141 ]; then
+  require_repo_binding "$@"
   exit 0
 fi
 
@@ -1181,6 +1213,121 @@ EOF
 https|HTTPS://GitHub.com/Example/Repo.git
 scp|git@GitHub.com:Example/Repo.git
 ssh|SSH://git@GitHub.com/Example/Repo.git
+EOF
+}
+
+run_feedback_r4_foreign_cwd_case() {
+  local gh_bin_dir="$TMP_DIR/feedback-r4-gh-bin" gh_log="$TMP_DIR/feedback-r4-gh.log"
+  local repo_log="$TMP_DIR/feedback-r4-gh-repo.log" outside="$TMP_DIR/feedback-r4-outside"
+  local setup origin repo provider source_commits before_head remote_before remote_after rc
+  local receipt deterministic_head terminal_oid registry label expected_reason negative_provider bad_oid
+  mkdir -p "$gh_bin_dir" "$outside"
+  write_feedback_r3_b1_gh "$gh_bin_dir/gh"
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r4-foreign-optional)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  rc="$(cd "$outside" && SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r4-optional.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    r4-optional: /' "$TMP_DIR/feedback-r4-optional.out"; fi
+  assert_exit 'R4 foreign-CWD non-dry-run optional construction succeeds' 0 "$rc"
+  assert_contains 'R4 foreign-CWD optional construction awaits merge' '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/feedback-r4-optional.out"
+  assert_feedback_r3_b1_objects_present 'R4 foreign-CWD optional construction retains exact implementation source objects' "$repo" "$source_commits"
+  assert_contains 'R4 implementation PR view binds provider repository' '^repo=example/repo args=pr view 131 --repo example/repo ' "$repo_log"
+  assert_contains 'R4 optional PR list binds provider repository' '^repo=example/repo args=pr list ' "$repo_log"
+  assert_contains 'R4 optional PR create binds provider repository' '^repo=example/repo args=pr create ' "$repo_log"
+  assert_contains 'R4 optional PR ready binds provider repository' '^repo=example/repo args=pr ready 141 ' "$repo_log"
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r4-foreign-receipt)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  git -C "$repo" fetch -q --no-tags origin refs/pull/131/head
+  deterministic_head="ship-closeout/$(python3 - <<'PY'
+import hashlib
+print(hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"merged-fixture-entity",b"131"))).hexdigest())
+PY
+)"
+  printf '%s\n' 'closeout_pr_number=141' 'closeout_pr_state=OPEN' \
+    "closeout_pr_head=$deterministic_head" >>"$provider"
+  registry="$TMP_DIR/feedback-r4-foreign-receipt.registry"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" \
+    run_helper "$repo" "$TMP_DIR/feedback-r4-receipt-seed.out" \
+      --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$provider" --closeout-mode pull-request)"
+  assert_exit 'R4 receipt fixture seeds an exact OPEN replay candidate' 0 "$rc"
+  receipt="$(find "$repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head")"
+  printf '%s\n' "closeout_pr_remote_oid=$terminal_oid" 'closeout_pr_is_draft=false' >>"$provider"
+  rm -f "$repo/.git/FETCH_HEAD"
+  git -C "$repo" reflog expire --expire=now --all
+  git -C "$repo" gc -q --prune=now
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  rc="$(cd "$outside" && SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r4-open.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R4 foreign-CWD receipt-only OPEN replay succeeds' 0 "$rc"
+  assert_contains 'R4 foreign-CWD receipt-only OPEN replay awaits merge' '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/feedback-r4-open.out"
+  assert_contains 'R4 receipt-only OPEN view binds provider repository' '^repo=example/repo args=pr view 141 ' "$repo_log"
+  remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$remote_before" = "$remote_after" ]; then
+    record_pass 'R4 foreign-CWD receipt-only OPEN replay is mutation-free'
+  else
+    record_fail 'R4 foreign-CWD receipt-only OPEN replay is mutation-free'
+  fi
+
+  git -C "$repo" merge -q --no-ff "$deterministic_head" -m 'fixture: land R4 optional terminal head'
+  perl -0pi -e 's/closeout_pr_state=OPEN/closeout_pr_state=MERGED/' "$provider"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  rc="$(cd "$outside" && SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r4-merged.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R4 foreign-CWD receipt-only MERGED replay succeeds' 0 "$rc"
+  assert_contains 'R4 foreign-CWD receipt-only MERGED replay is terminal no-op' '^reason=closeout-pr-terminal-noop$' "$TMP_DIR/feedback-r4-merged.out"
+  assert_contains 'R4 receipt-only MERGED view binds provider repository' '^repo=example/repo args=pr view 141 ' "$repo_log"
+  remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$remote_before" = "$remote_after" ]; then
+    record_pass 'R4 foreign-CWD receipt-only MERGED replay is mutation-free'
+  else
+    record_fail 'R4 foreign-CWD receipt-only MERGED replay is mutation-free'
+  fi
+
+  while IFS='|' read -r label expected_reason; do
+    setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r4-negative-$label")"
+    IFS='|' read -r origin repo negative_provider <<<"$setup"
+    case "$label" in
+      repository) perl -0pi -e 's#repository=example/repo#repository=wrong/repository#' "$negative_provider" ;;
+      pr) perl -0pi -e 's/number=131\n/number=132\n/' "$negative_provider" ;;
+      head)
+        bad_oid="$(git -C "$repo" rev-parse HEAD)"
+        perl -0pi -e "s/source_commits=[^\n]*/source_commits=$bad_oid,$bad_oid/" "$negative_provider"
+        ;;
+      count) perl -0pi -e 's/pr_commit_count=2\n/pr_commit_count=3\n/' "$negative_provider" ;;
+    esac
+    before_head="$(git -C "$repo" rev-parse HEAD)"
+    remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+    rc="$(cd "$outside" && SHIP_FLOW_R3_PROVIDER_FILE="$negative_provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+      SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" \
+      run_helper_with_path "$repo" "$TMP_DIR/feedback-r4-negative-$label.out" "$gh_bin_dir:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    assert_exit "R4 wrong provider $label fails closed" 2 "$rc"
+    assert_contains "R4 wrong provider $label reports stable reason" "^reason=${expected_reason}$" "$TMP_DIR/feedback-r4-negative-$label.out"
+    remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+    if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$remote_before" = "$remote_after" ]; then
+      record_pass "R4 wrong provider $label preserves local and remote refs"
+    else
+      record_fail "R4 wrong provider $label preserves local and remote refs"
+    fi
+  done <<'EOF'
+repository|landing-patch-equivalence-failed|
+pr|pr-number-mismatch|
+head|landing-patch-equivalence-failed|
+count|landing-patch-equivalence-failed|
 EOF
 }
 
@@ -2333,7 +2480,9 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r3-b1 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r4-b1 ]; then
+    run_feedback_r4_foreign_cwd_case
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r3-b1 ]; then
     run_feedback_r3_b1_main_only_case
     run_feedback_r3_review_blockers_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-b2-integration ]; then
