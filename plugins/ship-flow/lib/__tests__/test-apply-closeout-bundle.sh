@@ -18,6 +18,10 @@ assert_eq() {
   local desc="$1" expected="$2" actual="$3"
   if [ "$expected" = "$actual" ]; then pass "$desc"; else fail "$desc (expected ${expected}, got ${actual})"; fi
 }
+assert_ne() {
+  local desc="$1" unexpected="$2" actual="$3"
+  if [ "$unexpected" != "$actual" ]; then pass "$desc"; else fail "$desc (unexpected ${unexpected})"; fi
+}
 assert_contains() {
   local desc="$1" pattern="$2" file="$3"
   if grep -qE "$pattern" "$file"; then pass "$desc"; else fail "$desc (missing ${pattern})"; fi
@@ -37,13 +41,19 @@ tree_hash() {
 
 write_source() {
   local repo="$1"
-  mkdir -p "$repo/docs/ship-flow/widget-closeout"
+  mkdir -p "$repo/docs/ship-flow/widget-closeout/ledgers"
   printf '%s\n' \
     '---' 'slug: widget-closeout' 'title: Widget closeout' 'status: ship' 'pr: "#40"' \
     'worktree:' 'completed:' 'verdict:' 'closeout_owner: true' '---' '' '# Widget closeout' \
     >"$repo/docs/ship-flow/widget-closeout/index.md"
   printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$repo/docs/ship-flow/widget-closeout/review.md"
   printf '%s\n' '# Ship' '' '### Verdict' 'merge_method_intent: rebase' 'pr: "#40"' >"$repo/docs/ship-flow/widget-closeout/ship.md"
+  printf '%s\n' '# Shape' '' 'Preserve shape evidence byte-for-byte.' >"$repo/docs/ship-flow/widget-closeout/shape.md"
+  printf '%s\n' '# Design' '' 'Preserve design evidence byte-for-byte.' >"$repo/docs/ship-flow/widget-closeout/design.md"
+  printf '%s\n' '# Plan' '' 'Preserve plan evidence byte-for-byte.' >"$repo/docs/ship-flow/widget-closeout/plan.md"
+  printf '%s\n' '# Execute' '' 'Preserve execute evidence byte-for-byte.' >"$repo/docs/ship-flow/widget-closeout/execute.md"
+  printf '%s\n' '# Verify' '' 'Preserve verify evidence byte-for-byte.' >"$repo/docs/ship-flow/widget-closeout/verify.md"
+  printf '%s\n' 'records:' '  - task: T3' '    status: green' >"$repo/docs/ship-flow/widget-closeout/ledgers/tdd.yaml"
 }
 
 setup_repo() {
@@ -52,8 +62,10 @@ setup_repo() {
   git -C "$repo" config user.email closeout@example.test
   git -C "$repo" config user.name 'Closeout Fixture'
   write_source "$repo"
+  printf '%s\n' 'docs/ship-flow/widget-closeout/ignored-private.txt' >"$repo/.gitignore"
+  printf '%s\n' 'ignored local bytes must not enter archive' >"$repo/docs/ship-flow/widget-closeout/ignored-private.txt"
   printf '%s\n' '# Roadmap' '| widget-closeout | Outside bounded sections |' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' '| widget-closeout | Widget closeout |' '| neighbor | widget-closeout |' '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
-  git -C "$repo" add -- ROADMAP.md docs/ship-flow/widget-closeout
+  git -C "$repo" add -- .gitignore ROADMAP.md docs/ship-flow/widget-closeout
   git -C "$repo" commit -qm 'fixture: source entity'
 }
 
@@ -150,6 +162,13 @@ else
 
   repo="$TMP_DIR/success"; bundle="$TMP_DIR/success-bundle"
   setup_repo "$repo"; make_bundle "$repo" "$bundle"
+  source_review_hash="$(sha256_file "$repo/docs/ship-flow/widget-closeout/review.md")"
+  source_shape_hash="$(sha256_file "$repo/docs/ship-flow/widget-closeout/shape.md")"
+  source_design_hash="$(sha256_file "$repo/docs/ship-flow/widget-closeout/design.md")"
+  source_plan_hash="$(sha256_file "$repo/docs/ship-flow/widget-closeout/plan.md")"
+  source_execute_hash="$(sha256_file "$repo/docs/ship-flow/widget-closeout/execute.md")"
+  source_verify_hash="$(sha256_file "$repo/docs/ship-flow/widget-closeout/verify.md")"
+  source_ledger_hash="$(sha256_file "$repo/docs/ship-flow/widget-closeout/ledgers/tdd.yaml")"
   before_commits="$(git -C "$repo" rev-list --count HEAD)"
   rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/success.out")"
   if [ "$rc" != 0 ]; then sed 's/^/    helper: /' "$TMP_DIR/success.out"; fi
@@ -160,6 +179,14 @@ else
   if [ ! -e "$repo/docs/ship-flow/widget-closeout" ]; then pass 'active entity removed atomically'; else fail 'active entity removed atomically'; fi
   if [ -f "$repo/docs/ship-flow/_archive/widget-closeout/index.md" ]; then pass 'archived entity landed'; else fail 'archived entity landed'; fi
   if [ -f "$repo/docs/ship-flow/_archive/widget-closeout/ship.md" ]; then pass 'final ship landed'; else fail 'final ship landed'; fi
+  assert_eq 'review evidence is archived byte-for-byte' "$source_review_hash" "$(sha256_file "$repo/docs/ship-flow/_archive/widget-closeout/review.md" 2>/dev/null || true)"
+  assert_eq 'shape evidence is archived byte-for-byte' "$source_shape_hash" "$(sha256_file "$repo/docs/ship-flow/_archive/widget-closeout/shape.md" 2>/dev/null || true)"
+  assert_eq 'design evidence is archived byte-for-byte' "$source_design_hash" "$(sha256_file "$repo/docs/ship-flow/_archive/widget-closeout/design.md" 2>/dev/null || true)"
+  assert_eq 'plan evidence is archived byte-for-byte' "$source_plan_hash" "$(sha256_file "$repo/docs/ship-flow/_archive/widget-closeout/plan.md" 2>/dev/null || true)"
+  assert_eq 'execute evidence is archived byte-for-byte' "$source_execute_hash" "$(sha256_file "$repo/docs/ship-flow/_archive/widget-closeout/execute.md" 2>/dev/null || true)"
+  assert_eq 'verify evidence is archived byte-for-byte' "$source_verify_hash" "$(sha256_file "$repo/docs/ship-flow/_archive/widget-closeout/verify.md" 2>/dev/null || true)"
+  assert_eq 'nested TDD ledger is archived byte-for-byte' "$source_ledger_hash" "$(sha256_file "$repo/docs/ship-flow/_archive/widget-closeout/ledgers/tdd.yaml" 2>/dev/null || true)"
+  if [ ! -e "$repo/docs/ship-flow/_archive/widget-closeout/ignored-private.txt" ]; then pass 'ignored untracked bytes are not archived'; else fail 'ignored untracked bytes are not archived'; fi
   if [ -f "$repo/docs/ship-flow/_debriefs/2026-07-15-01.md" ]; then pass 'debrief landed'; else fail 'debrief landed'; fi
   assert_eq 'exactly one Shipped row landed' 1 "$(grep -c '^| widget-closeout | Widget closeout | 2026-07-15 |$' "$repo/ROADMAP.md")"
   assert_eq 'ROADMAP preserves exact slug row outside bounded sections' 1 "$(grep -c '^| widget-closeout | Outside bounded sections |$' "$repo/ROADMAP.md")"
@@ -222,6 +249,33 @@ else
   assert_contains 'injected failure is stable conflict' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/fault.out"
   assert_eq 'injected failure restores HEAD' "$before_head" "$(git -C "$repo" rev-parse HEAD)"
   assert_eq 'injected failure restores index and tree' "$before_tree" "$(tree_hash "$repo")"
+
+  repo="$TMP_DIR/post-commit-signal"; bundle="$TMP_DIR/post-commit-signal-bundle"
+  setup_repo "$repo"; make_bundle "$repo" "$bundle"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  signal_bin="$TMP_DIR/post-commit-signal-bin"
+  mkdir -p "$signal_bin"
+  real_git="$(command -v git)"
+  # shellcheck disable=SC2016 # emitted wrapper expands these variables at runtime
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'saw_commit=no' 'for arg in "$@"; do [ "$arg" = commit ] && saw_commit=yes; done' \
+    "'$real_git' \"\$@\"" 'rc=$?' \
+    '[ "$rc" -eq 0 ] && [ "$saw_commit" = yes ] && kill -TERM "$PPID"' \
+    'exit "$rc"' >"$signal_bin/git"
+  chmod +x "$signal_bin/git"
+  saved_path="$PATH"
+  PATH="$signal_bin:$PATH"
+  export PATH
+  rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/post-commit-signal.out")"
+  PATH="$saved_path"
+  export PATH
+  assert_nonzero 'signal immediately after durable commit interrupts first invocation' "$rc"
+  assert_ne 'post-commit signal preserves the durable new HEAD' "$before_head" "$(git -C "$repo" rev-parse HEAD)"
+  assert_eq 'post-commit signal leaves committed worktree coherent' '' "$(git -C "$repo" status --porcelain --untracked-files=all)"
+  if [ -f "$repo/docs/ship-flow/_closeouts/$(basename "$(find "$bundle/docs/ship-flow/_closeouts" -name '*.json' -print -quit)")" ]; then pass 'post-commit signal preserves committed receipt'; else fail 'post-commit signal preserves committed receipt'; fi
+  rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/post-commit-rerun.out")"
+  assert_eq 'post-commit signal is safely rerunnable' 0 "$rc"
+  assert_contains 'post-commit signal rerun detects applied receipt' '^state=already_applied$' "$TMP_DIR/post-commit-rerun.out"
 
   repo="$TMP_DIR/roadmap-conflict"; bundle="$TMP_DIR/roadmap-conflict-bundle"
   setup_repo "$repo"; make_bundle "$repo" "$bundle"
@@ -291,6 +345,20 @@ else
   assert_eq 'external sentinel remains byte-identical' "$sentinel_hash" "$(sha256_file "$external/sentinel.txt")"
   if [ ! -e "$external/2026-07-15-01.md" ]; then pass 'destination symlink creates no external output'; else fail 'destination symlink creates no external output'; fi
   if [ ! -e "$external/write-observed" ]; then pass 'destination symlink is rejected before any external write'; else fail 'destination symlink is rejected before any external write'; fi
+
+  repo="$TMP_DIR/source-symlink"; bundle="$TMP_DIR/source-symlink-bundle"
+  setup_repo "$repo"; make_bundle "$repo" "$bundle"
+  external="$TMP_DIR/source-symlink-external"
+  printf '%s\n' 'external source bytes must never be followed' >"$external"
+  ln -s "$external" "$repo/docs/ship-flow/widget-closeout/external-evidence"
+  git -C "$repo" add -- docs/ship-flow/widget-closeout/external-evidence
+  git -C "$repo" commit -qm 'fixture: tracked source symlink'
+  before_head="$(git -C "$repo" rev-parse HEAD)"; before_tree="$(tree_hash "$repo")"
+  rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/source-symlink.out")"
+  assert_nonzero 'tracked source symlink stops before archive mutation' "$rc"
+  assert_contains 'tracked source symlink reports stable sentinel reason' '^reason=closeout-sentinel-invalid$' "$TMP_DIR/source-symlink.out"
+  assert_eq 'tracked source symlink preserves HEAD' "$before_head" "$(git -C "$repo" rev-parse HEAD)"
+  assert_eq 'tracked source symlink preserves index and tree' "$before_tree" "$(tree_hash "$repo")"
 
   git -C "$repo" checkout -qb not-main
   rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/not-main.out")"

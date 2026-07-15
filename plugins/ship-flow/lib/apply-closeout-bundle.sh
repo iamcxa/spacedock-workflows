@@ -63,6 +63,60 @@ for raw in sys.argv[2:]:
 PY
 }
 
+validate_tracked_entity_tree() {
+  local repo_root="$1" active_relative="$2"
+  python3 - "$repo_root" "$active_relative" <<'PY'
+import os,stat,subprocess,sys
+repo,active=sys.argv[1:]
+prefix=active.rstrip("/")+"/"
+tracked=subprocess.check_output(
+    ["git","-C",repo,"ls-files","-z","--",active]
+).split(b"\0")
+tracked=[os.fsdecode(path) for path in tracked if path]
+def reject(detail):
+    print("verdict=STOP")
+    print("reason=closeout-sentinel-invalid")
+    print("detail="+detail)
+    raise SystemExit(1)
+if not tracked:
+    reject("active entity has no tracked files")
+for relative in tracked:
+    if not relative.startswith(prefix):
+        reject("tracked entity path is outside the active folder: "+relative)
+    current=repo
+    for part in relative.split("/"):
+        current=os.path.join(current,part)
+        try: mode=os.lstat(current).st_mode
+        except FileNotFoundError:
+            reject("tracked entity path is missing: "+relative)
+        if stat.S_ISLNK(mode):
+            reject("tracked entity path contains a symlink: "+relative)
+    if not stat.S_ISREG(mode):
+        reject("tracked entity path is not a regular file: "+relative)
+PY
+}
+
+copy_tracked_entity_tree() {
+  local repo_root="$1" active_relative="$2" archive_root_relative="$3"
+  python3 - "$repo_root" "$active_relative" "$archive_root_relative" <<'PY'
+import os,shutil,subprocess,sys
+repo,active,archive=sys.argv[1:]
+prefix=active.rstrip("/")+"/"
+tracked=subprocess.check_output(
+    ["git","-C",repo,"ls-files","-z","--",active]
+).split(b"\0")
+for encoded in tracked:
+    if not encoded: continue
+    relative=os.fsdecode(encoded)
+    tail=relative[len(prefix):]
+    source=os.path.join(repo,relative)
+    destination=os.path.join(repo,archive,tail)
+    os.makedirs(os.path.dirname(destination),exist_ok=True)
+    shutil.copyfile(source,destination)
+    shutil.copymode(source,destination)
+PY
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo-root) REPO_ROOT="${2:-}"; shift 2 ;;
@@ -122,9 +176,13 @@ SHIP_RELATIVE="${RECEIPT_FIELDS[5]}"
 ARCHIVE_RELATIVE="${RECEIPT_FIELDS[6]}"
 PROOF_HASH="${RECEIPT_FIELDS[7]}"
 for relative in "$DEBRIEF_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE"; do safe_relative "$relative" || stop closeout-sentinel-invalid "receipt output path is unsafe"; done
+ARCHIVE_ROOT_RELATIVE="${ARCHIVE_RELATIVE%/index.md}"
+[ "$ARCHIVE_RELATIVE" = "$ARCHIVE_ROOT_RELATIVE/index.md" ] || stop closeout-sentinel-invalid "archived entity output must be the canonical index path"
+[ "$SHIP_RELATIVE" = "$ARCHIVE_ROOT_RELATIVE/ship.md" ] || stop closeout-sentinel-invalid "ship output must share the canonical archive folder"
+[ "$ARCHIVE_ROOT_RELATIVE" = "${RECEIPT_FIELDS[2]}/_archive/${RECEIPT_FIELDS[3]}" ] || stop closeout-sentinel-invalid "archive folder does not match receipt identity"
 
 preflight_lexical_paths "$BUNDLE_ROOT" ROADMAP.md "$RECEIPT_RELATIVE" "$DEBRIEF_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE" || exit $?
-preflight_lexical_paths "$REPO_ROOT" ROADMAP.md "$ACTIVE_ENTITY_RELATIVE" "$ACTIVE_ENTITY_RELATIVE/index.md" "$ACTIVE_ENTITY_RELATIVE/review.md" "$ACTIVE_ENTITY_RELATIVE/ship.md" "$RECEIPT_RELATIVE" "$DEBRIEF_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE" || exit $?
+preflight_lexical_paths "$REPO_ROOT" ROADMAP.md "$ACTIVE_ENTITY_RELATIVE" "$ACTIVE_ENTITY_RELATIVE/index.md" "$ACTIVE_ENTITY_RELATIVE/review.md" "$ACTIVE_ENTITY_RELATIVE/ship.md" "$RECEIPT_RELATIVE" "$DEBRIEF_RELATIVE" "$ARCHIVE_ROOT_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE" || exit $?
 
 if [ -f "$RECEIPT_PATH" ]; then
   SOURCE_PROOF="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proof_hash"])' "$RECEIPT_SOURCE")"
@@ -145,9 +203,11 @@ for relative in "$DEBRIEF_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE"; do
     stop closeout-projection-source-drift "terminal projection exists without the matching closeout receipt: $relative"
   fi
 done
+[ ! -e "$REPO_ROOT/$ARCHIVE_ROOT_RELATIVE" ] || stop closeout-projection-source-drift "terminal archive exists without the matching closeout receipt: $ARCHIVE_ROOT_RELATIVE"
 for source in index.md review.md ship.md; do
   [ -f "$REPO_ROOT/$ACTIVE_ENTITY_RELATIVE/$source" ] || stop closeout-stage-artifacts-incoherent "active source is missing: $source"
 done
+validate_tracked_entity_tree "$REPO_ROOT" "$ACTIVE_ENTITY_RELATIVE" || exit $?
 
 python3 - "$RECEIPT_SOURCE" "$REPO_ROOT" "$BUNDLE_ROOT" <<'PY'
 import hashlib,json,pathlib,re,sys
@@ -224,19 +284,37 @@ if ! grep -q '^status: done$' "$BUNDLE_ROOT/$ARCHIVE_RELATIVE" || ! grep -q '^ve
 fi
 
 APPLIED="no"
+durable_closeout_commit_exists() {
+  local landed_head parent subject
+  landed_head="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)"
+  [ -n "$landed_head" ] && [ "$landed_head" != "$CURRENT_HEAD" ] || return 1
+  parent="$(git -C "$REPO_ROOT" rev-parse "${landed_head}^" 2>/dev/null || true)"
+  [ "$parent" = "$CURRENT_HEAD" ] || return 1
+  subject="$(git -C "$REPO_ROOT" log -1 --format=%s "$landed_head" 2>/dev/null || true)"
+  [ "$subject" = "$COMMIT_AS" ] || return 1
+  git -C "$REPO_ROOT" show "${landed_head}:${RECEIPT_RELATIVE}" 2>/dev/null | cmp -s - "$RECEIPT_SOURCE"
+}
 rollback() {
-  local rc=$?
+  local rc="${1:-1}"
   if [ "$APPLIED" = yes ]; then
-    git -C "$REPO_ROOT" reset -q HEAD -- "$ACTIVE_ENTITY_RELATIVE" ROADMAP.md "$DEBRIEF_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE" "$RECEIPT_RELATIVE" 2>/dev/null || true
+    if durable_closeout_commit_exists; then
+      APPLIED="no"
+      exit "$rc"
+    fi
+    git -C "$REPO_ROOT" reset -q HEAD -- "$ACTIVE_ENTITY_RELATIVE" ROADMAP.md "$DEBRIEF_RELATIVE" "$ARCHIVE_ROOT_RELATIVE" "$RECEIPT_RELATIVE" 2>/dev/null || true
     git -C "$REPO_ROOT" restore --source=HEAD --worktree -- "$ACTIVE_ENTITY_RELATIVE" ROADMAP.md 2>/dev/null || true
-    rm -f "$REPO_ROOT/$DEBRIEF_RELATIVE" "$REPO_ROOT/$SHIP_RELATIVE" "$REPO_ROOT/$ARCHIVE_RELATIVE" "$REPO_ROOT/$RECEIPT_RELATIVE"
-    rmdir "$REPO_ROOT/$(dirname "$DEBRIEF_RELATIVE")" "$REPO_ROOT/$(dirname "$SHIP_RELATIVE")" "$REPO_ROOT/$(dirname "$RECEIPT_RELATIVE")" 2>/dev/null || true
+    rm -f "$REPO_ROOT/$DEBRIEF_RELATIVE" "$REPO_ROOT/$RECEIPT_RELATIVE"
+    rm -rf "$REPO_ROOT/${ARCHIVE_ROOT_RELATIVE:?}"
+    rmdir "$REPO_ROOT/$(dirname "$DEBRIEF_RELATIVE")" "$REPO_ROOT/$(dirname "$RECEIPT_RELATIVE")" 2>/dev/null || true
   fi
   exit "$rc"
 }
-trap rollback ERR INT TERM
+trap 'rollback $?' ERR
+trap 'rollback 130' INT
+trap 'rollback 143' TERM
 APPLIED="yes"
 mkdir -p "$REPO_ROOT/$(dirname "$DEBRIEF_RELATIVE")" "$REPO_ROOT/$(dirname "$SHIP_RELATIVE")" "$REPO_ROOT/$(dirname "$ARCHIVE_RELATIVE")" "$REPO_ROOT/$(dirname "$RECEIPT_RELATIVE")"
+copy_tracked_entity_tree "$REPO_ROOT" "$ACTIVE_ENTITY_RELATIVE" "$ARCHIVE_ROOT_RELATIVE"
 cp "$BUNDLE_ROOT/ROADMAP.md" "$REPO_ROOT/ROADMAP.md"
 cp "$BUNDLE_ROOT/$DEBRIEF_RELATIVE" "$REPO_ROOT/$DEBRIEF_RELATIVE"
 cp "$BUNDLE_ROOT/$SHIP_RELATIVE" "$REPO_ROOT/$SHIP_RELATIVE"
@@ -244,13 +322,13 @@ cp "$BUNDLE_ROOT/$ARCHIVE_RELATIVE" "$REPO_ROOT/$ARCHIVE_RELATIVE"
 cp "$RECEIPT_SOURCE" "$RECEIPT_PATH"
 rm -rf "$REPO_ROOT/${ACTIVE_ENTITY_RELATIVE:?}"
 
-git -C "$REPO_ROOT" add -- "$ACTIVE_ENTITY_RELATIVE" ROADMAP.md "$DEBRIEF_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE" "$RECEIPT_RELATIVE"
+git -C "$REPO_ROOT" add -- "$ACTIVE_ENTITY_RELATIVE" ROADMAP.md "$DEBRIEF_RELATIVE" "$ARCHIVE_ROOT_RELATIVE" "$RECEIPT_RELATIVE"
 python3 "$VALIDATOR" --receipt "$RECEIPT_PATH" --repo-root "$REPO_ROOT" --verify-outputs >/dev/null
 if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = before-commit ]; then
   printf 'verdict=STOP\nreason=closeout-checkpoint-conflict\ndetail=injected failure before atomic closeout commit\n'
   false
 fi
-git -C "$REPO_ROOT" commit -qm "$COMMIT_AS" -- "$ACTIVE_ENTITY_RELATIVE" ROADMAP.md "$DEBRIEF_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE" "$RECEIPT_RELATIVE"
+git -C "$REPO_ROOT" commit -qm "$COMMIT_AS" -- "$ACTIVE_ENTITY_RELATIVE" ROADMAP.md "$DEBRIEF_RELATIVE" "$ARCHIVE_ROOT_RELATIVE" "$RECEIPT_RELATIVE"
 APPLIED="no"
 trap - ERR INT TERM
 
