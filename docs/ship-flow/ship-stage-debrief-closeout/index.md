@@ -266,24 +266,24 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Pin round 5 to `63a47a3..f5e9dbc` at metadata-only `0ef493b`. Close R4-B1/R4-W1: repository discovery and all five PR operations bind authoritative `--repo`; foreign-CWD optional and OPEN/MERGED replay plus repo/PR/OID/count negatives pass 29/29 on Bash 3.2 and 5.3.
-- DONE: Reconfirm R3 acquisition/collision/signals/mixed-case/no-residue at 107/107 on both shells, R2 native/squash at 13/13 + 23/23, landing 94/94, receipt 85/85, bundle 78/78, static checks, C1–C15, and pinned launcher status.
-- FAILED: Recovery panel and an independent injected-failure reproduction find R5-B1. `gh pr list/create/ready` exit 71 without `verdict/reason/state`; list leaves one local checkpoint, create one plus a remote write, and ready two plus a remote write.
-- GATE: Round 5 returns only R5-B1 to execute and preserves all closed R2–R4 claims. Verdict is FAILED/PROMPT_CAPTAIN; no implementation, FO receipt/status/review/push/PR/merge/archive/todo/remote mutation occurred.
+- DONE: Pin round 6 to `f34ce34..2b63447` at metadata-only `f1fe2f4`. Verify all five R5 failure seams on Bash 3.2 and 5.3: canonical `PROMPT_CAPTAIN / closeout-checkpoint-conflict`, exact prepared/awaiting checkpoints, trees, receipts, refs, provider effects, and convergent reruns pass 141/141.
+- DONE: Preserve R4 foreign-CWD/repository binding at 29/29 on both shells, R3 acquisition/signals/collision/no-residue at 107/107, R2 native/squash at 13/13 + 23/23, static/schema/TDD/C1–C15, and pinned launcher status.
+- FAILED: Both panels and an independent `GIT_TRACE` probe find R6-B1. The `create-before` retry performs the seed push twice; focused scenario push counts are `2,3,2,2,2`. Tests count ref updates, so the no-op duplicate remains invisible to 141/141.
+- GATE: Round 6 returns only R6-B1 to execute and preserves all closed R2–R5 claims. Verdict is FAILED/PROMPT_CAPTAIN; no implementation, FO receipt/status/Review dispatch/push/PR/merge/archive/todo/remote mutation occurred.
 
 ### Summary
 
-Round 5 verifies the repository-binding repair, but provider interruptions after durable boundaries still lack stable recovery routing. The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
+Round 6 verifies stable provider-failure routing and checkpoint integrity, but `create-before` recovery still repeats an external push. The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 65 across five verify rounds
-- iteration_count: 5
+- duration_minutes: 77 across six verify rounds
+- iteration_count: 6
 - blocking_findings_count: 1 current
-- warning_findings_count: 3
+- warning_findings_count: 4
 - claim_records: required VERIFIED=7 NOT VERIFIED=1 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 5; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- reviewer_verdict: VETO round 6; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles

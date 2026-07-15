@@ -2,9 +2,9 @@
 # Make debrief a native post-merge ship closeout — Verify
 
 <details>
-<summary>Round 5 snapshot provenance</summary>
+<summary>Round 6 snapshot provenance</summary>
 
-Implementation snapshot: `63a47a3..f5e9dbc`; production repair: `eba76c1`; metadata-only Verify entry: `0ef493b`. Verification and panels were pinned to that immutable bundle.
+Implementation snapshot: `f34ce34..2b63447`; production repair: `0fdbe25`; test repair: `743f1af`; metadata-only Verify entry: `f1fe2f4`. Verification and panels were pinned to that immutable bundle.
 </details>
 
 <!-- section:verify-check-manifest -->
@@ -12,154 +12,154 @@ Implementation snapshot: `63a47a3..f5e9dbc`; production repair: `eba76c1`; metad
 
 | Lane | Fresh evidence | Verdict |
 |---|---|---|
-| R4 repository binding | five call-site audit; foreign-CWD optional + OPEN/MERGED replay; negative repo/PR/OID/count | PASS; R4-B1/R4-W1 CLOSED |
-| Historical recovery | R3 107/107 both shells; R2 13/13 + 23/23; landing 94/94; receipt 85/85; bundle 78/78 | PASS |
-| Provider failure recovery | injected `gh pr list/create/ready` exit 71 after durable boundaries | FAIL |
-| Panels | general/testing/schema PASS; recovery BLOCKING | FAIL |
+| R5 stable failure routing | list/create/ready before/after provider effect, exact checkpoint/tree/ref/effect assertions | PASS |
+| R5 retry idempotency | provider effects, remote updates, and Git push invocations | FAIL: duplicate seed push |
+| R4/R3/R2 history | foreign-CWD binding both shells; bounded acquisition; native/squash proof | PASS |
+| Panels | general + recovery, immutable range, read-only | BLOCKING |
 | External/RoboRev | excluded by Captain instruction; not invoked | NOT RUN |
 <!-- /section:verify-check-manifest -->
-
 <!-- section:quality-gate -->
 ### Quality Gate
 
 | Gate | Fresh result | Verdict |
 |---|---|---|
-| R4 focused | 29/29 on Bash 5.3 and 3.2 | PASS |
-| Proportional regression | R3 107/107 both; R2 13/13 + 23/23; landing 94/94; receipt 85/85; bundle 78/78 | PASS |
-| Static/contracts | both Bash syntax; ShellCheck; diff hygiene; C1–C15 | PASS |
-| Pinned launcher | `0.25.0-pre1`, contract 3; status with explicit workflow dir remains `verify` | PASS |
+| R5 focused | 141/141 on Bash 5.3 and 3.2 | PASS assertions; coverage gap below |
+| Proportional regression | R4 29/29 both; R3 107/107; R2 13/13 + 23/23 | PASS |
+| Contracts/static | TDD ledger 5; schema registry/context; both Bash syntax; ShellCheck; diff hygiene; C1–C15 | PASS |
+| Pinned launcher | `0.25.0-pre1`, contract 3; explicit workflow-dir status remains `verify` | PASS |
 <!-- /section:quality-gate -->
-
 <!-- section:review-findings -->
 ### Review Findings
 
 | ID | Severity | File:Line | Finding | Route/status |
 |---|---|---|---|---|
-| R5-B1 | BLOCKING | `merged-pr-closeout-reconciler.sh:1190,1202,1271`; test `:783-797` | `gh pr list/create/ready` failures raw-exit without stable report; list leaves 1 local commit, create 1 + remote write, ready 2 + remote write. | execute; Captain gate FAIL |
+| R6-B1 | BLOCKING | reconciler `:1123-1149,1196-1207`; test `:1593,1631` | `create-before` retry reuses the local seed ref but invokes the same seed push again; tests count ref updates, not push calls. | execute; Captain gate FAIL |
+| R6-W1 | WARNING | reconciler `:21-34,1310,1354` | Provider exits bypass normal `bundle_root` cleanup; EXIT trap owns only source-object acquisition state. | execute with R6-B1 |
 | W2 | WARNING | `apply-closeout-bundle.sh:232` | Same-user path-swap TOCTOU remains possible after static checks. | deferred hardening |
-| W3 | WARNING | `merged-pr-closeout-reconciler.sh:648` | Receipt/entity discovery remains additive `O(R+E)` scanning. | performance follow-up |
-| W4 | WARNING | `review-scope.sh:21` | Positional-range fallback can select `HEAD~1`; verifier used the immutable manifest. | tooling follow-up |
+| W3 | WARNING | reconciler `:648` | Receipt/entity discovery remains additive `O(R+E)` scanning. | performance follow-up |
+| W4 | WARNING | `review-scope.sh:21` | Positional fallback can select `HEAD~1`; verifier used the explicit immutable manifest. | tooling follow-up |
 
-R4-B1/R4-W1 are closed: repository discovery is repo-root-bound; implementation/closeout view, list, create, and ready bind authoritative `--repo`; receipt repository comparison and the strict fake reject drift. R5-B1 is separate and does not reopen R2/R3.
+R5 stable routing is closed: all five injected seams produce canonical `PROMPT_CAPTAIN / closeout-checkpoint-conflict`, preserve the expected prepared or awaiting checkpoint, and converge without duplicate commit, PR, ready effect, or remote-head update. R6-B1 is narrower: one redundant no-op seed push invocation remains.
 
 #### TDD Evidence Audit
 
-T1–T4 retain observable RED/GREEN history and fresh GREEN commands; T5 retains its documentation exemption. R4 success behavior is GREEN, but provider-failure recovery has no regression and violates T4's unchanged-tree/stable-stop contract.
+The ledger and RED/GREEN history remain valid. The fresh 141/141 matrix verifies exact trees and provider/ref effects but does not observe push invocations: post-receive logs ignore an everything-up-to-date push, so the suite is green while the explicit no-duplicate-push claim is false.
 
 <details>
 <summary>Required claim records</summary>
 
 | Source / condition | Smallest disproof | Verdict / route |
 |---|---|---|
-| scoped gates exit zero | any named gate fails | VERIFIED / proceed |
-| active legacy terminal requires native proof | mutation or bypass | VERIFIED / proceed |
-| squash proof is Git-rederived/caller-propagated | forged IDs pass | VERIFIED / proceed |
-| main-only/post-GC acquisition is bounded and residue-free | exact objects unavailable/residue | VERIFIED / proceed |
+| scoped gates exit zero | any named command fails | VERIFIED / proceed |
+| R5 failures route canonically with exact checkpoint | wrong verdict/reason/state/tree/receipt/ref | VERIFIED / proceed |
+| R5 rerun has no duplicate external operation | `GIT_TRACE` shows create-before seed push twice | NOT VERIFIED / execute |
+| expected tree excludes every extra path | actual tree differs from base + exact receipt blob | VERIFIED / proceed |
 | all five PR calls bind authoritative repository | missing/wrong `--repo` accepted | VERIFIED / proceed |
-| provider failures stop stably without unsafe residue | exit 71 yields no report and durable partial state | NOT VERIFIED / execute |
-| ROADMAP cell-zero and young-root rules hold | later-cell/crash accepted | VERIFIED / proceed |
-| one owner/full archive/postcommit/W1/no duplicates | lost byte/duplicate | VERIFIED / proceed |
+| R3 acquisition is bounded, signal-safe, and residue-free | missing object/ref/FETCH_HEAD residue | VERIFIED / proceed |
+| R2 native/squash/cell-zero/young-root closures hold | bypass, forged proof, crash | VERIFIED / proceed |
+| one owner/full archive/postcommit/W1/no duplicates | lost byte/duplicate projection | VERIFIED / proceed |
 </details>
 <!-- /section:review-findings -->
-
 <!-- section:uat -->
 ### UAT
 
-| DC | Verify procedure | Verdict | Evidence |
-|---|---|---|---|
-| DC-1/DC-5 | landing, identity, acquisition, forged/tampered negatives | PASS | 94/94; R3 107/107 both shells |
-| DC-2/DC-4/DC-6 | foreign-CWD optional + receipt replay and provider interruptions | FAIL | success 29/29 both; injected list/create/ready raw-exit with residue |
-| DC-3/DC-7 | schema/static/compatibility/C1–C15 | PASS | all selected gates zero |
-| DC-8 | frozen PR40/41 historical closure | PASS | retained execute proof and unaffected code paths |
-<!-- /section:uat -->
+mode: focused CLI failure/retry runtime plus proportional historical regression; non-UI.
 
+| DC | Verify | Evidence |
+|---|---|---|
+| DC-1/DC-5 PASS | landing/identity/acquisition closures retained | R3 107/107; R2 13/13 + 23/23 |
+| DC-2/DC-4/DC-6 FAIL | stable routing passes, retry side-effect idempotency fails | R5 141/141 both; trace push counts `2,3,2,2,2` |
+| DC-3/DC-7 PASS | schema/static/compatibility | registry/TDD/static/C1–C15 zero |
+| DC-8 PASS | frozen historical dogfood path unchanged | unaffected source path + execute evidence retained |
+<!-- /section:uat -->
 <!-- section:verify-knowledge-captures -->
 ### Knowledge Captures
 
-- `[D2-candidate]` Binding provider identity is necessary but insufficient: every provider failure after a durable checkpoint needs a stable routed result and resumable predicate.
+- `[D2-candidate]` Ref-update counts cannot prove external-command idempotency: an everything-up-to-date push is still a duplicate invocation and needs command-level observation.
 <!-- /section:verify-knowledge-captures -->
-
 <!-- section:render-fidelity -->
 ### Render Fidelity
 
 render_fidelity_status: not-applicable — `affects_ui: false`.
 <!-- /section:render-fidelity -->
-
+<!-- section:science-officer-em-upward-report -->
 ### Science Officer (EM) Upward Report
 
 ```yaml
 science_officer_em_upward_report:
   subject: {entity: ship-stage-debrief-closeout, stage: verify, report_kind: verify-synthesis}
-  em_judgment: "Repository binding is repaired, but provider failure recovery still violates the durable-boundary contract."
-  evidence_synthesis: ["R4 29/29 both shells", "injected list/create/ready exit 71 leaves no report and 1/1/2 local commits; create/ready change remote refs"]
-  risk_tradeoff_call: "Proceeding would accept externally visible partial state without a stable recovery reason."
-  recommendation: "Return only R5-B1 to execute; preserve every closed R2-R4 claim."
+  em_judgment: "Failure routing and checkpoint integrity are repaired, but create-before recovery still repeats an external push."
+  evidence_synthesis: ["R5 141/141 both shells", "fresh GIT_TRACE: 11 pushes total, scenario counts 2,3,2,2,2"]
+  risk_tradeoff_call: "A no-op duplicate push is bounded today but violates the explicit recovery contract and introduces another unwrapped failure seam."
+  recommendation: "Return only R6-B1 plus its focused invocation-count regression to execute; preserve all closed R2-R5 claims."
   route: return
   confidence: high
   fo_boundary: "FO owns workflow mechanics; EM owns judgment and recommendation."
 ```
-
+<!-- /section:science-officer-em-upward-report -->
 <!-- section:verify-verdict -->
 ### Verdict
 
 status: failed
-quality: repository binding, acquisition, schema, static, and proportional gates pass; provider failure recovery fails
-review: general panel PASS/NO_FINDINGS; recovery panel BLOCKING on R5-B1
-cross_review_verdict: VETO — required provider-failure claim is NOT VERIFIED
+stage_cost: focused dual-shell runtime, proportional regression, static/contracts, and two fresh read-only panels
+quality: canonical provider-failure routing passes; no-duplicate-push acceptance fails
+review: general and recovery panels independently BLOCKING on R6-B1
+cross_review_verdict: VETO — one required claim is NOT VERIFIED
+cross_review_coaching: Count external command invocations as well as resulting state changes when the contract forbids duplicate side effects.
 captain_gate: PROMPT_CAPTAIN
-blocking_issues: R5-B1
-claim_records: required VERIFIED=7 NOT VERIFIED=1 INCONCLUSIVE=0
+blocking_issues: R6-B1
+claim_records: required VERIFIED=7 NOT VERIFIED=1 INCONCLUSIVE=0; advisory VERIFIED=0 NOT VERIFIED=0 INCONCLUSIVE=0
 auto_fixes: none — provider/recovery logic and tests are execute-owned
-completed_at: 2026-07-15T15:40:00Z
+started_at: 2026-07-15T16:26:00Z
+completed_at: 2026-07-15T16:37:31Z
+duration_minutes: 12
 <!-- /section:verify-verdict -->
-
 <!-- section:verify-verdict-metrics -->
 ### Metrics
 
-iteration_count: 5
+status: failed
+duration_minutes: 12
+iteration_count: 6
+claim_records_required_not_verified: 1
 blocking_findings_count: 1
-warning_findings_count: 3
-runtime_checks_count: 15
+warning_findings_count: 4
+runtime_checks_count: 14
 <!-- /section:verify-verdict-metrics -->
-
 <!-- section:panel-coverage -->
 ## Panel Coverage
 
-- Tier B by Captain instruction; no RoboRev/external review. General/testing/schema: PASS/NO_FINDINGS. Recovery: BLOCKING.
-- Pass ownership: worker ownership PASS; workflow/static PASS; type/design PASS; test adequacy BLOCKING; silent failure BLOCKING; recovery/runtime BLOCKING; domain intent BLOCKING.
+- Tier B by Captain instruction; no RoboRev/external review. General/testing/maintainability/security: BLOCKING 1, otherwise NO_FINDINGS. Recovery/silent-failure: BLOCKING 1 + WARNING 1.
+- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; type_design NO_FINDINGS; silent_failure BLOCKING; test_adequacy BLOCKING; security NO_FINDINGS; cross_model_challenge DEGRADED by instruction; runtime_uat BLOCKING.
+- PR Quality Score: non-PASS. Cross-model: NO by Captain instruction.
 <!-- /section:panel-coverage -->
-
 <!-- section:runtime-verification -->
 ### Runtime Verification
 
-| Type | Result | Verdict |
+| Type | Command/result | Verdict |
 |---|---|---|
-| foreign-CWD success | R4 29/29 both Bash versions | PASS |
-| acquisition/history | R3 107/107 both; R2 13/13 + 23/23 | PASS |
-| injected provider failures | list `rc=71/local=1/remote=no`; create `71/1/yes`; ready `71/2/yes`; all `report=NONE` | FAIL |
+| R5 recovery | focused matrix: 141/141 on both Bash versions | PASS assertions |
+| duplicate-operation probe | focused Bash 5.3 with `GIT_TRACE`: 11 pushes, scenarios `2,3,2,2,2` | FAIL create-before |
+| historical | R4 29/29 both; R3 107/107; R2 13/13 + 23/23 | PASS |
 <!-- /section:runtime-verification -->
-
 <!-- section:stage-checklist -->
 ## Stage Report: verify
 
-- DONE: Close R4-B1/R4-W1 with authoritative five-call binding and strict foreign-CWD coverage on both shells.
-- DONE: Reconfirm R2/R3 acquisition, signals, collision, mixed-case, no-residue, native/squash, identity, archive, and recovery closures.
-- FAILED: Provider list/create/ready interruptions lack stable routing and leave durable partial state.
-- GATE: Captain Verify gate FAIL/PROMPT_CAPTAIN. No implementation, FO receipt/status, review, push, PR, merge, archive, todo, or remote mutation occurred.
+- DONE: Verify R5 canonical failure routing, exact checkpoints/trees/receipts/refs, provider effects, and bounded reruns on both Bash versions.
+- DONE: Preserve R4 binding and R3/R2/historical closures with proportional fresh evidence.
+- FAILED: `create-before` retry performs a duplicate seed push that state-only assertions cannot see.
+- GATE: Captain Verify gate FAIL/PROMPT_CAPTAIN. No implementation, FO receipt/status, Review dispatch, push, PR, merge, archive, todo, or remote mutation occurred.
 <!-- /section:stage-checklist -->
-
 <!-- section:hand-off-to-review -->
 ### Hand-off to Review
 
 - `verify_verdict`: failed; review must not proceed.
-- `blocking_issues`: [R5-B1 provider list/create/ready failure routing and partial durable state].
+- `blocking_issues`: [R6-B1 duplicate seed push invocation on create-before retry].
 - `canonical_docs_touched`: none in Verify; `render_fidelity_status`: not-applicable.
 <!-- /section:hand-off-to-review -->
-
 <!-- section:deferred-to-todo -->
 ## Deferred to TODO
 
-Deferred to TODO: 0 emitted. R5-B1 is Captain-gated; W2–W4 remain visible. No todo or remote state was mutated.
+Deferred to TODO: 0 emitted. R6-B1 is Captain-gated; R6-W1 and W2–W4 remain visible. No todo or remote state was mutated.
 <!-- /section:deferred-to-todo -->
 
 <!-- /section:verify-report -->
