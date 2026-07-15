@@ -76,6 +76,9 @@ check "external_project field present (epic project binding)" \
 check "external_project typed string" \
   "grep -E 'external_project: \{ type: string' \"$SCHEMA_PATH\""
 
+check "closeout_owner is an optional boolean frontmatter field" \
+  "ruby -e 'require \"yaml\"; s = YAML.safe_load(File.read(ARGV.fetch(0))); f = s.fetch(\"frontmatter\").fetch(\"optional\").fetch(\"closeout_owner\"); abort unless f.fetch(\"type\") == \"bool\" && f.fetch(\"optional\") == true' \"$SCHEMA_PATH\""
+
 check "reviewer_output_matrix file_line documents nullable contract for non-findings invalid context and degraded rows" \
   "grep -q 'file_line: \"<path:line|null>\"' \"$SCHEMA_PATH\" && grep -q 'file_line_nullable_for.*NO_FINDINGS.*INVALID_CONTEXT.*DEGRADED' \"$SCHEMA_PATH\""
 

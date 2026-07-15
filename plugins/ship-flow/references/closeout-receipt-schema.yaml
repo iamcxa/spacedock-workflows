@@ -1,0 +1,69 @@
+# Ship-Flow Closeout Receipt Schema
+# Canonical version-1 contract for docs/ship-flow/_closeouts/<closeout_id>.json.
+schema_version: 1
+kind: ship-flow.closeout
+encoding:
+  format: json
+  canonical_json: "UTF-8 JSON with sorted keys and separators ',' ':'; no insignificant whitespace"
+location:
+  canonical: "<repo-root>/<workflow>/_closeouts/<closeout_id>.json"
+  invariant: "normal validation requires explicit --repo-root; --allow-any-path is fixture-only"
+identity:
+  closeout_id:
+    algorithm: sha256
+    bytes: "v1 NUL provider NUL repository NUL workflow NUL entity_slug NUL decimal implementation_pr"
+    path_binding: "receipt basename must equal <closeout_id>.json"
+  fields:
+    provider: { type: enum, values: [github] }
+    repository: { type: string, pattern: "^[^/]+/[^/]+$" }
+    workflow: { type: string, pattern: "^docs/[^/]+$" }
+    entity_slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]*$" }
+    implementation_pr: { type: integer, minimum: 1 }
+ownership_proof:
+  unique_entity_matches: { type: integer, minimum: 1 }
+  participant_entities:
+    type: array
+    items: { type: string, format: entity_slug }
+    invariants:
+      - "identity.entity_slug is the sole owner and is not repeated here"
+      - "all other matching entities are recorded exactly once"
+      - "unique_entity_matches equals one owner plus participant count"
+  source_hashes:
+    index: { type: sha256 }
+    review: { type: sha256 }
+    ship: { type: sha256 }
+    description: "Exact pre-merge bytes for the owning entity's required stage artifacts"
+mode: { type: enum, values: [direct, pull_request] }
+merge_method_intent: { type: nullable-enum, values: [rebase, squash, merge_commit] }
+deterministic_closeout_head: { type: string, format: "ship-closeout/<closeout_id>" }
+landing_proof: { type: object, min_properties: 1 }
+transaction:
+  phase: { type: enum, values: [prepared, awaiting_closeout_pr, applied, complete] }
+  generation: { type: integer, minimum: 1 }
+  closeout_pr: { type: nullable-positive-integer }
+  main_commit: { type: nullable-40-hex }
+  legal_transitions:
+    direct: [prepared-to-applied, applied-to-complete]
+    pull_request: [prepared-to-awaiting_closeout_pr, awaiting_closeout_pr-to-applied, applied-to-complete]
+  replay_invariants:
+    - "exact identical receipt replay keeps generation unchanged"
+    - "each legal transition increments generation by exactly one"
+    - "identity, mode, merge_method_intent, deterministic head, proof_hash, and proof payload are immutable"
+    - "closeout_pr binds only entering pull_request awaiting state, then is immutable"
+    - "main_commit binds only entering applied state, then is immutable"
+outputs:
+  exact_keys: [debrief, ship, archived_entity, roadmap_row]
+  artifact: { fields: { path: string, sha256: sha256 } }
+  roadmap_row: { fields: { identity: string, sha256: sha256 } }
+proof_hash:
+  algorithm: sha256
+  canonical_payload_keys: [identity, ownership_proof, landing_proof, outputs]
+sentinel_validation_order:
+  - path-derived closeout identity
+  - deterministic closeout head
+  - proof hash and exact artifact hashes from landed bytes
+  - ordinary entity resolution
+validator_modes:
+  verify_sources: "hash <repo-root>/<workflow>/<entity_slug>/{index,review,ship}.md against ownership_proof.source_hashes before merge"
+  verify_outputs: "resolve safe repo-relative output paths, hash landed files, then parse exactly one Markdown table row inside the bounded Shipped section whose cell equals roadmap_row.identity and hash the exact original selected line bytes excluding its line terminator"
+  path_safety: "reject absolute paths, traversal, missing files, resolved paths outside repo root, and every symlink component including aliases that still resolve inside the repo"

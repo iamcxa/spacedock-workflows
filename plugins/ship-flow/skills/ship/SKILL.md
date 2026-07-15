@@ -357,6 +357,14 @@ The active worktree entity is primary. When a same-slug main/startup copy is kno
 
 Now that the PR exists and its body is confirmed, write `ship.md → ### Verdict → pr:` with the confirmed `#N` ref + the ≤1-2 line summary (CAS via `--if-hash` on ship.md; atomic `write-stage-artifact.sh`). ship.md still records ONLY the ref + summary — never the full body (≤60 C15 cap; pr_payload contract). The `pr:` ref MUST never be a placeholder. On stale hash (exit 6): write `status: blocked, reason: ship.md/index.md stale hash; parallel session contaminated` and return.
 
+### Step 6.6a — Persist closeout owner and optional landing intent BEFORE merge
+
+After finalizing `ship.md`, and before any merge or auto-merge progression, call `lib/persist-closeout-intent.sh` with read-first hashes for the active entity, its known main/startup mirror, and (when chosen) `ship.md`. This helper is the sole pre-merge producer of `closeout_owner` and `### Verdict → merge_method_intent`; do not write either field ad hoc. Before rendering, an active/main mirror must have the same entity slug, title, and normalized implementation PR; a mismatch stops without mutation. A single matching entity owns implicitly. A shared implementation PR must enumerate the unique, exhaustive match set, declare exactly one closeout owner, and pair every `--participant-entity PATH` with its adjacent `--participant-if-hash SHA256`; duplicate paths/slugs, stale hashes, zero owners, or multiple owners stop before mutation.
+
+The optional `merge_method_intent` may be `rebase`, `squash`, or `merge_commit`. It only discriminates among proof-valid landing candidates: absence is legal, ambiguity without intent still stops, and conflicting intent never overrides topology or patch proof. Use `--if-hash`, `--mirror-if-hash`, and `--ship-if-hash`; any stale CAS stops before merge.
+
+Post-merge recovery validates an exact `_closeouts/<closeout_id>.json` sentinel from landed bytes before ordinary entity resolution: path-derived identity, deterministic closeout head, canonical payload hash, and every artifact hash must bind. Title/body prose is never a recursion sentinel.
+
 ### Step 6.7 — Post-create merge-state check
 
 After metadata persistence, run the read-only helper before any post-create auto-review, Ready, reviewer routing, smoke routing, or announce step:
