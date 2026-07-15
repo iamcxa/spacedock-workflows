@@ -202,6 +202,41 @@ read_provider_gh() {
   fi
 }
 
+prepare_receipt_source_commits() {
+  local receipt_path="$1" receipt_strategy receipt_pr structural_out structural_rc=0
+  structural_out="$(mktemp)"
+  python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --allow-any-path >"$structural_out" 2>&1 || structural_rc=$?
+  if [ "$structural_rc" -ne 0 ]; then cat "$structural_out"; rm -f "$structural_out"; return "$structural_rc"; fi
+  rm -f "$structural_out"
+  IFS=$'\t' read -r receipt_strategy receipt_pr < <(python3 - "$receipt_path" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+print(r["landing_proof"]["strategy"],r["identity"]["implementation_pr"],sep="\t")
+PY
+)
+  [ "$receipt_strategy" = squash ] || return 0
+  if [ -n "${source_commits:-}" ] && [ "${pr_number:-}" = "$receipt_pr" ]; then
+    return 0
+  fi
+  pr_number="$receipt_pr"
+  case "$pr_provider" in
+    fixture) read_provider_fixture "$pr_fixture" ;;
+    gh) read_provider_gh ;;
+  esac
+  [ "$pr_state" = MERGED ] || prompt_captain pr-not-merged "implementation PR source commits require authoritative MERGED provider state"
+}
+
+validate_receipt_normal() {
+  local receipt_path="$1"
+  shift
+  prepare_receipt_source_commits "$receipt_path" || return $?
+  if [ -n "${source_commits:-}" ]; then
+    python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --source-commits "$source_commits" "$@"
+  else
+    python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" "$@"
+  fi
+}
+
 primary_worktree_root() {
   local worktree_list
   worktree_list="$(git -C "$repo_root" worktree list --porcelain)" || return 1
@@ -416,7 +451,7 @@ PY
   receipt_path="$(printf '%s\n' "$scan_output" | sed -n '2p')"
   receipt_path="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$receipt_path")"
   validator_out="$(mktemp)"
-  python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --repo-root "$repo_root" >"$validator_out" 2>&1 || validator_rc=$?
+  validate_receipt_normal "$receipt_path" --repo-root "$repo_root" >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
   IFS=$'\t' read -r mode phase recorded_pr expected_head expected_proof < <(python3 - "$receipt_path" <<'PY'
@@ -464,7 +499,7 @@ PY
   [ "$closeout_pr_head" = "$expected_head" ] || reject_input closeout-sentinel-identity-mismatch "resolved closeout PR head differs from deterministic receipt head"
   [ "$closeout_pr_state" = MERGED ] || prompt_captain closeout-pr-awaiting-merge "landed receipt claims an unmerged closeout PR"
   validator_out="$(mktemp)"; validator_rc=0
-  python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --repo-root "$repo_root" --verify-outputs >"$validator_out" 2>&1 || validator_rc=$?
+  validate_receipt_normal "$receipt_path" --repo-root "$repo_root" --verify-outputs >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
   verdict="PROCEED"; pr_number="$recorded_pr"; pr_state="MERGED"
@@ -540,7 +575,7 @@ PY
   receipt_path="$(printf '%s\n' "$match_output" | sed -n '2p')"
   receipt_path="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$receipt_path")"
   validator_out="$(mktemp)"
-  python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --repo-root "$repo_root" --verify-outputs >"$validator_out" 2>&1 || validator_rc=$?
+  validate_receipt_normal "$receipt_path" --repo-root "$repo_root" --verify-outputs >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
   receipt_archive="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["outputs"]["archived_entity"]["path"])' "$receipt_path")"
@@ -828,7 +863,7 @@ PY
     return 0
   fi
   apply_out="$(mktemp)"
-  "$BUNDLE_APPLIER" --repo-root "$repo_root" --bundle-root "$bundle_root" --receipt-relative "$receipt_relative" --active-entity-relative "$active_relative" --if-head "$(git -C "$repo_root" rev-parse HEAD)" --if-roadmap-hash "$(sha256_file "$repo_root/ROADMAP.md")" --commit-as "ship(${entity_slug}): advance status to done" >"$apply_out" 2>&1 || apply_rc=$?
+  "$BUNDLE_APPLIER" --repo-root "$repo_root" --bundle-root "$bundle_root" --receipt-relative "$receipt_relative" --active-entity-relative "$active_relative" --if-head "$(git -C "$repo_root" rev-parse HEAD)" --if-roadmap-hash "$(sha256_file "$repo_root/ROADMAP.md")" --commit-as "ship(${entity_slug}): advance status to done" --source-commits "$source_commits" >"$apply_out" 2>&1 || apply_rc=$?
   rm -rf "$bundle_root"
   if [ "$apply_rc" -ne 0 ]; then cat "$apply_out"; rm -f "$apply_out"; exit "$apply_rc"; fi
   rm -f "$apply_out"
@@ -959,7 +994,7 @@ optional_terminal_head_matches() {
   printf '%s' "$shown" | python3 -c 'import json,sys; r=json.load(sys.stdin); t=r["transaction"]; raise SystemExit(0 if r["mode"]=="pull_request" and t["phase"]=="applied" and t["closeout_pr"]==int(sys.argv[1]) and r["proof_hash"]==sys.argv[2] else 1)' "$expected_pr" "$expected_proof" || return 1
   exported="$(mktemp -d)"
   git -C "$repo_root" archive "$deterministic_head" | tar -x -C "$exported"
-  python3 "$RECEIPT_VALIDATOR" --receipt "$exported/$receipt_relative" --repo-root "$exported" --landing-proof-repo-root "$repo_root" --verify-outputs >/dev/null 2>&1 || { rm -rf "$exported"; return 1; }
+  validate_receipt_normal "$exported/$receipt_relative" --repo-root "$exported" --landing-proof-repo-root "$repo_root" --verify-outputs >/dev/null 2>&1 || { rm -rf "$exported"; return 1; }
   rm -rf "$exported"
 }
 
@@ -977,7 +1012,7 @@ build_optional_terminal_head() {
     git -C "$clone_root" commit -qm "closeout(${entity_slug}): promote prepared receipt" -- "$receipt_relative"
     apply_out="$(mktemp)"
     [ -z "${SHIP_FLOW_CLOSEOUT_BUNDLE_LOG:-}" ] || printf 'apply %s\n' "$deterministic_head" >>"$SHIP_FLOW_CLOSEOUT_BUNDLE_LOG"
-    "$BUNDLE_APPLIER" --repo-root "$clone_root" --bundle-root "$bundle_root" --receipt-relative "$receipt_relative" --active-entity-relative "$active_relative" --if-head "$(git -C "$clone_root" rev-parse HEAD)" --if-roadmap-hash "$(sha256_file "$clone_root/ROADMAP.md")" --commit-as "ship(${entity_slug}): advance status to done" >"$apply_out" 2>&1 || apply_rc=$?
+    "$BUNDLE_APPLIER" --repo-root "$clone_root" --bundle-root "$bundle_root" --receipt-relative "$receipt_relative" --active-entity-relative "$active_relative" --if-head "$(git -C "$clone_root" rev-parse HEAD)" --if-roadmap-hash "$(sha256_file "$clone_root/ROADMAP.md")" --commit-as "ship(${entity_slug}): advance status to done" --source-commits "$source_commits" >"$apply_out" 2>&1 || apply_rc=$?
     if [ "$apply_rc" -ne 0 ]; then cat "$apply_out"; rm -f "$apply_out"; rm -rf "$clone_root"; exit "$apply_rc"; fi
     rm -f "$apply_out"
     python3 - "$clone_root/$receipt_relative" "$bound_pr" <<'PY'

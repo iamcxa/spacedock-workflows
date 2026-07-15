@@ -397,6 +397,45 @@ prepare_full_d1_repo() {
     'pr_commit_count=2' >"$fixture"
 }
 
+prepare_full_d1_squash_repo() {
+  local repo="$1" fixture="$2"
+  local base source_one source_two anchor
+  setup_repo "$repo"
+  printf '%s\n' '.worktrees/' >"$repo/.gitignore"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' \
+    '| Entity | Title |' '| --- | --- |' \
+    '| merged-fixture-entity | Merged fixture entity |' \
+    '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' \
+    '| Entity | Title | Shipped |' '| --- | --- | --- |' \
+    '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  git -C "$repo" add -- .gitignore ROADMAP.md
+  git -C "$repo" commit -qm 'fixture: add squash roadmap'
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb ship-merged-fixture-entity "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' ''
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$repo/docs/ship-flow/merged-fixture-entity/review.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/merged-fixture-entity/review.md
+  git -C "$repo" commit -qm 'implementation: add squash reviewed entity'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' \
+    '- Preserve squash source proof.' '' '### Verdict' \
+    'merge_method_intent: squash' 'pr: "#131"' \
+    >"$repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$repo" commit -qm 'implementation: add squash ship evidence'
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" merge --squash -q ship-merged-fixture-entity >/dev/null
+  git -C "$repo" commit -qm 'fixture: squash implementation landing'
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' \
+    'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=ship-merged-fixture-entity' 'base_ref=main' \
+    'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_one,$source_two" \
+    'pr_commit_count=2' >"$fixture"
+}
+
 run_helper() {
   local repo="$1"
   local output="$2"
@@ -592,6 +631,96 @@ run_feedback_r2_f1_case() {
     record_pass 'coherent native terminal rerun is a byte and commit no-op'
   else
     record_fail 'coherent native terminal rerun is a byte and commit no-op'
+  fi
+}
+
+run_feedback_r2_b2_integration_case() {
+  local direct_repo="$TMP_DIR/feedback-r2-b2-direct-repo"
+  local direct_fixture="$TMP_DIR/feedback-r2-b2-direct.env"
+  local missing_repo="$TMP_DIR/feedback-r2-b2-missing-repo"
+  local missing_fixture="$TMP_DIR/feedback-r2-b2-missing.env"
+  local before_head before_tree landed_head rc receipt
+
+  prepare_full_d1_squash_repo "$direct_repo" "$direct_fixture"
+  git clone -q "$direct_repo" "$missing_repo"
+  grep -v '^source_commits=' "$direct_fixture" >"$missing_fixture"
+  before_head="$(git -C "$missing_repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "$missing_repo/docs/ship-flow")"
+  rc="$(run_helper "$missing_repo" "$TMP_DIR/feedback-r2-b2-missing.out" \
+    --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$missing_fixture")"
+  assert_exit 'squash closeout without provider source commits rejects' 2 "$rc"
+  assert_contains 'missing provider source commits reports stable reason' '^reason=landing-pr-commit-count-mismatch$' "$TMP_DIR/feedback-r2-b2-missing.out"
+  if [ "$before_head" = "$(git -C "$missing_repo" rev-parse HEAD)" ] && \
+     [ "$before_tree" = "$(hash_tree "$missing_repo/docs/ship-flow")" ]; then
+    record_pass 'missing provider source commits preserve HEAD and workflow bytes'
+  else
+    record_fail 'missing provider source commits preserve HEAD and workflow bytes'
+  fi
+  assert_file_exists 'missing provider source commits keep active entity' "$missing_repo/docs/ship-flow/merged-fixture-entity/index.md"
+  assert_path_missing 'missing provider source commits create no archive' "$missing_repo/docs/ship-flow/_archive/merged-fixture-entity"
+
+  rc="$(run_helper "$direct_repo" "$TMP_DIR/feedback-r2-b2-direct.out" \
+    --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$direct_fixture")"
+  assert_exit 'integrated squash direct closeout exits success' 0 "$rc"
+  assert_contains 'integrated squash direct closeout uses native bundle' '^terminal_action=closeout_bundle$' "$TMP_DIR/feedback-r2-b2-direct.out"
+  receipt="$(find "$direct_repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  if [ -n "$receipt" ]; then record_pass 'integrated squash direct closeout lands receipt'; else record_fail 'integrated squash direct closeout lands receipt'; fi
+  landed_head="$(git -C "$direct_repo" rev-parse HEAD)"
+  rc="$(run_helper "$direct_repo" "$TMP_DIR/feedback-r2-b2-direct-rerun.out" \
+    --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$direct_fixture")"
+  assert_exit 'integrated squash archived direct replay exits success' 0 "$rc"
+  assert_contains 'integrated squash archived direct replay is reconciled' '^state=already_reconciled$' "$TMP_DIR/feedback-r2-b2-direct-rerun.out"
+  if [ "$landed_head" = "$(git -C "$direct_repo" rev-parse HEAD)" ]; then
+    record_pass 'integrated squash archived direct replay creates no commit'
+  else
+    record_fail 'integrated squash archived direct replay creates no commit'
+  fi
+
+  local optional_repo="$TMP_DIR/feedback-r2-b2-optional-repo"
+  local optional_fixture="$TMP_DIR/feedback-r2-b2-optional.env"
+  local registry="$TMP_DIR/feedback-r2-b2-optional.registry"
+  local pr_log="$TMP_DIR/feedback-r2-b2-optional.pr.log"
+  local bundle_log="$TMP_DIR/feedback-r2-b2-optional.bundle.log"
+  local cid deterministic_head open_head merged_head
+  prepare_full_d1_squash_repo "$optional_repo" "$optional_fixture"
+  cid="$(python3 - <<'PY'
+import hashlib
+print(hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"merged-fixture-entity",b"131"))).hexdigest())
+PY
+)"
+  deterministic_head="ship-closeout/$cid"
+  printf '%s\n' 'closeout_pr_number=141' 'closeout_pr_state=OPEN' "closeout_pr_head=$deterministic_head" >>"$optional_fixture"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper "$optional_repo" "$TMP_DIR/feedback-r2-b2-optional.out" \
+      --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$optional_fixture" --closeout-mode pull-request)"
+  assert_exit 'integrated squash optional closeout prepares terminal head' 0 "$rc"
+  assert_contains 'integrated squash optional closeout awaits merge' '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/feedback-r2-b2-optional.out"
+  if git -C "$optional_repo" show-ref --verify --quiet "refs/heads/$deterministic_head"; then record_pass 'integrated squash optional terminal head exists'; else record_fail 'integrated squash optional terminal head exists'; fi
+  open_head="$(git -C "$optional_repo" rev-parse HEAD)"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper "$optional_repo" "$TMP_DIR/feedback-r2-b2-optional-rerun.out" \
+      --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$optional_fixture" --closeout-mode pull-request)"
+  assert_exit 'integrated squash receipt-only OPEN replay exits success' 0 "$rc"
+  assert_contains 'integrated squash receipt-only OPEN replay awaits merge' '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/feedback-r2-b2-optional-rerun.out"
+  assert_contains 'integrated squash receipt-only OPEN report retains closeout PR identity' '^pr=141$' "$TMP_DIR/feedback-r2-b2-optional-rerun.out"
+  if [ "$open_head" = "$(git -C "$optional_repo" rev-parse HEAD)" ]; then record_pass 'integrated squash receipt-only OPEN replay creates no commit'; else record_fail 'integrated squash receipt-only OPEN replay creates no commit'; fi
+  if git -C "$optional_repo" show "$deterministic_head:docs/ship-flow/_closeouts/$cid.json" 2>/dev/null | \
+    python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin)["transaction"]["phase"]=="applied" else 1)'; then
+    git -C "$optional_repo" merge -q --no-ff "$deterministic_head" -m 'fixture: squash closeout PR merged'
+    perl -0pi -e 's/closeout_pr_state=OPEN/closeout_pr_state=MERGED/' "$optional_fixture"
+    merged_head="$(git -C "$optional_repo" rev-parse HEAD)"
+    rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" \
+      SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper "$optional_repo" "$TMP_DIR/feedback-r2-b2-optional-merged.out" \
+        --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$optional_fixture" --closeout-mode pull-request)"
+    assert_exit 'integrated squash receipt-only MERGED replay exits success' 0 "$rc"
+    assert_contains 'integrated squash receipt-only MERGED replay is terminal no-op' '^reason=closeout-pr-terminal-noop$' "$TMP_DIR/feedback-r2-b2-optional-merged.out"
+    assert_contains 'integrated squash receipt-only MERGED report retains closeout PR identity' '^pr=141$' "$TMP_DIR/feedback-r2-b2-optional-merged.out"
+    if [ "$merged_head" = "$(git -C "$optional_repo" rev-parse HEAD)" ]; then record_pass 'integrated squash receipt-only MERGED replay creates no commit'; else record_fail 'integrated squash receipt-only MERGED replay creates no commit'; fi
+  else
+    record_fail 'integrated squash receipt-only MERGED replay exits success'
+    record_fail 'integrated squash receipt-only MERGED replay is terminal no-op'
+    record_fail 'integrated squash receipt-only MERGED report retains closeout PR identity'
+    record_fail 'integrated squash receipt-only MERGED replay creates no commit'
   fi
 }
 
@@ -1744,7 +1873,9 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-f1 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-b2-integration ]; then
+    run_feedback_r2_b2_integration_case
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-f1 ]; then
     run_feedback_r2_f1_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-f1 ]; then
     run_incomplete_landing_contract_case

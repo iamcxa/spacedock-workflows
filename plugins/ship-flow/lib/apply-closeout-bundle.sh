@@ -13,9 +13,10 @@ ACTIVE_ENTITY_RELATIVE=""
 IF_HEAD=""
 IF_ROADMAP_HASH=""
 COMMIT_AS=""
+SOURCE_COMMITS=""
 
 usage() {
-  echo "Usage: apply-closeout-bundle.sh --repo-root PATH --bundle-root PATH --receipt-relative PATH --active-entity-relative PATH --if-head SHA --if-roadmap-hash SHA256 --commit-as MESSAGE" >&2
+  echo "Usage: apply-closeout-bundle.sh --repo-root PATH --bundle-root PATH --receipt-relative PATH --active-entity-relative PATH --if-head SHA --if-roadmap-hash SHA256 --commit-as MESSAGE [--source-commits SHA[,SHA...]]" >&2
   exit 2
 }
 
@@ -117,6 +118,26 @@ for encoded in tracked:
 PY
 }
 
+validate_normal_receipt() {
+  local receipt="$1"
+  shift
+  local validator_out validator_rc=0
+  validator_out="$(mktemp)"
+  if [ -n "$SOURCE_COMMITS" ]; then
+    python3 "$VALIDATOR" --receipt "$receipt" --repo-root "$REPO_ROOT" \
+      --source-commits "$SOURCE_COMMITS" "$@" >"$validator_out" 2>&1 || validator_rc=$?
+  else
+    python3 "$VALIDATOR" --receipt "$receipt" --repo-root "$REPO_ROOT" \
+      "$@" >"$validator_out" 2>&1 || validator_rc=$?
+  fi
+  if [ "$validator_rc" -ne 0 ]; then
+    cat "$validator_out"
+    rm -f "$validator_out"
+    return "$validator_rc"
+  fi
+  rm -f "$validator_out"
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo-root) REPO_ROOT="${2:-}"; shift 2 ;;
@@ -126,6 +147,7 @@ while [ "$#" -gt 0 ]; do
     --if-head) IF_HEAD="${2:-}"; shift 2 ;;
     --if-roadmap-hash) IF_ROADMAP_HASH="${2:-}"; shift 2 ;;
     --commit-as) COMMIT_AS="${2:-}"; shift 2 ;;
+    --source-commits) SOURCE_COMMITS="${2:-}"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -188,7 +210,7 @@ if [ -f "$RECEIPT_PATH" ]; then
   SOURCE_PROOF="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proof_hash"])' "$RECEIPT_SOURCE")"
   LANDED_PROOF="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proof_hash"])' "$RECEIPT_PATH" 2>/dev/null || true)"
   [ -n "$LANDED_PROOF" ] && [ "$SOURCE_PROOF" = "$LANDED_PROOF" ] || stop closeout-proof-hash-mismatch "landed closeout receipt differs from prepared proof"
-  python3 "$VALIDATOR" --receipt "$RECEIPT_PATH" --repo-root "$REPO_ROOT" --verify-outputs >/dev/null || exit $?
+  validate_normal_receipt "$RECEIPT_PATH" --verify-outputs || exit $?
   printf 'verdict=PROCEED\nstate=already_applied\nproof_hash=%s\ncommit=%s\n' "$LANDED_PROOF" "$(git -C "$REPO_ROOT" rev-parse HEAD)"
   exit 0
 fi
@@ -323,7 +345,7 @@ cp "$RECEIPT_SOURCE" "$RECEIPT_PATH"
 rm -rf "$REPO_ROOT/${ACTIVE_ENTITY_RELATIVE:?}"
 
 git -C "$REPO_ROOT" add -- "$ACTIVE_ENTITY_RELATIVE" ROADMAP.md "$DEBRIEF_RELATIVE" "$ARCHIVE_ROOT_RELATIVE" "$RECEIPT_RELATIVE"
-python3 "$VALIDATOR" --receipt "$RECEIPT_PATH" --repo-root "$REPO_ROOT" --verify-outputs >/dev/null
+validate_normal_receipt "$RECEIPT_PATH" --verify-outputs
 if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = before-commit ]; then
   printf 'verdict=STOP\nreason=closeout-checkpoint-conflict\ndetail=injected failure before atomic closeout commit\n'
   false

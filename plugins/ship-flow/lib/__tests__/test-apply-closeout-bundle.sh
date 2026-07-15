@@ -71,22 +71,41 @@ setup_repo() {
 }
 
 make_bundle() {
-  local repo="$1" bundle="$2"
-  local proof_anchor proof_envelope
+  local repo="$1" bundle="$2" strategy="${3:-rebase}" source_metadata="${4:-}"
+  local proof_anchor proof_envelope source_commits source_one source_two proof_base
   mkdir -p "$bundle/docs/ship-flow/_debriefs" "$bundle/docs/ship-flow/_archive/widget-closeout" "$bundle/docs/ship-flow/_closeouts"
   printf '%s\n' '# Widget closeout debrief' '' '## Outcome' 'Merged and reconciled.' '' '## Reconciliation' 'First: 1111111' 'Last: 2222222' '' '## Todo Closure' 'No open todos.' >"$bundle/docs/ship-flow/_debriefs/2026-07-15-01.md"
   printf '%s\n' '---' 'slug: widget-closeout' 'title: Widget closeout' 'status: done' 'pr: "#40"' 'worktree:' 'completed: 2026-07-15T00:00:00Z' 'verdict: PASSED' 'archived: 2026-07-15T00:00:00Z' 'closeout_owner: true' '---' '' '# Widget closeout' >"$bundle/docs/ship-flow/_archive/widget-closeout/index.md"
-  printf '%s\n' '# Ship' '' '### Verdict' 'merge_method_intent: rebase' 'pr: "#40"' 'closeout_id: pending' '' '### Closeout' 'status: applied' >"$bundle/docs/ship-flow/_archive/widget-closeout/ship.md"
+  printf '%s\n' '# Ship' '' '### Verdict' "merge_method_intent: $strategy" 'pr: "#40"' 'closeout_id: pending' '' '### Closeout' 'status: applied' >"$bundle/docs/ship-flow/_archive/widget-closeout/ship.md"
   awk '
     $0 == "| widget-closeout | Widget closeout |" { next }
     $0 == "<!-- /section:shipped -->" { print "| widget-closeout | Widget closeout | 2026-07-15 |" }
     { print }
   ' "$repo/ROADMAP.md" >"$bundle/ROADMAP.md"
 
-  printf '%s\n' 'canonical landing proof fixture' >"$repo/landing-proof-fixture.txt"
-  git -C "$repo" add -- landing-proof-fixture.txt
-  git -C "$repo" commit -qm 'fixture: canonical landing proof'
-  proof_anchor="$(git -C "$repo" rev-parse HEAD)"
+  if [ "$strategy" = squash ]; then
+    proof_base="$(git -C "$repo" rev-parse HEAD)"
+    git -C "$repo" checkout -qb bundle-squash-topic "$proof_base"
+    printf '%s\n' 'squash source one' >"$repo/landing-proof-fixture.txt"
+    git -C "$repo" add -- landing-proof-fixture.txt
+    git -C "$repo" commit -qm 'fixture: squash source one'
+    source_one="$(git -C "$repo" rev-parse HEAD)"
+    printf '%s\n' 'squash source one' 'squash source two' >"$repo/landing-proof-fixture.txt"
+    git -C "$repo" commit -qam 'fixture: squash source two'
+    source_two="$(git -C "$repo" rev-parse HEAD)"
+    git -C "$repo" checkout -q main
+    git -C "$repo" merge --squash -q bundle-squash-topic >/dev/null
+    git -C "$repo" commit -qm 'fixture: squash landing'
+    proof_anchor="$(git -C "$repo" rev-parse HEAD)"
+    source_commits="$source_one,$source_two"
+  else
+    printf '%s\n' 'canonical landing proof fixture' >"$repo/landing-proof-fixture.txt"
+    git -C "$repo" add -- landing-proof-fixture.txt
+    git -C "$repo" commit -qm 'fixture: canonical landing proof'
+    proof_anchor="$(git -C "$repo" rev-parse HEAD)"
+    source_commits="$proof_anchor"
+  fi
+  [ -z "$source_metadata" ] || printf '%s\n' "$source_commits" >"$source_metadata"
   proof_envelope="${bundle}.landing-proof.env"
   "$LANDING_RESOLVER" \
     --repo-dir "$repo" \
@@ -95,13 +114,13 @@ make_bundle() {
     --implementation-pr 40 \
     --provider-merged-at 2026-07-15T00:00:00Z \
     --landing-anchor "$proof_anchor" \
-    --source-commits "$proof_anchor" \
-    --pr-commit-count 1 \
-    --merge-method-intent rebase >"$proof_envelope"
+    --source-commits "$source_commits" \
+    --pr-commit-count "$(printf '%s' "$source_commits" | awk -F, '{print NF}')" \
+    --merge-method-intent "$strategy" >"$proof_envelope"
 
-  python3 - "$repo" "$bundle" "$proof_envelope" <<'PY'
+  python3 - "$repo" "$bundle" "$proof_envelope" "$strategy" <<'PY'
 import hashlib,json,pathlib,sys
-repo,bundle,envelope=map(pathlib.Path,sys.argv[1:])
+repo,bundle,envelope=map(pathlib.Path,sys.argv[1:4]); strategy=sys.argv[4]
 ident={"provider":"github","repository":"example/repo","workflow":"docs/ship-flow","entity_slug":"widget-closeout","implementation_pr":40}
 cid=hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"widget-closeout",b"40"))).hexdigest()
 def h(path): return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -118,7 +137,7 @@ row="| widget-closeout | Widget closeout | 2026-07-15 |"
 r={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":ident,
  "ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{
    "index":h(repo/"docs/ship-flow/widget-closeout/index.md"),"review":h(repo/"docs/ship-flow/widget-closeout/review.md"),"ship":h(repo/"docs/ship-flow/widget-closeout/ship.md")}},
- "mode":"direct","merge_method_intent":"rebase","deterministic_closeout_head":"ship-closeout/"+cid,
+ "mode":"direct","merge_method_intent":strategy,"deterministic_closeout_head":"ship-closeout/"+cid,
  "landing_proof":landing,
  "transaction":{"phase":"applied","generation":2,"closeout_pr":None,"main_commit":landing["landing_anchor"]},
  "outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-07-15-01.md","sha256":h(bundle/"docs/ship-flow/_debriefs/2026-07-15-01.md")},
@@ -224,9 +243,28 @@ else
   assert_eq 'matching receipt rerun creates no commit' "$first_head" "$(git -C "$repo" rev-parse HEAD)"
   assert_contains 'matching receipt rerun is no-op' '^state=already_applied$' "$TMP_DIR/noop.out"
 
+  repo="$TMP_DIR/squash"; bundle="$TMP_DIR/squash-bundle"; squash_sources_file="$TMP_DIR/squash-sources"
+  setup_repo "$repo"; make_bundle "$repo" "$bundle" squash "$squash_sources_file"
+  squash_sources="$(cat "$squash_sources_file")"
+  before_head="$(git -C "$repo" rev-parse HEAD)"; before_tree="$(tree_hash "$repo")"
+  rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/squash-missing-source.out")"
+  assert_eq 'squash bundle without authoritative source commits fails closed' 1 "$rc"
+  assert_contains 'squash bundle missing source reports stable sentinel reason' '^reason=closeout-sentinel-invalid$' "$TMP_DIR/squash-missing-source.out"
+  assert_eq 'squash bundle missing source preserves HEAD' "$before_head" "$(git -C "$repo" rev-parse HEAD)"
+  assert_eq 'squash bundle missing source preserves index and tree' "$before_tree" "$(tree_hash "$repo")"
+  rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/squash-success.out" --source-commits "$squash_sources")"
+  assert_eq 'squash bundle accepts authoritative implementation source commits' 0 "$rc"
+  assert_contains 'squash bundle reports applied' '^state=applied$' "$TMP_DIR/squash-success.out"
+  squash_head="$(git -C "$repo" rev-parse HEAD)"
+  rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/squash-rerun.out" --source-commits "$squash_sources")"
+  assert_eq 'squash bundle idempotent replay exits success' 0 "$rc"
+  assert_eq 'squash bundle idempotent replay creates no commit' "$squash_head" "$(git -C "$repo" rev-parse HEAD)"
+  assert_contains 'squash bundle idempotent replay reports already applied' '^state=already_applied$' "$TMP_DIR/squash-rerun.out"
+
   repo="$TMP_DIR/bash32"; bundle="$TMP_DIR/bash32-bundle"
   setup_repo "$repo"; make_bundle "$repo" "$bundle"
   rc="$(run_bundle_with_shell_and_subject /bin/bash /usr/bin:/bin "$repo" "$bundle" "$TMP_DIR/bash32.out" 'ship(widget-closeout): advance status to done')"
+  if [ "$rc" != 0 ]; then sed 's/^/    bash32: /' "$TMP_DIR/bash32.out"; fi
   assert_eq 'focused helper executes under Bash 3.2 restricted PATH' 0 "$rc"
   assert_contains 'Bash 3.2 helper applies bundle' '^state=applied$' "$TMP_DIR/bash32.out"
 
