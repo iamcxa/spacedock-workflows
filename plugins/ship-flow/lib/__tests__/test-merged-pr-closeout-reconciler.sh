@@ -1535,6 +1535,18 @@ assert_feedback_r5_count() {
   if [ "$actual" = "$expected" ]; then record_pass "$desc"; else record_fail "$desc (expected $expected, got $actual)"; fi
 }
 
+feedback_r5_expected_receipt_tree() {
+  local repo="$1" base_head="$2" checkpoint_head="$3" receipt="$4" relative blob index expected
+  relative="${receipt#"$repo/"}"
+  blob="$(git -C "$repo" rev-parse "${checkpoint_head}:${relative}")"
+  index="$(mktemp)"; rm -f "$index"
+  GIT_INDEX_FILE="$index" git -C "$repo" read-tree "$base_head"
+  GIT_INDEX_FILE="$index" git -C "$repo" update-index --add --cacheinfo "100644,$blob,$relative"
+  expected="$(GIT_INDEX_FILE="$index" git -C "$repo" write-tree)"
+  rm -f "$index"
+  printf '%s\n' "$expected"
+}
+
 run_feedback_r5_failure_scenario() {
   local seam="$1" expected_phase="$2" expected_first_ref="$3" expected_first_updates="$4"
   local expected_first_main_commits="$5" expected_rerun_main_commits="$6"
@@ -1542,7 +1554,8 @@ run_feedback_r5_failure_scenario() {
   local expected_final_list_calls="$9" expected_final_create_calls="${10}" expected_final_ready_calls="${11}"
   local expected_final_create_effects="${12}" expected_final_ready_effects="${13}"
   local setup origin repo provider gh_bin registry log marker push_log deterministic_head receipt expected_failure_state
-  local base_head first_head first_tree first_receipt_hash first_ref_oid="" rc rerun_head rerun_tree rerun_receipt_hash
+  local base_head first_head first_tree expected_first_tree first_receipt_hash first_ref_oid="" rc
+  local rerun_head rerun_tree expected_rerun_tree rerun_receipt_hash
 
   setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r5-$seam")"
   IFS='|' read -r origin repo provider <<<"$setup"
@@ -1562,6 +1575,7 @@ run_feedback_r5_failure_scenario() {
       --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
   first_head="$(git -C "$repo" rev-parse HEAD)"; first_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
   receipt="$(feedback_r5_receipt_path "$repo")"; first_receipt_hash="$(shasum -a 256 "$receipt" 2>/dev/null | awk '{print $1}')"
+  expected_first_tree="$(feedback_r5_expected_receipt_tree "$repo" "$base_head" "$first_head" "$receipt")"
   [ "$expected_first_ref" = absent ] || first_ref_oid="$(git -C "$repo" rev-parse "refs/heads/$deterministic_head" 2>/dev/null || true)"
 
   assert_exit "R5 $seam first provider failure routes through stable retry" 1 "$rc"
@@ -1570,7 +1584,7 @@ run_feedback_r5_failure_scenario() {
   assert_contains "R5 $seam first failure reports its safe checkpoint state" "^state=${expected_failure_state}$" "$TMP_DIR/feedback-r5-$seam-first.out"
   assert_feedback_r5_receipt "R5 $seam first checkpoint" "$repo" "$expected_phase" "$(if [ "$expected_phase" = prepared ]; then printf null; else printf 141; fi)"
   if [ "$(git -C "$repo" rev-list --count "$base_head..$first_head")" = "$expected_first_main_commits" ] && \
-     [ "$first_tree" = "$(git -C "$repo" rev-parse "$first_head^{tree}")" ]; then
+     [ "$first_tree" = "$expected_first_tree" ]; then
     record_pass "R5 $seam first failure preserves the exact documented main checkpoint"
   else
     record_fail "R5 $seam first failure preserves the exact documented main checkpoint"
@@ -1587,6 +1601,7 @@ run_feedback_r5_failure_scenario() {
       --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
   rerun_head="$(git -C "$repo" rev-parse HEAD)"; rerun_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
   receipt="$(feedback_r5_receipt_path "$repo")"; rerun_receipt_hash="$(shasum -a 256 "$receipt" 2>/dev/null | awk '{print $1}')"
+  expected_rerun_tree="$(feedback_r5_expected_receipt_tree "$repo" "$base_head" "$rerun_head" "$receipt")"
 
   assert_exit "R5 $seam rerun converges" 0 "$rc"
   assert_contains "R5 $seam rerun awaits the one closeout PR" '^verdict=PROCEED$' "$TMP_DIR/feedback-r5-$seam-rerun.out"
@@ -1594,7 +1609,7 @@ run_feedback_r5_failure_scenario() {
   assert_contains "R5 $seam rerun reports awaiting state" '^state=closeout_pr_awaiting_merge$' "$TMP_DIR/feedback-r5-$seam-rerun.out"
   assert_feedback_r5_receipt "R5 $seam rerun checkpoint" "$repo" awaiting_closeout_pr 141
   if [ "$(git -C "$repo" rev-list --count "$base_head..$rerun_head")" = "$expected_rerun_main_commits" ] && \
-     [ "$rerun_tree" = "$(git -C "$repo" rev-parse "$rerun_head^{tree}")" ]; then
+     [ "$rerun_tree" = "$expected_rerun_tree" ]; then
     record_pass "R5 $seam rerun has the exact bounded main history and tree"
   else
     record_fail "R5 $seam rerun has the exact bounded main history and tree"
