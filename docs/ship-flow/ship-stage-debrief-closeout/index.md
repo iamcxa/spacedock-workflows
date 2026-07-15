@@ -241,20 +241,22 @@ Planned native post-merge closeout as five ordered TDD waves: landing proof, dur
   Commit `b5fa535` sanctions only subject/state/body-bound FO feedback receipts; focused C14 is 31/31 and full C1-C15 exits 0 after an independent APPROVED review.
 - DONE: Re-enter Execute for Verify feedback cycle 2 and close R2-B1-R2-B4 without taking the deferred W2 or receipt-scan performance warnings into acceptance scope.
   Commits `b6cd023`, `91402c7`, `110bc09`, and `85d6dff` require native proof before active legacy closeout, bind authoritative squash source commits through direct/optional/replay paths, restrict ROADMAP identity to cell zero, and guard root-parent speculation. Independent reviews APPROVED; resolver 94/94 both shells, receipt 85/85, bundle 78/78 both shells, integration 23/23, default 198/198, direct 200/200, optional 179/179, and PR40/41 141/141 pass.
+- DONE: Re-enter Execute for Verify feedback cycle 3 and close only R3-B1 while deferring W2/W3/W4.
+  Commits `54a4a9a` and `8d1ac64` boundedly reacquire authoritative GitHub PR source objects in true main-only and post-prune replay states, bind repo/PR/provider OIDs, preserve checkout/remotes, and make temporary-ref creation collision/signal safe. Focused R3 is 107/107 on Bash 3.2 and 5.3; compact R2 regressions are 13/13 and 23/23; the same reviewer APPROVED all three prior findings as closed.
 - BOUNDARY: No external PR, push, merge, deployment, issue update, archive, or verify-stage advance occurred. Non-UI render fidelity is N/A.
 
 ### Summary
 
-Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, receipt-first crash recovery, authoritative squash-source validation, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
+Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, receipt-first crash recovery, bounded authoritative PR-source reacquisition, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
 
 ### Metrics
 
 - status: passed
-- duration_minutes: 505
-- iteration_count: 18 implementation/review repair loops
-- task_count: 13
-- commit_count: 16 implementation/docs commits
-- reviewer_verdict: APPROVED after both feedback cycles received independent re-review
+- duration_minutes: 599
+- iteration_count: 20 implementation/review repair loops
+- task_count: 14
+- commit_count: 18 implementation/docs commits
+- reviewer_verdict: APPROVED after all three feedback cycles received independent re-review
 <!-- /section:execute-stage-report -->
 
 <!-- section:verify-stage-report -->

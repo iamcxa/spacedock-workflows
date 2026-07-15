@@ -2,9 +2,9 @@
 # Make debrief a native post-merge ship closeout — Execute
 
 started: 2026-07-15T04:49:00Z
-completed: 2026-07-15T13:14:18Z
+completed: 2026-07-15T14:48:07Z
 base_commit: d45d176
-verified_head: 85d6dff1dd595612d0cec7fc123d896c6ca4a969
+verified_head: 8d1ac64dcb16cb8710b678c667b71537d3989198
 
 ## Execute Dispatch Manifest
 
@@ -30,7 +30,7 @@ W2 remains deferred hardening. F1 and F2 are disjoint and may run concurrently; 
 
 ### Feedback Cycle 2 Dispatch Manifest
 
-R2-F1 (B1), R2-F2 (B2/B3), and R2-F3 (B4) used disjoint delegated TDD lanes; R2-R independently reviewed each completed lane while later disjoint execution continued.
+R2-F1 (B1), R2-F2 (B2/B3), and R2-F3 (B4) used disjoint delegated TDD lanes; R2-R independently reviewed each completed lane while later disjoint execution continued. Cycle 3 split R3-B1 RED, production design, and same-reviewer repair lanes; W2/W3/W4 remained deferred.
 
 ## Execution Log
 
@@ -49,6 +49,7 @@ R2-F1 (B1), R2-F2 (B2/B3), and R2-F3 (B4) used disjoint delegated TDD lanes; R2-
 | R2-F2 | feedback 2 | Codex worker + independent reviewer | done | authoritative squash proof and first-cell ROADMAP identity | `91402c7` |
 | R2-F3 | feedback 2 | Codex worker + independent reviewer | done | young-repository parent guard | `110bc09` |
 | R2-I | feedback 2 integration | Codex worker + independent reviewer | done | squash source proof through direct, optional, and replay callers | `85d6dff` |
+| R3-B1 | feedback 3 | Codex workers + same independent reviewer | done | bounded authoritative PR-source acquisition and review hardening | `54a4a9a`, `8d1ac64` |
 
 ## TDD Evidence
 
@@ -65,6 +66,7 @@ R2-F1 (B1), R2-F2 (B2/B3), and R2-F3 (B4) used disjoint delegated TDD lanes; R2-
 | F4 | C14 28/29, then impossible-time review case 30/31 | focused 31/31; full C1-C15 exit 0 |
 | R2-F1 | focused reconciler 7/6 | focused 13/13; default 198/198; native rerun byte/commit no-op |
 | R2-F2/F3/I | receipt 81/3; resolver 89/5; integration 9/12; apply 4/5 | receipt 85/85; resolver 94/94 both shells; integration 23/23; bundle 78/78 both shells; independent APPROVED |
+| R3-B1 | main-only acquisition 26/17; review-blocker matrix 31/25 | focused 107/107 both shells; collision and HUP/INT/QUIT/TERM cleanup green; R2 13/13 and 23/23; same reviewer APPROVED |
 
 ## Issues Found
 
@@ -75,7 +77,7 @@ R2-F1 (B1), R2-F2 (B2/B3), and R2-F3 (B4) used disjoint delegated TDD lanes; R2-
 - Resolved: Verify feedback B1-B5 and W1 now fail closed, preserve the tracked entity tree, survive post-commit signals, validate D1/D4 semantics from Git plus exported bytes, and retain one reconciler projection owner; fresh review APPROVED.
 - Warning only: final gates retained three expected legacy-v1 debrief warnings plus existing historical invariant skips/grandfather warning.
 - Deferred hardening: W2 same-user path-swap TOCTOU and proof-root symlink-alias coverage remain non-acceptance follow-ups.
-- Resolved: aggregate C14 recognizes only subject/state/body-bound FO feedback receipts (`b5fa535`); round-2 B1-B4 now require native proof, bind squash sources through every normal caller, match ROADMAP identity in cell zero, and guard root-parent speculation (`b6cd023`..`85d6dff`).
+- Resolved: aggregate C14 recognizes only subject/state/body-bound FO feedback receipts (`b5fa535`); round-2 B1-B4 require native proof, bound squash sources, cell-zero ROADMAP identity, and root-parent guards (`b6cd023`..`85d6dff`); R3-B1 now reacquires exact provider PR objects after pruning via repo-bound, bounded, collision-safe acquisition (`54a4a9a`, `8d1ac64`).
 
 ## Knowledge Captures
 
@@ -87,7 +89,7 @@ R2-F1 (B1), R2-F2 (B2/B3), and R2-F3 (B4) used disjoint delegated TDD lanes; R2-
 | DC | Procedure | Result | Evidence |
 | --- | --- | --- | --- |
 | DC-1 | landing resolver suite | PASS | 94/94 both shells; rebase, squash, merge-commit, young-root and ambiguity/moving-main cases |
-| DC-2/4/5/6 | default reconciler suite | PASS | 198/198; direct 200/200; receipt 85/85; bundle 78/78 both shells; optional 179/179 |
+| DC-2/4/5/6 | default reconciler suite | PASS | 198/198; direct 200/200; receipt 85/85; bundle 78/78 both shells; optional 179/179; R3 main-only 107/107 both shells |
 | DC-3 | debrief schema + C15 | PASS | schema PASS; C15 through `OK C15.23b` |
 | DC-7 | exact seven-command compatibility chain | PASS | todo 5/5, metadata 45/45, mergeable 115/115, feedback C14 31/31, C1..C15 all OK |
 | DC-8 | `SHIP_FLOW_CLOSEOUT_CASE=pr40-pr41` | PASS | 141/141; first run terminalizes once, second byte/hash no-op |
@@ -99,32 +101,32 @@ Ancillary evidence: TDD ledger `status=pass records=5`; Bash syntax, Python comp
 ## Execute Report
 
 status: passed
-stage_cost: five serial delegated waves plus two feedback cycles with overlapped execute/review
-tasks_summary: T1-T5, F1-F4, and R2-F1/R2-F2/R2-F3/R2-I done; 0 blocked
-cross_review_verdict: APPROVED after both feedback cycles received independent re-review
+stage_cost: five serial delegated waves plus three feedback cycles with overlapped execute/review
+tasks_summary: T1-T5, F1-F4, R2-F1/R2-F2/R2-F3/R2-I, and R3-B1 done; 0 blocked
+cross_review_verdict: APPROVED after all three feedback cycles received independent re-review
 cross_review_coaching: Keep review-driven reopens attached to their original task and surface methodology substitutions explicitly so Verify inherits the actual execution graph.
 science_officer_em_upward_report: {em_judgment: "execute evidence and attribution are verification-ready", recommendation: "finalize execute artifact; FO may route verification", route: proceed, confidence: high}
 knowledge_captures: 2
 
 ### Metrics
 
-duration_minutes: 505
-iteration_count: 18 implementation/review repair loops
-task_count: 13
-tasks_done: 13
+duration_minutes: 599
+iteration_count: 20 implementation/review repair loops
+task_count: 14
+tasks_done: 14
 tasks_blocked: 0
-commit_count: 16 implementation/docs commits
+commit_count: 18 implementation/docs commits
 
 ### Hand-off to Verify
 
 <!-- section:hand-off-to-verify -->
 ```yaml
 commit_list:
-  commits: [42b9637, 1870efb, 4069946, a196da6, 2424b9d, 42f8e06, bdbbf96, c08c391, 3ee8f21, 490a294, fb6f4aa, b5fa535, b6cd023, 91402c7, 110bc09, 85d6dff]
-  verified_head: 85d6dff1dd595612d0cec7fc123d896c6ca4a969
+  commits: [42b9637, 1870efb, 4069946, a196da6, 2424b9d, 42f8e06, bdbbf96, c08c391, 3ee8f21, 490a294, fb6f4aa, b5fa535, b6cd023, 91402c7, 110bc09, 85d6dff, 54a4a9a, 8d1ac64]
+  verified_head: 8d1ac64dcb16cb8710b678c667b71537d3989198
 dc_status:
   - {id: DC-1, status: PASS, evidence: "landing resolver 94/94 both shells"}
-  - {id: DC-2/DC-4/DC-5/DC-6, status: PASS, evidence: "default 198/198; direct 200/200; receipt 85/85; optional 179/179; bundle 78/78 both shells"}
+  - {id: DC-2/DC-4/DC-5/DC-6, status: PASS, evidence: "default 198/198; direct 200/200; receipt 85/85; optional 179/179; bundle 78/78 both shells; R3 main-only 107/107 both shells"}
   - {id: DC-3, status: PASS, evidence: "debrief schema and C15 PASS"}
   - {id: DC-7, status: PASS, evidence: "exact compatibility chain and C1-C15 exit 0; feedback C14 31/31"}
   - {id: DC-8, status: PASS, evidence: "PR40/41 141/141 and two-run no-op"}
@@ -133,7 +135,7 @@ deviations:
   - "After W3 and before W4, review reopened T2-owned receipt schema paths in 42f8e06 to clarify transaction.main_commit as the implementation landing anchor, never the projection or optional closeout-PR merge SHA."
   - "Review-driven tests and repairs stayed within each task's owned paths and acceptance contract."
   - "T2 did not use plan-listed superpowers:writing-skills; TDD plus independent schema/spec/quality review supplied the contract discipline instead."
-  - "Verify feedback cycles added only F1-F4 and R2-F1/R2-F2/R2-F3/R2-I for B1-B5/W1 then R2-B1-R2-B4; W2 and round-2 performance warnings remain deferred hardening."
+  - "Verify feedback cycles added only F1-F4, R2-F1/R2-F2/R2-F3/R2-I, and R3-B1 for B1-B5/W1, R2-B1-R2-B4, then authoritative source reacquisition; W2/W3/W4 and performance warnings remain deferred hardening."
 render_fidelity_evidence: "N/A — non-UI entity"
 stub_ack_log: []
 skills_needed_used:
