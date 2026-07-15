@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -312,3 +312,11 @@ Round 4 verifies the source-object acquisition repair itself, but optional and r
   verify_artifact: verify.md@6ca8236
   required_fixes: R3-B1 bounded authoritative implementation-PR source-object acquisition for main-only first closeout and cleanup/GC replay
   deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
+- cycle: 4
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-15T15:10:04Z
+  verify_artifact: verify.md@a217804
+  required_fixes: R4-B1 authoritative repository binding for receipt-first and optional closeout-PR GitHub operations with foreign-CWD non-dry-run coverage
+  deferred_hardening: R4-W1 fake-gh repository-binding assertions accompany the blocker; W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
