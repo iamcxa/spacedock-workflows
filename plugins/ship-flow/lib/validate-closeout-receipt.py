@@ -268,6 +268,15 @@ def validate(receipt: dict[str, Any], path: Path | None = None) -> None:
         fail("closeout-checkpoint-conflict", "awaiting phase requires PR and forbids main commit")
     if phase in ("applied", "complete") and main_commit is None:
         fail("closeout-checkpoint-conflict", "applied/complete phase requires authoritative main commit")
+    if phase in ("applied", "complete"):
+        landing_anchor = landing.get("landing_anchor")
+        if not isinstance(landing_anchor, str) or not SHA40_RE.fullmatch(landing_anchor):
+            fail("closeout-sentinel-invalid", "applied/complete landing proof requires a full landing_anchor sha")
+        if main_commit != landing_anchor:
+            fail(
+                "closeout-checkpoint-conflict",
+                "main_commit must equal the implementation PR authoritative landing_anchor",
+            )
     if mode == "pull_request" and phase in ("applied", "complete") and closeout_pr is None:
         fail("closeout-checkpoint-conflict", "applied PR closeout must retain closeout_pr")
 

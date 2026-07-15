@@ -41,7 +41,9 @@ transaction:
   phase: { type: enum, values: [prepared, awaiting_closeout_pr, applied, complete] }
   generation: { type: integer, minimum: 1 }
   closeout_pr: { type: nullable-positive-integer }
-  main_commit: { type: nullable-40-hex }
+  main_commit:
+    type: nullable-40-hex
+    semantics: "In applied or complete, equals landing_proof.landing_anchor: the implementation PR's verified authoritative main landing, never the terminal projection commit or closeout-PR merge SHA"
   legal_transitions:
     direct: [prepared-to-applied, applied-to-complete]
     pull_request: [prepared-to-awaiting_closeout_pr, awaiting_closeout_pr-to-applied, applied-to-complete]
@@ -51,6 +53,9 @@ transaction:
     - "identity, mode, merge_method_intent, deterministic head, proof_hash, and proof payload are immutable"
     - "closeout_pr binds only entering pull_request awaiting state, then is immutable"
     - "main_commit binds only entering applied state, then is immutable"
+pull_request_merge_proof:
+  invariant: "Provider state is MERGED and exact landed sentinel/output bytes validate with deterministic closeout head and closeout PR bindings"
+  excludes: "transaction.main_commit; that field remains the implementation PR authoritative landing_anchor"
 outputs:
   exact_keys: [debrief, ship, archived_entity, roadmap_row]
   artifact: { fields: { path: string, sha256: sha256 } }

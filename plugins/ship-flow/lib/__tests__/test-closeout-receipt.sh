@@ -117,8 +117,12 @@ PY
 expect_reason "stale artifact hash invalidates proof" closeout-sentinel-payload-mismatch python3 "$VALIDATOR" --receipt "$TMP/tampered.json" --allow-any-path
 
 make_receipt "$TMP/prepared.json" prepared
-transition_receipt "$TMP/prepared.json" "$TMP/applied.json" applied 2 null "c$(printf 'c%.0s' {1..39})"
+transition_receipt "$TMP/prepared.json" "$TMP/mismatched-anchor-applied.json" applied 2 null "c$(printf 'c%.0s' {1..39})"
+expect_reason "applied main commit must equal verified landing anchor" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/mismatched-anchor-applied.json" --allow-any-path
+transition_receipt "$TMP/prepared.json" "$TMP/applied.json" applied 2 null "$(printf 'b%.0s' {1..40})"
 expect_ok "phase advances monotonically" python3 "$VALIDATOR" --receipt "$TMP/applied.json" --previous "$TMP/prepared.json" --allow-any-path
+transition_receipt "$TMP/applied.json" "$TMP/mismatched-anchor-complete.json" complete 3 null "c$(printf 'c%.0s' {1..39})"
+expect_reason "complete main commit must equal verified landing anchor" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/mismatched-anchor-complete.json" --allow-any-path
 expect_reason "phase regression stops" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/prepared.json" --previous "$TMP/applied.json" --allow-any-path
 expect_ok "idempotent receipt replay is valid" python3 "$VALIDATOR" --receipt "$TMP/applied.json" --previous "$TMP/applied.json" --allow-any-path
 
@@ -194,21 +198,21 @@ printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Ti
 expect_reason "duplicate exact Shipped rows reject" closeout-stage-artifacts-incoherent python3 "$VALIDATOR" --receipt "$CANONICAL" --repo-root "$TMP" --verify-outputs
 
 make_receipt "$TMP/direct-prepared.json" prepared direct 1
-transition_receipt "$TMP/direct-prepared.json" "$TMP/direct-applied.json" applied 2 null "c$(printf 'c%.0s' {1..39})"
+transition_receipt "$TMP/direct-prepared.json" "$TMP/direct-applied.json" applied 2 null "$(printf 'b%.0s' {1..40})"
 expect_ok "direct prepared to applied is legal" python3 "$VALIDATOR" --receipt "$TMP/direct-applied.json" --previous "$TMP/direct-prepared.json" --allow-any-path
-transition_receipt "$TMP/direct-applied.json" "$TMP/direct-complete.json" complete 3 null "c$(printf 'c%.0s' {1..39})"
+transition_receipt "$TMP/direct-applied.json" "$TMP/direct-complete.json" complete 3 null "$(printf 'b%.0s' {1..40})"
 expect_ok "direct applied to complete is legal" python3 "$VALIDATOR" --receipt "$TMP/direct-complete.json" --previous "$TMP/direct-applied.json" --allow-any-path
-transition_receipt "$TMP/direct-prepared.json" "$TMP/direct-skip.json" complete 2 null "c$(printf 'c%.0s' {1..39})"
+transition_receipt "$TMP/direct-prepared.json" "$TMP/direct-skip.json" complete 2 null "$(printf 'b%.0s' {1..40})"
 expect_reason "direct phase skip rejects" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/direct-skip.json" --previous "$TMP/direct-prepared.json" --allow-any-path
-transition_receipt "$TMP/direct-prepared.json" "$TMP/direct-same-generation.json" applied 1 null "c$(printf 'c%.0s' {1..39})"
+transition_receipt "$TMP/direct-prepared.json" "$TMP/direct-same-generation.json" applied 1 null "$(printf 'b%.0s' {1..40})"
 expect_reason "transition requires generation plus one" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/direct-same-generation.json" --previous "$TMP/direct-prepared.json" --allow-any-path
-transition_receipt "$TMP/direct-prepared.json" "$TMP/direct-generation-skip.json" applied 3 null "c$(printf 'c%.0s' {1..39})"
+transition_receipt "$TMP/direct-prepared.json" "$TMP/direct-generation-skip.json" applied 3 null "$(printf 'b%.0s' {1..40})"
 expect_reason "transition rejects generation skip" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/direct-generation-skip.json" --previous "$TMP/direct-prepared.json" --allow-any-path
-transition_receipt "$TMP/direct-prepared.json" "$TMP/mode-mutation.json" applied 2 null "c$(printf 'c%.0s' {1..39})" pull_request
+transition_receipt "$TMP/direct-prepared.json" "$TMP/mode-mutation.json" applied 2 null "$(printf 'b%.0s' {1..40})" pull_request
 expect_reason "mode mutation rejects" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/mode-mutation.json" --previous "$TMP/direct-prepared.json" --allow-any-path
-transition_receipt "$TMP/direct-prepared.json" "$TMP/intent-mutation.json" applied 2 null "c$(printf 'c%.0s' {1..39})" "" squash
+transition_receipt "$TMP/direct-prepared.json" "$TMP/intent-mutation.json" applied 2 null "$(printf 'b%.0s' {1..40})" "" squash
 expect_reason "merge intent mutation rejects" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/intent-mutation.json" --previous "$TMP/direct-prepared.json" --allow-any-path
-transition_receipt "$TMP/direct-prepared.json" "$TMP/head-mutation.json" applied 2 null "c$(printf 'c%.0s' {1..39})" "" KEEP "ship-closeout/$(printf 'f%.0s' {1..64})"
+transition_receipt "$TMP/direct-prepared.json" "$TMP/head-mutation.json" applied 2 null "$(printf 'b%.0s' {1..40})" "" KEEP "ship-closeout/$(printf 'f%.0s' {1..64})"
 expect_reason "deterministic head mutation rejects" closeout-sentinel-identity-mismatch python3 "$VALIDATOR" --receipt "$TMP/head-mutation.json" --previous "$TMP/direct-prepared.json" --allow-any-path
 python3 - "$TMP/direct-applied.json" "$TMP/identity-mutation.json" <<'PY'
 import hashlib,json,sys
@@ -222,9 +226,9 @@ expect_reason "identity mutation across replay rejects" closeout-checkpoint-conf
 make_receipt "$TMP/pr-prepared.json" prepared pull_request 1
 transition_receipt "$TMP/pr-prepared.json" "$TMP/pr-awaiting.json" awaiting_closeout_pr 2 88 null
 expect_ok "PR prepared to awaiting is legal" python3 "$VALIDATOR" --receipt "$TMP/pr-awaiting.json" --previous "$TMP/pr-prepared.json" --allow-any-path
-transition_receipt "$TMP/pr-awaiting.json" "$TMP/pr-applied.json" applied 3 88 "d$(printf 'd%.0s' {1..39})"
+transition_receipt "$TMP/pr-awaiting.json" "$TMP/pr-applied.json" applied 3 88 "$(printf 'b%.0s' {1..40})"
 expect_ok "PR awaiting to applied is legal" python3 "$VALIDATOR" --receipt "$TMP/pr-applied.json" --previous "$TMP/pr-awaiting.json" --allow-any-path
-transition_receipt "$TMP/pr-applied.json" "$TMP/pr-changed.json" complete 4 89 "d$(printf 'd%.0s' {1..39})"
+transition_receipt "$TMP/pr-applied.json" "$TMP/pr-changed.json" complete 4 89 "$(printf 'b%.0s' {1..40})"
 expect_reason "closeout PR is immutable" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/pr-changed.json" --previous "$TMP/pr-applied.json" --allow-any-path
 transition_receipt "$TMP/pr-applied.json" "$TMP/main-changed.json" complete 4 88 "e$(printf 'e%.0s' {1..39})"
 expect_reason "main commit is immutable" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/main-changed.json" --previous "$TMP/pr-applied.json" --allow-any-path
