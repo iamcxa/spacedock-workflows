@@ -249,20 +249,26 @@ Planned native post-merge closeout as five ordered TDD waves: landing proof, dur
   Commits `0fdbe25` and `743f1af` map provider list/create/ready failures to one stable checkpoint verdict, resume exact local/remote state without duplicates, and prove the precise base-plus-receipt checkpoint tree. Final RED was 121/20; R5 is 141/141 on Bash 3.2 and 5.3, R4 is 29/29 both shells, isolated R3 is 107/107, R2 is 13/13 + 23/23, default is 198/198, and independent review APPROVED after one test-quality repair.
 - DONE: Re-enter Execute for Verify feedback cycle 6 and close only R6-B1 plus directly coupled R6-W1 while preserving R2-R5 and deferring W2/W3/W4.
   Commit `0a47e50` counts actual seed/terminal push invocations, skips an already exact remote seed, fails closed on divergent or uninspectable refs, and composes internally owned bundle cleanup with source-object signal cleanup. Final RED was 235/44; R6 is 279/279 both shells, R4 is 29/29 both, isolated R3 is 107/107, R2 is 13/13 + 23/23, default is 198/198, and fresh spec/quality reviews APPROVED.
+- DONE: Add the Cycle 7 deterministic inspection-to-push race regression while production is frozen.
+  The local-bare wrapper inserts an ancestor-valued competitor immediately before the real seed push; the causal RED was 14/5 and failed exactly on competitor overwrite, post-race provider creation, and the missing expected-absence lease/full-ref destination.
+- DONE: Close only R7-B1 with atomic expected-absence seed publication while preserving exact retry and terminal-publication semantics.
+  Commit `e3adebe` uses a create-only full-ref lease, preserves the competing remote ref plus exact local checkpoint bytes on rejection, emits stable `PROMPT_CAPTAIN / closeout-checkpoint-conflict / closeout_pr_prepared`, publishes a missing seed once, skips an exact existing OID, and leaves the terminal OID lease unchanged.
+- DONE: Preserve the Cycle 6 recovery envelope and complete Cycle 7 review/report gates without widening into W2/W3/W4.
+  R7 is 19/19, R6 is 279/279, R4 is 29/29, isolated R3 is 107/107, R2 is 13/13 + 23/23, and default is 198/198 on both Bash 3.2 and 5.3; independent spec/quality reviews APPROVED, the pinned ledger/Spacedock checks pass, and the full compatibility chain plus C1-C15 exit 0.
 - BOUNDARY: No external PR, push, merge, deployment, issue update, archive, or verify-stage advance occurred. Non-UI render fidelity is N/A.
 
 ### Summary
 
-Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, receipt-first crash recovery, bounded authoritative provider/object binding, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
+Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, atomic expected-absence seed publication, receipt-first crash recovery, bounded authoritative provider/object binding, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
 
 ### Metrics
 
 - status: passed
-- duration_minutes: 765
-- iteration_count: 24 implementation/review repair loops
-- task_count: 17
-- commit_count: 22 implementation/docs/test commits
-- reviewer_verdict: APPROVED after all six feedback cycles received independent re-review
+- duration_minutes: 809
+- iteration_count: 25 implementation/review repair loops
+- task_count: 18
+- commit_count: 23 implementation/docs/test commits
+- reviewer_verdict: APPROVED after all seven feedback cycles received independent re-review
 <!-- /section:execute-stage-report -->
 
 <!-- section:verify-stage-report -->
