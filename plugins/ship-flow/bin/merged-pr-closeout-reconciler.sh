@@ -11,6 +11,32 @@ BUNDLE_APPLIER="${PLUGIN_ROOT}/lib/apply-closeout-bundle.sh"
 RECEIPT_VALIDATOR="${PLUGIN_ROOT}/lib/validate-closeout-receipt.py"
 DEBRIEF_VALIDATOR="${PLUGIN_ROOT}/lib/__tests__/validate-debrief-schema.sh"
 
+source_object_store=""
+source_object_binding=""
+source_object_store_ref="refs/ship-flow/closeout-source"
+source_object_target_repos=()
+source_object_target_refs=()
+source_object_target_tips=()
+
+# shellcheck disable=SC2329 # Invoked indirectly by the EXIT trap.
+cleanup_source_object_acquisition() {
+  local status=$? index=0
+  trap - EXIT HUP INT QUIT TERM
+  while [ "$index" -lt "${#source_object_target_repos[@]}" ]; do
+    git -C "${source_object_target_repos[$index]}" update-ref -d \
+      "${source_object_target_refs[$index]}" "${source_object_target_tips[$index]}" >/dev/null 2>&1 || true
+    index=$((index + 1))
+  done
+  [ -z "$source_object_store" ] || rm -rf "$source_object_store"
+  exit "$status"
+}
+
+trap cleanup_source_object_acquisition EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 131' QUIT
+trap 'exit 143' TERM
+
 resolve_status_bin() {
   if [ -n "${STATUS_BIN:-}" ]; then
     printf '%s\n' "$STATUS_BIN"
@@ -182,7 +208,8 @@ read_provider_fixture() {
 read_provider_gh() {
   command -v gh >/dev/null 2>&1 || reject_input "missing-gh" "gh CLI is not available"
   local output
-  output="$(gh pr view "$pr_number" \
+  repository="$(gh repo view --json nameWithOwner --jq '.nameWithOwner')"
+  output="$(gh pr view "$pr_number" --repo "$repository" \
     --json number,state,mergedAt,headRefName,baseRefName,url,mergeCommit,commits \
     --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")", "landing_anchor=\(.mergeCommit.oid // "")", "source_commits=\([.commits[].oid] | join(","))", "pr_commit_count=\(.commits | length)"] | .[]')"
   provider="gh"
@@ -196,10 +223,164 @@ read_provider_gh() {
   landing_anchor="$(printf '%s\n' "$output" | awk -F= '$1=="landing_anchor"{print $2; exit}')"
   source_commits="$(printf '%s\n' "$output" | awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}')"
   pr_commit_count="$(printf '%s\n' "$output" | awk -F= '$1=="pr_commit_count"{print $2; exit}')"
-  repository="$(gh repo view --json nameWithOwner --jq '.nameWithOwner')"
   if [ "$provider_number" != "$pr_number" ]; then
     reject_input "pr-number-mismatch" "gh PR number does not match entity"
   fi
+}
+
+normalize_github_remote_repository() {
+  local value="$1" path
+  value="${value%/}"
+  case "$value" in
+    https://github.com/*) path="${value#https://github.com/}" ;;
+    git@github.com:*) path="${value#git@github.com:}" ;;
+    ssh://git@github.com/*) path="${value#ssh://git@github.com/}" ;;
+    ssh://github.com/*) path="${value#ssh://github.com/}" ;;
+    *) return 1 ;;
+  esac
+  path="${path%.git}"
+  case "$path" in
+    */*) [ "${path#*/}" = "${path##*/}" ] || return 1 ;;
+    *) return 1 ;;
+  esac
+  [[ "$path" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || return 1
+  printf '%s\n' "$path"
+}
+
+resolve_provider_source_remote() {
+  local candidate raw normalized normalized_fold repository_fold remotes
+  source_remote_name=""
+  source_remote_url=""
+  remotes="$(git -C "$repo_root" remote)"
+  repository_fold="$(printf '%s' "$repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  for candidate in origin $remotes; do
+    [ -n "$candidate" ] || continue
+    [ "$candidate" != origin ] || git -C "$repo_root" config --get remote.origin.url >/dev/null 2>&1 || continue
+    [ "$candidate" = origin ] || [ "$candidate" != "$source_remote_name" ] || continue
+    raw="$(git -C "$repo_root" config --get "remote.${candidate}.url" 2>/dev/null || true)"
+    [ -n "$raw" ] || continue
+    normalized="$(normalize_github_remote_repository "$raw" 2>/dev/null || true)"
+    normalized_fold="$(printf '%s' "$normalized" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+    [ -n "$normalized" ] && [ "$normalized_fold" = "$repository_fold" ] || continue
+    source_remote_name="$candidate"
+    source_remote_url="$(git -C "$repo_root" remote get-url "$candidate" 2>/dev/null || true)"
+    [ -n "$source_remote_url" ] || continue
+    return 0
+  done
+  return 1
+}
+
+validate_source_object_set() {
+  local target_repo="$1" expected_tip="$2" ordered_oids="$3" expected_count="$4"
+  local source_oids=() source_oid first_parent
+  IFS=',' read -r -a source_oids <<< "$ordered_oids"
+  [ "${#source_oids[@]}" -eq "$expected_count" ] || return 1
+  for source_oid in "${source_oids[@]}"; do
+    [[ "$source_oid" =~ ^[0-9a-f]{40}$ ]] || return 1
+    git -C "$target_repo" cat-file -e "${source_oid}^{commit}" 2>/dev/null || return 1
+    git -C "$target_repo" merge-base --is-ancestor "$source_oid" "$expected_tip" 2>/dev/null || return 1
+  done
+  first_parent="$(git -C "$target_repo" rev-parse --verify "${source_oids[0]}^1" 2>/dev/null || true)"
+  [ -n "$first_parent" ] && git -C "$target_repo" cat-file -e "${first_parent}^{commit}" 2>/dev/null
+}
+
+materialize_acquired_source_objects() {
+  local target_repo="$1" binding_hash target_ref import_out import_rc=0 expected_tip imported_tip="" index=0 nonce
+  local source_oids=()
+  IFS=',' read -r -a source_oids <<< "$source_commits"
+  expected_tip="${source_oids[$((${#source_oids[@]} - 1))]}"
+
+  if [ "$pr_provider" = fixture ]; then
+    validate_source_object_set "$target_repo" "$expected_tip" "$source_commits" "$pr_commit_count" ||
+      reject_input landing-patch-equivalence-failed "authoritative implementation PR source objects are unavailable"
+    return 0
+  fi
+
+  while [ "$index" -lt "${#source_object_target_repos[@]}" ]; do
+    if [ "${source_object_target_repos[$index]}" = "$target_repo" ] &&
+       [ "$(git -C "$target_repo" rev-parse --verify "${source_object_target_refs[$index]}^{commit}" 2>/dev/null || true)" = "$expected_tip" ]; then
+      validate_source_object_set "$target_repo" "$expected_tip" "$source_commits" "$pr_commit_count" ||
+        reject_input landing-patch-equivalence-failed "cached implementation PR source objects do not match provider OIDs"
+      return 0
+    fi
+    index=$((index + 1))
+  done
+
+  binding_hash="$(printf '%s' "$source_object_binding" | git hash-object --stdin)"
+  nonce="${source_object_store##*/}"
+  target_ref="refs/ship-flow/closeout-source/${binding_hash}/$$-${nonce}-${#source_object_target_refs[@]}"
+  git check-ref-format "$target_ref" >/dev/null 2>&1 ||
+    reject_input landing-patch-equivalence-failed "temporary implementation PR source-object ref is invalid"
+  if git -C "$target_repo" show-ref --verify --quiet "$target_ref"; then
+    reject_input landing-patch-equivalence-failed "temporary implementation PR source-object ref already exists"
+  fi
+  # Register the absent, collision-resistant ref before fetch so an EXIT trap
+  # can remove an update that completed immediately before an interrupt. The
+  # expected-old CAS prevents cleanup from deleting a differently valued ref.
+  source_object_target_repos+=("$target_repo")
+  source_object_target_refs+=("$target_ref")
+  source_object_target_tips+=("$expected_tip")
+  import_out="$(mktemp)"
+  git -C "$target_repo" fetch -q --force --no-tags --no-write-fetch-head --recurse-submodules=no \
+    "$source_object_store" "+${source_object_store_ref}:${target_ref}" >"$import_out" 2>&1 || import_rc=$?
+  rm -f "$import_out"
+  imported_tip="$(git -C "$target_repo" rev-parse --verify "${target_ref}^{commit}" 2>/dev/null || true)"
+  if [ "$import_rc" -ne 0 ]; then
+    reject_input landing-patch-equivalence-failed "authoritative implementation PR source objects could not be materialized"
+  fi
+  [ "$imported_tip" = "$expected_tip" ] ||
+    reject_input landing-patch-equivalence-failed "materialized implementation PR source ref tip does not match provider OIDs"
+  validate_source_object_set "$target_repo" "$expected_tip" "$source_commits" "$pr_commit_count" ||
+    reject_input landing-patch-equivalence-failed "materialized implementation PR source objects do not match provider OIDs"
+}
+
+acquire_source_objects() {
+  local target_repo="$1" binding expected_tip fetch_depth fetch_out fetch_rc=0 fetched_tip
+  local source_oids=()
+  [[ "$pr_commit_count" =~ ^[1-9][0-9]*$ ]] ||
+    reject_input landing-patch-equivalence-failed "authoritative implementation PR commit count is invalid"
+  IFS=',' read -r -a source_oids <<< "$source_commits"
+  [ "${#source_oids[@]}" -eq "$pr_commit_count" ] ||
+    reject_input landing-patch-equivalence-failed "authoritative implementation PR source OID count does not match provider count"
+  expected_tip="${source_oids[$((${#source_oids[@]} - 1))]}"
+  binding="${repository}|${pr_number}|${source_commits}|${pr_commit_count}"
+
+  if [ "$pr_provider" = fixture ]; then
+    [ -z "$source_object_binding" ] || [ "$source_object_binding" = "$binding" ] ||
+      reject_input landing-patch-equivalence-failed "implementation PR source-object binding changed during reconciliation"
+    source_object_binding="$binding"
+    materialize_acquired_source_objects "$target_repo"
+    return 0
+  fi
+
+  if [ -n "$source_object_binding" ] && [ "$source_object_binding" != "$binding" ]; then
+    reject_input landing-patch-equivalence-failed "implementation PR source-object binding changed during reconciliation"
+  fi
+  if [ -z "$source_object_store" ]; then
+    resolve_provider_source_remote ||
+      reject_input landing-patch-equivalence-failed "no configured GitHub remote matches the authoritative provider repository"
+    source_object_store="$(mktemp -d "${TMPDIR:-/tmp}/ship-flow-closeout-source.XXXXXX")"
+    git init -q --bare "$source_object_store" ||
+      reject_input landing-patch-equivalence-failed "temporary implementation PR source-object store could not be initialized"
+    fetch_depth=$((pr_commit_count + 1))
+    [ "$fetch_depth" -gt "$pr_commit_count" ] ||
+      reject_input landing-patch-equivalence-failed "authoritative implementation PR commit count exceeds fetch bounds"
+    fetch_out="$(mktemp)"
+    env GIT_ALTERNATE_OBJECT_DIRECTORIES='' git -C "$source_object_store" -c fetch.recurseSubmodules=false \
+      fetch -q --force --no-tags --no-write-fetch-head --depth="$fetch_depth" "$source_remote_url" \
+      "+refs/pull/${pr_number}/head:${source_object_store_ref}" >"$fetch_out" 2>&1 || fetch_rc=$?
+    rm -f "$fetch_out"
+    if [ "$fetch_rc" -ne 0 ]; then
+      reject_input landing-patch-equivalence-failed "authoritative implementation PR source ref is unavailable"
+    fi
+    fetched_tip="$(env GIT_ALTERNATE_OBJECT_DIRECTORIES='' git -C "$source_object_store" rev-parse --verify "${source_object_store_ref}^{commit}" 2>/dev/null || true)"
+    [ "$fetched_tip" = "$expected_tip" ] ||
+      reject_input landing-patch-equivalence-failed "implementation PR source ref tip does not match provider OIDs"
+    (unset GIT_ALTERNATE_OBJECT_DIRECTORIES; validate_source_object_set "$source_object_store" "$expected_tip" "$source_commits" "$pr_commit_count") ||
+      reject_input landing-patch-equivalence-failed "implementation PR source ref does not contain the exact provider OIDs"
+    source_object_binding="$binding"
+  fi
+  materialize_acquired_source_objects "$target_repo"
 }
 
 prepare_receipt_source_commits() {
@@ -215,15 +396,15 @@ print(r["landing_proof"]["strategy"],r["identity"]["implementation_pr"],sep="\t"
 PY
 )
   [ "$receipt_strategy" = squash ] || return 0
-  if [ -n "${source_commits:-}" ] && [ "${pr_number:-}" = "$receipt_pr" ]; then
-    return 0
+  if [ -z "${source_commits:-}" ] || [ "${pr_number:-}" != "$receipt_pr" ]; then
+    pr_number="$receipt_pr"
+    case "$pr_provider" in
+      fixture) read_provider_fixture "$pr_fixture" ;;
+      gh) read_provider_gh ;;
+    esac
   fi
-  pr_number="$receipt_pr"
-  case "$pr_provider" in
-    fixture) read_provider_fixture "$pr_fixture" ;;
-    gh) read_provider_gh ;;
-  esac
   [ "$pr_state" = MERGED ] || prompt_captain pr-not-merged "implementation PR source commits require authoritative MERGED provider state"
+  acquire_source_objects "$repo_root"
 }
 
 validate_receipt_normal() {
@@ -1008,6 +1189,7 @@ build_optional_terminal_head() {
     clone_root="$(mktemp -d)"; git clone -q "$repo_root" "$clone_root"
     git -C "$clone_root" config user.email "$(git -C "$repo_root" config user.email)"
     git -C "$clone_root" config user.name "$(git -C "$repo_root" config user.name)"
+    materialize_acquired_source_objects "$clone_root"
     git -C "$clone_root" rm -q -- "$receipt_relative"
     git -C "$clone_root" commit -qm "closeout(${entity_slug}): promote prepared receipt" -- "$receipt_relative"
     apply_out="$(mktemp)"
@@ -1312,6 +1494,7 @@ case "$pr_state" in
 esac
 
 require_landing_contract
+acquire_source_objects "$repo_root"
 
 if [ "$closeout_mode" = pull-request ]; then
   reconcile_pull_request_bundle

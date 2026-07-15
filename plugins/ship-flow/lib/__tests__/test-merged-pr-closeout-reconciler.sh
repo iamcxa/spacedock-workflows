@@ -724,6 +724,329 @@ PY
   fi
 }
 
+write_feedback_r3_b1_gh() {
+  local bin="$1"
+  cat >"$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SHIP_FLOW_R3_PROVIDER_FILE:?missing provider metadata}"
+: "${SHIP_FLOW_R3_GH_LOG:?missing gh log}"
+printf '%s\n' "$*" >>"$SHIP_FLOW_R3_GH_LOG"
+
+field() {
+  awk -F= -v key="$1" '$1==key{sub(/^[^=]*=/, ""); print; exit}' "$SHIP_FLOW_R3_PROVIDER_FILE"
+}
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
+  printf '%s\n' \
+    'provider=gh' \
+    "number=$(field number)" \
+    "state=$(field state)" \
+    "merged_at=$(field merged_at)" \
+    "head_ref=$(field head_ref)" \
+    "base_ref=$(field base_ref)" \
+    "url=$(field url)" \
+    "landing_anchor=$(field landing_anchor)" \
+    "source_commits=$(field source_commits)" \
+    "pr_commit_count=$(field pr_commit_count)"
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 141 ]; then
+  printf '%s|%s|%s|%s|%s\n' \
+    "$(field closeout_pr_number)" \
+    "$(field closeout_pr_state)" \
+    "$(field closeout_pr_head)" \
+    "$(field closeout_pr_remote_oid)" \
+    "$(field closeout_pr_is_draft)"
+  exit 0
+fi
+
+if [ "${1:-}" = repo ] && [ "${2:-}" = view ]; then
+  field repository
+  exit 0
+fi
+
+echo "unsupported fake gh invocation: $*" >&2
+exit 2
+EOF
+  chmod +x "$bin"
+}
+
+prepare_feedback_r3_b1_main_only_clone() {
+  local label="$1"
+  local source_repo="$TMP_DIR/${label}-source"
+  local source_fixture="$TMP_DIR/${label}-source.env"
+  local origin="$TMP_DIR/${label}-origin.git"
+  local clone="$TMP_DIR/${label}-main-only"
+  local source_tip
+
+  prepare_full_d1_squash_repo "$source_repo" "$source_fixture"
+  source_tip="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); n=split($0,oids,","); print oids[n]; exit}' "$source_fixture")"
+  git clone -q --bare "$source_repo" "$origin"
+  git -C "$origin" update-ref refs/pull/131/head "$source_tip"
+  git -C "$origin" update-ref -d refs/heads/ship-merged-fixture-entity
+  git -C "$origin" symbolic-ref HEAD refs/heads/main
+
+  git clone -q --single-branch --branch main --no-tags "$origin" "$clone"
+  git -C "$clone" config user.email test@example.test
+  git -C "$clone" config user.name 'Ship Flow Test'
+  git -C "$clone" config remote.origin.url https://github.com/example/repo.git
+  git -C "$clone" config "url.file://${origin}.insteadOf" https://github.com/example/repo.git
+  # A local-path clone may hard-link unreachable objects that a network
+  # single-branch clone would never receive. Prune that local transport residue
+  # so this is a true main-only object database, not only a main-only ref set.
+  rm -f "$clone/.git/FETCH_HEAD"
+  git -C "$clone" reflog expire --expire=now --all
+  git -C "$clone" gc -q --prune=now
+  cp "$source_fixture" "$TMP_DIR/${label}-provider.env"
+
+  printf '%s\n' "$origin|$clone|$TMP_DIR/${label}-provider.env"
+}
+
+assert_feedback_r3_b1_objects_missing() {
+  local desc="$1" repo="$2" source_commits="$3" oid missing=no
+  local old_ifs="$IFS"
+  IFS=','
+  for oid in $source_commits; do
+    if git -C "$repo" cat-file -e "${oid}^{commit}" 2>/dev/null; then
+      missing=no
+      break
+    fi
+    missing=yes
+  done
+  IFS="$old_ifs"
+  if [ "$missing" = yes ]; then record_pass "$desc"; else record_fail "$desc"; fi
+}
+
+assert_feedback_r3_b1_objects_present() {
+  local desc="$1" repo="$2" source_commits="$3" oid present=yes
+  local old_ifs="$IFS"
+  IFS=','
+  for oid in $source_commits; do
+    if ! git -C "$repo" cat-file -e "${oid}^{commit}" 2>/dev/null; then
+      present=no
+      break
+    fi
+  done
+  IFS="$old_ifs"
+  if [ "$present" = yes ]; then record_pass "$desc"; else record_fail "$desc"; fi
+}
+
+assert_feedback_r3_b1_acquisition_cleanup() {
+  local label="$1" repo="$2" expected_preexisting="$3"
+  local namespace=refs/ship-flow/closeout-source preexisting leftovers
+  preexisting="$namespace/preexisting"
+  leftovers="$(git -C "$repo" for-each-ref --format='%(refname)' "$namespace" | grep -v "^${preexisting}$" || true)"
+  if [ "$(git -C "$repo" rev-parse --verify "$preexisting")" = "$expected_preexisting" ]; then record_pass "$label preserves the unrelated acquisition ref"; else record_fail "$label preserves the unrelated acquisition ref"; fi
+  if [ -z "$leftovers" ]; then record_pass "$label removes every process-scoped acquisition ref"; else record_fail "$label removes every process-scoped acquisition ref"; fi
+  if [ ! -e "$repo/.git/shallow" ]; then record_pass "$label leaves no shallow repository marker"; else record_fail "$label leaves no shallow repository marker"; fi
+  if [ ! -e "$repo/.git/FETCH_HEAD" ]; then record_pass "$label leaves FETCH_HEAD absent"; else record_fail "$label leaves FETCH_HEAD absent"; fi
+}
+
+run_feedback_r3_b1_main_only_case() {
+  local setup origin repo provider source_commits source_tip before_head after_head
+  local remote_before remote_after rc gh_bin_dir="$TMP_DIR/feedback-r3-b1-bin"
+  local gh_log="$TMP_DIR/feedback-r3-b1-gh.log"
+  local registry cid deterministic_head terminal_oid receipt phase preexisting_oid
+  mkdir -p "$gh_bin_dir"
+  write_feedback_r3_b1_gh "$gh_bin_dir/gh"
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r3-b1-direct)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  source_tip="${source_commits##*,}"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  preexisting_oid="$before_head"
+  git -C "$repo" update-ref refs/ship-flow/closeout-source/preexisting "$preexisting_oid"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+
+  assert_feedback_r3_b1_objects_missing 'R3 main-only clone starts without authoritative source commit objects' "$repo" "$source_commits"
+  if [ "$(git -C "$origin" rev-parse refs/pull/131/head)" = "$source_tip" ] && \
+     ! git -C "$origin" show-ref --verify --quiet refs/heads/ship-merged-fixture-entity; then
+    record_pass 'R3 bare origin exposes exact PR head after implementation branch cleanup'
+  else
+    record_fail 'R3 bare origin exposes exact PR head after implementation branch cleanup'
+  fi
+  if [ "$(git -C "$repo" config --get remote.origin.url)" = https://github.com/example/repo.git ]; then
+    record_pass 'R3 provider repository identity is bound to origin'
+  else
+    record_fail 'R3 provider repository identity is bound to origin'
+  fi
+
+  rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-b1-direct.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh)"
+  if [ "$rc" != 0 ]; then sed 's/^/    r3-direct: /' "$TMP_DIR/feedback-r3-b1-direct.out"; fi
+  assert_exit 'R3 main-only direct closeout acquires exact PR source objects' 0 "$rc"
+  assert_contains 'R3 direct closeout uses provider-bound implementation PR' '^pr=131$' "$TMP_DIR/feedback-r3-b1-direct.out"
+  assert_contains 'R3 direct closeout reaches native bundle after acquisition' '^terminal_action=closeout_bundle$' "$TMP_DIR/feedback-r3-b1-direct.out"
+  assert_feedback_r3_b1_objects_present 'R3 direct closeout materializes every provider source commit object' "$repo" "$source_commits"
+  after_head="$(git -C "$repo" rev-parse HEAD)"
+  if [ "$rc" = 0 ]; then
+    if [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ] && \
+       [ "$(git -C "$repo" rev-parse "${after_head}^1")" = "$before_head" ]; then
+      record_pass 'R3 acquisition preserves main checkout and base lineage'
+    else
+      record_fail 'R3 acquisition preserves main checkout and base lineage'
+    fi
+  elif [ "$after_head" = "$before_head" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then
+    record_pass 'R3 rejected acquisition preserves main checkout and base HEAD'
+  else
+    record_fail 'R3 rejected acquisition preserves main checkout and base HEAD'
+  fi
+  remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$remote_before" = "$remote_after" ]; then record_pass 'R3 direct acquisition performs no remote write'; else record_fail 'R3 direct acquisition performs no remote write'; fi
+  assert_feedback_r3_b1_acquisition_cleanup 'R3 direct acquisition cleanup' "$repo" "$preexisting_oid"
+  assert_contains 'R3 fake gh observed exact implementation PR query' '^pr view 131 ' "$gh_log"
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r3-b1-mismatch)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  git -C "$origin" update-ref refs/pull/131/head "$(git -C "$origin" rev-parse refs/heads/main)"
+  git -C "$origin" reflog expire --expire=now --all
+  git -C "$origin" gc -q --prune=now
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-b1-mismatch.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh)"
+  assert_exit 'R3 mismatched exact PR ref fails closed' 2 "$rc"
+  assert_contains 'R3 mismatched exact PR ref reports REJECT' '^verdict=REJECT$' "$TMP_DIR/feedback-r3-b1-mismatch.out"
+  assert_contains 'R3 mismatched exact PR ref reports canonical reason' '^reason=landing-patch-equivalence-failed$' "$TMP_DIR/feedback-r3-b1-mismatch.out"
+  assert_feedback_r3_b1_objects_missing 'R3 mismatched exact PR ref cannot materialize provider source objects' "$repo" "$source_commits"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then
+    record_pass 'R3 mismatched exact PR ref preserves base HEAD and checkout'
+  else
+    record_fail 'R3 mismatched exact PR ref preserves base HEAD and checkout'
+  fi
+  remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$remote_before" = "$remote_after" ]; then record_pass 'R3 mismatched exact PR ref performs no remote write'; else record_fail 'R3 mismatched exact PR ref performs no remote write'; fi
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r3-b1-optional-construct)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  preexisting_oid="$before_head"
+  git -C "$repo" update-ref refs/ship-flow/closeout-source/preexisting "$preexisting_oid"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-prepared \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-b1-optional-construct.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$rc" != 1 ]; then sed 's/^/    r3-optional-construct: /' "$TMP_DIR/feedback-r3-b1-optional-construct.out"; fi
+  assert_exit 'R3 main-only optional construction reaches hermetic prepared checkpoint' 1 "$rc"
+  assert_contains 'R3 optional construction stops at the requested pre-push failpoint' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r3-b1-optional-construct.out"
+  assert_feedback_r3_b1_objects_present 'R3 optional construction acquires every provider source commit before rendering' "$repo" "$source_commits"
+  receipt="$(find "$repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  phase="$(if [ -f "$receipt" ]; then python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["transaction"]["phase"])' "$receipt"; fi)"
+  if [ "$phase" = prepared ]; then record_pass 'R3 optional construction validates and records a prepared receipt'; else record_fail 'R3 optional construction validates and records a prepared receipt'; fi
+  after_head="$(git -C "$repo" rev-parse HEAD)"
+  if [ "$rc" = 1 ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ] && \
+     [ "$(git -C "$repo" rev-parse "${after_head}^1")" = "$before_head" ]; then
+    record_pass 'R3 optional acquisition preserves checkout and adds only the prepared checkpoint'
+  elif [ "$after_head" = "$before_head" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then
+    record_pass 'R3 rejected optional acquisition preserves base HEAD and checkout'
+  else
+    record_fail 'R3 optional acquisition preserves authoritative main lineage'
+  fi
+  remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$remote_before" = "$remote_after" ]; then record_pass 'R3 optional acquisition reaches no push or PR-create side effect'; else record_fail 'R3 optional acquisition reaches no push or PR-create side effect'; fi
+  assert_feedback_r3_b1_acquisition_cleanup 'R3 optional nonzero cleanup' "$repo" "$preexisting_oid"
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r3-b1-replay)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  git -C "$repo" fetch -q --no-tags origin refs/pull/131/head
+  rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-b1-replay-seed.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh)"
+  assert_exit 'R3 replay fixture seeds one native receipt while source objects are present' 0 "$rc"
+  rm -f "$repo/.git/FETCH_HEAD"
+  git -C "$repo" reflog expire --expire=now --all
+  git -C "$repo" gc -q --prune=now
+  assert_feedback_r3_b1_objects_missing 'R3 replay fixture prunes source objects after branch cleanup' "$repo" "$source_commits"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-b1-replay.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh)"
+  if [ "$rc" != 0 ]; then sed 's/^/    r3-replay: /' "$TMP_DIR/feedback-r3-b1-replay.out"; fi
+  assert_exit 'R3 archived receipt replay reacquires exact PR source objects' 0 "$rc"
+  assert_contains 'R3 archived receipt replay validates as already reconciled' '^state=already_reconciled$' "$TMP_DIR/feedback-r3-b1-replay.out"
+  assert_feedback_r3_b1_objects_present 'R3 archived receipt replay rematerializes every source object' "$repo" "$source_commits"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then
+    record_pass 'R3 archived receipt replay preserves base HEAD and checkout'
+  else
+    record_fail 'R3 archived receipt replay preserves base HEAD and checkout'
+  fi
+  remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$remote_before" = "$remote_after" ]; then record_pass 'R3 replay acquisition performs no remote write'; else record_fail 'R3 replay acquisition performs no remote write'; fi
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r3-b1-optional-replay)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  git -C "$repo" fetch -q --no-tags origin refs/pull/131/head
+  cid="$(python3 - <<'PY'
+import hashlib
+print(hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"merged-fixture-entity",b"131"))).hexdigest())
+PY
+)"
+  deterministic_head="ship-closeout/$cid"
+  printf '%s\n' 'closeout_pr_number=141' 'closeout_pr_state=OPEN' \
+    "closeout_pr_head=$deterministic_head" >>"$provider"
+  registry="$TMP_DIR/feedback-r3-b1-optional-replay.registry"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" \
+    run_helper "$repo" "$TMP_DIR/feedback-r3-b1-optional-replay-seed.out" \
+      --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$provider" --closeout-mode pull-request)"
+  assert_exit 'R3 optional replay fixture seeds exact OPEN receipt candidate' 0 "$rc"
+  terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head")"
+  printf '%s\n' "closeout_pr_remote_oid=$terminal_oid" 'closeout_pr_is_draft=false' >>"$provider"
+  rm -f "$repo/.git/FETCH_HEAD"
+  git -C "$repo" reflog expire --expire=now --all
+  git -C "$repo" gc -q --prune=now
+  assert_feedback_r3_b1_objects_missing 'R3 optional OPEN replay starts after source-object pruning' "$repo" "$source_commits"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-b1-optional-open.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    r3-optional-open: /' "$TMP_DIR/feedback-r3-b1-optional-open.out"; fi
+  assert_exit 'R3 receipt-only OPEN replay reacquires exact PR source objects' 0 "$rc"
+  assert_contains 'R3 receipt-only OPEN replay retains awaiting state' '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/feedback-r3-b1-optional-open.out"
+  assert_feedback_r3_b1_objects_present 'R3 receipt-only OPEN replay rematerializes every source object' "$repo" "$source_commits"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then
+    record_pass 'R3 receipt-only OPEN replay preserves base HEAD and checkout'
+  else
+    record_fail 'R3 receipt-only OPEN replay preserves base HEAD and checkout'
+  fi
+  remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$remote_before" = "$remote_after" ]; then record_pass 'R3 receipt-only OPEN acquisition performs no remote write'; else record_fail 'R3 receipt-only OPEN acquisition performs no remote write'; fi
+
+  git -C "$repo" merge -q --no-ff "$deterministic_head" -m 'fixture: land optional terminal head'
+  perl -0pi -e 's/closeout_pr_state=OPEN/closeout_pr_state=MERGED/' "$provider"
+  rm -f "$repo/.git/FETCH_HEAD"
+  git -C "$repo" reflog expire --expire=now --all
+  git -C "$repo" gc -q --prune=now
+  assert_feedback_r3_b1_objects_missing 'R3 receipt-only MERGED replay re-prunes source objects' "$repo" "$source_commits"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-b1-optional-merged.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    r3-optional-merged: /' "$TMP_DIR/feedback-r3-b1-optional-merged.out"; fi
+  assert_exit 'R3 receipt-only MERGED replay reacquires exact PR source objects' 0 "$rc"
+  assert_contains 'R3 receipt-only MERGED replay remains terminal no-op' '^reason=closeout-pr-terminal-noop$' "$TMP_DIR/feedback-r3-b1-optional-merged.out"
+  assert_feedback_r3_b1_objects_present 'R3 receipt-only MERGED replay rematerializes every source object' "$repo" "$source_commits"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then
+    record_pass 'R3 receipt-only MERGED replay preserves base HEAD and checkout'
+  else
+    record_fail 'R3 receipt-only MERGED replay preserves base HEAD and checkout'
+  fi
+  remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$remote_before" = "$remote_after" ]; then record_pass 'R3 receipt-only MERGED acquisition performs no remote write'; else record_fail 'R3 receipt-only MERGED acquisition performs no remote write'; fi
+}
+
 run_missing_landing_field_matrix() {
   local template_repo="$TMP_DIR/missing-field-template" template_fixture="$TMP_DIR/missing-field-template.env"
   local field expected repo fixture output before_head before_tree after_tree rc
@@ -1873,7 +2196,9 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-b2-integration ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r3-b1 ]; then
+    run_feedback_r3_b1_main_only_case
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-b2-integration ]; then
     run_feedback_r2_b2_integration_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-f1 ]; then
     run_feedback_r2_f1_case
