@@ -274,30 +274,29 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Pin round 7 to implementation range `e624554..2554a25` at metadata-only `8163bd9`. Fresh R6 is
-  279/279 on Bash 3.2 and 5.3; command-level seed/terminal counts, pre-existing remote handling, terminal lease,
-  cleanup ownership, signals, caller TMP sentinel preservation, and durable checkpoints pass.
-- DONE: Preserve closed R2-R5 claims, both-shell syntax, ShellCheck, and diff hygiene. R6-B1 duplicate push and
-  R6-W1 bundle cleanup are closed.
-- FAILED: The general panel and an independent bare-remote probe find R7-B1. A remote ref created at an ancestor
-  after missing inspection is silently fast-forwarded by the ordinary seed push; the 279/279 suite omits this race.
-- GATE: Round 7 returns only R7-B1 to execute. Verdict is FAILED/PROMPT_CAPTAIN; no implementation, FO
-  receipt/status/Review dispatch/push/PR/merge/archive/todo/external remote mutation occurred.
+- DONE: Pin round 8 to implementation/test `e3adebe` at metadata-only `15ec239`. Current tests with pre-fix
+  production reproduce 14/19 RED on both Bash versions; current production is 19/19 GREEN on both.
+- DONE: Verify single-endpoint expected-absence CAS, checkpoint/provider preservation, terminal lease, R6 279/279
+  both shells, R4 29/29 both, R3 107/107, R2 13/13 + 23/23, default 198/198, static/contracts, and pinned status.
+- FAILED: Two panels and an independent local Git probe find R8-B1. With two pushurls, endpoint A accepts the seed
+  before endpoint B rejects its competitor; aggregate exit 1 therefore follows partial remote mutation.
+- GATE: Round 8 returns only R8-B1 and its coupled multi-pushurl regression to execute. Verdict is
+  FAILED/PROMPT_CAPTAIN; no implementation, receipt/status/Review dispatch/external push/PR/merge/archive/todo/network mutation occurred.
 
 ### Summary
 
-Round 7 closes the prior command-count and cleanup defects, but seed publication is not atomic expected-absence.
+Round 8 closes the prior single-endpoint race, but a named remote can fan out and fail after partial publication.
 The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 86 across seven verify rounds
-- iteration_count: 7
+- duration_minutes: 101 across eight verify rounds
+- iteration_count: 8
 - blocking_findings_count: 1 current
-- warning_findings_count: 3
+- warning_findings_count: 4
 - claim_records: required VERIFIED=7 NOT VERIFIED=1 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 7; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- reviewer_verdict: VETO round 8; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
