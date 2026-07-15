@@ -1331,6 +1331,313 @@ count|landing-patch-equivalence-failed|
 EOF
 }
 
+write_feedback_r5_b1_gh() {
+  local bin="$1"
+  cat >"$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SHIP_FLOW_R5_PROVIDER_FILE:?missing implementation provider metadata}"
+: "${SHIP_FLOW_R5_REGISTRY:?missing closeout PR registry}"
+: "${SHIP_FLOW_R5_LOG:?missing provider call log}"
+: "${SHIP_FLOW_R5_ORIGIN:?missing local bare origin}"
+
+printf 'call %s\n' "$*" >>"$SHIP_FLOW_R5_LOG"
+
+provider_field() {
+  awk -F= -v key="$1" '$1==key{sub(/^[^=]*=/, ""); print; exit}' "$SHIP_FLOW_R5_PROVIDER_FILE"
+}
+
+registry_field() {
+  [ -f "$SHIP_FLOW_R5_REGISTRY" ] || return 0
+  awk -F= -v key="$1" '$1==key{sub(/^[^=]*=/, ""); print; exit}' "$SHIP_FLOW_R5_REGISTRY"
+}
+
+set_registry_field() {
+  local key="$1" value="$2" tmp="${SHIP_FLOW_R5_REGISTRY}.tmp"
+  mkdir -p "$(dirname "$SHIP_FLOW_R5_REGISTRY")"
+  if [ -f "$SHIP_FLOW_R5_REGISTRY" ]; then
+    awk -F= -v key="$key" '$1!=key{print}' "$SHIP_FLOW_R5_REGISTRY" >"$tmp"
+  else
+    : >"$tmp"
+  fi
+  printf '%s=%s\n' "$key" "$value" >>"$tmp"
+  mv "$tmp" "$SHIP_FLOW_R5_REGISTRY"
+}
+
+require_repo_binding() {
+  local seen="" previous="" arg
+  for arg in "$@"; do
+    if [ "$previous" = --repo ]; then seen="$arg"; break; fi
+    previous="$arg"
+  done
+  [ "$seen" = "$(provider_field repository)" ] || exit 64
+}
+
+fail_once() {
+  local seam="$1"
+  [ "${SHIP_FLOW_R5_FAILURE:-}" = "$seam" ] || return 0
+  [ -n "${SHIP_FLOW_R5_FAILURE_MARKER:-}" ] || exit 65
+  if [ ! -e "$SHIP_FLOW_R5_FAILURE_MARKER" ]; then
+    : >"$SHIP_FLOW_R5_FAILURE_MARKER"
+    printf 'failure %s\n' "$seam" >>"$SHIP_FLOW_R5_LOG"
+    return 71
+  fi
+}
+
+closeout_remote_oid() {
+  local head
+  head="$(registry_field head)"
+  [ -n "$head" ] || return 0
+  git -C "$SHIP_FLOW_R5_ORIGIN" rev-parse --verify "refs/heads/$head" 2>/dev/null || true
+}
+
+emit_closeout_record() {
+  local number head
+  number="$(registry_field number)"; head="$(registry_field head)"
+  [ -n "$number" ] || return 0
+  printf '%s|OPEN|%s|%s|%s\n' \
+    "$number" "$head" "$(closeout_remote_oid)" "$(registry_field is_draft)"
+}
+
+if [ "${1:-}" = repo ] && [ "${2:-}" = view ]; then
+  provider_field repository
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
+  require_repo_binding "$@"
+  printf '%s\n' \
+    'provider=gh' \
+    "number=$(provider_field number)" \
+    "state=$(provider_field state)" \
+    "merged_at=$(provider_field merged_at)" \
+    "head_ref=$(provider_field head_ref)" \
+    "base_ref=$(provider_field base_ref)" \
+    "url=$(provider_field url)" \
+    "landing_anchor=$(provider_field landing_anchor)" \
+    "source_commits=$(provider_field source_commits)" \
+    "pr_commit_count=$(provider_field pr_commit_count)"
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 141 ]; then
+  require_repo_binding "$@"
+  emit_closeout_record
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = list ]; then
+  require_repo_binding "$@"
+  fail_once list-before || exit $?
+  emit_closeout_record
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = create ]; then
+  local_head=""; previous=""
+  require_repo_binding "$@"
+  for arg in "$@"; do
+    if [ "$previous" = --head ]; then local_head="$arg"; break; fi
+    previous="$arg"
+  done
+  fail_once create-before || exit $?
+  set_registry_field number 141
+  set_registry_field state OPEN
+  set_registry_field head "$local_head"
+  set_registry_field is_draft true
+  printf 'effect create 141 %s\n' "$local_head" >>"$SHIP_FLOW_R5_LOG"
+  fail_once create-after || exit $?
+  printf '%s\n' 'https://github.com/example/repo/pull/141'
+  exit 0
+fi
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = ready ] && [ "${3:-}" = 141 ]; then
+  require_repo_binding "$@"
+  fail_once ready-before || exit $?
+  set_registry_field is_draft false
+  printf 'effect ready 141 %s\n' "$(closeout_remote_oid)" >>"$SHIP_FLOW_R5_LOG"
+  fail_once ready-after || exit $?
+  exit 0
+fi
+
+printf 'unsupported fake gh invocation: %s\n' "$*" >&2
+exit 2
+EOF
+  chmod +x "$bin"
+}
+
+feedback_r5_deterministic_head() {
+  printf 'ship-closeout/%s\n' "$(python3 - <<'PY'
+import hashlib
+print(hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"merged-fixture-entity",b"131"))).hexdigest())
+PY
+)"
+}
+
+install_feedback_r5_remote_update_log() {
+  local origin="$1" push_log="$2"
+  cat >"$origin/hooks/post-receive" <<EOF
+#!/bin/sh
+while read old new ref; do
+  printf '%s %s %s\n' "\$old" "\$new" "\$ref" >>'$push_log'
+done
+EOF
+  chmod +x "$origin/hooks/post-receive"
+}
+
+feedback_r5_receipt_path() {
+  find "$1/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true
+}
+
+assert_feedback_r5_receipt() {
+  local desc="$1" repo="$2" expected_phase="$3" expected_pr="$4"
+  local receipt relative committed="$TMP_DIR/feedback-r5-committed-receipt.json"
+  receipt="$(feedback_r5_receipt_path "$repo")"
+  if [ ! -f "$receipt" ]; then record_fail "$desc (receipt missing)"; return; fi
+  if python3 - "$receipt" "$expected_phase" "$expected_pr" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); t=r["transaction"]
+expected=None if sys.argv[3]=="null" else int(sys.argv[3])
+raise SystemExit(0 if t["phase"]==sys.argv[2] and t["closeout_pr"]==expected else 1)
+PY
+  then record_pass "$desc has exact phase and PR binding"; else record_fail "$desc has exact phase and PR binding"; fi
+  relative="${receipt#"$repo/"}"
+  git -C "$repo" show "HEAD:$relative" >"$committed" 2>/dev/null || : >"$committed"
+  if cmp -s "$receipt" "$committed" && [ -z "$(git -C "$repo" status --porcelain --untracked-files=all)" ]; then
+    record_pass "$desc bytes equal committed HEAD and worktree is clean"
+  else
+    record_fail "$desc bytes equal committed HEAD and worktree is clean"
+  fi
+}
+
+assert_feedback_r5_ref_shape() {
+  local desc="$1" repo="$2" origin="$3" deterministic_head="$4" expected="$5"
+  local local_count remote_count local_oid="" remote_oid=""
+  local_count="$(git -C "$repo" for-each-ref --format='%(refname)' "refs/heads/$deterministic_head" | awk 'NF{n++} END{print n+0}')"
+  remote_count="$(git -C "$origin" for-each-ref --format='%(refname)' "refs/heads/$deterministic_head" | awk 'NF{n++} END{print n+0}')"
+  if [ "$expected" = absent ]; then
+    if [ "$local_count" = 0 ] && [ "$remote_count" = 0 ]; then record_pass "$desc has no deterministic local or remote ref"; else record_fail "$desc has no deterministic local or remote ref"; fi
+    return
+  fi
+  local_oid="$(git -C "$repo" rev-parse --verify "refs/heads/$deterministic_head" 2>/dev/null || true)"
+  remote_oid="$(git -C "$origin" rev-parse --verify "refs/heads/$deterministic_head" 2>/dev/null || true)"
+  if [ "$local_count" = 1 ] && [ "$remote_count" = 1 ] && [ "$local_oid" = "$remote_oid" ] && [ -n "$local_oid" ]; then
+    record_pass "$desc binds one identical deterministic local and remote ref"
+  else
+    record_fail "$desc binds one identical deterministic local and remote ref"
+  fi
+}
+
+assert_feedback_r5_count() {
+  local desc="$1" pattern="$2" file="$3" expected="$4" actual
+  actual="$(grep -cE "$pattern" "$file" 2>/dev/null || true)"
+  if [ "$actual" = "$expected" ]; then record_pass "$desc"; else record_fail "$desc (expected $expected, got $actual)"; fi
+}
+
+run_feedback_r5_failure_scenario() {
+  local seam="$1" expected_phase="$2" expected_first_ref="$3" expected_first_updates="$4"
+  local expected_first_main_commits="$5" expected_rerun_main_commits="$6"
+  local expected_first_create_effects="$7" expected_first_ready_effects="$8"
+  local expected_final_list_calls="$9" expected_final_create_calls="${10}" expected_final_ready_calls="${11}"
+  local expected_final_create_effects="${12}" expected_final_ready_effects="${13}"
+  local setup origin repo provider gh_bin registry log marker push_log deterministic_head receipt expected_failure_state
+  local base_head first_head first_tree first_receipt_hash first_ref_oid="" rc rerun_head rerun_tree rerun_receipt_hash
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r5-$seam")"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  gh_bin="$TMP_DIR/feedback-r5-$seam-bin"; registry="$TMP_DIR/feedback-r5-$seam.registry"
+  log="$TMP_DIR/feedback-r5-$seam.log"; marker="$TMP_DIR/feedback-r5-$seam.marker"
+  push_log="$TMP_DIR/feedback-r5-$seam-push.log"; deterministic_head="$(feedback_r5_deterministic_head)"
+  mkdir -p "$gh_bin"; : >"$log"; : >"$push_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"
+  install_feedback_r5_remote_update_log "$origin" "$push_log"
+  base_head="$(git -C "$repo" rev-parse HEAD)"
+  if [ "$expected_phase" = prepared ]; then expected_failure_state=closeout_pr_prepared; else expected_failure_state=closeout_pr_awaiting_merge; fi
+
+  rc="$(SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE="$seam" \
+    SHIP_FLOW_R5_FAILURE_MARKER="$marker" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r5-$seam-first.out" "$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  first_head="$(git -C "$repo" rev-parse HEAD)"; first_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  receipt="$(feedback_r5_receipt_path "$repo")"; first_receipt_hash="$(shasum -a 256 "$receipt" 2>/dev/null | awk '{print $1}')"
+  [ "$expected_first_ref" = absent ] || first_ref_oid="$(git -C "$repo" rev-parse "refs/heads/$deterministic_head" 2>/dev/null || true)"
+
+  assert_exit "R5 $seam first provider failure routes through stable retry" 1 "$rc"
+  assert_contains "R5 $seam first failure reports PROMPT_CAPTAIN" '^verdict=PROMPT_CAPTAIN$' "$TMP_DIR/feedback-r5-$seam-first.out"
+  assert_contains "R5 $seam first failure reports stable checkpoint reason" '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r5-$seam-first.out"
+  assert_contains "R5 $seam first failure reports its safe checkpoint state" "^state=${expected_failure_state}$" "$TMP_DIR/feedback-r5-$seam-first.out"
+  assert_feedback_r5_receipt "R5 $seam first checkpoint" "$repo" "$expected_phase" "$(if [ "$expected_phase" = prepared ]; then printf null; else printf 141; fi)"
+  if [ "$(git -C "$repo" rev-list --count "$base_head..$first_head")" = "$expected_first_main_commits" ] && \
+     [ "$first_tree" = "$(git -C "$repo" rev-parse "$first_head^{tree}")" ]; then
+    record_pass "R5 $seam first failure preserves the exact documented main checkpoint"
+  else
+    record_fail "R5 $seam first failure preserves the exact documented main checkpoint"
+  fi
+  assert_feedback_r5_ref_shape "R5 $seam first failure" "$repo" "$origin" "$deterministic_head" "$expected_first_ref"
+  assert_feedback_r5_count "R5 $seam first failure has exact remote ref update count" "refs/heads/$deterministic_head$" "$push_log" "$expected_first_updates"
+  assert_feedback_r5_count "R5 $seam first failure has exact create side-effect count" '^effect create ' "$log" "$expected_first_create_effects"
+  assert_feedback_r5_count "R5 $seam first failure has exact ready side-effect count" '^effect ready ' "$log" "$expected_first_ready_effects"
+
+  rc="$(SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE="$seam" \
+    SHIP_FLOW_R5_FAILURE_MARKER="$marker" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r5-$seam-rerun.out" "$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  rerun_head="$(git -C "$repo" rev-parse HEAD)"; rerun_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  receipt="$(feedback_r5_receipt_path "$repo")"; rerun_receipt_hash="$(shasum -a 256 "$receipt" 2>/dev/null | awk '{print $1}')"
+
+  assert_exit "R5 $seam rerun converges" 0 "$rc"
+  assert_contains "R5 $seam rerun awaits the one closeout PR" '^verdict=PROCEED$' "$TMP_DIR/feedback-r5-$seam-rerun.out"
+  assert_contains "R5 $seam rerun reports awaiting reason" '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/feedback-r5-$seam-rerun.out"
+  assert_contains "R5 $seam rerun reports awaiting state" '^state=closeout_pr_awaiting_merge$' "$TMP_DIR/feedback-r5-$seam-rerun.out"
+  assert_feedback_r5_receipt "R5 $seam rerun checkpoint" "$repo" awaiting_closeout_pr 141
+  if [ "$(git -C "$repo" rev-list --count "$base_head..$rerun_head")" = "$expected_rerun_main_commits" ] && \
+     [ "$rerun_tree" = "$(git -C "$repo" rev-parse "$rerun_head^{tree}")" ]; then
+    record_pass "R5 $seam rerun has the exact bounded main history and tree"
+  else
+    record_fail "R5 $seam rerun has the exact bounded main history and tree"
+  fi
+  if [ "$expected_phase" != awaiting_closeout_pr ] || \
+     { [ "$first_head" = "$rerun_head" ] && [ "$first_tree" = "$rerun_tree" ] && [ "$first_receipt_hash" = "$rerun_receipt_hash" ]; }; then
+    record_pass "R5 $seam rerun does not duplicate an already durable checkpoint"
+  else
+    record_fail "R5 $seam rerun does not duplicate an already durable checkpoint"
+  fi
+  assert_feedback_r5_ref_shape "R5 $seam rerun" "$repo" "$origin" "$deterministic_head" present
+  if [ "$expected_first_ref" = absent ] || [ -z "$first_ref_oid" ] || \
+     [ "$first_ref_oid" = "$(git -C "$repo" rev-parse "refs/heads/$deterministic_head")" ] || \
+     [ "$(git -C "$repo" rev-list --count "$first_ref_oid..refs/heads/$deterministic_head")" -gt 0 ]; then
+    record_pass "R5 $seam rerun reuses or monotonically advances the deterministic head"
+  else
+    record_fail "R5 $seam rerun reuses or monotonically advances the deterministic head"
+  fi
+  assert_feedback_r5_count "R5 $seam rerun has exactly two bounded remote ref updates" "refs/heads/$deterministic_head$" "$push_log" 2
+  assert_feedback_r5_count "R5 $seam rerun has exact list call count" '^call pr list ' "$log" "$expected_final_list_calls"
+  assert_feedback_r5_count "R5 $seam rerun has exact create call count" '^call pr create ' "$log" "$expected_final_create_calls"
+  assert_feedback_r5_count "R5 $seam rerun has exact ready call count" '^call pr ready ' "$log" "$expected_final_ready_calls"
+  assert_feedback_r5_count "R5 $seam rerun creates one provider PR" '^effect create ' "$log" "$expected_final_create_effects"
+  assert_feedback_r5_count "R5 $seam rerun performs one provider ready transition" '^effect ready ' "$log" "$expected_final_ready_effects"
+  if [ "$(awk -F= '$1=="number"{print $2; exit}' "$registry")" = 141 ] && \
+     [ "$(awk -F= '$1=="head"{print $2; exit}' "$registry")" = "$deterministic_head" ] && \
+     [ "$(awk -F= '$1=="is_draft"{print $2; exit}' "$registry")" = false ]; then
+    record_pass "R5 $seam rerun registry binds one exact ready PR"
+  else
+    record_fail "R5 $seam rerun registry binds one exact ready PR"
+  fi
+}
+
+run_feedback_r5_b1_provider_retry_case() {
+  # seam | first receipt | first ref | first remote updates | first/final main commits |
+  # first create/ready effects | final list/create/ready calls | final create/ready effects
+  run_feedback_r5_failure_scenario list-before prepared absent 0 1 2 0 0 2 1 1 1 1
+  run_feedback_r5_failure_scenario create-before prepared present 1 1 2 0 0 2 2 1 1 1
+  run_feedback_r5_failure_scenario create-after prepared present 1 1 2 1 0 2 1 1 1 1
+  run_feedback_r5_failure_scenario ready-before awaiting_closeout_pr present 2 2 2 1 0 2 1 2 1 1
+  run_feedback_r5_failure_scenario ready-after awaiting_closeout_pr present 2 2 2 1 1 1 1 1 1 1
+}
+
 run_missing_landing_field_matrix() {
   local template_repo="$TMP_DIR/missing-field-template" template_fixture="$TMP_DIR/missing-field-template.env"
   local field expected repo fixture output before_head before_tree after_tree rc
@@ -2480,7 +2787,9 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r4-b1 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r5-b1 ]; then
+    run_feedback_r5_b1_provider_retry_case
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r4-b1 ]; then
     run_feedback_r4_foreign_cwd_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r3-b1 ]; then
     run_feedback_r3_b1_main_only_case

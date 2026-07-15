@@ -1161,6 +1161,7 @@ require_open_closeout_pr() {
 
 resolve_or_create_closeout_pr() {
   local deterministic_head="$1" title="$2" receipt_relative="$3" registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}" found count created_url created_tail registered_number
+  local list_rc=0 create_rc=0
   if [ "$pr_provider" = fixture ]; then
     read_closeout_pr_fixture "$pr_fixture"
     [ "$closeout_pr_head" = "$deterministic_head" ] || reject_input closeout-sentinel-identity-mismatch "fixture closeout PR head is not deterministic"
@@ -1187,7 +1188,11 @@ resolve_or_create_closeout_pr() {
     return 0
   fi
   ensure_gh_repository
-  found="$(gh pr list --head "$deterministic_head" --state all --json number,state,headRefName,headRefOid,isDraft --jq '.[] | [.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")' --repo "$repository")"
+  found="$(gh pr list --head "$deterministic_head" --state all --json number,state,headRefName,headRefOid,isDraft --jq '.[] | [.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")' --repo "$repository")" || list_rc=$?
+  if [ "$list_rc" -ne 0 ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict "deterministic closeout PR lookup failed; retry preserves the prepared checkpoint"
+  fi
   count="$(printf '%s\n' "$found" | awk 'NF{n++} END{print n+0}')"
   [ "$count" -le 1 ] || reject_input closeout-checkpoint-conflict "multiple PRs use the deterministic closeout head"
   if [ "$count" = 1 ]; then
@@ -1199,7 +1204,11 @@ resolve_or_create_closeout_pr() {
     return 0
   fi
   ensure_initial_closeout_head "$deterministic_head" "$receipt_relative"
-  created_url="$(gh pr create --draft --head "$deterministic_head" --base "$base_ref" --title "Close out: $title" --body "Receipt-bound post-merge closeout for implementation PR #${pr_number}." --repo "$repository")"
+  created_url="$(gh pr create --draft --head "$deterministic_head" --base "$base_ref" --title "Close out: $title" --body "Receipt-bound post-merge closeout for implementation PR #${pr_number}." --repo "$repository")" || create_rc=$?
+  if [ "$create_rc" -ne 0 ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict "deterministic closeout PR creation outcome is unknown; retry will resolve the exact head"
+  fi
   created_url="${created_url%/}"; created_tail="${created_url##*/}"
   closeout_pr_number="$(normalize_pr_number "$created_tail" || true)"
   [ -n "$closeout_pr_number" ] || reject_input closeout-checkpoint-conflict "created closeout PR number cannot be parsed"
@@ -1219,7 +1228,7 @@ optional_terminal_head_matches() {
 
 build_optional_terminal_head() {
   local bundle_root="$1" receipt_relative="$2" active_relative="$3" deterministic_head="$4" bound_pr="$5"
-  local expected_proof clone_root apply_out apply_rc=0 terminal_sha registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}"
+  local expected_proof clone_root apply_out apply_rc=0 ready_rc=0 terminal_sha registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}"
   expected_proof="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proof_hash"])' "$bundle_root/$receipt_relative")"
   if optional_terminal_head_matches "$deterministic_head" "$receipt_relative" "$bound_pr" "$expected_proof"; then
     terminal_sha="$(git -C "$repo_root" rev-parse "$deterministic_head")"
@@ -1268,7 +1277,11 @@ PY
     fail_once ready
     if [ "$pr_provider" = gh ]; then
       ensure_gh_repository
-      gh pr ready "$bound_pr" --repo "$repository" >/dev/null
+      gh pr ready "$bound_pr" --repo "$repository" >/dev/null || ready_rc=$?
+      if [ "$ready_rc" -ne 0 ]; then
+        state_name="closeout_pr_awaiting_merge"
+        prompt_captain closeout-checkpoint-conflict "closeout PR ready outcome is unknown; retry will re-query the bound PR"
+      fi
     else
       [ -z "${SHIP_FLOW_CLOSEOUT_PR_LOG:-}" ] || printf 'ready %s %s\n' "$bound_pr" "$terminal_sha" >>"$SHIP_FLOW_CLOSEOUT_PR_LOG"
       set_registry_field "$registry" is_draft false
