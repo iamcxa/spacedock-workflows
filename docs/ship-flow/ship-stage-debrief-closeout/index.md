@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -274,3 +274,14 @@ Verification preserves the green focused evidence but rejects the implementation
 - warning_findings_count: 2
 - reviewer_verdict: VETO; artifact cross-review PROCEED to execute
 <!-- /section:verify-stage-report -->
+
+### Feedback Cycles
+
+- cycle: 1
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-15T11:03:07Z
+  verify_artifact: verify.md@ae56c20
+  required_fixes: B1 incomplete-envelope legacy fallback; B2 duplicate startup terminalization; B3 full entity-tree archive preservation; B4 canonical landing/output receipt semantics; B5 post-commit signal recovery; W1 pull-request ROADMAP title/table validation parity
+  deferred_hardening: W2 same-user path-swap TOCTOU remains explicit non-acceptance follow-up
