@@ -260,29 +260,28 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Independently boot the exact execute snapshot, extract the schema/context manifests, validate the persisted TDD ledger, and rerun the scoped landing, receipt, transaction, reconciler, compatibility, and static evidence without trusting execute self-attestation.
-  The verifier reproduced 951 counted focused assertions plus the exact compatibility chain; C14/C15, syntax, Python compile, ShellCheck, and diff hygiene are green.
-- DONE: Run the mandatory read-only panel for general, silent-failure, testing, maintainability, security, schema/domain, and adversarial coverage, spot-check every citation, and cross-review the bounded failed artifact.
-  Two parallel panels found five unique blockers and two warnings; the fresh process cross-review returned PROCEED for the honest failed artifact and execute route, not for the implementation.
-- FAILED: Required integrated claims B1-B5 are NOT VERIFIED, so Verify VETOs and routes back to Execute without a proceed receipt or state advance.
-  The blockers are incomplete-envelope legacy fallback, duplicate startup terminalization, loss of the full archived entity evidence tree, underconstrained receipt semantics, and post-commit signal rollback corruption; W1 accompanies the execute repair and W2 remains explicit hardening risk.
-- DONE: Re-enter Verify at valid entry `5523916`, preserve the round-1 record, and independently confirm feedback-cycle repairs B2/B3/B5/W1 with 1,286 focused assertions plus full C1-C15 green.
-  The round-2 pinned implementation snapshot is `d45d176..c0494e5`; green suites do not override uncovered integration paths.
-- FAILED: Round 2 VETOs on four required claims and routes back to Execute.
-  R2-B1 allows active legacy done/PASSED archive before native proof; R2-B2 permits self-rehashed squash source-patch forgery; R2-B3 accepts ROADMAP identity outside the first cell; R2-B4 can crash a valid young-repo squash during speculative rebase analysis. Same-user path-swap TOCTOU and O(E×R) receipt scanning remain non-blocking warnings.
+- DONE: Preserve both earlier VETO rounds and independently re-enter round 3 at metadata-only entry `bc2345d`, pinned to implementation range `cce775c..0c1fc29`.
+  Fresh ledger, focused, aggregate, Bash 3.2/5.3, static, pinned-launcher, and C1–C15 gates are green; default reconciler is 198/198 on both shells, direct 200/200, optional 179/179, PR40/41 141/141, and recursion 124/124.
+- DONE: Verify the exact round-2 repairs and prior closures without trusting execute self-attestation.
+  Active legacy done/PASSED fails closed before native proof; squash source IDs/digests are Git-rederived when objects exist; ROADMAP identity is restricted to cell zero; young-root topology is guarded; one-owner projection, full archive tree, post-commit recovery, and W1 parity remain closed.
+- FAILED: Two read-only panels and an independent clean main-only clone repro find R3-B1.
+  GitHub discovery records source commit OIDs but never fetches their objects. A valid squash landing returns `landing-patch-equivalence-failed: source commit is unavailable` until `refs/pull/40/head` is fetched; the same missing acquisition boundary can break later native replay after object pruning.
+- GATE: Round 3 VETOs the required one-cycle and replay claims, but two execute feedback cycles are already exhausted.
+  Verdict is FAILED/PROMPT_CAPTAIN. No third feedback cycle, FO proceed receipt, status mutation, review dispatch, push, PR, merge, archive, todo, or remote mutation occurred. W2 same-user path-swap, W3 `O(R+E)` scanning, and W4 verifier-scope tooling remain non-blocking follow-ups.
 
 ### Summary
 
-Verification preserves both VETO rounds. Cycle 1 repairs B2/B3/B5/W1, but round 2 rejects the implementation because four uncovered proof, projection, and topology paths still violate the native closeout contract. The authoritative history and current four required `NOT VERIFIED` claims remain in [verify.md](verify.md).
+Round 3 preserves all earlier fixes but cannot verify one-cycle squash closeout from a normal main-only clone: authoritative OID metadata is not enough when the required Git objects were never acquired. The bounded failed artifact and Captain-gated loop-cap decision are recorded in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 26 across two rounds
-- iteration_count: 2
-- blocking_findings_count: 4 current (5 historical)
-- warning_findings_count: 2
-- reviewer_verdict: VETO round 2; route execute
+- duration_minutes: 43 across three verify rounds
+- iteration_count: 3
+- blocking_findings_count: 1 current
+- warning_findings_count: 3
+- claim_records: required VERIFIED=6 NOT VERIFIED=1 INCONCLUSIVE=0
+- reviewer_verdict: VETO round 3; PROMPT_CAPTAIN because execute feedback cap is exhausted
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
