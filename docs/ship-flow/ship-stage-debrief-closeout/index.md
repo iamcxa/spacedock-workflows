@@ -268,24 +268,30 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Pin round 6 to `f34ce34..2b63447` at metadata-only `f1fe2f4`. Verify all five R5 failure seams on Bash 3.2 and 5.3: canonical `PROMPT_CAPTAIN / closeout-checkpoint-conflict`, exact prepared/awaiting checkpoints, trees, receipts, refs, provider effects, and convergent reruns pass 141/141.
-- DONE: Preserve R4 foreign-CWD/repository binding at 29/29 on both shells, R3 acquisition/signals/collision/no-residue at 107/107, R2 native/squash at 13/13 + 23/23, static/schema/TDD/C1–C15, and pinned launcher status.
-- FAILED: Both panels and an independent `GIT_TRACE` probe find R6-B1. The `create-before` retry performs the seed push twice; focused scenario push counts are `2,3,2,2,2`. Tests count ref updates, so the no-op duplicate remains invisible to 141/141.
-- GATE: Round 6 returns only R6-B1 to execute and preserves all closed R2–R5 claims. Verdict is FAILED/PROMPT_CAPTAIN; no implementation, FO receipt/status/Review dispatch/push/PR/merge/archive/todo/remote mutation occurred.
+- DONE: Pin round 7 to implementation range `e624554..2554a25` at metadata-only `8163bd9`. Fresh R6 is
+  279/279 on Bash 3.2 and 5.3; command-level seed/terminal counts, pre-existing remote handling, terminal lease,
+  cleanup ownership, signals, caller TMP sentinel preservation, and durable checkpoints pass.
+- DONE: Preserve closed R2-R5 claims, both-shell syntax, ShellCheck, and diff hygiene. R6-B1 duplicate push and
+  R6-W1 bundle cleanup are closed.
+- FAILED: The general panel and an independent bare-remote probe find R7-B1. A remote ref created at an ancestor
+  after missing inspection is silently fast-forwarded by the ordinary seed push; the 279/279 suite omits this race.
+- GATE: Round 7 returns only R7-B1 to execute. Verdict is FAILED/PROMPT_CAPTAIN; no implementation, FO
+  receipt/status/Review dispatch/push/PR/merge/archive/todo/external remote mutation occurred.
 
 ### Summary
 
-Round 6 verifies stable provider-failure routing and checkpoint integrity, but `create-before` recovery still repeats an external push. The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
+Round 7 closes the prior command-count and cleanup defects, but seed publication is not atomic expected-absence.
+The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 77 across six verify rounds
-- iteration_count: 6
+- duration_minutes: 86 across seven verify rounds
+- iteration_count: 7
 - blocking_findings_count: 1 current
-- warning_findings_count: 4
+- warning_findings_count: 3
 - claim_records: required VERIFIED=7 NOT VERIFIED=1 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 6; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- reviewer_verdict: VETO round 7; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
