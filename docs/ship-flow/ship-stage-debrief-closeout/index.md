@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -318,3 +318,11 @@ Round 5 verifies the repository-binding repair, but provider interruptions after
   verify_artifact: verify.md@a217804
   required_fixes: R4-B1 authoritative repository binding for receipt-first and optional closeout-PR GitHub operations with foreign-CWD non-dry-run coverage
   deferred_hardening: R4-W1 fake-gh repository-binding assertions accompany the blocker; W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
+- cycle: 5
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-15T15:56:29Z
+  verify_artifact: verify.md@39dd0b1
+  required_fixes: R5-B1 stable provider list/create/ready failure routing plus resumable partial-state recovery without duplicate commits, PRs, or remote heads
+  deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
