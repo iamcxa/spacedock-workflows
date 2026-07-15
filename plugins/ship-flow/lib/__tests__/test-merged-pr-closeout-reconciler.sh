@@ -531,6 +531,70 @@ run_incomplete_landing_contract_case() {
   fi
 }
 
+run_feedback_r2_f1_case() {
+  local legacy_repo="$TMP_DIR/feedback-r2-f1-legacy-repo"
+  local fixture="${FIXTURE_ROOT}/pr-merged.env"
+  local output="$TMP_DIR/feedback-r2-f1-legacy.out"
+  local registry="$TMP_DIR/feedback-r2-f1.registry"
+  local pr_log="$TMP_DIR/feedback-r2-f1-pr.log"
+  local bundle_log="$TMP_DIR/feedback-r2-f1-bundle.log"
+  local before_head before_tree rc
+
+  setup_repo "$legacy_repo"
+  write_entity "$legacy_repo/docs/ship-flow" merged-fixture-entity 'done' '#131' '' '2026-05-06T00:00:00Z' PASSED
+  git -C "$legacy_repo" add -- docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$legacy_repo" commit -qm 'fixture: active legacy terminal entity'
+  before_head="$(git -C "$legacy_repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "$legacy_repo/docs/ship-flow")"
+
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" \
+    SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" \
+    run_helper "$legacy_repo" "$output" \
+      --entity merged-fixture-entity \
+      --pr-provider fixture \
+      --pr-fixture "$fixture" \
+      --closeout-mode pull-request)"
+
+  assert_exit 'active legacy done/PASSED without native proof rejects' 2 "$rc"
+  assert_contains 'active legacy terminal reports stable landing reason' '^reason=landing-anchor-missing$' "$output"
+  assert_contains 'active legacy terminal does not proceed' '^verdict=REJECT$' "$output"
+  assert_file_exists 'active legacy terminal keeps active index' "$legacy_repo/docs/ship-flow/merged-fixture-entity/index.md"
+  assert_path_missing 'active legacy terminal creates no index-only archive' "$legacy_repo/docs/ship-flow/_archive/merged-fixture-entity"
+  assert_path_missing 'active legacy terminal creates no native receipt' "$legacy_repo/docs/ship-flow/_closeouts"
+  if [ "$before_head" = "$(git -C "$legacy_repo" rev-parse HEAD)" ] && \
+     [ "$before_tree" = "$(hash_tree "$legacy_repo/docs/ship-flow")" ]; then
+    record_pass 'active legacy terminal preserves HEAD and workflow bytes'
+  else
+    record_fail 'active legacy terminal preserves HEAD and workflow bytes'
+  fi
+  if [ ! -e "$registry" ] && [ ! -e "$pr_log" ] && [ ! -e "$bundle_log" ]; then
+    record_pass 'active legacy terminal creates no closeout provider or bundle side effects'
+  else
+    record_fail 'active legacy terminal creates no closeout provider or bundle side effects'
+  fi
+
+  local native_repo="$TMP_DIR/feedback-r2-f1-native-repo"
+  local native_fixture="$TMP_DIR/feedback-r2-f1-native.env"
+  local native_head native_tree
+  prepare_full_d1_repo "$native_repo" "$native_fixture"
+  rc="$(run_helper "$native_repo" "$TMP_DIR/feedback-r2-f1-native-first.out" \
+    --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$native_fixture")"
+  assert_exit 'native terminal fixture applies once' 0 "$rc"
+  native_head="$(git -C "$native_repo" rev-parse HEAD)"
+  native_tree="$(hash_tree "$native_repo/docs/ship-flow")"
+  rc="$(run_helper "$native_repo" "$TMP_DIR/feedback-r2-f1-native-rerun.out" \
+    --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$native_fixture")"
+  assert_exit 'coherent native terminal rerun exits success' 0 "$rc"
+  assert_contains 'coherent native terminal rerun reports already reconciled' '^state=already_reconciled$' "$TMP_DIR/feedback-r2-f1-native-rerun.out"
+  if [ "$native_head" = "$(git -C "$native_repo" rev-parse HEAD)" ] && \
+     [ "$native_tree" = "$(hash_tree "$native_repo/docs/ship-flow")" ]; then
+    record_pass 'coherent native terminal rerun is a byte and commit no-op'
+  else
+    record_fail 'coherent native terminal rerun is a byte and commit no-op'
+  fi
+}
+
 run_missing_landing_field_matrix() {
   local template_repo="$TMP_DIR/missing-field-template" template_fixture="$TMP_DIR/missing-field-template.env"
   local field expected repo fixture output before_head before_tree after_tree rc
@@ -828,9 +892,10 @@ run_usage_and_dry_run_cases() {
     --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
     --dry-run)"
   after="$(hash_tree "${active_done_repo}/docs/ship-flow")"
-  assert_exit "dry-run active done exits success" 0 "$rc"
-  assert_contains "dry-run active done reports planned archive" '^state=already_done_archive_planned$' "$TMP_DIR/dry-run-active-done.out"
-  assert_contains "dry-run active done does not claim archived now" '^detail=active terminal entity archive planned$' "$TMP_DIR/dry-run-active-done.out"
+  assert_exit "dry-run active legacy done rejects" 2 "$rc"
+  assert_contains "dry-run active legacy done reports stable landing reason" '^reason=landing-anchor-missing$' "$TMP_DIR/dry-run-active-done.out"
+  assert_file_exists "dry-run active legacy done keeps active index" "$active_done_repo/docs/ship-flow/merged-fixture-entity/index.md"
+  assert_path_missing "dry-run active legacy done creates no archive" "$active_done_repo/docs/ship-flow/_archive/merged-fixture-entity"
   if [ "$before" = "$after" ]; then
     record_pass "dry-run active done leaves workflow unchanged"
   else
@@ -1006,14 +1071,23 @@ run_idempotency_cases() {
   write_entity "${active_done_repo}/docs/ship-flow" "merged-fixture-entity" "done" "#131" "" "2026-05-06T00:00:00Z" "PASSED"
   git -C "$active_done_repo" add docs/ship-flow/merged-fixture-entity/index.md
   git -C "$active_done_repo" commit -qm "add active done entity"
-  local rc
+  local before_head before_tree rc
+  before_head="$(git -C "$active_done_repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "$active_done_repo/docs/ship-flow")"
   rc="$(run_helper "$active_done_repo" "$TMP_DIR/active-done.out" \
     --entity merged-fixture-entity \
     --pr-provider fixture \
     --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
-  assert_exit "active done coherent archives now" 0 "$rc"
-  assert_contains "active done reports archived now" '^state=already_done_archived_now$' "$TMP_DIR/active-done.out"
-  assert_file_exists "active done archived file exists" "${active_done_repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md"
+  assert_exit "active legacy done rejects" 2 "$rc"
+  assert_contains "active legacy done reports stable landing reason" '^reason=landing-anchor-missing$' "$TMP_DIR/active-done.out"
+  assert_file_exists "active legacy done keeps active index" "${active_done_repo}/docs/ship-flow/merged-fixture-entity/index.md"
+  assert_path_missing "active legacy done creates no archive" "${active_done_repo}/docs/ship-flow/_archive/merged-fixture-entity"
+  if [ "$before_head" = "$(git -C "$active_done_repo" rev-parse HEAD)" ] && \
+     [ "$before_tree" = "$(hash_tree "$active_done_repo/docs/ship-flow")" ]; then
+    record_pass "active legacy done preserves HEAD and workflow bytes"
+  else
+    record_fail "active legacy done preserves HEAD and workflow bytes"
+  fi
 
   local archived_repo="$TMP_DIR/archived-repo"
   setup_repo "$archived_repo"
@@ -1670,7 +1744,9 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-f1 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-f1 ]; then
+    run_feedback_r2_f1_case
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-f1 ]; then
     run_incomplete_landing_contract_case
     run_missing_landing_field_matrix
     run_cleanup_safety_contract_cases

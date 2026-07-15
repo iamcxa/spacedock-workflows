@@ -290,17 +290,6 @@ remove_worktree_if_safe() {
   fi
 }
 
-archive_active_entity() {
-  if [ "$dry_run" = "yes" ]; then
-    return 0
-  fi
-  run_status --archive "$entity_slug" >/dev/null
-}
-
-verify_archived_entity() {
-  run_status --archived --resolve "archive:${entity_slug}" >/dev/null
-}
-
 cleanup_branch_if_safe() {
   if [ -z "${cleanup_branch:-}" ]; then
     if [ "$branch_cleanup" = "not_applicable" ]; then
@@ -1261,23 +1250,6 @@ pr_raw="$(read_frontmatter_field "$entity_path" pr)"
 pr_number="$(normalize_pr_number "$pr_raw" || true)"
 [ -n "$pr_number" ] || reject_input "invalid-pr" "entity pr field is not a recognizable PR number"
 worktree_value="$(read_frontmatter_field "$entity_path" worktree)"
-
-if coherent_terminal_file "$entity_path"; then
-  terminal_action="archive"
-  if [ "$dry_run" = "no" ]; then
-    archive_active_entity
-    verify_archived_entity
-    state_name="already_done_archived_now"
-    detail="active terminal entity archived"
-  else
-    state_name="already_done_archive_planned"
-    detail="active terminal entity archive planned"
-  fi
-  verdict="PROCEED"
-  pr_state="MERGED"
-  emit_report
-  exit 0
-fi
 
 case "$pr_provider" in
   fixture) read_provider_fixture "$pr_fixture" ;;
