@@ -235,6 +235,10 @@ Planned native post-merge closeout as five ordered TDD waves: landing proof, dur
   Landing is 89/89; reconciler 160/160; PR40/41 103/103; optional PR 141/141; debrief/C15 and the seven-command compatibility chain pass; all ancillary gates exit 0.
 - DONE: Fresh Science Officer execute reverse-audit checks plan-task attribution, stub acknowledgements, deviation capture, evidence completeness, and Hand-off to Verify accuracy before the artifact commit.
   The first pass returned an artifact-only VETO; after reattributing `42f8e06` to a disclosed cross-wave T2 reopen and recording the unused writing-skills methodology, re-review returned PROCEED with no implementation blocker.
+- DONE: Re-enter Execute for Verify feedback cycle 1 and repair B1-B5 plus W1 through three owned-path TDD lanes, with independent reviews overlapped against later disjoint execution.
+  Commits `3ee8f21`, `490a294`, and `fb6f4aa` make merged envelopes fail closed, assign one projection owner, preserve the full tracked entity tree, validate canonical D1/D4 receipt semantics, survive post-commit signals, and keep PR/direct ROADMAP parity. Fresh re-review APPROVED; receipt 81/81, bundle 69/69 on both shells, optional 176/176, default 195/195, direct 197/197, and PR40/41 138/138 pass. W2 remains deferred hardening.
+- DONE: Close the aggregate C14 compatibility gap without rewriting the feedback transition history.
+  Commit `b5fa535` sanctions only subject/state/body-bound FO feedback receipts; focused C14 is 31/31 and full C1-C15 exits 0 after an independent APPROVED review.
 - BOUNDARY: No external PR, push, merge, deployment, issue update, archive, or verify-stage advance occurred. Non-UI render fidelity is N/A.
 
 ### Summary
@@ -245,10 +249,10 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 
 - status: passed
 - duration_minutes: 285
-- iteration_count: 8 implementation/review repair loops
-- task_count: 5
-- commit_count: 8 implementation/docs commits
-- reviewer_verdict: PROCEED after one artifact-attribution repair loop
+- iteration_count: 14 implementation/review repair loops
+- task_count: 9
+- commit_count: 12 implementation/docs commits
+- reviewer_verdict: APPROVED after feedback-cycle independent re-review
 <!-- /section:execute-stage-report -->
 
 <!-- section:verify-stage-report -->
