@@ -733,6 +733,7 @@ set -euo pipefail
 : "${SHIP_FLOW_R3_PROVIDER_FILE:?missing provider metadata}"
 : "${SHIP_FLOW_R3_GH_LOG:?missing gh log}"
 printf '%s\n' "$*" >>"$SHIP_FLOW_R3_GH_LOG"
+[ -z "${SHIP_FLOW_R3_GH_PWD_LOG:-}" ] || printf 'pwd=%s args=%s\n' "$PWD" "$*" >>"$SHIP_FLOW_R3_GH_PWD_LOG"
 
 field() {
   awk -F= -v key="$1" '$1==key{sub(/^[^=]*=/, ""); print; exit}' "$SHIP_FLOW_R3_PROVIDER_FILE"
@@ -764,6 +765,10 @@ if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 141 ]; then
 fi
 
 if [ "${1:-}" = repo ] && [ "${2:-}" = view ]; then
+  if [ -n "${SHIP_FLOW_R3_EXPECT_GH_PWD:-}" ] && [ "$PWD" != "$SHIP_FLOW_R3_EXPECT_GH_PWD" ]; then
+    printf '%s\n' wrong/repository
+    exit 0
+  fi
   field repository
   exit 0
 fi
@@ -1045,6 +1050,138 @@ PY
   fi
   remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
   if [ "$remote_before" = "$remote_after" ]; then record_pass 'R3 receipt-only MERGED acquisition performs no remote write'; else record_fail 'R3 receipt-only MERGED acquisition performs no remote write'; fi
+}
+
+write_feedback_r3_review_git_wrapper() {
+  local bin="$1"
+  cat >"$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+atomic_ref=""
+seen_update=no
+has_zero=no
+zero=0000000000000000000000000000000000000000
+for arg in "$@"; do
+  if [ "$seen_update" = yes ] && [ -z "$atomic_ref" ]; then atomic_ref="$arg"; fi
+  [ "$arg" != update-ref ] || seen_update=yes
+  [ "$arg" != "$zero" ] || has_zero=yes
+done
+case "$atomic_ref" in refs/ship-flow/closeout-source/*) ;; *) atomic_ref="" ;; esac
+[ "$has_zero" = yes ] || atomic_ref=""
+
+if [ "${SHIP_FLOW_R3_GIT_MODE:-}" = collision ] && [ -n "$atomic_ref" ]; then
+  "$SHIP_FLOW_R3_REAL_GIT" -C "$SHIP_FLOW_R3_TARGET_REPO" update-ref "$atomic_ref" "$SHIP_FLOW_R3_COLLISION_OID"
+  printf '%s\n' "$atomic_ref" >"$SHIP_FLOW_R3_GIT_MARKER"
+fi
+
+"$SHIP_FLOW_R3_REAL_GIT" "$@"
+rc=$?
+if [ "$rc" = 0 ] && [ "${SHIP_FLOW_R3_GIT_MODE:-}" = signal ] && [ -n "$atomic_ref" ]; then
+  printf '%s\n' "$atomic_ref" >"$SHIP_FLOW_R3_GIT_MARKER"
+  kill -s "$SHIP_FLOW_R3_SIGNAL" "$PPID"
+fi
+exit "$rc"
+EOF
+  chmod +x "$bin"
+}
+
+run_feedback_r3_review_blockers_case() {
+  local gh_bin_dir="$TMP_DIR/feedback-r3-review-gh-bin" gh_log="$TMP_DIR/feedback-r3-review-gh.log"
+  local git_bin_dir="$TMP_DIR/feedback-r3-review-git-bin" real_git setup origin repo provider
+  local source_commits before_head after_head remote_before remote_after rc outside pwd_log
+  local collision_oid collision_ref marker preexisting_oid leftovers expected signal label raw
+  mkdir -p "$gh_bin_dir" "$git_bin_dir"
+  write_feedback_r3_b1_gh "$gh_bin_dir/gh"
+  write_feedback_r3_review_git_wrapper "$git_bin_dir/git"
+  real_git="$(command -v git)"
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r3-review-gh-cwd)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  outside="$TMP_DIR/feedback-r3-review-outside"; pwd_log="$TMP_DIR/feedback-r3-review-gh-pwd.log"; mkdir -p "$outside"
+  rc="$(cd "$outside" && SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    SHIP_FLOW_R3_GH_PWD_LOG="$pwd_log" SHIP_FLOW_R3_EXPECT_GH_PWD="$repo" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-review-gh-cwd.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request --dry-run)"
+  assert_exit 'R3 gh lookup binds itself to repo_root from an unrelated CWD' 0 "$rc"
+  assert_contains 'R3 repo-bound gh lookup reaches planned closeout' '^state=closeout_pr_planned$' "$TMP_DIR/feedback-r3-review-gh-cwd.out"
+  assert_contains 'R3 fake gh observes repo_root for repository discovery' "^pwd=${repo} args=repo view " "$pwd_log"
+  assert_feedback_r3_b1_objects_present 'R3 repo-bound gh lookup acquires provider source objects' "$repo" "$source_commits"
+  after_head="$(git -C "$repo" rev-parse HEAD)"; remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$after_head" = "$before_head" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then record_pass 'R3 repo-bound gh lookup preserves HEAD and checkout'; else record_fail 'R3 repo-bound gh lookup preserves HEAD and checkout'; fi
+  if [ "$remote_after" = "$remote_before" ]; then record_pass 'R3 repo-bound gh lookup performs no remote write'; else record_fail 'R3 repo-bound gh lookup performs no remote write'; fi
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r3-review-collision)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  before_head="$(git -C "$repo" rev-parse HEAD)"; collision_oid="$before_head"
+  remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"; marker="$TMP_DIR/feedback-r3-review-collision.marker"
+  rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+    SHIP_FLOW_R3_GIT_MODE=collision SHIP_FLOW_R3_REAL_GIT="$real_git" SHIP_FLOW_R3_TARGET_REPO="$repo" \
+    SHIP_FLOW_R3_COLLISION_OID="$collision_oid" SHIP_FLOW_R3_GIT_MARKER="$marker" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-review-collision.out" "$git_bin_dir:$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request --dry-run)"
+  assert_exit 'R3 atomic target-ref collision fails closed' 2 "$rc"
+  assert_contains 'R3 atomic target-ref collision reports canonical reason' '^reason=landing-patch-equivalence-failed$' "$TMP_DIR/feedback-r3-review-collision.out"
+  collision_ref="$(if [ -f "$marker" ]; then sed -n '1p' "$marker"; fi)"
+  if [ -n "$collision_ref" ]; then record_pass 'R3 collision wrapper reached atomic create'; else record_fail 'R3 collision wrapper reached atomic create'; fi
+  if [ -n "$collision_ref" ] && [ "$(git -C "$repo" rev-parse --verify "$collision_ref" 2>/dev/null || true)" = "$collision_oid" ]; then record_pass 'R3 collision preserves the independently created ref value'; else record_fail 'R3 collision preserves the independently created ref value'; fi
+  after_head="$(git -C "$repo" rev-parse HEAD)"; remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+  if [ "$after_head" = "$before_head" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then record_pass 'R3 collision preserves HEAD and checkout'; else record_fail 'R3 collision preserves HEAD and checkout'; fi
+  if [ "$remote_after" = "$remote_before" ]; then record_pass 'R3 collision performs no remote write'; else record_fail 'R3 collision performs no remote write'; fi
+  if [ ! -e "$repo/.git/shallow" ] && [ ! -e "$repo/.git/FETCH_HEAD" ]; then record_pass 'R3 collision leaves no shallow or FETCH_HEAD residue'; else record_fail 'R3 collision leaves no shallow or FETCH_HEAD residue'; fi
+
+  while IFS='|' read -r signal expected; do
+    label="$(printf '%s' "$signal" | tr '[:upper:]' '[:lower:]')"
+    setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r3-review-signal-$label")"
+    IFS='|' read -r origin repo provider <<<"$setup"
+    before_head="$(git -C "$repo" rev-parse HEAD)"; preexisting_oid="$before_head"
+    git -C "$repo" update-ref refs/ship-flow/closeout-source/preexisting "$preexisting_oid"
+    remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"; marker="$TMP_DIR/feedback-r3-review-signal-$label.marker"
+    rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+      SHIP_FLOW_R3_GIT_MODE=signal SHIP_FLOW_R3_REAL_GIT="$real_git" SHIP_FLOW_R3_SIGNAL="$signal" \
+      SHIP_FLOW_R3_GIT_MARKER="$marker" \
+      run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-review-signal-$label.out" "$git_bin_dir:$gh_bin_dir:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request --dry-run)"
+    assert_exit "R3 real $signal exits with signal contract" "$expected" "$rc"
+    if [ -s "$marker" ]; then record_pass "R3 real $signal fires immediately after acquisition ref creation"; else record_fail "R3 real $signal fires immediately after acquisition ref creation"; fi
+    leftovers="$(git -C "$repo" for-each-ref --format='%(refname)' refs/ship-flow/closeout-source | grep -v '^refs/ship-flow/closeout-source/preexisting$' || true)"
+    if [ -z "$leftovers" ]; then record_pass "R3 real $signal removes the process-scoped acquisition ref"; else record_fail "R3 real $signal removes the process-scoped acquisition ref"; fi
+    if [ "$(git -C "$repo" rev-parse --verify refs/ship-flow/closeout-source/preexisting)" = "$preexisting_oid" ]; then record_pass "R3 real $signal preserves the unrelated ref"; else record_fail "R3 real $signal preserves the unrelated ref"; fi
+    after_head="$(git -C "$repo" rev-parse HEAD)"; remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+    if [ "$after_head" = "$before_head" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then record_pass "R3 real $signal preserves HEAD and checkout"; else record_fail "R3 real $signal preserves HEAD and checkout"; fi
+    if [ "$remote_after" = "$remote_before" ]; then record_pass "R3 real $signal performs no remote write"; else record_fail "R3 real $signal performs no remote write"; fi
+    if [ ! -e "$repo/.git/shallow" ] && [ ! -e "$repo/.git/FETCH_HEAD" ]; then record_pass "R3 real $signal leaves no shallow or FETCH_HEAD residue"; else record_fail "R3 real $signal leaves no shallow or FETCH_HEAD residue"; fi
+  done <<'EOF'
+HUP|129
+INT|130
+QUIT|131
+TERM|143
+EOF
+
+  while IFS='|' read -r label raw; do
+    setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r3-review-remote-$label")"
+    IFS='|' read -r origin repo provider <<<"$setup"
+    git -C "$repo" config remote.origin.url "$raw"
+    git -C "$repo" config "url.file://${origin}.insteadOf" "$raw"
+    source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+    before_head="$(git -C "$repo" rev-parse HEAD)"; remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+    rc="$(SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
+      run_helper_with_path "$repo" "$TMP_DIR/feedback-r3-review-remote-$label.out" "$gh_bin_dir:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request --dry-run)"
+    assert_exit "R3 mixed-case $label GitHub remote acquires" 0 "$rc"
+    assert_contains "R3 mixed-case $label remote reaches bounded planned state" '^state=closeout_pr_planned$' "$TMP_DIR/feedback-r3-review-remote-$label.out"
+    assert_feedback_r3_b1_objects_present "R3 mixed-case $label remote materializes provider objects" "$repo" "$source_commits"
+    after_head="$(git -C "$repo" rev-parse HEAD)"; remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
+    if [ "$after_head" = "$before_head" ] && [ "$(git -C "$repo" symbolic-ref --short HEAD)" = main ]; then record_pass "R3 mixed-case $label remote preserves HEAD and checkout"; else record_fail "R3 mixed-case $label remote preserves HEAD and checkout"; fi
+    if [ "$remote_after" = "$remote_before" ]; then record_pass "R3 mixed-case $label remote performs no remote write"; else record_fail "R3 mixed-case $label remote performs no remote write"; fi
+  done <<'EOF'
+https|HTTPS://GitHub.com/Example/Repo.git
+scp|git@GitHub.com:Example/Repo.git
+ssh|SSH://git@GitHub.com/Example/Repo.git
+EOF
 }
 
 run_missing_landing_field_matrix() {
@@ -2198,6 +2335,7 @@ else
   record_pass "helper exists and is executable"
   if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r3-b1 ]; then
     run_feedback_r3_b1_main_only_case
+    run_feedback_r3_review_blockers_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-b2-integration ]; then
     run_feedback_r2_b2_integration_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r2-f1 ]; then

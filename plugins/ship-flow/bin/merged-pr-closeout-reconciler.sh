@@ -207,11 +207,20 @@ read_provider_fixture() {
 
 read_provider_gh() {
   command -v gh >/dev/null 2>&1 || reject_input "missing-gh" "gh CLI is not available"
-  local output
-  repository="$(gh repo view --json nameWithOwner --jq '.nameWithOwner')"
+  local output repo_rc=0 pr_rc=0 gh_repo_root cdup
+  cdup="$(git -C "$workflow_dir" rev-parse --show-cdup 2>/dev/null || true)"
+  gh_repo_root="${workflow_dir%/}/${cdup}"
+  repository="$(cd -L "$gh_repo_root" && gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)" || repo_rc=$?
+  if [ "$repo_rc" -ne 0 ] || [ -z "$repository" ] ||
+     ! [[ "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+    reject_input landing-patch-equivalence-failed "authoritative GitHub repository identity is unavailable"
+  fi
   output="$(gh pr view "$pr_number" --repo "$repository" \
     --json number,state,mergedAt,headRefName,baseRefName,url,mergeCommit,commits \
-    --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")", "landing_anchor=\(.mergeCommit.oid // "")", "source_commits=\([.commits[].oid] | join(","))", "pr_commit_count=\(.commits | length)"] | .[]')"
+    --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")", "landing_anchor=\(.mergeCommit.oid // "")", "source_commits=\([.commits[].oid] | join(","))", "pr_commit_count=\(.commits | length)"] | .[]')" || pr_rc=$?
+  if [ "$pr_rc" -ne 0 ]; then
+    reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR metadata is unavailable"
+  fi
   provider="gh"
   provider_number="$(printf '%s\n' "$output" | awk -F= '$1=="number"{print $2; exit}')"
   pr_state="$(printf '%s\n' "$output" | awk -F= '$1=="state"{print $2; exit}')"
@@ -229,16 +238,23 @@ read_provider_gh() {
 }
 
 normalize_github_remote_repository() {
-  local value="$1" path
+  local value="$1" folded path path_folded remainder
   value="${value%/}"
-  case "$value" in
-    https://github.com/*) path="${value#https://github.com/}" ;;
-    git@github.com:*) path="${value#git@github.com:}" ;;
-    ssh://git@github.com/*) path="${value#ssh://git@github.com/}" ;;
-    ssh://github.com/*) path="${value#ssh://github.com/}" ;;
+  folded="$(printf '%s' "$value" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  case "$folded" in
+    https://github.com/*)
+      remainder="${value#*://}"
+      path="${remainder#*/}"
+      ;;
+    git@github.com:*) path="${value#*:}" ;;
+    ssh://git@github.com/*|ssh://github.com/*)
+      remainder="${value#*://}"
+      path="${remainder#*/}"
+      ;;
     *) return 1 ;;
   esac
-  path="${path%.git}"
+  path_folded="$(printf '%s' "$path" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  case "$path_folded" in *.git) path="${path%????}" ;; esac
   case "$path" in
     */*) [ "${path#*/}" = "${path##*/}" ] || return 1 ;;
     *) return 1 ;;
@@ -311,23 +327,25 @@ materialize_acquired_source_objects() {
   target_ref="refs/ship-flow/closeout-source/${binding_hash}/$$-${nonce}-${#source_object_target_refs[@]}"
   git check-ref-format "$target_ref" >/dev/null 2>&1 ||
     reject_input landing-patch-equivalence-failed "temporary implementation PR source-object ref is invalid"
-  if git -C "$target_repo" show-ref --verify --quiet "$target_ref"; then
-    reject_input landing-patch-equivalence-failed "temporary implementation PR source-object ref already exists"
-  fi
-  # Register the absent, collision-resistant ref before fetch so an EXIT trap
-  # can remove an update that completed immediately before an interrupt. The
-  # expected-old CAS prevents cleanup from deleting a differently valued ref.
-  source_object_target_repos+=("$target_repo")
-  source_object_target_refs+=("$target_ref")
-  source_object_target_tips+=("$expected_tip")
   import_out="$(mktemp)"
-  git -C "$target_repo" fetch -q --force --no-tags --no-write-fetch-head --recurse-submodules=no \
-    "$source_object_store" "+${source_object_store_ref}:${target_ref}" >"$import_out" 2>&1 || import_rc=$?
+  git -C "$target_repo" fetch -q --no-tags --no-write-fetch-head --recurse-submodules=no \
+    "$source_object_store" "$source_object_store_ref" >"$import_out" 2>&1 || import_rc=$?
   rm -f "$import_out"
-  imported_tip="$(git -C "$target_repo" rev-parse --verify "${target_ref}^{commit}" 2>/dev/null || true)"
   if [ "$import_rc" -ne 0 ]; then
     reject_input landing-patch-equivalence-failed "authoritative implementation PR source objects could not be materialized"
   fi
+  # Register cleanup before the atomic create. If a signal arrives as
+  # update-ref returns, EXIT cleanup can delete only this exact expected tip.
+  source_object_target_repos+=("$target_repo")
+  source_object_target_refs+=("$target_ref")
+  source_object_target_tips+=("$expected_tip")
+  import_rc=0
+  git -C "$target_repo" update-ref "$target_ref" "$expected_tip" 0000000000000000000000000000000000000000 \
+    >/dev/null 2>&1 || import_rc=$?
+  if [ "$import_rc" -ne 0 ]; then
+    reject_input landing-patch-equivalence-failed "temporary implementation PR source-object ref could not be created atomically"
+  fi
+  imported_tip="$(git -C "$target_repo" rev-parse --verify "${target_ref}^{commit}" 2>/dev/null || true)"
   [ "$imported_tip" = "$expected_tip" ] ||
     reject_input landing-patch-equivalence-failed "materialized implementation PR source ref tip does not match provider OIDs"
   validate_source_object_set "$target_repo" "$expected_tip" "$source_commits" "$pr_commit_count" ||
