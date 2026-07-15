@@ -49,6 +49,7 @@ pre_mortem:
     one_liner: "All strategy fixtures pass, but non-atomic debrief, archive, and ROADMAP writes still force a second manual FO cycle after a crash."
 stage_outputs:
     shape: shape.md
+    verify: verify.md
 worktree: .worktrees/spacedock-ensign-ship-stage-debrief-closeout
 ---
 
@@ -59,6 +60,7 @@ worktree: .worktrees/spacedock-ensign-ship-stage-debrief-closeout
 | design | [design.md](design.md) |
 | plan | [plan.md](plan.md) |
 | execute | [execute.md](execute.md) |
+| verify | [verify.md](verify.md) |
 <!-- /section:stage-artifact-links -->
 
 <!-- section:problem -->
@@ -248,3 +250,27 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 - commit_count: 8 implementation/docs commits
 - reviewer_verdict: PROCEED after one artifact-attribution repair loop
 <!-- /section:execute-stage-report -->
+
+<!-- section:verify-stage-report -->
+## Stage Report: verify
+
+- DONE: Independently boot the exact execute snapshot, extract the schema/context manifests, validate the persisted TDD ledger, and rerun the scoped landing, receipt, transaction, reconciler, compatibility, and static evidence without trusting execute self-attestation.
+  The verifier reproduced 951 counted focused assertions plus the exact compatibility chain; C14/C15, syntax, Python compile, ShellCheck, and diff hygiene are green.
+- DONE: Run the mandatory read-only panel for general, silent-failure, testing, maintainability, security, schema/domain, and adversarial coverage, spot-check every citation, and cross-review the bounded failed artifact.
+  Two parallel panels found five unique blockers and two warnings; the fresh process cross-review returned PROCEED for the honest failed artifact and execute route, not for the implementation.
+- FAILED: Required integrated claims B1-B5 are NOT VERIFIED, so Verify VETOs and routes back to Execute without a proceed receipt or state advance.
+  The blockers are incomplete-envelope legacy fallback, duplicate startup terminalization, loss of the full archived entity evidence tree, underconstrained receipt semantics, and post-commit signal rollback corruption; W1 accompanies the execute repair and W2 remains explicit hardening risk.
+
+### Summary
+
+Verification preserves the green focused evidence but rejects the implementation because uncovered integration branches can bypass or corrupt the native closeout contract. The authoritative evidence and five required `NOT VERIFIED` claims remain in [verify.md](verify.md).
+
+### Metrics
+
+- status: failed
+- duration_minutes: 17
+- iteration_count: 1
+- blocking_findings_count: 5
+- warning_findings_count: 2
+- reviewer_verdict: VETO; artifact cross-review PROCEED to execute
+<!-- /section:verify-stage-report -->
