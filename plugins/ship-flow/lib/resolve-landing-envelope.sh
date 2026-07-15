@@ -289,11 +289,15 @@ if [ "$parent_count" -eq 1 ]; then
       rebase_commits+=("${reverse_rebase_commits[$i]}")
       i=$((i - 1))
     done
-    rebase_base_before="$(git -C "$repo_dir" rev-parse "${rebase_commits[0]}^")"
-    rebase_patch_ids="$(ordered_patch_ids "$repo_dir" "${rebase_commits[@]}" || true)"
-    rebase_patch_digest="$(aggregate_patch_digest "$repo_dir" "$rebase_base_before" "$landing_anchor" || true)"
-    if [ "$rebase_patch_ids" = "$source_patch_ids" ] && [ "$rebase_patch_digest" = "$source_patch_digest" ]; then
-      valid_rebase="yes"
+    rebase_base_before="$(git -C "$repo_dir" rev-parse --verify "${rebase_commits[0]}^1" 2>/dev/null || true)"
+    if [ -n "$rebase_base_before" ]; then
+      rebase_patch_ids="$(ordered_patch_ids "$repo_dir" "${rebase_commits[@]}" || true)"
+      rebase_patch_digest="$(aggregate_patch_digest "$repo_dir" "$rebase_base_before" "$landing_anchor" || true)"
+      if [ "$rebase_patch_ids" = "$source_patch_ids" ] && [ "$rebase_patch_digest" = "$source_patch_digest" ]; then
+        valid_rebase="yes"
+      fi
+    else
+      count_problem="yes"
     fi
   else
     count_problem="yes"

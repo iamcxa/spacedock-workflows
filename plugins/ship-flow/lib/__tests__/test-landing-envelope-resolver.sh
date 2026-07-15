@@ -185,6 +185,31 @@ build_landing_repo() {
   fi
 }
 
+build_young_squash_repo() {
+  local repo="$1"
+  init_repo "$repo"
+  BASE_BEFORE="$INITIAL"
+
+  git -C "$repo" checkout -qb young-topic "$INITIAL"
+  commit_file "$repo" feature-one.txt "feature one" "young source one"
+  SRC1="$(git -C "$repo" rev-parse HEAD)"
+  commit_file "$repo" feature-two.txt "feature two" "young source two"
+  SRC2="$(git -C "$repo" rev-parse HEAD)"
+  SOURCE_CSV="${SRC1},${SRC2}"
+
+  git -C "$repo" checkout -qb young-alternate "$INITIAL"
+  commit_file "$repo" alternate-one.txt "alternate one" "young alternate one"
+  ALT1="$(git -C "$repo" rev-parse HEAD)"
+  commit_file "$repo" alternate-two.txt "alternate two" "young alternate two"
+  ALT2="$(git -C "$repo" rev-parse HEAD)"
+  ALT_CSV="${ALT1},${ALT2}"
+
+  git -C "$repo" checkout -q main
+  git -C "$repo" merge --squash -q young-topic >/dev/null 2>&1
+  git -C "$repo" commit -qm "young squash landing"
+  ANCHOR="$(git -C "$repo" rev-parse HEAD)"
+}
+
 build_octopus_repo() {
   local repo="$1"
   init_repo "$repo"
@@ -328,6 +353,15 @@ else
   run_success_case rebase
   run_success_case squash
   run_success_case merge_commit
+
+  young_repo="$TMP_DIR/young-squash-repo"
+  build_young_squash_repo "$young_repo"
+  young_squash_out="$TMP_DIR/young-squash.out"
+  young_squash_rc="$(run_resolver "$young_repo" "$young_squash_out" "$ANCHOR" "$SOURCE_CSV" 2 squash)"
+  assert_exit "young repository squash exits success" 0 "$young_squash_rc"
+  assert_field "young repository squash selects squash" "$young_squash_out" strategy squash
+  assert_field "young repository squash preserves root base-before" "$young_squash_out" base_before "$BASE_BEFORE"
+  run_rejection_case "young speculative rebase root boundary" "$young_repo" "$ANCHOR" "$ALT_CSV" 2 rebase "$REASON_COUNT_MISMATCH"
 
   contract_repo="$TMP_DIR/contract-fields-repo"
   build_landing_repo "$contract_repo" rebase 2
