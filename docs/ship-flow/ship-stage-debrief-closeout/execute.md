@@ -2,9 +2,9 @@
 # Make debrief a native post-merge ship closeout — Execute
 
 started: 2026-07-15T04:49:00Z
-completed: 2026-07-15T12:14:28Z
+completed: 2026-07-15T13:14:18Z
 base_commit: d45d176
-verified_head: b5fa535ea9546894c9da5af1ca4d5c90f546fc3d
+verified_head: 85d6dff1dd595612d0cec7fc123d896c6ca4a969
 
 ## Execute Dispatch Manifest
 
@@ -28,6 +28,10 @@ verified_head: b5fa535ea9546894c9da5af1ca4d5c90f546fc3d
 
 W2 remains deferred hardening. F1 and F2 are disjoint and may run concurrently; F3 waits only for an available worker slot. Integration and state advancement remain with the execute ensign.
 
+### Feedback Cycle 2 Dispatch Manifest
+
+R2-F1 (B1), R2-F2 (B2/B3), and R2-F3 (B4) used disjoint delegated TDD lanes; R2-R independently reviewed each completed lane while later disjoint execution continued.
+
 ## Execution Log
 
 | Task | Wave | Model | Status | Files | Commit |
@@ -41,6 +45,10 @@ W2 remains deferred hardening. F1 and F2 are disjoint and may run concurrently; 
 | F2 | feedback 1 | Codex worker + independent reviewer | done | full archive tree and post-commit signal recovery | `3ee8f21` |
 | F3 | feedback 1 | Codex workers + independent reviewer | done | D1/D4 receipt semantics and split-root archive proof | `fb6f4aa` |
 | F4 | feedback 1 | Codex worker + independent reviewer | done | sanctioned feedback-stage receipt grammar | `b5fa535` |
+| R2-F1 | feedback 2 | Codex worker + independent reviewer | done | native-proof gate for active legacy terminal state | `b6cd023` |
+| R2-F2 | feedback 2 | Codex worker + independent reviewer | done | authoritative squash proof and first-cell ROADMAP identity | `91402c7` |
+| R2-F3 | feedback 2 | Codex worker + independent reviewer | done | young-repository parent guard | `110bc09` |
+| R2-I | feedback 2 integration | Codex worker + independent reviewer | done | squash source proof through direct, optional, and replay callers | `85d6dff` |
 
 ## TDD Evidence
 
@@ -55,6 +63,8 @@ W2 remains deferred hardening. F1 and F2 are disjoint and may run concurrently; 
 | F2 | bundle 54/15 including evidence loss and post-commit corruption | 69/69 on Bash 3.2 and 5.3; receipt regression green |
 | F3 | receipt 65/74, schema 74/78, split-root receipt 78/81, optional 164/176 | receipt 81/81; optional 176/176; direct 197/197; PR40/41 138/138 |
 | F4 | C14 28/29, then impossible-time review case 30/31 | focused 31/31; full C1-C15 exit 0 |
+| R2-F1 | focused reconciler 7/6 | focused 13/13; default 198/198; native rerun byte/commit no-op |
+| R2-F2/F3/I | receipt 81/3; resolver 89/5; integration 9/12; apply 4/5 | receipt 85/85; resolver 94/94 both shells; integration 23/23; bundle 78/78 both shells; independent APPROVED |
 
 ## Issues Found
 
@@ -65,7 +75,7 @@ W2 remains deferred hardening. F1 and F2 are disjoint and may run concurrently; 
 - Resolved: Verify feedback B1-B5 and W1 now fail closed, preserve the tracked entity tree, survive post-commit signals, validate D1/D4 semantics from Git plus exported bytes, and retain one reconciler projection owner; fresh review APPROVED.
 - Warning only: final gates retained three expected legacy-v1 debrief warnings plus existing historical invariant skips/grandfather warning.
 - Deferred hardening: W2 same-user path-swap TOCTOU and proof-root symlink-alias coverage remain non-acceptance follow-ups.
-- Resolved: aggregate C14 now recognizes only subject/state/body-bound FO feedback receipts; manual edits and impossible UTC timestamps remain fail closed (`b5fa535`).
+- Resolved: aggregate C14 recognizes only subject/state/body-bound FO feedback receipts (`b5fa535`); round-2 B1-B4 now require native proof, bind squash sources through every normal caller, match ROADMAP identity in cell zero, and guard root-parent speculation (`b6cd023`..`85d6dff`).
 
 ## Knowledge Captures
 
@@ -76,12 +86,12 @@ W2 remains deferred hardening. F1 and F2 are disjoint and may run concurrently; 
 
 | DC | Procedure | Result | Evidence |
 | --- | --- | --- | --- |
-| DC-1 | landing resolver suite | PASS | 89/89; rebase, squash, merge-commit and ambiguity/moving-main cases |
-| DC-2/4/5/6 | default reconciler suite | PASS | 195/195; receipt 81/81; bundle 69/69 both shells; optional 176/176 |
+| DC-1 | landing resolver suite | PASS | 94/94 both shells; rebase, squash, merge-commit, young-root and ambiguity/moving-main cases |
+| DC-2/4/5/6 | default reconciler suite | PASS | 198/198; direct 200/200; receipt 85/85; bundle 78/78 both shells; optional 179/179 |
 | DC-3 | debrief schema + C15 | PASS | schema PASS; C15 through `OK C15.23b` |
 | DC-7 | exact seven-command compatibility chain | PASS | todo 5/5, metadata 45/45, mergeable 115/115, feedback C14 31/31, C1..C15 all OK |
-| DC-8 | `SHIP_FLOW_CLOSEOUT_CASE=pr40-pr41` | PASS | 138/138; first run terminalizes once, second byte/hash no-op |
-| Optional PR | `SHIP_FLOW_CLOSEOUT_CASE=optional-pr` | PASS | 176/176; exported bytes plus authoritative Git proof, one PR/bundle |
+| DC-8 | `SHIP_FLOW_CLOSEOUT_CASE=pr40-pr41` | PASS | 141/141; first run terminalizes once, second byte/hash no-op |
+| Optional PR | `SHIP_FLOW_CLOSEOUT_CASE=optional-pr` | PASS | 179/179; exported bytes plus authoritative Git/source proof, one PR/bundle |
 | Operator setup | syntax-check README example; resolve real root/helper only | PASS | helper present; `network_actions=0`; no reconciler/GitHub action invoked |
 
 Ancillary evidence: TDD ledger `status=pass records=5`; Bash syntax, Python compile, ShellCheck, and `git diff --check` all exit 0; non-UI render fidelity is N/A.
@@ -89,41 +99,41 @@ Ancillary evidence: TDD ledger `status=pass records=5`; Bash syntax, Python comp
 ## Execute Report
 
 status: passed
-stage_cost: five serial delegated waves plus three feedback lanes with overlapped execute/review
-tasks_summary: T1-T5 and F1-F3 done; 0 blocked
-cross_review_verdict: APPROVED after feedback-cycle independent re-review
+stage_cost: five serial delegated waves plus two feedback cycles with overlapped execute/review
+tasks_summary: T1-T5, F1-F4, and R2-F1/R2-F2/R2-F3/R2-I done; 0 blocked
+cross_review_verdict: APPROVED after both feedback cycles received independent re-review
 cross_review_coaching: Keep review-driven reopens attached to their original task and surface methodology substitutions explicitly so Verify inherits the actual execution graph.
 science_officer_em_upward_report: {em_judgment: "execute evidence and attribution are verification-ready", recommendation: "finalize execute artifact; FO may route verification", route: proceed, confidence: high}
 knowledge_captures: 2
 
 ### Metrics
 
-duration_minutes: 445
-iteration_count: 14 implementation/review repair loops
-task_count: 9
-tasks_done: 9
+duration_minutes: 505
+iteration_count: 18 implementation/review repair loops
+task_count: 13
+tasks_done: 13
 tasks_blocked: 0
-commit_count: 12 implementation/docs commits
+commit_count: 16 implementation/docs commits
 
 ### Hand-off to Verify
 
 <!-- section:hand-off-to-verify -->
 ```yaml
 commit_list:
-  commits: [42b9637, 1870efb, 4069946, a196da6, 2424b9d, 42f8e06, bdbbf96, c08c391, 3ee8f21, 490a294, fb6f4aa, b5fa535]
-  verified_head: b5fa535ea9546894c9da5af1ca4d5c90f546fc3d
+  commits: [42b9637, 1870efb, 4069946, a196da6, 2424b9d, 42f8e06, bdbbf96, c08c391, 3ee8f21, 490a294, fb6f4aa, b5fa535, b6cd023, 91402c7, 110bc09, 85d6dff]
+  verified_head: 85d6dff1dd595612d0cec7fc123d896c6ca4a969
 dc_status:
-  - {id: DC-1, status: PASS, evidence: "landing resolver 89/89"}
-  - {id: DC-2/DC-4/DC-5/DC-6, status: PASS, evidence: "default 195/195; receipt 81/81; optional 176/176; bundle 69/69 both shells"}
+  - {id: DC-1, status: PASS, evidence: "landing resolver 94/94 both shells"}
+  - {id: DC-2/DC-4/DC-5/DC-6, status: PASS, evidence: "default 198/198; direct 200/200; receipt 85/85; optional 179/179; bundle 78/78 both shells"}
   - {id: DC-3, status: PASS, evidence: "debrief schema and C15 PASS"}
   - {id: DC-7, status: PASS, evidence: "exact compatibility chain and C1-C15 exit 0; feedback C14 31/31"}
-  - {id: DC-8, status: PASS, evidence: "PR40/41 138/138 and two-run no-op"}
+  - {id: DC-8, status: PASS, evidence: "PR40/41 141/141 and two-run no-op"}
 deviations:
   - "No task was added, removed, or scope-expanded; primary waves remained W1-W5 serial."
   - "After W3 and before W4, review reopened T2-owned receipt schema paths in 42f8e06 to clarify transaction.main_commit as the implementation landing anchor, never the projection or optional closeout-PR merge SHA."
   - "Review-driven tests and repairs stayed within each task's owned paths and acceptance contract."
   - "T2 did not use plan-listed superpowers:writing-skills; TDD plus independent schema/spec/quality review supplied the contract discipline instead."
-  - "Verify feedback cycle 1 added F1-F3 only for B1-B5/W1; W2 remains deferred hardening."
+  - "Verify feedback cycles added only F1-F4 and R2-F1/R2-F2/R2-F3/R2-I for B1-B5/W1 then R2-B1-R2-B4; W2 and round-2 performance warnings remain deferred hardening."
 render_fidelity_evidence: "N/A — non-UI entity"
 stub_ack_log: []
 skills_needed_used:
