@@ -17,11 +17,19 @@ source_object_store_ref="refs/ship-flow/closeout-source"
 source_object_target_repos=()
 source_object_target_refs=()
 source_object_target_tips=()
+owned_bundle_root=""
+
+cleanup_owned_bundle_root() {
+  local root="${owned_bundle_root:-}"
+  owned_bundle_root=""
+  [ -z "$root" ] || rm -rf -- "$root" >/dev/null 2>&1 || true
+}
 
 # shellcheck disable=SC2329 # Invoked indirectly by the EXIT trap.
 cleanup_source_object_acquisition() {
   local status=$? index=0
   trap - EXIT HUP INT QUIT TERM
+  cleanup_owned_bundle_root
   while [ "$index" -lt "${#source_object_target_repos[@]}" ]; do
     git -C "${source_object_target_repos[$index]}" update-ref -d \
       "${source_object_target_refs[$index]}" "${source_object_target_tips[$index]}" >/dev/null 2>&1 || true
@@ -1059,30 +1067,31 @@ reconcile_direct_bundle() {
   "$LANDING_RESOLVER" "${landing_args[@]}" >"$envelope_file" 2>&1 || envelope_rc=$?
   if [ "$envelope_rc" -ne 0 ]; then cat "$envelope_file"; rm -f "$envelope_file"; exit "$envelope_rc"; fi
   bundle_root="$(mktemp -d)"
+  owned_bundle_root="$bundle_root"
   receipt_relative="$(prepare_direct_bundle "$bundle_root" "$envelope_file" "$title" "$merge_intent")" || render_rc=$?
   rm -f "$envelope_file"
-  if [ "$render_rc" -ne 0 ]; then rm -rf "$bundle_root"; reject_input closeout-stage-artifacts-incoherent "failed to render coherent closeout bundle"; fi
+  if [ "$render_rc" -ne 0 ]; then cleanup_owned_bundle_root; reject_input closeout-stage-artifacts-incoherent "failed to render coherent closeout bundle"; fi
   debrief_relative="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["outputs"]["debrief"]["path"])' "$bundle_root/$receipt_relative")" || {
-    rm -rf "$bundle_root"; reject_input closeout-stage-artifacts-incoherent "rendered receipt cannot identify its debrief"
+    cleanup_owned_bundle_root; reject_input closeout-stage-artifacts-incoherent "rendered receipt cannot identify its debrief"
   }
   if ! "$DEBRIEF_VALIDATOR" "$bundle_root/$debrief_relative" >/dev/null; then
-    rm -rf "$bundle_root"; reject_input closeout-stage-artifacts-incoherent "rendered debrief fails schema validation"
+    cleanup_owned_bundle_root; reject_input closeout-stage-artifacts-incoherent "rendered debrief fails schema validation"
   fi
   active_relative="$(python3 - "$repo_root" "$entity_path" <<'PY'
 import pathlib,sys
 print(pathlib.Path(sys.argv[2]).resolve().parent.relative_to(pathlib.Path(sys.argv[1]).resolve()).as_posix())
 PY
 )" || active_rc=$?
-  if [ "$active_rc" -ne 0 ]; then rm -rf "$bundle_root"; reject_input closeout-entity-outside-repo "active entity is outside the repository"; fi
+  if [ "$active_rc" -ne 0 ]; then cleanup_owned_bundle_root; reject_input closeout-entity-outside-repo "active entity is outside the repository"; fi
   terminal_action="closeout_bundle"
   if [ "$dry_run" = yes ]; then
-    rm -rf "$bundle_root"
+    cleanup_owned_bundle_root
     state_name="closeout_bundle_planned"; detail="coherent direct closeout bundle planned"
     return 0
   fi
   apply_out="$(mktemp)"
   "$BUNDLE_APPLIER" --repo-root "$repo_root" --bundle-root "$bundle_root" --receipt-relative "$receipt_relative" --active-entity-relative "$active_relative" --if-head "$(git -C "$repo_root" rev-parse HEAD)" --if-roadmap-hash "$(sha256_file "$repo_root/ROADMAP.md")" --commit-as "ship(${entity_slug}): advance status to done" --source-commits "$source_commits" >"$apply_out" 2>&1 || apply_rc=$?
-  rm -rf "$bundle_root"
+  cleanup_owned_bundle_root
   if [ "$apply_rc" -ne 0 ]; then cat "$apply_out"; rm -f "$apply_out"; exit "$apply_rc"; fi
   rm -f "$apply_out"
   state_name="reconciled"; detail="merged PR reconciled as one receipt-bound terminal Git bundle"
@@ -1120,6 +1129,7 @@ PY
 
 ensure_initial_closeout_head() {
   local deterministic_head="$1" receipt_relative="$2" registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}" seed_root seed_sha
+  local remote_ref remote_record remote_rc=0 expected_remote_record
   if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$deterministic_head"; then
     seed_sha="$(git -C "$repo_root" rev-parse "$deterministic_head")"
   else
@@ -1144,6 +1154,22 @@ ensure_initial_closeout_head() {
       [ -z "${SHIP_FLOW_CLOSEOUT_PR_LOG:-}" ] || printf 'seed-push %s\n' "$seed_sha" >>"$SHIP_FLOW_CLOSEOUT_PR_LOG"
     fi
   else
+    remote_ref="refs/heads/$deterministic_head"
+    remote_record="$(git -C "$repo_root" ls-remote --exit-code --refs origin "$remote_ref" 2>/dev/null)" || remote_rc=$?
+    if [ "$remote_rc" -eq 0 ]; then
+      expected_remote_record="${seed_sha}"$'\t'"${remote_ref}"
+      if [ "$remote_record" != "$expected_remote_record" ]; then
+        state_name="closeout_pr_prepared"
+        prompt_captain closeout-checkpoint-conflict "deterministic closeout seed remote ref differs from the exact prepared seed"
+      fi
+      closeout_pr_remote_oid="$seed_sha"
+      return 0
+    fi
+    if [ "$remote_rc" -ne 2 ] || [ -n "$remote_record" ]; then
+      state_name="closeout_pr_prepared"
+      prompt_captain closeout-checkpoint-conflict "deterministic closeout seed remote ref cannot be inspected authoritatively"
+    fi
+    state_name="closeout_pr_prepared"
     fail_once seed-push
     git -C "$repo_root" push origin "$deterministic_head" >/dev/null
   fi
@@ -1307,10 +1333,12 @@ reconcile_pull_request_bundle() {
   [ -n "$merge_intent" ] && landing_args+=(--merge-method-intent "$merge_intent")
   "$LANDING_RESOLVER" "${landing_args[@]}" >"$envelope_file" 2>&1 || envelope_rc=$?
   if [ "$envelope_rc" -ne 0 ]; then cat "$envelope_file"; rm -f "$envelope_file"; exit "$envelope_rc"; fi
-  bundle_root="$(mktemp -d)"; receipt_relative="$(prepare_direct_bundle "$bundle_root" "$envelope_file" "$title" "$merge_intent")" || render_rc=$?; rm -f "$envelope_file"
-  [ "$render_rc" -eq 0 ] || { rm -rf "$bundle_root"; reject_input closeout-stage-artifacts-incoherent "failed to render coherent closeout bundle"; }
+  bundle_root="$(mktemp -d)"
+  owned_bundle_root="$bundle_root"
+  receipt_relative="$(prepare_direct_bundle "$bundle_root" "$envelope_file" "$title" "$merge_intent")" || render_rc=$?; rm -f "$envelope_file"
+  [ "$render_rc" -eq 0 ] || { cleanup_owned_bundle_root; reject_input closeout-stage-artifacts-incoherent "failed to render coherent closeout bundle"; }
   debrief_relative="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["outputs"]["debrief"]["path"])' "$bundle_root/$receipt_relative")"
-  "$DEBRIEF_VALIDATOR" "$bundle_root/$debrief_relative" >/dev/null || { rm -rf "$bundle_root"; reject_input closeout-stage-artifacts-incoherent "rendered debrief fails schema validation"; }
+  "$DEBRIEF_VALIDATOR" "$bundle_root/$debrief_relative" >/dev/null || { cleanup_owned_bundle_root; reject_input closeout-stage-artifacts-incoherent "rendered debrief fails schema validation"; }
   active_relative="$(python3 - "$repo_root" "$entity_path" <<'PY'
 import pathlib,sys
 print(pathlib.Path(sys.argv[2]).resolve().parent.relative_to(pathlib.Path(sys.argv[1]).resolve()).as_posix())
@@ -1327,31 +1355,31 @@ r=json.load(open(sys.argv[1])); t=r["transaction"]
 print(t["phase"],t["closeout_pr"] or "",r["proof_hash"],sep="|")
 PY
 )
-    [ "$existing_proof" = "$rendered_proof" ] || { rm -rf "$bundle_root"; reject_input closeout-proof-hash-mismatch "existing optional checkpoint differs from rendered terminal proof"; }
+    [ "$existing_proof" = "$rendered_proof" ] || { cleanup_owned_bundle_root; reject_input closeout-proof-hash-mismatch "existing optional checkpoint differs from rendered terminal proof"; }
     case "$existing_phase" in
       prepared|awaiting_closeout_pr) ;;
-      *) rm -rf "$bundle_root"; reject_input closeout-checkpoint-conflict "active optional flow has an unsupported receipt phase" ;;
+      *) cleanup_owned_bundle_root; reject_input closeout-checkpoint-conflict "active optional flow has an unsupported receipt phase" ;;
     esac
   fi
   terminal_action="closeout_pull_request"
-  if [ "$dry_run" = yes ]; then rm -rf "$bundle_root"; state_name="closeout_pr_planned"; detail="prepared checkpoint and deterministic closeout PR planned"; return 0; fi
+  if [ "$dry_run" = yes ]; then cleanup_owned_bundle_root; state_name="closeout_pr_planned"; detail="prepared checkpoint and deterministic closeout PR planned"; return 0; fi
   if [ "$existing_phase" != awaiting_closeout_pr ]; then
     checkpoint_optional_receipt "$prepared_source" "$receipt_relative" prepared 1 null
-    if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-prepared ]; then rm -rf "$bundle_root"; prompt_captain closeout-checkpoint-conflict "injected failure after prepared receipt checkpoint"; fi
+    if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-prepared ]; then cleanup_owned_bundle_root; prompt_captain closeout-checkpoint-conflict "injected failure after prepared receipt checkpoint"; fi
     resolve_or_create_closeout_pr "$deterministic_head" "$title" "$receipt_relative"
     bound_pr="$closeout_pr_number"
-    if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-pr-create ]; then rm -rf "$bundle_root"; prompt_captain closeout-checkpoint-conflict "injected failure after exact-head PR creation"; fi
+    if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-pr-create ]; then cleanup_owned_bundle_root; prompt_captain closeout-checkpoint-conflict "injected failure after exact-head PR creation"; fi
     checkpoint_optional_receipt "$prepared_source" "$receipt_relative" awaiting_closeout_pr 2 "$bound_pr"
   else
     bound_pr="$existing_pr"
     resolve_or_create_closeout_pr "$deterministic_head" "$title" "$receipt_relative"
     resolved_pr="$closeout_pr_number"
-    [ "$resolved_pr" = "$bound_pr" ] || { rm -rf "$bundle_root"; reject_input closeout-checkpoint-conflict "existing awaiting receipt PR differs from exact-head provider PR"; }
+    [ "$resolved_pr" = "$bound_pr" ] || { cleanup_owned_bundle_root; reject_input closeout-checkpoint-conflict "existing awaiting receipt PR differs from exact-head provider PR"; }
   fi
-  if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-awaiting ]; then rm -rf "$bundle_root"; prompt_captain closeout-checkpoint-conflict "injected failure after awaiting receipt checkpoint"; fi
+  if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-awaiting ]; then cleanup_owned_bundle_root; prompt_captain closeout-checkpoint-conflict "injected failure after awaiting receipt checkpoint"; fi
   build_optional_terminal_head "$bundle_root" "$receipt_relative" "$active_relative" "$deterministic_head" "$bound_pr"
-  if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-terminal-head ]; then rm -rf "$bundle_root"; prompt_captain closeout-checkpoint-conflict "injected failure after terminal head preparation"; fi
-  rm -rf "$bundle_root"
+  if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-terminal-head ]; then cleanup_owned_bundle_root; prompt_captain closeout-checkpoint-conflict "injected failure after terminal head preparation"; fi
+  cleanup_owned_bundle_root
   verdict="PROCEED"; pr_number="$bound_pr"; pr_state="OPEN"; reason="closeout-pr-awaiting-merge"; state_name="closeout_pr_awaiting_merge"
   detail="prepared checkpoint, exact deterministic head, and one bound closeout PR await merge"
 }

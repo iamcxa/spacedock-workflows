@@ -1429,6 +1429,12 @@ fi
 
 if [ "${1:-}" = pr ] && [ "${2:-}" = list ]; then
   require_repo_binding "$@"
+  if [ -n "${SHIP_FLOW_R6_SIGNAL:-}" ]; then
+    [ -n "${SHIP_FLOW_R6_SIGNAL_MARKER:-}" ] || exit 65
+    printf '%s\n' "$SHIP_FLOW_R6_SIGNAL" >"$SHIP_FLOW_R6_SIGNAL_MARKER"
+    kill -s "$SHIP_FLOW_R6_SIGNAL" "$PPID"
+    exit 0
+  fi
   fail_once list-before || exit $?
   emit_closeout_record
   exit 0
@@ -1475,15 +1481,90 @@ PY
 )"
 }
 
-install_feedback_r5_remote_update_log() {
-  local origin="$1" push_log="$2"
-  cat >"$origin/hooks/post-receive" <<EOF
-#!/bin/sh
-while read old new ref; do
-  printf '%s %s %s\n' "\$old" "\$new" "\$ref" >>'$push_log'
+write_feedback_r6_git_wrapper() {
+  local bin="$1"
+  cat >"$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SHIP_FLOW_R6_REAL_GIT:?missing real git path}"
+: "${SHIP_FLOW_R6_GIT_LOG:?missing git invocation log}"
+
+is_push=no
+is_terminal=no
+is_ls_remote=no
+last_arg=""
+for arg in "$@"; do
+  [ "$arg" != push ] || is_push=yes
+  [ "$arg" != ls-remote ] || is_ls_remote=yes
+  case "$arg" in --force-with-lease=*) is_terminal=yes ;; esac
+  last_arg="$arg"
 done
+if [ "$is_ls_remote" = yes ]; then
+  printf 'remote-inspection <%s>\n' "$last_arg" >>"$SHIP_FLOW_R6_GIT_LOG"
+  case "${SHIP_FLOW_R6_LS_REMOTE_MODE:-}" in
+    failure) exit 71 ;;
+    malformed) printf 'not-an-object-id\t%s\n' "$last_arg"; exit 0 ;;
+  esac
+fi
+if [ "$is_push" = yes ]; then
+  if [ "$is_terminal" = yes ]; then kind=terminal-push; else kind=seed-push; fi
+  printf '%s' "$kind" >>"$SHIP_FLOW_R6_GIT_LOG"
+  printf ' <%s>' "$@" >>"$SHIP_FLOW_R6_GIT_LOG"
+  printf '\n' >>"$SHIP_FLOW_R6_GIT_LOG"
+fi
+
+exec "$SHIP_FLOW_R6_REAL_GIT" "$@"
 EOF
-  chmod +x "$origin/hooks/post-receive"
+  chmod +x "$bin"
+}
+
+write_feedback_r6_mktemp_wrapper() {
+  local bin="$1"
+  cat >"$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SHIP_FLOW_R6_REAL_MKTEMP:?missing real mktemp path}"
+: "${SHIP_FLOW_R6_TEMP_ROOT:?missing scoped temp root}"
+export TMPDIR="$SHIP_FLOW_R6_TEMP_ROOT"
+if [ "$#" = 0 ]; then
+  exec "$SHIP_FLOW_R6_REAL_MKTEMP" "$SHIP_FLOW_R6_TEMP_ROOT/ship-flow-r6-file.XXXXXX"
+fi
+if [ "$#" = 1 ] && [ "$1" = -d ]; then
+  exec "$SHIP_FLOW_R6_REAL_MKTEMP" -d "$SHIP_FLOW_R6_TEMP_ROOT/ship-flow-r6-dir.XXXXXX"
+fi
+if [ "$#" = 2 ] && [ "$1" = -d ]; then
+  case "$2" in
+    */ship-flow-closeout-source.XXXXXX)
+      exec "$SHIP_FLOW_R6_REAL_MKTEMP" -d "$SHIP_FLOW_R6_TEMP_ROOT/ship-flow-closeout-source.XXXXXX"
+      ;;
+  esac
+fi
+exec "$SHIP_FLOW_R6_REAL_MKTEMP" "$@"
+EOF
+  chmod +x "$bin"
+}
+
+prepare_feedback_r6_temp_root() {
+  local root="$1"
+  mkdir -p "$root"
+  printf '%s\n' caller-owned >"$root/caller-owned.keep"
+}
+
+assert_feedback_r6_temp_ownership() {
+  local desc="$1" root="$2" residue
+  if [ -d "$root" ] && [ "$(sed -n '1p' "$root/caller-owned.keep" 2>/dev/null || true)" = caller-owned ]; then
+    record_pass "$desc preserves caller-owned temp parent and sentinel"
+  else
+    record_fail "$desc preserves caller-owned temp parent and sentinel"
+  fi
+  residue="$(find "$root" -mindepth 1 ! -path "$root/caller-owned.keep" -print 2>/dev/null || true)"
+  if [ -z "$residue" ]; then
+    record_pass "$desc removes every internally-created temp artifact"
+  else
+    record_fail "$desc removes every internally-created temp artifact"
+  fi
 }
 
 feedback_r5_receipt_path() {
@@ -1548,30 +1629,45 @@ feedback_r5_expected_receipt_tree() {
 }
 
 run_feedback_r5_failure_scenario() {
-  local seam="$1" expected_phase="$2" expected_first_ref="$3" expected_first_updates="$4"
-  local expected_first_main_commits="$5" expected_rerun_main_commits="$6"
-  local expected_first_create_effects="$7" expected_first_ready_effects="$8"
-  local expected_final_list_calls="$9" expected_final_create_calls="${10}" expected_final_ready_calls="${11}"
-  local expected_final_create_effects="${12}" expected_final_ready_effects="${13}"
-  local setup origin repo provider gh_bin registry log marker push_log deterministic_head receipt expected_failure_state
+  local seam="$1" expected_phase="$2" expected_first_ref="$3"
+  local expected_first_main_commits="$4" expected_rerun_main_commits="$5"
+  local expected_first_create_effects="$6" expected_first_ready_effects="$7"
+  local expected_final_list_calls="$8" expected_final_create_calls="$9" expected_final_ready_calls="${10}"
+  local expected_final_create_effects="${11}" expected_final_ready_effects="${12}"
+  local setup origin repo provider gh_bin git_bin registry log marker git_log real_git real_mktemp deterministic_head receipt expected_failure_state
+  local first_temp_root rerun_temp_root expected_first_seed_pushes expected_first_terminal_pushes
   local base_head first_head first_tree expected_first_tree first_receipt_hash first_ref_oid="" rc
   local rerun_head rerun_tree expected_rerun_tree rerun_receipt_hash
 
   setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r5-$seam")"
   IFS='|' read -r origin repo provider <<<"$setup"
-  gh_bin="$TMP_DIR/feedback-r5-$seam-bin"; registry="$TMP_DIR/feedback-r5-$seam.registry"
+  gh_bin="$TMP_DIR/feedback-r5-$seam-gh-bin"; git_bin="$TMP_DIR/feedback-r5-$seam-git-bin"
+  registry="$TMP_DIR/feedback-r5-$seam.registry"
   log="$TMP_DIR/feedback-r5-$seam.log"; marker="$TMP_DIR/feedback-r5-$seam.marker"
-  push_log="$TMP_DIR/feedback-r5-$seam-push.log"; deterministic_head="$(feedback_r5_deterministic_head)"
-  mkdir -p "$gh_bin"; : >"$log"; : >"$push_log"
+  git_log="$TMP_DIR/feedback-r5-$seam-git.log"; deterministic_head="$(feedback_r5_deterministic_head)"
+  first_temp_root="$TMP_DIR/feedback-r5-$seam-first-tmp"; rerun_temp_root="$TMP_DIR/feedback-r5-$seam-rerun-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$log"; : >"$git_log"
   write_feedback_r5_b1_gh "$gh_bin/gh"
-  install_feedback_r5_remote_update_log "$origin" "$push_log"
+  write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"
+  prepare_feedback_r6_temp_root "$first_temp_root"
+  prepare_feedback_r6_temp_root "$rerun_temp_root"
+  real_git="$(command -v git)"
+  real_mktemp="$(command -v mktemp)"
   base_head="$(git -C "$repo" rev-parse HEAD)"
-  if [ "$expected_phase" = prepared ]; then expected_failure_state=closeout_pr_prepared; else expected_failure_state=closeout_pr_awaiting_merge; fi
+  if [ "$expected_phase" = prepared ]; then
+    expected_failure_state=closeout_pr_prepared; expected_first_terminal_pushes=0
+  else
+    expected_failure_state=closeout_pr_awaiting_merge; expected_first_terminal_pushes=1
+  fi
+  if [ "$expected_first_ref" = absent ]; then expected_first_seed_pushes=0; else expected_first_seed_pushes=1; fi
 
-  rc="$(SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+  rc="$(TMPDIR="$first_temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
     SHIP_FLOW_R5_LOG="$log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE="$seam" \
-    SHIP_FLOW_R5_FAILURE_MARKER="$marker" run_helper_with_path "$repo" \
-      "$TMP_DIR/feedback-r5-$seam-first.out" "$gh_bin:$PATH" \
+    SHIP_FLOW_R5_FAILURE_MARKER="$marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$first_temp_root" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r5-$seam-first.out" "$git_bin:$gh_bin:$PATH" \
       --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
   first_head="$(git -C "$repo" rev-parse HEAD)"; first_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
   receipt="$(feedback_r5_receipt_path "$repo")"; first_receipt_hash="$(shasum -a 256 "$receipt" 2>/dev/null | awk '{print $1}')"
@@ -1590,14 +1686,18 @@ run_feedback_r5_failure_scenario() {
     record_fail "R5 $seam first failure preserves the exact documented main checkpoint"
   fi
   assert_feedback_r5_ref_shape "R5 $seam first failure" "$repo" "$origin" "$deterministic_head" "$expected_first_ref"
-  assert_feedback_r5_count "R5 $seam first failure has exact remote ref update count" "refs/heads/$deterministic_head$" "$push_log" "$expected_first_updates"
+  assert_feedback_r5_count "R6 $seam first failure has exact seed push invocation count" '^seed-push ' "$git_log" "$expected_first_seed_pushes"
+  assert_feedback_r5_count "R6 $seam first failure has exact terminal force-with-lease invocation count" '^terminal-push ' "$git_log" "$expected_first_terminal_pushes"
   assert_feedback_r5_count "R5 $seam first failure has exact create side-effect count" '^effect create ' "$log" "$expected_first_create_effects"
   assert_feedback_r5_count "R5 $seam first failure has exact ready side-effect count" '^effect ready ' "$log" "$expected_first_ready_effects"
+  assert_feedback_r6_temp_ownership "R6 $seam first failure" "$first_temp_root"
 
-  rc="$(SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+  rc="$(TMPDIR="$rerun_temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
     SHIP_FLOW_R5_LOG="$log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE="$seam" \
-    SHIP_FLOW_R5_FAILURE_MARKER="$marker" run_helper_with_path "$repo" \
-      "$TMP_DIR/feedback-r5-$seam-rerun.out" "$gh_bin:$PATH" \
+    SHIP_FLOW_R5_FAILURE_MARKER="$marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$rerun_temp_root" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r5-$seam-rerun.out" "$git_bin:$gh_bin:$PATH" \
       --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
   rerun_head="$(git -C "$repo" rev-parse HEAD)"; rerun_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
   receipt="$(feedback_r5_receipt_path "$repo")"; rerun_receipt_hash="$(shasum -a 256 "$receipt" 2>/dev/null | awk '{print $1}')"
@@ -1628,7 +1728,8 @@ run_feedback_r5_failure_scenario() {
   else
     record_fail "R5 $seam rerun reuses or monotonically advances the deterministic head"
   fi
-  assert_feedback_r5_count "R5 $seam rerun has exactly two bounded remote ref updates" "refs/heads/$deterministic_head$" "$push_log" 2
+  assert_feedback_r5_count "R6 $seam rerun has one total seed push invocation" '^seed-push ' "$git_log" 1
+  assert_feedback_r5_count "R6 $seam rerun has one total terminal force-with-lease invocation" '^terminal-push ' "$git_log" 1
   assert_feedback_r5_count "R5 $seam rerun has exact list call count" '^call pr list ' "$log" "$expected_final_list_calls"
   assert_feedback_r5_count "R5 $seam rerun has exact create call count" '^call pr create ' "$log" "$expected_final_create_calls"
   assert_feedback_r5_count "R5 $seam rerun has exact ready call count" '^call pr ready ' "$log" "$expected_final_ready_calls"
@@ -1641,16 +1742,163 @@ run_feedback_r5_failure_scenario() {
   else
     record_fail "R5 $seam rerun registry binds one exact ready PR"
   fi
+  assert_feedback_r6_temp_ownership "R6 $seam normal rerun" "$rerun_temp_root"
 }
 
 run_feedback_r5_b1_provider_retry_case() {
-  # seam | first receipt | first ref | first remote updates | first/final main commits |
+  # seam | first receipt | first ref | first/final main commits |
   # first create/ready effects | final list/create/ready calls | final create/ready effects
-  run_feedback_r5_failure_scenario list-before prepared absent 0 1 2 0 0 2 1 1 1 1
-  run_feedback_r5_failure_scenario create-before prepared present 1 1 2 0 0 2 2 1 1 1
-  run_feedback_r5_failure_scenario create-after prepared present 1 1 2 1 0 2 1 1 1 1
-  run_feedback_r5_failure_scenario ready-before awaiting_closeout_pr present 2 2 2 1 0 2 1 2 1 1
-  run_feedback_r5_failure_scenario ready-after awaiting_closeout_pr present 2 2 2 1 1 1 1 1 1 1
+  run_feedback_r5_failure_scenario list-before prepared absent 1 2 0 0 2 1 1 1 1
+  run_feedback_r5_failure_scenario create-before prepared present 1 2 0 0 2 2 1 1 1
+  run_feedback_r5_failure_scenario create-after prepared present 1 2 1 0 2 1 1 1 1
+  run_feedback_r5_failure_scenario ready-before awaiting_closeout_pr present 2 2 1 0 2 1 2 1 1
+  run_feedback_r5_failure_scenario ready-after awaiting_closeout_pr present 2 2 1 1 1 1 1 1 1
+  run_feedback_r6_seed_remote_case missing
+  run_feedback_r6_seed_remote_case different
+  run_feedback_r6_seed_remote_case ls-remote-failure
+  run_feedback_r6_seed_remote_case ls-remote-malformed
+  run_feedback_r6_bundle_cleanup_signal_case
+}
+
+run_feedback_r6_seed_remote_case() {
+  local mode="$1" setup origin repo provider deterministic_head gh_bin git_bin registry provider_log marker git_log real_git real_mktemp
+  local first_temp_root retry_temp_root first_head first_tree first_receipt_hash receipt seed_oid remote_oid rc
+  setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r6-remote-$mode")"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"
+  gh_bin="$TMP_DIR/feedback-r6-remote-$mode-gh-bin"; git_bin="$TMP_DIR/feedback-r6-remote-$mode-git-bin"
+  registry="$TMP_DIR/feedback-r6-remote-$mode.registry"; provider_log="$TMP_DIR/feedback-r6-remote-$mode-provider.log"
+  marker="$TMP_DIR/feedback-r6-remote-$mode.marker"; git_log="$TMP_DIR/feedback-r6-remote-$mode-git.log"
+  first_temp_root="$TMP_DIR/feedback-r6-remote-$mode-first-tmp"
+  retry_temp_root="$TMP_DIR/feedback-r6-remote-$mode-retry-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"
+  write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"
+  prepare_feedback_r6_temp_root "$first_temp_root"
+  prepare_feedback_r6_temp_root "$retry_temp_root"
+  real_git="$(command -v git)"
+  real_mktemp="$(command -v mktemp)"
+
+  rc="$(TMPDIR="$first_temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE=create-before \
+    SHIP_FLOW_R5_FAILURE_MARKER="$marker" SHIP_FLOW_R6_REAL_GIT="$real_git" SHIP_FLOW_R6_GIT_LOG="$git_log" \
+    SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$first_temp_root" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r6-remote-$mode-first.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit "R6 $mode precondition stops after the first seed push" 1 "$rc"
+  assert_feedback_r5_count "R6 $mode precondition invokes one seed push" '^seed-push ' "$git_log" 1
+  assert_feedback_r5_count "R6 $mode precondition invokes no terminal push" '^terminal-push ' "$git_log" 0
+  assert_feedback_r5_receipt "R6 $mode precondition" "$repo" prepared null
+  assert_feedback_r6_temp_ownership "R6 $mode precondition" "$first_temp_root"
+  first_head="$(git -C "$repo" rev-parse HEAD)"; first_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  receipt="$(feedback_r5_receipt_path "$repo")"
+  first_receipt_hash="$(shasum -a 256 "$receipt" | awk '{print $1}')"
+  seed_oid="$(git -C "$repo" rev-parse "refs/heads/$deterministic_head")"
+  remote_oid="$(git -C "$origin" rev-parse "refs/heads/$deterministic_head")"
+  if [ "$seed_oid" = "$remote_oid" ]; then
+    record_pass "R6 $mode precondition binds the exact seed OID remotely"
+  else
+    record_fail "R6 $mode precondition binds the exact seed OID remotely"
+  fi
+
+  case "$mode" in
+    missing)
+      git -C "$origin" update-ref -d "refs/heads/$deterministic_head" "$seed_oid"
+      ;;
+    different)
+      remote_oid="$(git -C "$origin" rev-parse refs/heads/main)"
+      git -C "$origin" update-ref "refs/heads/$deterministic_head" "$remote_oid" "$seed_oid"
+      ;;
+    ls-remote-failure|ls-remote-malformed) ;;
+  esac
+
+  rc="$(TMPDIR="$retry_temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE=create-before \
+    SHIP_FLOW_R5_FAILURE_MARKER="$marker" SHIP_FLOW_R6_REAL_GIT="$real_git" SHIP_FLOW_R6_GIT_LOG="$git_log" \
+    SHIP_FLOW_R6_LS_REMOTE_MODE="${mode#ls-remote-}" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$retry_temp_root" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r6-remote-$mode-retry.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$mode" = missing ]; then
+    assert_exit 'R6 missing remote seed ref retry converges' 0 "$rc"
+    assert_contains 'R6 missing remote seed ref retry awaits one PR' '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/feedback-r6-remote-$mode-retry.out"
+    assert_feedback_r5_count 'R6 missing remote seed ref permits exactly one retry seed push' '^seed-push ' "$git_log" 2
+    assert_feedback_r5_count 'R6 missing remote seed ref retains one terminal force-with-lease push' '^terminal-push ' "$git_log" 1
+    assert_feedback_r5_receipt 'R6 missing remote seed ref retry' "$repo" awaiting_closeout_pr 141
+    assert_feedback_r5_ref_shape 'R6 missing remote seed ref retry' "$repo" "$origin" "$deterministic_head" present
+  else
+    assert_exit "R6 $mode retry fails closed" 1 "$rc"
+    assert_contains "R6 $mode retry reports PROMPT_CAPTAIN" '^verdict=PROMPT_CAPTAIN$' "$TMP_DIR/feedback-r6-remote-$mode-retry.out"
+    assert_contains "R6 $mode retry reports stable checkpoint reason" '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r6-remote-$mode-retry.out"
+    assert_contains "R6 $mode retry reports prepared checkpoint state" '^state=closeout_pr_prepared$' "$TMP_DIR/feedback-r6-remote-$mode-retry.out"
+    assert_feedback_r5_count "R6 $mode retry performs no illegal seed push" '^seed-push ' "$git_log" 1
+    assert_feedback_r5_count "R6 $mode retry performs no terminal push" '^terminal-push ' "$git_log" 0
+    assert_feedback_r5_receipt "R6 $mode retry" "$repo" prepared null
+    if [ "$first_head" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+       [ "$first_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ] && \
+       [ "$first_receipt_hash" = "$(shasum -a 256 "$receipt" | awk '{print $1}')" ]; then
+      record_pass "R6 $mode retry preserves exact durable checkpoint bytes and history"
+    else
+      record_fail "R6 $mode retry preserves exact durable checkpoint bytes and history"
+    fi
+    if [ "$seed_oid" = "$(git -C "$repo" rev-parse "refs/heads/$deterministic_head")" ]; then
+      record_pass "R6 $mode retry preserves the exact local seed ref"
+    else
+      record_fail "R6 $mode retry preserves the exact local seed ref"
+    fi
+    if [ "$mode" = different ]; then
+      if [ "$remote_oid" = "$(git -C "$origin" rev-parse "refs/heads/$deterministic_head")" ]; then
+        record_pass 'R6 different remote OID is never overwritten'
+      else
+        record_fail 'R6 different remote OID is never overwritten'
+      fi
+    elif [ "$seed_oid" = "$(git -C "$origin" rev-parse "refs/heads/$deterministic_head")" ]; then
+      record_pass 'R6 failed remote inspection leaves the remote seed ref unchanged'
+    else
+      record_fail 'R6 failed remote inspection leaves the remote seed ref unchanged'
+    fi
+  fi
+  assert_feedback_r6_temp_ownership "R6 $mode retry" "$retry_temp_root"
+}
+
+run_feedback_r6_bundle_cleanup_signal_case() {
+  local signal expected label setup origin repo provider gh_bin git_bin provider_log git_log marker temp_root real_git real_mktemp rc
+  while IFS='|' read -r signal expected; do
+    label="$(printf '%s' "$signal" | tr '[:upper:]' '[:lower:]')"
+    setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r6-signal-$label")"
+    IFS='|' read -r origin repo provider <<<"$setup"
+    gh_bin="$TMP_DIR/feedback-r6-signal-$label-gh-bin"; git_bin="$TMP_DIR/feedback-r6-signal-$label-git-bin"
+    provider_log="$TMP_DIR/feedback-r6-signal-$label-provider.log"; git_log="$TMP_DIR/feedback-r6-signal-$label-git.log"
+    marker="$TMP_DIR/feedback-r6-signal-$label.marker"; temp_root="$TMP_DIR/feedback-r6-signal-$label-tmp"
+    mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"
+    write_feedback_r5_b1_gh "$gh_bin/gh"
+    write_feedback_r6_git_wrapper "$git_bin/git"
+    write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"
+    prepare_feedback_r6_temp_root "$temp_root"
+    real_git="$(command -v git)"
+    real_mktemp="$(command -v mktemp)"
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$TMP_DIR/feedback-r6-signal-$label.registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_SIGNAL="$signal" \
+      SHIP_FLOW_R6_SIGNAL_MARKER="$marker" SHIP_FLOW_R6_REAL_GIT="$real_git" SHIP_FLOW_R6_GIT_LOG="$git_log" \
+      SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+      run_helper_with_path "$repo" "$TMP_DIR/feedback-r6-signal-$label.out" "$git_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    assert_exit "R6 real $signal during provider lookup exits with signal contract" "$expected" "$rc"
+    if [ "$(sed -n '1p' "$marker" 2>/dev/null || true)" = "$signal" ]; then
+      record_pass "R6 real $signal fires after optional bundle creation"
+    else
+      record_fail "R6 real $signal fires after optional bundle creation"
+    fi
+    assert_feedback_r5_receipt "R6 real $signal durable checkpoint" "$repo" prepared null
+    assert_feedback_r5_count "R6 real $signal performs no push" '^(seed|terminal)-push ' "$git_log" 0
+    assert_feedback_r6_temp_ownership "R6 real $signal" "$temp_root"
+  done <<'EOF'
+HUP|129
+INT|130
+QUIT|131
+TERM|143
+EOF
 }
 
 run_missing_landing_field_matrix() {
