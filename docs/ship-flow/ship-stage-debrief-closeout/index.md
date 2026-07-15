@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: execute
+status: verify
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
