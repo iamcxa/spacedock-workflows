@@ -52,7 +52,7 @@ setup_repo() {
   git -C "$repo" config user.email closeout@example.test
   git -C "$repo" config user.name 'Closeout Fixture'
   write_source "$repo"
-  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' '| widget-closeout | Widget closeout |' '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  printf '%s\n' '# Roadmap' '| widget-closeout | Outside bounded sections |' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' '| widget-closeout | Widget closeout |' '| neighbor | widget-closeout |' '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
   git -C "$repo" add -- ROADMAP.md docs/ship-flow/widget-closeout
   git -C "$repo" commit -qm 'fixture: source entity'
 }
@@ -162,6 +162,8 @@ else
   if [ -f "$repo/docs/ship-flow/_archive/widget-closeout/ship.md" ]; then pass 'final ship landed'; else fail 'final ship landed'; fi
   if [ -f "$repo/docs/ship-flow/_debriefs/2026-07-15-01.md" ]; then pass 'debrief landed'; else fail 'debrief landed'; fi
   assert_eq 'exactly one Shipped row landed' 1 "$(grep -c '^| widget-closeout | Widget closeout | 2026-07-15 |$' "$repo/ROADMAP.md")"
+  assert_eq 'ROADMAP preserves exact slug row outside bounded sections' 1 "$(grep -c '^| widget-closeout | Outside bounded sections |$' "$repo/ROADMAP.md")"
+  assert_eq 'ROADMAP ignores slug in a non-identity Now cell' 1 "$(grep -c '^| neighbor | widget-closeout |$' "$repo/ROADMAP.md")"
   first_head="$(git -C "$repo" rev-parse HEAD)"
   rc="$(run_bundle "$repo" "$bundle" "$TMP_DIR/noop.out")"
   assert_eq 'matching receipt rerun exits success' 0 "$rc"

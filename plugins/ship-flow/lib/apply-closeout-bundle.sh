@@ -164,7 +164,17 @@ for key in ("debrief","ship","archived_entity"):
         print("verdict=STOP\nreason=closeout-proof-hash-mismatch\ndetail=bundle bytes differ for "+key); raise SystemExit(1)
 lines=(bundle/"ROADMAP.md").read_text().splitlines()
 identity=r["outputs"]["roadmap_row"]["identity"]
-rows=[line for line in lines if line.strip().startswith("|") and identity in [c.strip() for c in line.strip()[1:-1].split("|")]]
+opens=[i for i,line in enumerate(lines) if line.strip()=="<!-- section:shipped -->"]
+closes=[i for i,line in enumerate(lines) if line.strip()=="<!-- /section:shipped -->"]
+if len(opens)!=1 or len(closes)!=1 or opens[0]>=closes[0]:
+    print("verdict=STOP\nreason=closeout-roadmap-conflict\ndetail=ROADMAP must contain exactly one bounded Shipped section"); raise SystemExit(1)
+rows=[]
+for line in lines[opens[0]+1:closes[0]]:
+    stripped=line.strip()
+    if not (stripped.startswith("|") and stripped.endswith("|")): continue
+    cells=[cell.strip() for cell in stripped[1:-1].split("|")]
+    if len(cells)<2 or all(re.fullmatch(r":?-{3,}:?",cell) for cell in cells): continue
+    if cells[0]==identity: rows.append(line)
 if len(rows)!=1:
     print("verdict=STOP\nreason=closeout-roadmap-conflict\ndetail=ROADMAP must contain exactly one shipped identity row"); raise SystemExit(1)
 if hashlib.sha256(rows[0].encode()).hexdigest()!=r["outputs"]["roadmap_row"]["sha256"]:
