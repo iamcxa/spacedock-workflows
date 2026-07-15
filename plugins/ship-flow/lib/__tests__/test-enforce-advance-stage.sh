@@ -317,6 +317,105 @@ EOF
   echo "$dir"
 }
 
+# Build a feedback-stage transition with independently configurable subject,
+# resulting status, and body receipt. The entity carries stage_outputs so C14's
+# legacy body-table exemption cannot mask an invalid feedback receipt.
+setup_fo_feedback_fixture() {
+  local subject="$1" after_status="$2" receipt_cycle="$3" receipt_rejected="$4"
+  local receipt_target="$5" captain_decision="$6" routed_at="$7" verify_artifact="$8"
+  local commit_body="${9:-}" dir
+  dir="$(mktemp -d)"
+  (
+    cd "$dir" || exit 1
+    git init -q -b main
+    git config user.email test@test
+    git config user.name test
+
+    mkdir -p docs/test-wf/feedback-entity
+    cat > docs/test-wf/feedback-entity/index.md <<'EOF'
+---
+id: "feedback-entity"
+title: "Feedback Entity"
+status: verify
+stage_outputs:
+  verify: verify.md
+---
+EOF
+    git add docs/test-wf/feedback-entity/index.md
+    git commit -qm "baseline: add verify entity"
+
+    git checkout -q -b feature
+    sed -i.bak "s/^status: verify$/status: ${after_status}/" docs/test-wf/feedback-entity/index.md
+    rm -f docs/test-wf/feedback-entity/index.md.bak
+    cat >> docs/test-wf/feedback-entity/index.md <<EOF
+
+### Feedback Cycles
+
+- cycle: ${receipt_cycle}
+  rejected_stage: ${receipt_rejected}
+  feedback_to: ${receipt_target}
+  captain_decision: ${captain_decision}
+  routed_at: ${routed_at}
+  verify_artifact: ${verify_artifact}
+EOF
+    git add docs/test-wf/feedback-entity/index.md
+    if [ -n "$commit_body" ]; then
+      git commit -q -m "$subject" -m "$commit_body"
+    else
+      git commit -qm "$subject"
+    fi
+  )
+  echo "$dir"
+}
+
+setup_fo_feedback_multi_fixture() {
+  local subject="$1" second_target="$2" dir
+  dir="$(mktemp -d)"
+  (
+    cd "$dir" || exit 1
+    git init -q -b main
+    git config user.email test@test
+    git config user.name test
+    local entity target
+    for entity in feedback-one feedback-two; do
+      mkdir -p "docs/test-wf/$entity"
+      cat >"docs/test-wf/$entity/index.md" <<EOF
+---
+id: "$entity"
+title: "$entity"
+status: verify
+stage_outputs:
+  verify: verify.md
+---
+EOF
+    done
+    git add docs/test-wf/feedback-one/index.md docs/test-wf/feedback-two/index.md
+    git commit -qm "baseline: add two verify entities"
+
+    git checkout -q -b feature
+    for entity in feedback-one feedback-two; do
+      target=execute
+      [ "$entity" = feedback-one ] || target="$second_target"
+      sed -i.bak 's/^status: verify$/status: execute/' "docs/test-wf/$entity/index.md"
+      rm -f "docs/test-wf/$entity/index.md.bak"
+      cat >>"docs/test-wf/$entity/index.md" <<EOF
+
+### Feedback Cycles
+
+- cycle: 1
+  rejected_stage: verify
+  feedback_to: ${target}
+  captain_decision: fix
+  routed_at: 2026-07-15T11:03:07Z
+  verify_artifact: verify.md@ae56c20
+EOF
+    done
+    git add docs/test-wf/feedback-one/index.md docs/test-wf/feedback-two/index.md
+    git commit -qm "$subject"
+  )
+  echo "$dir"
+}
+
 # Run only the new check against the fixture repo via --check mode.
 # Uses check-invariants.sh's existing single-check dispatch path.
 # shellcheck disable=SC2329 # invoked indirectly through assert_exit/eval cases below
@@ -559,6 +658,84 @@ echo
 echo "--- Case 18: FO LOOKALIKE receipt (whitespace-only summary) → FAIL ---"
 TMP="$(setup_fo_dispatch_fixture "dispatch:   entering shape")"
 assert_exit 1 "run_check_only '$TMP'" "Case-18 FO dispatch receipt requires a non-whitespace summary (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 19: FO FEEDBACK receipt (verify cycle 1 → execute, canonical subject/body/status) → PASS ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
+assert_exit 0 "run_check_only '$TMP'" "Case-19 canonical FO feedback receipt passes (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 20: FO FEEDBACK wrong resulting status → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" plan 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
+assert_exit 1 "run_check_only '$TMP'" "Case-20 feedback target must equal resulting status (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 21: FO FEEDBACK rejected-stage mismatch between subject and body → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity review cycle 1 to execute" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
+assert_exit 1 "run_check_only '$TMP'" "Case-21 feedback rejected stage must match body (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 22: FO FEEDBACK cycle mismatch between subject and body → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 2 to execute" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
+assert_exit 1 "run_check_only '$TMP'" "Case-22 feedback cycle must match body (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 23: FO FEEDBACK target mismatch between subject and body → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify plan fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
+assert_exit 1 "run_check_only '$TMP'" "Case-23 feedback target must match body (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 24: FO FEEDBACK non-canonical subject grammar → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 into execute" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
+assert_exit 1 "run_check_only '$TMP'" "Case-24 feedback subject requires canonical grammar (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 25: FO FEEDBACK canonical text in commit body only → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "manual: route feedback" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20 "feedback: feedback-entity verify cycle 1 to execute")"
+assert_exit 1 "run_check_only '$TMP'" "Case-25 feedback receipt is subject-only (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 26: FO FEEDBACK non-fix captain decision → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute defer 2026-07-15T11:03:07Z verify.md@ae56c20)"
+assert_exit 1 "run_check_only '$TMP'" "Case-26 feedback body requires captain fix decision (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 27: FO FEEDBACK malformed routed timestamp → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute fix not-a-time verify.md@ae56c20)"
+assert_exit 1 "run_check_only '$TMP'" "Case-27 feedback body requires canonical routed time (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 28: FO FEEDBACK mismatched verify artifact provenance → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute fix 2026-07-15T11:03:07Z review.md@deadbee)"
+assert_exit 1 "run_check_only '$TMP'" "Case-28 feedback artifact must match rejected stage (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 29: FO FEEDBACK multi-entity commit requires matching receipt on every path → FAIL ---"
+TMP="$(setup_fo_feedback_multi_fixture "feedback: feedback entities verify cycle 1 to execute" plan)"
+assert_exit 1 "run_check_only '$TMP'" "Case-29 feedback receipt binds every mutated entity path (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 30: FO FEEDBACK rejected stage must equal parent status → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity review cycle 1 to execute" execute 1 review execute fix 2026-07-15T11:03:07Z review.md@deadbee)"
+assert_exit 1 "run_check_only '$TMP'" "Case-30 feedback rejected stage binds parent status (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 31: FO FEEDBACK impossible routed calendar timestamp → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute fix 2026-99-99T99:99:99Z verify.md@ae56c20)"
+assert_exit 1 "run_check_only '$TMP'" "Case-31 feedback routed time must be a real UTC instant (exit 1)"
 rm -rf "$TMP"
 
 echo
