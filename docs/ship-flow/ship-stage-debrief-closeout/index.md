@@ -262,28 +262,28 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Preserve both earlier VETO rounds and independently re-enter round 3 at metadata-only entry `bc2345d`, pinned to implementation range `cce775c..0c1fc29`.
-  Fresh ledger, focused, aggregate, Bash 3.2/5.3, static, pinned-launcher, and C1–C15 gates are green; default reconciler is 198/198 on both shells, direct 200/200, optional 179/179, PR40/41 141/141, and recursion 124/124.
-- DONE: Verify the exact round-2 repairs and prior closures without trusting execute self-attestation.
-  Active legacy done/PASSED fails closed before native proof; squash source IDs/digests are Git-rederived when objects exist; ROADMAP identity is restricted to cell zero; young-root topology is guarded; one-owner projection, full archive tree, post-commit recovery, and W1 parity remain closed.
-- FAILED: Two read-only panels and an independent clean main-only clone repro find R3-B1.
-  GitHub discovery records source commit OIDs but never fetches their objects. A valid squash landing returns `landing-patch-equivalence-failed: source commit is unavailable` until `refs/pull/40/head` is fetched; the same missing acquisition boundary can break later native replay after object pruning.
-- GATE: Round 3 VETOs the required one-cycle and replay claims, but two execute feedback cycles are already exhausted.
-  Verdict is FAILED/PROMPT_CAPTAIN. No third feedback cycle, FO proceed receipt, status mutation, review dispatch, push, PR, merge, archive, todo, or remote mutation occurred. W2 same-user path-swap, W3 `O(R+E)` scanning, and W4 verifier-scope tooling remain non-blocking follow-ups.
+- DONE: Re-enter round 4 at metadata-only `a535179`, pinned to cycle-3 implementation range `9b3be77..60f59d9`, and rerun full mechanical, schema/domain, static, pinned-launcher, and C1-C15 evidence.
+  R3 is 107/107 on Bash 3.2 and 5.3; default is 198/198 on both; landing 94/94 on both; bundle 78/78 on both; receipt 85/85; direct 200/200; optional 179/179; PR40/41 141/141; recursion 124/124.
+- DONE: Independently verify the cycle-3 acquisition repair and prior closures without trusting execute self-attestation.
+  True main-only and post-GC direct/optional/OPEN/MERGED replay, provider OIDs, collision, HUP/INT/QUIT/TERM cleanup, mixed-case remotes, and mutation residue pass. R2 native proof, squash validation, ROADMAP cell zero, young root, one owner, full archive, postcommit recovery, and W1 remain closed.
+- FAILED: General/testing/schema review plus an independent non-Git-CWD control find R4-B1.
+  Receipt-first `gh pr view` and optional `gh pr list/create/ready` remain unbound to the authoritative repository. The focused foreign-CWD test exits at dry-run before those calls; the real unbound command fails with `fatal: not a git repository`.
+- GATE: Round 4 VETOs D3/D4 optional and receipt-first location independence and stops at the Captain Verify gate.
+  Verdict is FAILED/PROMPT_CAPTAIN. The recovery panel timed out and was interrupted without softening the blocker. No FO receipt/status/review/push/PR/merge/archive/todo/remote mutation occurred; R4-W1 and W2-W4 remain warnings.
 
 ### Summary
 
-Round 3 preserves all earlier fixes but cannot verify one-cycle squash closeout from a normal main-only clone: authoritative OID metadata is not enough when the required Git objects were never acquired. The bounded failed artifact and Captain-gated loop-cap decision are recorded in [verify.md](verify.md).
+Round 4 verifies the source-object acquisition repair itself, but optional and receipt-first GitHub operations still depend on caller CWD after the dry-run boundary. The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 43 across three verify rounds
-- iteration_count: 3
+- duration_minutes: 55 across four verify rounds
+- iteration_count: 4
 - blocking_findings_count: 1 current
-- warning_findings_count: 3
-- claim_records: required VERIFIED=6 NOT VERIFIED=1 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 3; PROMPT_CAPTAIN because execute feedback cap is exhausted
+- warning_findings_count: 4
+- claim_records: required VERIFIED=7 NOT VERIFIED=1 INCONCLUSIVE=0
+- reviewer_verdict: VETO round 4; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
