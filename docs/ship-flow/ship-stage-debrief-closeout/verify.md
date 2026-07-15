@@ -40,6 +40,9 @@ Implementation snapshot: `cce775c..0c1fc29` (11 files, 554 insertions, 96 deleti
 | W3 | WARNING | `merged-pr-closeout-reconciler.sh:436` | Receipt/entity discovery is additive `O(R+E)` scanning and grows with repository history. | performance follow-up; no acceptance-scale failure |
 | W4 | WARNING | `review-scope.sh:21` | The helper accepts one positional base, so `--base/--head` fell back to `HEAD~1`; verifier overrode it with the 650-line pinned manifest. | verifier-tooling follow-up; coverage remained full |
 
+<details>
+<summary>TDD Evidence Audit</summary>
+
 #### TDD Evidence Audit
 
 | Task | Fresh audit | Severity | route_to |
@@ -49,6 +52,7 @@ Implementation snapshot: `cce775c..0c1fc29` (11 files, 554 insertions, 96 deleti
 | T3 | ledger valid; 78/78 both shells; full tree and post-commit recovery remain closed | none | none |
 | T4 | ledger valid; all selected reconciler suites green; replay object acquisition remains absent | BLOCKING | captain after execute-loop cap |
 | T5 | valid docs exemption; compatibility/C1–C15 green | none | none |
+</details>
 
 <details>
 <summary>Required verification claim records</summary>
@@ -144,8 +148,7 @@ mode: full CLI rerun plus clean-clone and recovery challenge; no UI/API server a
 <!-- section:verify-knowledge-captures -->
 ### Knowledge Captures
 
-- `[D2-candidate]` OID metadata is not Git-object availability; proof consumers must acquire or durably retain the exact provider source objects they later re-derive.
-- `[D2-candidate]` `review-scope.sh` must honor the verifier's pinned base/head rather than silently using `HEAD~1`.
+- `[D2-candidate]` OID metadata is not Git-object availability; acquire/retain exact provider objects. Also make `review-scope.sh` honor the pinned range instead of `HEAD~1`.
 <!-- /section:verify-knowledge-captures -->
 
 <!-- section:render-fidelity -->
@@ -187,8 +190,7 @@ runtime_checks_count: 34
 <!-- section:panel-coverage -->
 ## Panel Coverage
 
-- Tier: B (single-model by Captain instruction; RoboRev/external review not invoked).
-- Specialists: general BLOCKING; silent-failure BLOCKING; testing BLOCKING; maintainability NO_FINDINGS; schema PASS conditional on available objects / landing-domain BLOCKING; recovery BLOCKING; security WARNING (NEVER_GATE); performance WARNING.
+- Tier: B by Captain instruction; RoboRev/external review not invoked. Specialists: general/silent/testing/landing/recovery BLOCKING; maintainability NO_FINDINGS; schema PASS when objects exist; security/performance WARNING.
 - Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; type_design BLOCKING; silent_failure BLOCKING; test_adequacy BLOCKING; security WARNING; cross_model_challenge DEGRADED (explicitly excluded); runtime_uat BLOCKING; domain_intent BLOCKING.
 - PR Quality Score: non-PASS. Cross-model: NO; degradation cannot soften the required NOT VERIFIED claim.
 <!-- /section:panel-coverage -->
@@ -203,16 +205,15 @@ CLI preflight: Bash 3.2/5.3, Python, Git, ShellCheck, and pinned Spacedock avail
 | DC-1 | cli/git | resolver in main-only clone with provider OIDs | `source_present=no`; rc 2 `source commit is unavailable` | FAIL |
 | DC-1 | cli/git control | fetch `refs/pull/40/head`, rerun identical resolver | squash proof emitted | PASS control |
 
-Preflight or probe failures: R3-B1 is implementation-owned missing object acquisition, not test infrastructure.
 <!-- /section:runtime-verification -->
 
 <!-- section:stage-checklist -->
 ## Stage Report: verify
 
-- DONE: pinned round-3 implementation and reran all focused, aggregate, Bash 3.2/5.3, static, launcher, and C1–C15 evidence.
-- DONE: verified R2-B1/B2-validation/B3/B4 and prior B2/B3/B5/W1 closures; retained W2 plus scan/tooling warnings separately.
-- FAILED: verifier's clean main-only repro and panel/control-flow post-cleanup replay challenge expose R3-B1; one-cycle closeout is not verified.
-- GATE: two execute feedback cycles are exhausted, so no cycle 3, status mutation, receipt, review dispatch, push, PR, merge, or archive was performed; Captain decision required.
+- DONE: pinned round-3 implementation; focused, aggregate, Bash 3.2/5.3, static, launcher, and C1–C15 evidence reran.
+- DONE: R2-B1/B2-validation/B3/B4 and prior B2/B3/B5/W1 stay closed; W2 plus scan/tooling warnings remain separate.
+- FAILED: clean main-only repro and panel/control-flow replay challenge expose R3-B1; one-cycle closeout is not verified.
+- GATE: two execute feedback cycles are exhausted; no cycle 3 or lifecycle/remote mutation occurred; Captain decision required.
 <!-- /section:stage-checklist -->
 
 <!-- section:hand-off-to-review -->
