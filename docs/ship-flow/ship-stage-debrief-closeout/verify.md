@@ -1,22 +1,21 @@
 <!-- section:verify-report -->
 # Make debrief a native post-merge ship closeout — Verify
-<details>
-<summary>Snapshot provenance</summary>
 
-Implementation snapshot: `d45d176..c08c391`; execute report: `e0033eb`; verify entry: `7086f2d`. The later execute narrative is not implementation-object evidence.
+<details>
+<summary>Round 3 snapshot provenance</summary>
+
+Implementation snapshot: `cce775c..0c1fc29` (11 files, 554 insertions, 96 deletions); valid metadata-only verify entry: `bc2345d`. Tests and review were pinned to the implementation range, not later stage metadata.
 </details>
+
 <!-- section:verify-check-manifest -->
 ### Verify Check Manifest
 
-| Lane | Primary owner | Fresh evidence | Verdict |
+| Lane | Owner | Fresh evidence | Verdict |
 |---|---|---|---|
-| workflow CI / CLI DCs | verifier | 951 counted focused assertions; exact compatibility chain; static gates | PASS |
-| general + type/design | external panel A | 22-file pinned diff and artifacts | BLOCKING |
-| silent failure + recovery | external panel B | control flow, fault boundaries, startup integration | BLOCKING |
-| testing + maintainability | panel A | focused suites plus uncovered branches | BLOCKING / WARNING |
-| security | panel B | receipt/path/sentinel boundary | BLOCKING + WARNING |
-| schema/domain intent | panels A/B + verifier | registry, design D1-D5, receipt contract | BLOCKING |
-| cross-model challenge | verifier | no external Claude transport after decisive VETO | DEGRADED, no effect on failed verdict |
+| CLI/schema/recovery | verifier | focused, aggregate, static, Bash 3.2/5.3, C1–C15 | PASS |
+| general/testing/schema | read-only panel A | full 650-line diff + D1–D5/DAC review | BLOCKING |
+| silent/recovery/security/performance | read-only panel B | control flow + clean-clone/GC challenge | BLOCKING + 2 WARNING |
+| cross-model | verifier | explicitly not invoked; Captain excluded RoboRev/external review | DEGRADED, accepted for failed verdict |
 <!-- /section:verify-check-manifest -->
 
 <!-- section:quality-gate -->
@@ -24,13 +23,11 @@ Implementation snapshot: `d45d176..c08c391`; execute report: `e0033eb`; verify e
 
 | Gate | Fresh result | Verdict |
 |---|---|---|
-| TDD ledger | `status=pass records=5` | PASS |
-| Landing proof | 89/89 on Bash 3.2 and 89/89 on Bash 5.3 | PASS |
-| Receipt / intent / schema | 43/43 + 21/21 + 34/34 + 7/7 | PASS |
-| Bundle / reconciler | 51/51 on each Bash; direct 162/162; full 160/160; optional 141/141; PR40/41 103/103 | PASS |
-| Compatibility / static | exact seven-command chain rc 0; syntax, Python compile, ShellCheck, `git diff --check` clean | PASS |
-
-`/bin/bash` 3.2 reaches the untouched `check-invariants.sh` `declare -A` baseline; the plan's exact PATH command uses Bash 5.3 and passes, while all changed shell entry points pass Bash 3.2 checks.
+| TDD ledger | `status=pass records=5`; RED/GREEN/REFACTOR evidence retained | PASS |
+| Landing / receipt / bundle | 94/94, 85/85, 78/78 on Bash 3.2 and 5.3 | PASS |
+| Reconciler | default 198/198 both shells; direct 200/200; optional 179/179; PR40/41 141/141; recursion 124/124 | PASS |
+| Compatibility / static | intent 21/21, entity 34/34, ship 7/7, exact compatibility chain, syntax, ShellCheck, Python compile, diff hygiene, C1–C15 | PASS |
+| Pinned launcher | `~/.local/share/spacedock/0.25.0-pre1/spacedock` = 0.25.0-pre1 contract 3; status read with `--workflow-dir docs/ship-flow` | PASS |
 <!-- /section:quality-gate -->
 
 <!-- section:review-findings -->
@@ -38,100 +35,93 @@ Implementation snapshot: `d45d176..c08c391`; execute report: `e0033eb`; verify e
 
 | ID | Severity | File:Line | Finding | Disposition |
 |---|---|---|---|---|
-| B1 | BLOCKING | `merged-pr-closeout-reconciler.sh:1314` | Missing landing fields silently select legacy sequential done/archive and return `PROCEED`. | bounce execute; add missing-field no-mutation tests |
-| B2 | BLOCKING | `docs/ship-flow/_mods/pr-merge.md:17` | Startup delegates to the reconciler, then still commands a second legacy terminalize/archive path. | bounce execute/docs; one reconciler owner only |
-| B3 | BLOCKING | `apply-closeout-bundle.sh:245` | Bundle archives only index/ship, then deletes shape/design/plan/execute/verify/review and ledgers. | bounce execute; preserve the complete folder tree |
-| B4 | BLOCKING | `validate-closeout-receipt.py:242` | Self-rehashed minimal landing proof and arbitrary/duplicate safe output paths can validate as terminal sentinel state. | bounce execute; validate D1 fields and canonical unique roles |
-| B5 | BLOCKING | `apply-closeout-bundle.sh:253` | Signal after durable commit but before `APPLIED=no` runs rollback against new HEAD and deletes committed outputs. | bounce execute; add post-commit interruption recovery proof |
-| W1 | WARNING | `merged-pr-closeout-reconciler.sh:1043` | Pull-request mode omits direct mode's ROADMAP title/table validation. | include in execute repair |
-| W2 | WARNING | `apply-closeout-bundle.sh:126` | Static symlink preflight leaves a same-user path-swap TOCTOU window. | retain as explicit hardening follow-up |
+| R3-B1 | BLOCKING | `merged-pr-closeout-reconciler.sh:185` | GitHub returns source OIDs but the reconciler never fetches their objects; a valid squash closeout fails on a main-only clone and replay can fail after object pruning. | VETO; loop cap reached, route Captain |
+| W2 | WARNING | `apply-closeout-bundle.sh:232` | Static path checks leave a same-user path-swap window before copy/stage. | non-acceptance hardening follow-up |
+| W3 | WARNING | `merged-pr-closeout-reconciler.sh:436` | Receipt/entity discovery is additive `O(R+E)` scanning and grows with repository history. | performance follow-up; no acceptance-scale failure |
+| W4 | WARNING | `review-scope.sh:21` | The helper accepts one positional base, so `--base/--head` fell back to `HEAD~1`; verifier overrode it with the 650-line pinned manifest. | verifier-tooling follow-up; coverage remained full |
 
 #### TDD Evidence Audit
 
-| Task | RED / GREEN / REFACTOR audit | Severity | route_to |
+| Task | Fresh audit | Severity | route_to |
 |---|---|---|---|
-| T1 | persisted contract and 89/89 fresh GREEN on both shells | NIT (none) | none |
-| T2 | persisted contract; 43/43, 21/21, 34/34, 7/7 fresh GREEN | NIT (none) | none |
-| T3 | persisted contract; bundle/direct fault suites fresh GREEN, but B3/B5 branches absent | BLOCKING | execute |
-| T4 | persisted contract; optional/dogfood GREEN, but B1/B2 integration paths absent | BLOCKING | execute |
-| T5 | valid `TDD: skip` docs exemption; exact chain GREEN; W1 remains | WARNING | execute |
+| T1 | ledger valid; 94/94 both shells; clean main-only clone disproves availability assumption | BLOCKING | captain after execute-loop cap |
+| T2 | ledger valid; 85/85 both shells; forged squash proof rejects when objects exist | none | none |
+| T3 | ledger valid; 78/78 both shells; full tree and post-commit recovery remain closed | none | none |
+| T4 | ledger valid; all selected reconciler suites green; replay object acquisition remains absent | BLOCKING | captain after execute-loop cap |
+| T5 | valid docs exemption; compatibility/C1–C15 green | none | none |
 
 <details>
 <summary>Required verification claim records</summary>
 
-Pre-scan: plan/diff paths match; context-routing manifest extracted; schema registry validates; no non-root guidance applies. Citation spot-check confirmed 100% of 7 unique findings. Strict dominance deduplicates the general/testing reports of B1; green suites do not override uncovered integration branches.
-
-```yaml
-science_officer_em_upward_report:
-  subject: {entity: ship-stage-debrief-closeout, stage: verify, report_kind: verify-synthesis}
-  em_judgment: "Verify evidence VETOs the implementation despite green focused suites."
-  evidence_synthesis: ["five cited integration defects", "951 counted assertions plus exact compatibility/static gates"]
-  risk_tradeoff_call: "Return now; accepting helper-level green would permit destructive or duplicated terminal closeout."
-  recommendation: "Route B1-B5 and W1 to execute; retain W2 as explicit hardening risk."
-  route: return
-  confidence: high
-  fo_boundary: "FO owns workflow mechanics; EM owns judgment and recommendation."
-```
-
-#### Verification Claim: scoped mechanical gate is reproducible
+#### Verification Claim: scoped mechanical gates reproduce
 | Field | Value |
 |---|---|
 | claim_source | `quality-gate:scoped-cli` |
-| condition / threshold | all declared focused and compatibility commands exit zero |
-| metric_or_observable | 951 counted assertions plus exact chain/static exits |
-| smallest_disproving_surface | any named failed assertion or nonzero exit |
-| baseline / treatment / comparison | execute report; fresh verifier runs; counts reproduced |
+| condition / threshold | every named focused, compatibility, and static command exits zero |
+| metric_or_observable | assertion counts and command exits above |
+| smallest_disproving_surface | any named failure or nonzero exit |
+| baseline / treatment / comparison | execute report; fresh round-3 runs; reproduced |
 | verdict / route_to | `VERIFIED`; `proceed` |
 
-#### Verification Claim: incomplete provider proof fails closed
+#### Verification Claim: active legacy terminal state cannot bypass native proof
 | Field | Value |
 |---|---|
-| claim_source | `review:general+silent`; DC-1/DC-2/DC-6 |
-| condition / threshold | merged input missing any landing field must reject without mutation |
-| metric_or_observable | control flow and existing legacy fixture |
-| smallest_disproving_surface | `:1314-1337` reaches sequential terminalization |
-| baseline / treatment / comparison | design fail-closed; implementation fallback; contradiction |
-| verdict / route_to | `NOT VERIFIED`; `execute` |
+| claim_source | `DC-1/DC-6; review:silent-failure` |
+| condition / threshold | done/PASSED active input without D1 proof rejects with no mutation |
+| metric_or_observable | default/direct tests and control-flow entry through landing contract |
+| smallest_disproving_surface | any archive/HEAD change before proof |
+| baseline / treatment / comparison | round-2 bypass; 0c1fc29; no bypass observed |
+| verdict / route_to | `VERIFIED`; `proceed` |
 
-#### Verification Claim: startup has exactly one terminal projection owner
+#### Verification Claim: squash receipt proof is Git-rederived when source objects exist
 | Field | Value |
 |---|---|
-| claim_source | `review:silent`; DC-2/DC-4 |
-| condition / threshold | mod only schedules reconciler and reports its result |
-| metric_or_observable | startup instructions |
-| smallest_disproving_surface | `pr-merge.md:17-21` commands a second mutation |
-| baseline / treatment / comparison | reconciler-owner intent; contradictory mod; mismatch |
-| verdict / route_to | `NOT VERIFIED`; `execute` |
+| claim_source | `DC-1/DC-5; review:schema` |
+| condition / threshold | self-rehashed source IDs reject; direct/optional/replay callers pass ordered sources |
+| metric_or_observable | receipt 85/85 plus caller trace |
+| smallest_disproving_surface | forged IDs validate or a caller omits `--source-commits` |
+| baseline / treatment / comparison | round-2 forgery; current validator/callers; fixed |
+| verdict / route_to | `VERIFIED`; `proceed` |
 
-#### Verification Claim: terminal archive preserves entity evidence
+#### Verification Claim: provider source objects are acquired and remain replayable
 | Field | Value |
 |---|---|
-| claim_source | `review:silent`; DC-2/DC-4 |
-| condition / threshold | complete folder entity is archived byte-for-byte except terminal index/ship updates |
-| metric_or_observable | rendered outputs and recursive deletion |
-| smallest_disproving_surface | `apply-closeout-bundle.sh:245` after only index/ship copies |
-| baseline / treatment / comparison | workflow whole-folder archive contract; evidence loss; mismatch |
-| verdict / route_to | `NOT VERIFIED`; `execute` |
+| claim_source | `DC-1/DC-2/DC-4/DC-6; review:recovery` |
+| condition / threshold | a main-only clone closes a valid squash PR in one cycle and later native replay no-ops after cleanup/GC |
+| metric_or_observable | clean bare-origin `refs/pull/40/head` repro |
+| smallest_disproving_surface | resolver/validator `cat-file` against provider OIDs absent locally |
+| baseline / treatment / comparison | before fetch: source absent, rc 2; manual PR-ref fetch: same proof succeeds |
+| verdict / route_to | `NOT VERIFIED`; `captain` (two execute feedback cycles exhausted) |
 
-#### Verification Claim: landed sentinel proves canonical terminal semantics
+#### Verification Claim: ROADMAP identity is canonical first-column identity
 | Field | Value |
 |---|---|
-| claim_source | `review:security+schema`; DC-5/DC-6 |
-| condition / threshold | D1 landing schema and unique canonical output roles are validated |
-| metric_or_observable | validator key/path checks |
-| smallest_disproving_surface | arbitrary nonempty object at `:242-244` and generic paths at `:283-295` |
-| baseline / treatment / comparison | D1/D4 contract; underconstrained validator; mismatch |
-| verdict / route_to | `NOT VERIFIED`; `execute` |
+| claim_source | `DC-2/DC-5; review:schema` |
+| condition / threshold | exactly one bounded Shipped row has `cells[0] == entity_slug` |
+| metric_or_observable | receipt/bundle/reconciler negative cases |
+| smallest_disproving_surface | identity accepted only in a later cell |
+| baseline / treatment / comparison | round-2 any-cell match; current first-cell checks; fixed |
+| verdict / route_to | `VERIFIED`; `proceed` |
 
-#### Verification Claim: durable commit survives interruption coherently
+#### Verification Claim: young-repository topology never dereferences a nonexistent parent
 | Field | Value |
 |---|---|
-| claim_source | `review:adversarial`; DC-4/DC-6 |
-| condition / threshold | post-commit signal leaves new HEAD and worktree coherent and rerunnable |
-| metric_or_observable | trap lifetime around commit |
-| smallest_disproving_surface | `APPLIED=yes` through `git commit`, rollback deletes new-HEAD outputs |
-| baseline / treatment / comparison | pre-commit test only; post-commit gap; not proven |
-| verdict / route_to | `NOT VERIFIED`; `execute` |
+| claim_source | `DC-1; review:landing-proof` |
+| condition / threshold | root squash succeeds and speculative rebase rejects stably |
+| metric_or_observable | resolver 94/94 on both shells |
+| smallest_disproving_surface | exit 128 or lost root `base_before` |
+| baseline / treatment / comparison | round-2 crash; guarded range; fixed |
+| verdict / route_to | `VERIFIED`; `proceed` |
+
+#### Verification Claim: terminal projection remains atomic and idempotent
+| Field | Value |
+|---|---|
+| claim_source | `DC-2/DC-4/DC-5/DC-6/DC-8; review:recovery` |
+| condition / threshold | one owner, full tracked archive, post-commit signal recovery, W1 parity, and no duplicate terminal effect |
+| metric_or_observable | bundle 78/78 plus direct/optional/PR40/41/recursion suites |
+| smallest_disproving_surface | missing evidence byte, rollback of durable HEAD, duplicate bundle/PR/row |
+| baseline / treatment / comparison | prior blockers; current fault/rerun matrix; remain closed |
+| verdict / route_to | `VERIFIED`; `proceed` |
 
 </details>
 <!-- /section:review-findings -->
@@ -139,21 +129,23 @@ science_officer_em_upward_report:
 <!-- section:uat -->
 ### UAT
 
-mode: full-rerun plus control-flow review; no UI/API server applies to this CLI-only entity.
+mode: full CLI rerun plus clean-clone and recovery challenge; no UI/API server applies.
 
 | DC | Verify Procedure | Execute 1st | Verify | Evidence |
 |---|---|---|---|---|
-| DC-1 | landing resolver suite | PASS | PASS helper / FAIL integration | 89/89; B1 bypass |
-| DC-2/4/5/6 | reconciler suites + fault review | PASS | FAIL | 162/160/141 green but B1-B5 disprove integrated behavior |
-| DC-3 | debrief schema + C15 | PASS | PASS | exact compatibility chain rc 0 |
-| DC-7 | compatibility chain | PASS | PASS | exact seven commands rc 0 |
-| DC-8 | PR40/41 case twice | PASS | PASS | 103/103; byte/hash no-op assertions |
+| DC-1 | three-strategy landing proof | PASS | FAIL integration | main-only valid squash rejects until manual PR-ref fetch |
+| DC-2/DC-4/DC-6 | direct/optional/recovery | PASS | FAIL recovery boundary | one-cycle and post-GC replay lack source-object acquisition |
+| DC-3 | debrief schema + C15 | PASS | PASS | schema, C15, C1–C15 green |
+| DC-5 | sentinel validation | PASS | PASS | tampered/multiple/forged proof cases reject |
+| DC-7 | compatibility chain | PASS | PASS | exact chain exits zero |
+| DC-8 | frozen PR40/41 twice | PASS | PASS | 141/141, byte/hash no-op |
 <!-- /section:uat -->
 
 <!-- section:verify-knowledge-captures -->
 ### Knowledge Captures
 
-skipped: true — failed-round lessons remain attached to the blocking findings.
+- `[D2-candidate]` OID metadata is not Git-object availability; proof consumers must acquire or durably retain the exact provider source objects they later re-derive.
+- `[D2-candidate]` `review-scope.sh` must honor the verifier's pinned base/head rather than silently using `HEAD~1`.
 <!-- /section:verify-knowledge-captures -->
 
 <!-- section:render-fidelity -->
@@ -166,16 +158,17 @@ render_fidelity_status: not-applicable — `affects_ui: false`.
 ### Verdict
 
 status: failed
-stage_cost: two parallel read-only panels plus six parallel mechanical lanes
-quality: mechanical gates pass
-review: VETO
-cross_review_verdict: PROCEED on failed artifact `18bfdea`; route execute
-uat: DC-2/DC-4/DC-5/DC-6 failed integrated verification
-blocking_issues: B1-B5
-claim_records: required VERIFIED=1 NOT VERIFIED=5 INCONCLUSIVE=0; advisory VERIFIED=0 NOT VERIFIED=0 INCONCLUSIVE=0
-auto_fixes: none — logic findings must route to execute
-started_at: 2026-07-15T09:49:00Z
-completed_at: 2026-07-15T10:06:17Z
+stage_cost: four parallel mechanical lanes plus two read-only reviewer panels
+quality: deterministic suites and static gates pass
+review: VETO on R3-B1; PROMPT_CAPTAIN because two execute feedback cycles are exhausted
+cross_review_verdict: VETO — feasibility, quality, DC adequacy, reverse-audit, and D1 coverage fail; loop cap routes Captain
+cross_review_coaching: Test the provider-to-Git-object boundary, not only proof math; hydrate exact PR objects in a fresh main-only clone.
+uat: DC-1/DC-2/DC-4/DC-6 fail the source-object availability/replay boundary
+blocking_issues: R3-B1
+claim_records: required VERIFIED=6 NOT VERIFIED=1 INCONCLUSIVE=0; advisory VERIFIED=0 NOT VERIFIED=0 INCONCLUSIVE=0
+auto_fixes: none — logic/recovery finding cannot be verifier-fixed
+started_at: 2026-07-15T13:17:46Z
+completed_at: 2026-07-15T13:34:37Z
 duration_minutes: 17
 
 <!-- section:verify-verdict-metrics -->
@@ -183,58 +176,64 @@ duration_minutes: 17
 
 status: failed
 duration_minutes: 17
-iteration_count: 1
-claim_records_required_not_verified: 5
-blocking_findings_count: 5
-warning_findings_count: 2
-runtime_checks_count: 951
+iteration_count: 3
+claim_records_required_not_verified: 1
+blocking_findings_count: 1
+warning_findings_count: 3
+runtime_checks_count: 34
 <!-- /section:verify-verdict-metrics -->
 <!-- /section:verify-verdict -->
 
 <!-- section:panel-coverage -->
 ## Panel Coverage
 
-- Tier: B (single-model; external Claude transport not invoked after decisive VETO).
-- Specialists: general BLOCKING; silent-failure BLOCKING; testing BLOCKING; maintainability WARNING; security BLOCKING; schema/domain BLOCKING; adversarial BLOCKING.
-- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; type_design BLOCKING; silent_failure BLOCKING; test_adequacy BLOCKING; security BLOCKING; cross_model_challenge DEGRADED; runtime_uat BLOCKING; domain_intent BLOCKING.
-- PR Quality Score: 0/10. Cross-model: NO; this cannot soften the failed verdict.
+- Tier: B (single-model by Captain instruction; RoboRev/external review not invoked).
+- Specialists: general BLOCKING; silent-failure BLOCKING; testing BLOCKING; maintainability NO_FINDINGS; schema PASS conditional on available objects / landing-domain BLOCKING; recovery BLOCKING; security WARNING (NEVER_GATE); performance WARNING.
+- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; type_design BLOCKING; silent_failure BLOCKING; test_adequacy BLOCKING; security WARNING; cross_model_challenge DEGRADED (explicitly excluded); runtime_uat BLOCKING; domain_intent BLOCKING.
+- PR Quality Score: non-PASS. Cross-model: NO; degradation cannot soften the required NOT VERIFIED claim.
 <!-- /section:panel-coverage -->
+
+<!-- section:runtime-verification -->
+### Runtime Verification
+
+CLI preflight: Bash 3.2/5.3, Python, Git, ShellCheck, and pinned Spacedock available. No UI/API dev server applies.
+
+| DC | Type | Command | Result | Verdict |
+|---|---|---|---|---|
+| DC-1 | cli/git | resolver in main-only clone with provider OIDs | `source_present=no`; rc 2 `source commit is unavailable` | FAIL |
+| DC-1 | cli/git control | fetch `refs/pull/40/head`, rerun identical resolver | squash proof emitted | PASS control |
+
+Preflight or probe failures: R3-B1 is implementation-owned missing object acquisition, not test infrastructure.
+<!-- /section:runtime-verification -->
 
 <!-- section:stage-checklist -->
 ## Stage Report: verify
 
-- DONE: independently booted the exact execute snapshot, derived manifests, validated ledger, and reran scoped CLI/schema evidence.
-- DONE: completed mandatory general, silent-failure, testing, maintainability, security, schema/domain, and adversarial coverage with 100% citation checks.
-- FAILED: five unique blockers require execute repair; no FO proceed receipt, state advance, push, PR, merge, or archive was performed.
+- DONE: pinned round-3 implementation and reran all focused, aggregate, Bash 3.2/5.3, static, launcher, and C1–C15 evidence.
+- DONE: verified R2-B1/B2-validation/B3/B4 and prior B2/B3/B5/W1 closures; retained W2 plus scan/tooling warnings separately.
+- FAILED: verifier's clean main-only repro and panel/control-flow post-cleanup replay challenge expose R3-B1; one-cycle closeout is not verified.
+- GATE: two execute feedback cycles are exhausted, so no cycle 3, status mutation, receipt, review dispatch, push, PR, merge, or archive was performed; Captain decision required.
 <!-- /section:stage-checklist -->
 
 <!-- section:hand-off-to-review -->
 ### Hand-off to Review
 
 - `verify_verdict`: failed; review must not proceed.
-- `blocking_issues`: [B1, B2, B3, B4, B5].
-- `canonical_docs_touched`: plugin README and pr-merge mod were reviewed; PRODUCT/ARCHITECTURE/ROADMAP terminal edits remain ship-review-owned.
+- `blocking_issues`: [R3-B1 missing provider source-object acquisition/durability].
+- `canonical_docs_touched`: none in round 3; execute-owned README/schema changes were checked.
 - `render_fidelity_status`: not-applicable.
 <!-- /section:hand-off-to-review -->
+
 <details>
-<summary>Verify Round 2 — FAILED / VETO, route R2-B1–R2-B4 to execute</summary>
-<!-- section:verify-round-2 -->
-## Verify Round 2
-snapshot: `d45d176..c0494e5`; execute `c0494e5`; valid verify entry `5523916`; quality: 1,286 focused assertions plus full C1-C15 PASS.
-resolved_from_round_1: B2, B3, B5, W1; round-1 body above remains the historical record.
-- R2-B1 BLOCKING — active legacy done/PASSED archives before native proof (`merged-pr-closeout-reconciler.sh:1265-1279`); route execute.
-- R2-B2 BLOCKING — squash source patch IDs are not Git-rederived, so self-rehashed forgery passes (`validate-closeout-receipt.py:162-199,327-337`); route execute.
-- R2-B3 BLOCKING — ROADMAP identity matches any cell, not `cells[0]` (`validate-closeout-receipt.py:444-458`); route execute.
-- R2-B4 BLOCKING — young-repo squash can crash on speculative root-parent dereference (`resolve-landing-envelope.sh:281-305`); route execute.
-warnings: same-user path-swap TOCTOU; O(E×R) receipt scanning (effectively O(R²) when both grow); both non-blocking.
-status: failed; review: VETO; claim_records: required VERIFIED=1 NOT VERIFIED=4 INCONCLUSIVE=0; blocking_issues: R2-B1–R2-B4.
-hand_off: review must not proceed; no proceed receipt, status advance, push, PR, merge, archive, todo, or remote mutation.
-<!-- /section:verify-round-2 -->
+<summary>Prior Verify round history</summary>
+
+Round 1 (`ae56c20`) VETOed B1–B5 and W1; cycle 1 closed B2/B3/B5/W1 and repaired B1/B4. Round 2 (`a55629d`) VETOed active legacy proof bypass, squash-source forgery, ROADMAP any-cell identity, and young-root crash; cycle 2 closes those exact code paths. The round-3 blocker is distinct: authoritative OIDs are now validated, but their Git objects are never acquired or retained.
 </details>
+
 <!-- section:deferred-to-todo -->
 ## Deferred to TODO
 
-Deferred to TODO: 0 findings this round. W1 should be repaired in the execute bounce; W2 remains explicitly visible as a non-acceptance hardening warning. No issue/todo/remote state was mutated.
+Deferred to TODO: 0 findings emitted this round. W2 path-race, W3 linear scanning, and W4 verifier-scope tooling remain visible follow-ups; no issue/todo/remote state was mutated. R3-B1 is not deferred—it is the Captain-gated acceptance blocker.
 <!-- /section:deferred-to-todo -->
 
 <!-- /section:verify-report -->
