@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: shape
+status: design
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -17,38 +17,39 @@ harvest_required: true
 children: []
 rabbit_holes: []
 deleted_from_shape:
-  - claim: "Use PR headRefOid or current main as the landing SHA"
-    reason: "Rebase rewriting and concurrent main movement make both identities invalid."
-  - claim: "Create a separate debrief stage or skill"
-    reason: "The requested outcome belongs to the existing ship lifecycle and the stage-skill count is capped."
-  - claim: "Classify closeout PRs by title or body prose"
-    reason: "Editable prose cannot provide a mechanical recursion guard."
+    - claim: "Use PR headRefOid or current main as the landing SHA"
+      reason: "Rebase rewriting and concurrent main movement make both identities invalid."
+    - claim: "Create a separate debrief stage or skill"
+      reason: "The requested outcome belongs to the existing ship lifecycle and the stage-skill count is capped."
+    - claim: "Classify closeout PRs by title or body prose"
+      reason: "Editable prose cannot provide a mechanical recursion guard."
 acceptance_outcome: "When an implementation PR becomes MERGED, one bounded FO startup or idle cycle produces the final debrief and compact ship receipt with real landing facts, a coherent done/PASSED archive, and exactly one Shipped ROADMAP row."
 captain_bet: "When this ships, the captain expects a merged implementation PR to reach a debriefed, archived done state with its real landing SHA within one FO post-merge closeout cycle. If not, this pitch was wrong about the Layer 1 claim that debrief belongs to the ship lifecycle rather than an ad-hoc session ritual."
 stated_assumptions:
-  - id: A1
-    claim: "Provider merge time plus a post-merge landing anchor, topology, PR commit count, and patch equivalence can identify the real landing set across all three strategies."
-    verified_by: codebase-grep
-    verification: "Disposable three-strategy topology probe plus live PR #13/#14/#40/#41 inspection."
-    confidence_at_shape: 95
-    criticality: critical
-  - id: A2
-    claim: "The existing reconciler can become a resumable closeout transaction without weakening fail-closed cleanup behavior."
-    verified_by: design-contract
-    verification: "Design must ratify the checkpoint and atomicity contract before plan."
-    confidence_at_shape: 75
-    criticality: critical
-  - id: A3
-    claim: "A persisted sentinel bound to implementation PR and entity identity can prevent recursive closeout."
-    verified_by: design-contract
-    verification: "Design must ratify sentinel location and validation semantics before plan."
-    confidence_at_shape: 85
-    criticality: important
+    - id: A1
+      claim: "Provider merge time plus a post-merge landing anchor, topology, PR commit count, and patch equivalence can identify the real landing set across all three strategies."
+      verified_by: codebase-grep
+      verification: "Disposable three-strategy topology probe plus live PR #13/#14/#40/#41 inspection."
+      confidence_at_shape: 95
+      criticality: critical
+    - id: A2
+      claim: "The existing reconciler can become a resumable closeout transaction without weakening fail-closed cleanup behavior."
+      verified_by: design-contract
+      verification: "Design must ratify the checkpoint and atomicity contract before plan."
+      confidence_at_shape: 75
+      criticality: critical
+    - id: A3
+      claim: "A persisted sentinel bound to implementation PR and entity identity can prevent recursive closeout."
+      verified_by: design-contract
+      verification: "Design must ratify sentinel location and validation semantics before plan."
+      confidence_at_shape: 85
+      criticality: important
 pre_mortem:
-  category: wrong-dcs
-  one_liner: "All strategy fixtures pass, but non-atomic debrief, archive, and ROADMAP writes still force a second manual FO cycle after a crash."
+    category: wrong-dcs
+    one_liner: "All strategy fixtures pass, but non-atomic debrief, archive, and ROADMAP writes still force a second manual FO cycle after a crash."
 stage_outputs:
-  shape: shape.md
+    shape: shape.md
+worktree: .worktrees/spacedock-ensign-ship-stage-debrief-closeout
 ---
 
 <!-- section:stage-artifact-links -->
