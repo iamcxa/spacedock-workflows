@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -302,3 +302,11 @@ Round 3 preserves all earlier fixes but cannot verify one-cycle squash closeout 
   verify_artifact: verify.md@a55629d
   required_fixes: R2-B1 legacy done/PASSED bypass before native proof; R2-B2 squash source patch-id forgery; R2-B3 ROADMAP identity-column validation; R2-B4 young-repo root-parent crash
   deferred_hardening: W2 same-user path-swap TOCTOU and O(E x R) receipt scanning remain non-acceptance follow-ups
+- cycle: 3
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-15T13:59:00Z
+  verify_artifact: verify.md@6ca8236
+  required_fixes: R3-B1 bounded authoritative implementation-PR source-object acquisition for main-only first closeout and cleanup/GC replay
+  deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
