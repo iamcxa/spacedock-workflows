@@ -489,7 +489,7 @@ run_merged_fixture_case() {
   assert_contains "merged fixture reports PR state" '^pr_state=MERGED$' "$TMP_DIR/merged.out"
   assert_contains "merged fixture terminal action" '^terminal_action=set_done$' "$TMP_DIR/merged.out"
   assert_file_exists "merged fixture archives folder index" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md"
-  assert_frontmatter_equals "archived entity status done" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" status done
+  assert_frontmatter_equals "archived entity status done" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" status "done"
   assert_frontmatter_nonempty "archived entity completed stamped" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" completed
   assert_frontmatter_equals "archived entity verdict passed" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" verdict PASSED
   assert_frontmatter_equals "archived entity worktree cleared" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" worktree ""
@@ -810,7 +810,17 @@ archived: 2026-05-06T00:01:00Z
 
 # Archived fixture entity
 EOF
-  git -C "$archived_repo" add docs/ship-flow/_archive/merged-fixture-entity/index.md
+  cat > "${archived_repo}/docs/ship-flow/_archive/merged-fixture-entity/ship.md" <<'EOF'
+# Ship
+
+## Todo Closeout Digest
+
+- Legacy archive without receipt markers.
+
+### Verdict
+pr: "#131"
+EOF
+  git -C "$archived_repo" add docs/ship-flow/_archive/merged-fixture-entity/index.md docs/ship-flow/_archive/merged-fixture-entity/ship.md
   git -C "$archived_repo" commit -qm "add archived entity"
   local before after
   before="$(hash_tree "${archived_repo}/docs/ship-flow")"
@@ -826,6 +836,270 @@ EOF
   else
     record_fail "already archived leaves workflow unchanged"
   fi
+
+  local incomplete_repo="$TMP_DIR/archived-incomplete-marker-repo" incomplete_head
+  git clone -q "$archived_repo" "$incomplete_repo"
+  printf '%s\n' '' '### Closeout' 'closeout_id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >>"$incomplete_repo/docs/ship-flow/_archive/merged-fixture-entity/ship.md"
+  git -C "$incomplete_repo" add -- docs/ship-flow/_archive/merged-fixture-entity/ship.md
+  git -C "$incomplete_repo" commit -qm 'fixture: incomplete closeout marker'
+  incomplete_head="$(git -C "$incomplete_repo" rev-parse HEAD)"
+  rc="$(run_helper "$incomplete_repo" "$TMP_DIR/archived-incomplete-marker.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
+  assert_exit 'archived incomplete closeout marker rejects' 2 "$rc"
+  assert_contains 'archived incomplete closeout marker is sentinel-invalid' '^reason=closeout-sentinel-invalid$' "$TMP_DIR/archived-incomplete-marker.out"
+  if [ "$incomplete_head" = "$(git -C "$incomplete_repo" rev-parse HEAD)" ]; then record_pass 'archived incomplete marker preserves HEAD'; else record_fail 'archived incomplete marker preserves HEAD'; fi
+}
+
+run_direct_transaction_case() {
+  local repo="$TMP_DIR/direct-transaction-repo"
+  setup_repo "$repo"
+  printf '%s\n' '.worktrees/' >"$repo/.gitignore"
+  printf '%s\n' '# Roadmap' '| merged-fixture-entity | Outside sections must survive |' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' '| merged-fixture-entity | Merged fixture entity |' '| neighbor | mentions merged-fixture-entity in another cell |' '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  mkdir -p "$repo/docs/ship-flow/_debriefs"
+  printf '%s\n' 'landed session one' >"$repo/docs/ship-flow/_debriefs/2026-07-15-01.md"
+  git -C "$repo" add -- .gitignore ROADMAP.md docs/ship-flow/_debriefs/2026-07-15-01.md
+  git -C "$repo" commit -qm 'fixture: add roadmap'
+  local base source_one source_two anchor fixture
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb implementation-topic "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' '.worktrees/cleanup-topic'
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$repo/docs/ship-flow/merged-fixture-entity/review.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/merged-fixture-entity/review.md
+  git -C "$repo" commit -qm 'implementation: add reviewed entity'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' '- Captured during this ship: preserve this exact todo evidence.' '- Deferred follow-up: retain the cleanup retry contract.' '' '### Token Summary' '' 'Budget: focused' '' '### Verdict' 'merge_method_intent: rebase' 'pr: "#131"' >"$repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$repo" commit -qm 'implementation: add ship evidence'
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" "$source_two" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  fixture="$TMP_DIR/pr-direct.env"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' 'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=cleanup-topic' 'base_ref=main' 'url=https://github.com/example/repo/pull/131' \
+    'repository=example/repo' "landing_anchor=$anchor" "source_commits=$source_one,$source_two" 'pr_commit_count=2' >"$fixture"
+
+  local before_head rc receipt debrief landed_head
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  rc="$(run_helper "$repo" "$TMP_DIR/direct.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  if [ "$rc" != 0 ]; then sed 's/^/    helper: /' "$TMP_DIR/direct.out"; fi
+  assert_exit 'direct transaction exits success' 0 "$rc"
+  assert_contains 'direct transaction reports bundle action' '^terminal_action=closeout_bundle$' "$TMP_DIR/direct.out"
+  assert_contains 'direct transaction reports reconciled state' '^state=reconciled$' "$TMP_DIR/direct.out"
+  if [ "$(git -C "$repo" rev-list --count "${before_head}..HEAD")" = 1 ]; then record_pass 'direct transaction creates exactly one terminal commit'; else record_fail 'direct transaction creates exactly one terminal commit'; fi
+  if [ "$(git -C "$repo" log -1 --format=%s)" = 'ship(merged-fixture-entity): advance status to done' ]; then record_pass 'direct transaction commit carries one exact C14 receipt'; else record_fail 'direct transaction commit carries one exact C14 receipt'; fi
+  assert_path_missing 'direct transaction removes active entity' "$repo/docs/ship-flow/merged-fixture-entity"
+  assert_file_exists 'direct transaction lands archived entity' "$repo/docs/ship-flow/_archive/merged-fixture-entity/index.md"
+  assert_file_exists 'direct transaction lands final ship' "$repo/docs/ship-flow/_archive/merged-fixture-entity/ship.md"
+  debrief="$repo/docs/ship-flow/_debriefs/2026-07-15-02.md"
+  receipt="$(find "$repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  assert_file_exists 'direct transaction allocates first free canonical debrief' "$debrief"
+  if [ -f "$debrief" ] && [ "$(frontmatter_field "$debrief" sequence)" = 2 ]; then record_pass 'direct debrief sequence matches canonical filename'; else record_fail 'direct debrief sequence matches canonical filename'; fi
+  if [ -f "$debrief" ] && bash "$PLUGIN_ROOT/lib/__tests__/validate-debrief-schema.sh" "$debrief" >/dev/null; then record_pass 'direct transaction lands schema-valid debrief'; else record_fail 'direct transaction lands schema-valid debrief'; fi
+  if [ -n "$receipt" ]; then record_pass 'direct transaction lands closeout receipt'; else record_fail 'direct transaction lands closeout receipt'; fi
+  if [ -n "$receipt" ] && python3 "$PLUGIN_ROOT/lib/validate-closeout-receipt.py" --receipt "$receipt" --repo-root "$repo" --verify-outputs >/dev/null; then record_pass 'direct receipt validates exact terminal outputs'; else record_fail 'direct receipt validates exact terminal outputs'; fi
+  if [ "$(grep -c '^| merged-fixture-entity | Merged fixture entity | 2026-07-15 |$' "$repo/ROADMAP.md")" = 1 ]; then record_pass 'direct transaction lands exactly one Shipped row'; else record_fail 'direct transaction lands exactly one Shipped row'; fi
+  assert_not_contains 'direct transaction removes exact Now identity row' '^\| merged-fixture-entity \| Merged fixture entity \|$' "$repo/ROADMAP.md"
+  assert_contains 'direct ROADMAP preserves slug outside bounded sections' '^\| merged-fixture-entity \| Outside sections must survive \|$' "$repo/ROADMAP.md"
+  assert_contains 'direct ROADMAP preserves slug in another Now cell' '^\| neighbor \| mentions merged-fixture-entity in another cell \|$' "$repo/ROADMAP.md"
+  if [ -f "$debrief" ]; then
+    assert_contains 'direct debrief preserves todo digest content' '^- Captured during this ship: preserve this exact todo evidence\.$' "$debrief"
+    assert_contains 'direct debrief records full landing anchor' "$anchor" "$debrief"
+    assert_contains 'direct debrief records full ordered source commits' "$source_one,$source_two" "$debrief"
+  fi
+  local final_ship="$repo/docs/ship-flow/_archive/merged-fixture-entity/ship.md"
+  if [ -f "$final_ship" ]; then
+    assert_contains 'direct final ship records receipt path' '^receipt: docs/ship-flow/_closeouts/[0-9a-f]{64}\.json$' "$final_ship"
+    assert_contains 'direct final ship preserves source worktree' '^source_worktree: \.worktrees/cleanup-topic$' "$final_ship"
+    assert_contains 'direct final ship carries full landing anchor' "$anchor" "$final_ship"
+    assert_contains 'direct final ship carries todo digest' '^- Deferred follow-up: retain the cleanup retry contract\.$' "$final_ship"
+    # proof_hash cannot be embedded here: the receipt proof binds these exact ship bytes.
+    assert_not_contains 'direct final ship omits circular receipt proof hash' '^proof_hash:' "$final_ship"
+  fi
+  if [ -f "$receipt" ] && [ -f "$debrief" ] && [ -f "$final_ship" ] && python3 - "$receipt" "$debrief" "$final_ship" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); debrief=open(sys.argv[2]).read(); ship=open(sys.argv[3]).read(); landing=r["landing_proof"]
+def joined(value): return ",".join(value) if isinstance(value,list) else str(value)
+debrief_fields={
+ "Provider merged at":"provider_merged_at","Landing anchor":"landing_anchor","Base ref":"base_ref","Base before":"base_before",
+ "Strategy":"strategy","Strategy evidence":"strategy_evidence","Method source":"method_source","PR commit count":"pr_commit_count",
+ "Ordered source commits":"source_commits","Source commit patch IDs":"source_commit_patch_ids","Source patch digest":"source_patch_digest",
+ "Ordered landing commits":"landing_commits","Landing commit patch IDs":"landing_commit_patch_ids","Landing patch digest":"landing_patch_digest",
+ "First landing commit":"first_landing_commit","Last landing commit":"last_landing_commit"}
+for label,key in debrief_fields.items(): assert f"- {label}: {joined(landing[key])}" in debrief
+ship_fields={"closeout_id":r["closeout_id"],"receipt":f'{r["identity"]["workflow"]}/_closeouts/{r["closeout_id"]}.json'}
+for key in ("landing_anchor","base_ref","base_before","first_landing_commit","last_landing_commit","landing_commits","source_patch_digest","landing_patch_digest"):
+    ship_fields[key]=joined(landing[key])
+for key,value in ship_fields.items(): assert f"{key}: {value}" in ship
+assert "proof_hash:" not in ship
+PY
+  then record_pass 'direct projections carry the complete non-circular landing envelope'; else record_fail 'direct projections carry the complete non-circular landing envelope'; fi
+  if [ -f "$repo/docs/ship-flow/_archive/merged-fixture-entity/index.md" ]; then
+    assert_frontmatter_equals 'direct archived status done' "$repo/docs/ship-flow/_archive/merged-fixture-entity/index.md" status "done"
+    assert_frontmatter_equals 'direct archived verdict PASSED' "$repo/docs/ship-flow/_archive/merged-fixture-entity/index.md" verdict PASSED
+  else
+    record_fail 'direct archived status done (archived entity missing)'
+    record_fail 'direct archived verdict PASSED (archived entity missing)'
+  fi
+
+  landed_head="$(git -C "$repo" rev-parse HEAD)"
+  rc="$(run_helper "$repo" "$TMP_DIR/direct-rerun.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  if [ "$rc" != 0 ]; then sed 's/^/    rerun: /' "$TMP_DIR/direct-rerun.out"; fi
+  assert_exit 'direct transaction rerun exits success' 0 "$rc"
+  if [ "$landed_head" = "$(git -C "$repo" rev-parse HEAD)" ]; then record_pass 'direct transaction rerun is commit no-op'; else record_fail 'direct transaction rerun is commit no-op'; fi
+
+  local variant variant_repo variant_head variant_receipt
+  for variant in missing-receipt multiple-receipts tampered-receipt tampered-debrief tampered-ship tampered-roadmap tampered-archive wrong-archive-binding; do
+    variant_repo="$TMP_DIR/direct-${variant}-repo"
+    git clone -q "$repo" "$variant_repo"
+    variant_receipt="$(find "$variant_repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+    case "$variant" in
+      missing-receipt) rm -f "$variant_receipt" ;;
+      multiple-receipts) cp "$variant_receipt" "${variant_receipt%.json}-duplicate.json" ;;
+      tampered-receipt) python3 - "$variant_receipt" <<'PY'
+import json,sys
+p=sys.argv[1]; r=json.load(open(p)); r["proof_hash"]="0"*64; open(p,"w").write(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+        ;;
+      tampered-debrief) printf '%s\n' 'tampered' >>"$variant_repo/docs/ship-flow/_debriefs/2026-07-15-02.md" ;;
+      tampered-ship) printf '%s\n' 'tampered' >>"$variant_repo/docs/ship-flow/_archive/merged-fixture-entity/ship.md" ;;
+      tampered-roadmap) perl -0pi -e 's/Merged fixture entity \| 2026-07-15/Merged fixture entity tampered | 2026-07-15/' "$variant_repo/ROADMAP.md" ;;
+      tampered-archive) printf '%s\n' 'tampered' >>"$variant_repo/docs/ship-flow/_archive/merged-fixture-entity/index.md" ;;
+      wrong-archive-binding) mkdir -p "$variant_repo/docs/ship-flow/_archive/other"; cp "$variant_repo/docs/ship-flow/_archive/merged-fixture-entity/index.md" "$variant_repo/docs/ship-flow/_archive/other/index.md"; python3 - "$variant_receipt" <<'PY'
+import hashlib,json,sys
+p=sys.argv[1]; r=json.load(open(p)); other=p.rsplit("/docs/",1)[0]+"/docs/ship-flow/_archive/other/index.md"
+r["outputs"]["archived_entity"]={"path":"docs/ship-flow/_archive/other/index.md","sha256":hashlib.sha256(open(other,"rb").read()).hexdigest()}
+payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}
+r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+open(p,"w").write(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+        ;;
+    esac
+    variant_head="$(git -C "$variant_repo" rev-parse HEAD)"
+    rc="$(run_helper "$variant_repo" "$TMP_DIR/${variant}.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+    if [ "$rc" != 0 ]; then record_pass "archived ${variant} sentinel stops"; else record_fail "archived ${variant} sentinel stops"; fi
+    if [ "$variant_head" = "$(git -C "$variant_repo" rev-parse HEAD)" ]; then record_pass "archived ${variant} keeps HEAD"; else record_fail "archived ${variant} keeps HEAD"; fi
+  done
+
+  local duplicate duplicate_repo duplicate_head duplicate_tree
+  for duplicate in duplicate-now prior-shipped; do
+    duplicate_repo="$TMP_DIR/direct-${duplicate}-repo"
+    git clone -q "$repo" "$duplicate_repo"
+    git -C "$duplicate_repo" reset -q --hard "$before_head"
+    python3 - "$duplicate_repo/ROADMAP.md" "$duplicate" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); mode=sys.argv[2]; lines=p.read_text().splitlines()
+marker="<!-- /section:now -->" if mode=="duplicate-now" else "<!-- /section:shipped -->"
+row="| merged-fixture-entity | Duplicate identity |" if mode=="duplicate-now" else "| merged-fixture-entity | Already shipped | 2026-07-14 |"
+lines.insert(lines.index(marker),row); p.write_text("\n".join(lines)+"\n")
+PY
+    git -C "$duplicate_repo" add -- ROADMAP.md
+    git -C "$duplicate_repo" commit -qm "fixture: ${duplicate}"
+    duplicate_head="$(git -C "$duplicate_repo" rev-parse HEAD)"; duplicate_tree="$(hash_tree "$duplicate_repo/docs/ship-flow")"
+    local render_tmp="$TMP_DIR/${duplicate}-tmp"
+    mkdir -p "$render_tmp"
+    rc="$(export TMPDIR="$render_tmp"; run_helper "$duplicate_repo" "$TMP_DIR/${duplicate}.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+    if [ "$rc" != 0 ]; then record_pass "direct ${duplicate} identity stops"; else record_fail "direct ${duplicate} identity stops"; fi
+    if [ "$duplicate_head" = "$(git -C "$duplicate_repo" rev-parse HEAD)" ] && [ "$duplicate_tree" = "$(hash_tree "$duplicate_repo/docs/ship-flow")" ]; then record_pass "direct ${duplicate} preserves HEAD and workflow"; else record_fail "direct ${duplicate} preserves HEAD and workflow"; fi
+    if [ -z "$(find "$render_tmp" -mindepth 1 -print -quit)" ]; then record_pass "direct ${duplicate} render failure removes temporary artifacts"; else record_fail "direct ${duplicate} render failure removes temporary artifacts"; fi
+  done
+
+  local malformed_repo="$TMP_DIR/direct-malformed-owner-repo" malformed_head malformed_tree
+  git clone -q "$repo" "$malformed_repo"
+  git -C "$malformed_repo" reset -q --hard "$before_head"
+  mkdir -p "$malformed_repo/docs/ship-flow/body-fence-candidate"
+  printf '%s\n' '# Malformed candidate' '' '---' 'pr: "#131"' 'closeout_owner: true' '---' >"$malformed_repo/docs/ship-flow/body-fence-candidate/index.md"
+  git -C "$malformed_repo" add -- docs/ship-flow/body-fence-candidate/index.md
+  git -C "$malformed_repo" commit -qm 'fixture: body fence cannot open frontmatter'
+  malformed_head="$(git -C "$malformed_repo" rev-parse HEAD)"; malformed_tree="$(hash_tree "$malformed_repo/docs/ship-flow")"
+  rc="$(run_helper "$malformed_repo" "$TMP_DIR/malformed-owner.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'malformed ownership candidate rejects' 2 "$rc"
+  assert_contains 'malformed ownership candidate reports stage incoherence' '^reason=closeout-stage-artifacts-incoherent$' "$TMP_DIR/malformed-owner.out"
+  if [ "$malformed_head" = "$(git -C "$malformed_repo" rev-parse HEAD)" ] && [ "$malformed_tree" = "$(hash_tree "$malformed_repo/docs/ship-flow")" ]; then record_pass 'malformed ownership candidate preserves bytes and HEAD'; else record_fail 'malformed ownership candidate preserves bytes and HEAD'; fi
+
+  local unsafe_title_repo="$TMP_DIR/direct-unsafe-title-repo" unsafe_title_head unsafe_title_tree
+  git clone -q "$repo" "$unsafe_title_repo"
+  git -C "$unsafe_title_repo" reset -q --hard "$before_head"
+  perl -0pi -e 's/title: "Merged fixture entity"/title: "Merged | fixture entity"/' "$unsafe_title_repo/docs/ship-flow/merged-fixture-entity/index.md"
+  git -C "$unsafe_title_repo" add -- docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$unsafe_title_repo" commit -qm 'fixture: unsafe ROADMAP title delimiter'
+  unsafe_title_head="$(git -C "$unsafe_title_repo" rev-parse HEAD)"; unsafe_title_tree="$(hash_tree "$unsafe_title_repo/docs/ship-flow")"
+  rc="$(run_helper "$unsafe_title_repo" "$TMP_DIR/unsafe-title.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'unsafe table title rejects before rendering' 2 "$rc"
+  assert_contains 'unsafe table title reports stage incoherence' '^reason=closeout-stage-artifacts-incoherent$' "$TMP_DIR/unsafe-title.out"
+  if [ "$unsafe_title_head" = "$(git -C "$unsafe_title_repo" rev-parse HEAD)" ] && [ "$unsafe_title_tree" = "$(hash_tree "$unsafe_title_repo/docs/ship-flow")" ]; then record_pass 'unsafe table title preserves bytes and HEAD'; else record_fail 'unsafe table title preserves bytes and HEAD'; fi
+
+  local empty_worktree_repo="$TMP_DIR/direct-empty-worktree-repo" empty_worktree_head
+  git clone -q "$repo" "$empty_worktree_repo"
+  git -C "$empty_worktree_repo" reset -q --hard "$before_head"
+  python3 - "$empty_worktree_repo/docs/ship-flow/merged-fixture-entity/index.md" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); p.write_text(p.read_text().replace("worktree: .worktrees/cleanup-topic","worktree:"))
+PY
+  git -C "$empty_worktree_repo" add -- docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$empty_worktree_repo" commit -qm 'fixture: direct entity has no source worktree'
+  rc="$(run_helper "$empty_worktree_repo" "$TMP_DIR/empty-worktree-first.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'direct empty-worktree transaction exits success' 0 "$rc"
+  empty_worktree_head="$(git -C "$empty_worktree_repo" rev-parse HEAD)"
+  rc="$(run_helper "$empty_worktree_repo" "$TMP_DIR/empty-worktree-rerun.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'archived empty-worktree rerun exits success' 0 "$rc"
+  assert_contains 'archived empty-worktree cleanup is not applicable' '^worktree_cleanup=not_applicable$' "$TMP_DIR/empty-worktree-rerun.out"
+  if [ "$empty_worktree_head" = "$(git -C "$empty_worktree_repo" rev-parse HEAD)" ]; then record_pass 'archived empty-worktree rerun is commit no-op'; else record_fail 'archived empty-worktree rerun is commit no-op'; fi
+
+  local cleanup_repo="$TMP_DIR/direct-cleanup-retry-repo" cleanup_path cleanup_bin cleanup_marker cleanup_head real_git
+  git clone -q "$repo" "$cleanup_repo"
+  git -C "$cleanup_repo" reset -q --hard "$before_head"
+  cleanup_path="$cleanup_repo/.worktrees/cleanup-topic"
+  mkdir -p "$cleanup_repo/.worktrees"
+  git -C "$cleanup_repo" worktree add -q -b cleanup-topic "$cleanup_path" "$before_head"
+  cleanup_bin="$TMP_DIR/fail-once-git-bin"; cleanup_marker="$TMP_DIR/worktree-remove-failed-once"; real_git="$(command -v git)"
+  mkdir -p "$cleanup_bin"
+  cat >"$cleanup_bin/git" <<'EOF'
+#!/usr/bin/env bash
+if [[ " $* " == *" worktree remove "* ]] && [ ! -e "$CLEANUP_FAIL_MARKER" ]; then touch "$CLEANUP_FAIL_MARKER"; exit 1; fi
+exec "$REAL_GIT" "$@"
+EOF
+  chmod +x "$cleanup_bin/git"
+  rc="$(PATH="$cleanup_bin:$PATH" REAL_GIT="$real_git" CLEANUP_FAIL_MARKER="$cleanup_marker" run_helper "$cleanup_repo" "$TMP_DIR/cleanup-first.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  if [ "$rc" != 1 ]; then sed 's/^/    cleanup-first: /' "$TMP_DIR/cleanup-first.out"; fi
+  assert_exit 'direct first cleanup failure stops after terminal commit' 1 "$rc"
+  cleanup_head="$(git -C "$cleanup_repo" rev-parse HEAD)"
+  if [ "$(git -C "$cleanup_repo" rev-list --count "${before_head}..HEAD")" = 1 ]; then record_pass 'direct cleanup failure keeps one terminal commit'; else record_fail 'direct cleanup failure keeps one terminal commit'; fi
+  assert_path_exists 'direct cleanup failure leaves worktree for retry' "$cleanup_path"
+  rc="$(PATH="$cleanup_bin:$PATH" REAL_GIT="$real_git" CLEANUP_FAIL_MARKER="$cleanup_marker" run_helper "$cleanup_repo" "$TMP_DIR/cleanup-second.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  if [ "$rc" != 0 ]; then sed 's/^/    cleanup-second: /' "$TMP_DIR/cleanup-second.out"; fi
+  assert_exit 'archived rerun retries cleanup successfully' 0 "$rc"
+  if [ "$cleanup_head" = "$(git -C "$cleanup_repo" rev-parse HEAD)" ]; then record_pass 'cleanup retry creates no terminal commit'; else record_fail 'cleanup retry creates no terminal commit'; fi
+  assert_path_missing 'cleanup retry removes registered worktree' "$cleanup_path"
+  if git -C "$cleanup_repo" show-ref --verify --quiet refs/heads/cleanup-topic; then record_fail 'cleanup retry deletes head branch'; else record_pass 'cleanup retry deletes head branch'; fi
+
+  local fault_repo="$TMP_DIR/direct-fault-repo" fault_before
+  git clone -q "$repo" "$fault_repo"
+  git -C "$fault_repo" reset -q --hard "$before_head"
+  fault_before="$(hash_tree "$fault_repo/docs/ship-flow")"
+  rc="$(SHIP_FLOW_CLOSEOUT_FAILPOINT=before-commit run_helper "$fault_repo" "$TMP_DIR/direct-fault.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'direct injected pre-commit fault stops' 1 "$rc"
+  assert_contains 'direct injected fault reports stable conflict' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/direct-fault.out"
+  if [ "$fault_before" = "$(hash_tree "$fault_repo/docs/ship-flow")" ] && [ "$before_head" = "$(git -C "$fault_repo" rev-parse HEAD)" ]; then record_pass 'direct injected fault restores coherent tree and HEAD'; else record_fail 'direct injected fault restores coherent tree and HEAD'; fi
+  if [ -f "$fault_repo/docs/ship-flow/merged-fixture-entity/index.md" ]; then
+    assert_frontmatter_equals 'direct injected fault keeps active status nonterminal' "$fault_repo/docs/ship-flow/merged-fixture-entity/index.md" status ship
+    assert_frontmatter_equals 'direct injected fault exposes no PASSED verdict' "$fault_repo/docs/ship-flow/merged-fixture-entity/index.md" verdict ''
+  else
+    record_fail 'direct injected fault keeps active status nonterminal (active entity missing)'
+    record_fail 'direct injected fault exposes no PASSED verdict (active entity missing)'
+  fi
+
+  local conflict_repo="$TMP_DIR/direct-projection-conflict-repo" conflict_before
+  git clone -q "$repo" "$conflict_repo"
+  git -C "$conflict_repo" reset -q --hard "$before_head"
+  mkdir -p "$conflict_repo/docs/ship-flow/_archive/merged-fixture-entity"
+  printf '%s\n' 'conflicting projection' >"$conflict_repo/docs/ship-flow/_archive/merged-fixture-entity/ship.md"
+  git -C "$conflict_repo" add -- docs/ship-flow/_archive/merged-fixture-entity/ship.md
+  git -C "$conflict_repo" commit -qm 'fixture: pre-existing closeout projection'
+  conflict_before="$(hash_tree "$conflict_repo/docs/ship-flow")"
+  rc="$(run_helper "$conflict_repo" "$TMP_DIR/direct-projection-conflict.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'direct projection conflict stops' 1 "$rc"
+  assert_contains 'direct projection conflict reports stable drift' '^reason=closeout-projection-source-drift$' "$TMP_DIR/direct-projection-conflict.out"
+  if [ "$conflict_before" = "$(hash_tree "$conflict_repo/docs/ship-flow")" ]; then record_pass 'direct projection conflict preserves tree'; else record_fail 'direct projection conflict preserves tree'; fi
 }
 
 run_scope_guard() {
@@ -840,7 +1114,9 @@ run_doc_scope_cases() {
     echo "  NOTE: pr-merge.md absent (fresh clone) — skipping dogfood doc scope assertions"
     return 0
   fi
+  # shellcheck disable=SC2016 # Backticks are literal documentation text and regex syntax.
   assert_contains "pr merge doc scopes v1 provider support" 'v1 reconciler supports GitHub `gh` and fixture-backed tests only' "$pr_merge_doc"
+  # shellcheck disable=SC2016 # Backticks are literal documentation text and regex syntax.
   assert_not_contains "pr merge doc does not advertise GitLab closeout state checks" 'glab mr view|If `MERGED` .*GitLab|If `MERGED` \(GitHub\) or `merged` \(GitLab\)' "$pr_merge_doc"
 }
 
@@ -864,6 +1140,9 @@ else
   run_usage_and_dry_run_cases
   run_cleanup_cases
   run_idempotency_cases
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = direct-transaction ]; then
+    run_direct_transaction_case
+  fi
   run_scope_guard
   run_doc_scope_cases
 fi
