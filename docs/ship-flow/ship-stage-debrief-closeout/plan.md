@@ -137,18 +137,18 @@ layer: L1
 model_hint: sonnet
 parallel_group: serial
 depends_on: [T1]
-owned_paths: [plugins/ship-flow/references/closeout-receipt-schema.yaml, plugins/ship-flow/lib/validate-closeout-receipt.py, plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh, plugins/ship-flow/lib/__tests__/fixtures/closeout-receipt/**, plugins/ship-flow/references/entity-body-schema.yaml, plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh, plugins/ship-flow/skills/ship/SKILL.md, plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh]
+owned_paths: [plugins/ship-flow/references/closeout-receipt-schema.yaml, plugins/ship-flow/lib/validate-closeout-receipt.py, plugins/ship-flow/lib/persist-closeout-intent.sh, plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh, plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh, plugins/ship-flow/lib/__tests__/fixtures/closeout-receipt/**, plugins/ship-flow/references/entity-body-schema.yaml, plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh, plugins/ship-flow/skills/ship/SKILL.md, plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh]
 integration_owner: executer
 skills_needed: [ship-flow:test-driven-development, superpowers:writing-skills, test, best-practices, api-design]
 reviewer_questions: [{lens: schema, question: "Are identity, owner selection, phase monotonicity, canonical hash, sentinel bindings, and output hashes closed and additive?", affected_path_family: "receipt/entity schemas and validator", evidence_required: "golden NUL ID/hash vectors plus invalid owner/phase/path fixtures"}]
 tdd_contract:
-  red_command: "bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
-  expected_red_failure: "receipt validator/schema and intent contract test are CONFIRMED-MISSING; entity schema lacks closeout_owner"
-  green_command: "bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
-  refactor_check: "python3 -m py_compile plugins/ship-flow/lib/validate-closeout-receipt.py && bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
+  red_command: "bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
+  expected_red_failure: "receipt validator/schema, CAS intent producer, and intent contract test are CONFIRMED-MISSING; entity schema lacks closeout_owner"
+  green_command: "bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
+  refactor_check: "python3 -m py_compile plugins/ship-flow/lib/validate-closeout-receipt.py && bash -n plugins/ship-flow/lib/persist-closeout-intent.sh && bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
 ```
 
-Define the D2-D4 JSON receipt contract and stdlib validator with canonical JSON hashing, path-derived ID, exact artifact hashes, and monotonic phases. Add optional boolean `closeout_owner`: one PR match owns implicitly; shared PRs require exactly one `true`, with all other matches recorded as participants; zero/multiple owners stop. Define `ship.md -> ### Verdict -> merge_method_intent` as the additive pre-merge source written when ship/FO knows the intended method; absence remains legal and ambiguous proof still stops. Validate sentinel identity/head/payload from landed bytes before ordinary entity resolution.
+Define the D2-D4 JSON receipt contract and stdlib validator with canonical JSON hashing, path-derived ID, exact artifact hashes, and monotonic phases. Add optional boolean `closeout_owner`: one PR match owns implicitly; shared PRs require exactly one `true`, with all other matches recorded as participants; zero/multiple owners stop. The new CAS helper is the sole pre-merge producer: ship/FO calls it before merge to persist `closeout_owner` in active/main entity mirrors and optional `ship.md -> ### Verdict -> merge_method_intent`; tests cover shared-PR zero/one/multiple owner declarations, stale hashes, and idempotent replay. Absence of intent remains legal and ambiguous proof still stops. Validate sentinel identity/head/payload from landed bytes before ordinary entity resolution.
 
 ### T3 — Apply the direct closeout as one recoverable Git transaction
 
@@ -184,15 +184,15 @@ depends_on: [T3]
 owned_paths: [plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/fixtures/merged-pr-closeout-reconciler/**, docs/ship-flow/_mods/pr-merge.md]
 integration_owner: executer
 skills_needed: [ship-flow:test-driven-development, test, best-practices, write-docs]
-reviewer_questions: [{lens: recursion-and-value, question: "Does exact-head reuse survive every checkpoint, and does landed sentinel classification precede owner lookup without title/body heuristics?", affected_path_family: "reconciler, startup mod, frozen PR40/41 fixtures", evidence_required: "call log, crash/rerun matrix, terminal-noop classification, two-run dogfood"}]
+reviewer_questions: [{lens: recursion-and-value, question: "Do awaiting and landed receipts resolve before entity lookup, does exact-head reuse survive every checkpoint, and does every terminal path invoke apply-closeout-bundle exactly once?", affected_path_family: "reconciler, startup mod, frozen PR40/41 fixtures", evidence_required: "receipt-discovery and bundle call logs, crash/rerun matrix, terminal-noop classification, two-run dogfood"}]
 tdd_contract:
   red_command: "bash -c 'SHIP_FLOW_CLOSEOUT_CASE=optional-pr,recursion,pr40-pr41 bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh'"
-  expected_red_failure: "current scope guard rejects PR creation, entity-first flow misses sentinel-only PR, and frozen PR40/41 fixture needs manual closeout"
+  expected_red_failure: "current scope guard rejects PR creation, entity-first flow misses awaiting and landed receipt-only PRs, optional terminalization bypasses the sole bundle owner, and frozen PR40/41 fixture needs manual closeout"
   green_command: "bash -c 'SHIP_FLOW_CLOSEOUT_CASE=optional-pr,recursion,pr40-pr41 bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh'"
   refactor_check: "bash -n plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh && bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh"
 ```
 
-Add explicit `--closeout-mode direct|pull-request` (default direct). PR mode commits `awaiting_closeout_pr` with deterministic head before external creation, searches/reuses only exact head, and withholds terminal state until merged sentinel bytes validate; injected stops after checkpoint/create/merge resume without a second PR. Replace the mod's sequential startup/idle mutation with reconciler delegation and sentinel-first classification. Freeze PR #40 rewritten landing plus PR #41 manual outcome as hermetic fixtures; first invocation closes once, second is byte/hash no-op.
+Add explicit `--closeout-mode direct|pull-request` (default direct). Before ordinary entity lookup, startup/idle scans validated `_closeouts` records in `awaiting_closeout_pr` or landed/applied phase, resolves the deterministic head/PR, and routes receipt-only crash recovery. PR mode checkpoints before external creation, searches/reuses only exact head, and withholds terminal state until merged sentinel bytes validate. Both direct and optional terminal projections must invoke `apply-closeout-bundle.sh` exactly once; legacy sequential setters may only prepare or clean up, and tests assert one C14 receipt/call plus unchanged trees on injected stops. Freeze PR #40 rewritten landing plus PR #41 manual outcome as hermetic fixtures; first invocation closes once, second is byte/hash no-op.
 
 ### T5 — Sync operator docs and lock compatibility envelope
 
@@ -266,12 +266,12 @@ context-routing-manifest:
 ## Plan Report
 
 status: passed
-stage_cost: one planner, one schema/repository producer, one event-saga/recovery lens, one fresh cross-reviewer over two passes
-iterations: 1 self-review + 2 cross-review passes
+stage_cost: one planner, one schema/repository producer, one event-saga/recovery lens, two independent reviewers over four passes
+iterations: 1 self-review + 4 reviewer passes
 dimensions: requirement coverage PASS; task completeness PASS; dependency safety PASS; zero-placeholder PASS; signatures PASS; minimality PASS; TDD PASS; stale anchors PASS; design compliance PASS; context routing PASS
 research_reviewer_verdict: FLAG integrated, no blocker
-cross_review_verdict: PROCEED after one skill-coverage VETO corrected T2 with `superpowers:writing-skills`
-cross_review_coaching: Explicitly empty render-fidelity targets prevent silent UI coverage assumptions at verify.
+cross_review_verdict: PROCEED after correcting T2 skill-authoring coverage and converting recovery assumptions into a CAS producer, receipt-first discovery, and exact bundle call-count invariants
+cross_review_coaching: Empty render targets prevent silent UI assumptions; explicit producers/discovery order/call counts make file-backed recovery observable.
 scope_anchoring: 5/5 tasks map AC-1..AC-8 and imported constraints 1..12
 skill-coverage: PASS
 open_decisions: []
@@ -283,11 +283,11 @@ None.
 ### Metrics
 
 - status: passed
-- duration_minutes: 55
-- iteration_count: 3
+- duration_minutes: 60
+- iteration_count: 5
 - task_count: 5
 - verification_spec_count: 8
-- model_split: four sonnet code-bearing dispatches; one sonnet docs/verification dispatch; read-only producer, lens, and reviewer
+- model_split: four sonnet code-bearing dispatches; one sonnet docs/verification dispatch; read-only producer, lens, and two reviewers
 
 <!-- section:hand-off-to-execute -->
 ### Hand-off to Execute
@@ -302,7 +302,7 @@ None.
 ```yaml
 plan-parallelization-manifest:
   - {task_id: T1, parallel_group: serial, depends_on: [], owned_paths: [plugins/ship-flow/lib/resolve-landing-envelope.sh, plugins/ship-flow/lib/__tests__/test-landing-envelope-resolver.sh, plugins/ship-flow/lib/__tests__/fixtures/landing-envelope/**], integration_owner: executer}
-  - {task_id: T2, parallel_group: serial, depends_on: [T1], owned_paths: [plugins/ship-flow/references/closeout-receipt-schema.yaml, plugins/ship-flow/lib/validate-closeout-receipt.py, plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh, plugins/ship-flow/lib/__tests__/fixtures/closeout-receipt/**, plugins/ship-flow/references/entity-body-schema.yaml, plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh, plugins/ship-flow/skills/ship/SKILL.md, plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh], integration_owner: executer}
+  - {task_id: T2, parallel_group: serial, depends_on: [T1], owned_paths: [plugins/ship-flow/references/closeout-receipt-schema.yaml, plugins/ship-flow/lib/validate-closeout-receipt.py, plugins/ship-flow/lib/persist-closeout-intent.sh, plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh, plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh, plugins/ship-flow/lib/__tests__/fixtures/closeout-receipt/**, plugins/ship-flow/references/entity-body-schema.yaml, plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh, plugins/ship-flow/skills/ship/SKILL.md, plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh], integration_owner: executer}
   - {task_id: T3, parallel_group: serial, depends_on: [T1, T2], owned_paths: [plugins/ship-flow/lib/apply-closeout-bundle.sh, plugins/ship-flow/lib/__tests__/test-apply-closeout-bundle.sh, plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-enforce-advance-stage.sh, plugins/ship-flow/lib/__tests__/fixtures/merged-pr-closeout-reconciler/**], integration_owner: executer}
   - {task_id: T4, parallel_group: serial, depends_on: [T3], owned_paths: [plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/fixtures/merged-pr-closeout-reconciler/**, docs/ship-flow/_mods/pr-merge.md], integration_owner: executer}
   - {task_id: T5, parallel_group: serial, depends_on: [T4], owned_paths: [plugins/ship-flow/README.md, plugins/ship-flow/references/doc-sync-context.md], integration_owner: executer}
@@ -313,9 +313,9 @@ plan-parallelization-manifest:
 | Task ID | Verify Lens | Reviewer Question | Affected Path Family | Required Skills | Evidence Required |
 |---|---|---|---|---|---|
 | T1 | landing-proof | Can unrelated main/head/reordered patches validate? | landing helper/fixtures | TDD,test,best-practices | three strategies plus negative matrix |
-| T2 | schema | Are identity, owner, phases, hashes, and sentinel closed/additive? | receipt/entity schema and ship skill | TDD,superpowers:writing-skills,test,api-design | golden and invalid fixtures |
+| T2 | schema | Does one CAS producer durably persist exactly one shared-PR owner and optional method intent before merge? | receipt/entity schema, intent helper, ship skill | TDD,superpowers:writing-skills,test,api-design | golden/invalid schema plus zero/one/multiple-owner and stale-CAS fixtures |
 | T3 | recovery | Can partial state expose terminal claims? | direct reconciler | TDD,test,best-practices | fault matrix and tree hashes |
-| T4 | recursion/value | Is exact-head PR reuse and sentinel-first no-op proven? | PR mode/mod/dogfood | TDD,test,write-docs | call log, reruns, PR40/41 |
+| T4 | recursion/value | Are awaiting/landed receipts discovered first and all terminal paths bundle-owned exactly once? | PR mode/mod/dogfood | TDD,test,write-docs | discovery/bundle call logs, reruns, PR40/41 |
 | T5 | compatibility | Are established guards green and docs truthful? | README/compatibility | write-docs,verification | focused plus full gates |
 
 <!-- /section:hand-off-to-execute -->

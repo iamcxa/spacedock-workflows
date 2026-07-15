@@ -57,6 +57,7 @@ worktree: .worktrees/spacedock-ensign-ship-stage-debrief-closeout
 | --- | --- |
 | shape | [shape.md](shape.md) |
 | design | [design.md](design.md) |
+| plan | [plan.md](plan.md) |
 <!-- /section:stage-artifact-links -->
 
 <!-- section:problem -->
@@ -195,3 +196,29 @@ to schema design if confirmed.
 ### Summary
 
 Designed native post-merge closeout around a versioned `_closeouts/<closeout_id>.json` receipt, exact landing proof, one atomic terminal projection, and a mechanically validated recursion sentinel. The non-UI design verdict is PROCEED with no unresolved decisions; plan and implementation remain untouched pending FO advancement.
+
+<!-- section:plan-stage-report -->
+## Stage Report: plan
+
+- DONE: Mechanically import all 12 design constraints and D1-D5 anchors, revalidate shape/design assumptions, and produce canonical ROADMAP/PRODUCT/ARCHITECTURE actions plus schema/fmodel/recovery lens coverage without silently changing selected contract.
+  Readiness, handoff, D-reference, and count-preserving import checks pass. The plan makes the approved ownership, intent, receipt-first discovery, and atomic bundle seams executable with no open decision or appetite blocker.
+- DONE: Emit executable medium-batch plan with bounded atomic waves, explicit owned paths/dependencies, per-task skills, and persisted TDD ledger contracts requiring observable RED before GREEN for landing proof, transaction recovery, recursion sentinel, compatibility, PR #40/#41 dogfood.
+  Five serial waves carry distinct skill lists and focused RED/GREEN commands; `tdd-ledger.txt` and `tdd-ledger.jsonl` validate all five task records.
+- DONE: Run plan self-review, fresh seven-factor cross-review, TDD-ledger/handoff/invariant validation, and record plan stage report/metrics; do not implement code/tests during plan.
+  Final verdict is PROCEED after correcting skill-authoring coverage and converting recovery assumptions into observable CAS-producer, receipt-discovery, and exact bundle call-count contracts; `skill-coverage: PASS`.
+- BOUNDARY: No implementation code, product tests, workflow state, canonical docs, or external PR/issue state changed. Only plan-stage artifacts, ledger evidence, and this report were written.
+
+### Summary
+
+Planned native post-merge closeout as five ordered TDD waves: landing proof, durable receipt/intent schema, atomic direct bundle, optional-PR/sentinel recovery with frozen PR #40/#41 dogfood, and compatibility/docs closeout.
+
+### Metrics
+
+- status: passed
+- duration_minutes: 60
+- iteration_count: 5
+- task_count: 5
+- verification_spec_count: 8
+- imported_design_constraints_count: 12
+- reviewer_verdict: PROCEED
+<!-- /section:plan-stage-report -->
