@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -327,4 +327,12 @@ Round 6 verifies stable provider-failure routing and checkpoint integrity, but `
   routed_at: 2026-07-15T15:56:29Z
   verify_artifact: verify.md@39dd0b1
   required_fixes: R5-B1 stable provider list/create/ready failure routing plus resumable partial-state recovery without duplicate commits, PRs, or remote heads
+  deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
+- cycle: 6
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-15T16:44:42Z
+  verify_artifact: verify.md@4e2e91a
+  required_fixes: R6-B1 eliminate duplicate seed push invocation on create-before retry with direct push-count regression; R6-W1 bound provider-failure bundle_root cleanup
   deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
