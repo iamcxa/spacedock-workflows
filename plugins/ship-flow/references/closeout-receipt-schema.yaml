@@ -88,6 +88,7 @@ landing_proof:
     - "intent-discriminator requires merge_method_intent equal to strategy"
   repository_invariants:
     - "normal validation re-derives topology, ordered commits, patch IDs, and aggregate digest from Git"
+    - "squash normal validation requires provider-ordered source commits and re-derives source_commit_patch_ids plus source_patch_digest from those Git objects"
     - "landing_anchor and base_before exist as commits and landing_anchor is reachable from base_ref"
     - "rebase ordered first-parent range from base_before through anchor equals landing_commits"
     - "squash anchor has one parent equal to base_before"
@@ -125,7 +126,7 @@ outputs:
   roadmap_row:
     exact_keys: [identity, sha256]
     fields: { identity: entity_slug, sha256: sha256 }
-    invariant: "roadmap_row.identity equals identity.entity_slug"
+    invariant: "roadmap_row.identity equals identity.entity_slug and must occupy cells[0] of exactly one row in the bounded Shipped table"
 proof_hash:
   algorithm: sha256
   canonical_payload_keys: [identity, ownership_proof, landing_proof, outputs]
@@ -135,8 +136,8 @@ sentinel_validation_order:
   - proof hash and exact artifact hashes from landed bytes
   - ordinary entity resolution
 validator_modes:
-  normal: "requires --repo-root for canonical receipt/output bytes and repository-backed landing proof verification; --landing-proof-repo-root may explicitly name a separate authoritative Git worktree and otherwise defaults to --repo-root"
+  normal: "requires --repo-root for canonical receipt/output bytes and repository-backed landing proof verification; --landing-proof-repo-root may explicitly name a separate authoritative Git worktree and otherwise defaults to --repo-root; squash additionally requires provider-ordered --source-commits so source patch IDs and aggregate digest are Git-rederived"
   allow_any_path: "fixture-only structural mode; skips canonical path and Git proof but not schema, payload, phase, or requested byte checks"
   verify_sources: "hash <repo-root>/<workflow>/<entity_slug>/{index,review,ship}.md against ownership_proof.source_hashes before merge"
-  verify_outputs: "resolve safe repo-relative output paths, hash landed files, then parse exactly one Markdown table row inside the bounded Shipped section whose cell equals roadmap_row.identity and hash the exact original selected line bytes excluding its line terminator"
+  verify_outputs: "resolve safe repo-relative output paths, hash landed files, then parse exactly one Markdown table row inside the bounded Shipped section whose cells[0] equals roadmap_row.identity and hash the exact original selected line bytes excluding its line terminator"
   path_safety: "reject absolute paths, traversal, missing files, resolved paths outside repo root, and every symlink component including aliases that still resolve inside the repo"

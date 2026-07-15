@@ -145,6 +145,65 @@ PY
   printf '%s\n' "$canonical"
 }
 
+make_real_squash_receipt() {
+  local repo="$1" saved_receipt="$2" metadata="$3"
+  git init -q -b main "$repo"
+  git -C "$repo" config user.email receipt@example.test
+  git -C "$repo" config user.name 'Receipt Proof Fixture'
+  printf '%s\n' 'seed' >"$repo/seed.txt"
+  git -C "$repo" add seed.txt
+  git -C "$repo" commit -qm 'fixture: squash pre-base seed'
+  printf '%s\n' 'base' >"$repo/proof.txt"
+  git -C "$repo" add proof.txt
+  git -C "$repo" commit -qm 'fixture: squash base'
+  local base first second anchor envelope canonical
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb source-topic
+  printf '%s\n' 'base' 'first' >"$repo/proof.txt"
+  git -C "$repo" commit -qam 'fixture: first source patch'
+  first="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'base' 'first' 'second' >"$repo/proof.txt"
+  git -C "$repo" commit -qam 'fixture: second source patch'
+  second="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" checkout -q source-topic -- proof.txt
+  git -C "$repo" commit -qm 'fixture: squash landing' proof.txt
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  envelope="$TMP/real-squash-landing.env"
+  "$LANDING_RESOLVER" --repo-dir "$repo" --repository acme/widgets --base-ref main \
+    --implementation-pr 40 --provider-merged-at 2026-07-15T00:00:00Z \
+    --landing-anchor "$anchor" --source-commits "$first,$second" --pr-commit-count 2 \
+    --merge-method-intent squash >"$envelope"
+  canonical="$(python3 - "$repo" "$envelope" "$saved_receipt" "$metadata" "$first" "$second" <<'PY'
+import hashlib,json,pathlib,sys
+repo,envelope,saved,metadata,first,second=sys.argv[1:]
+env={}
+for line in pathlib.Path(envelope).read_text().splitlines():
+    key,value=line.split("=",1); env[key]=value
+arrays={"source_commit_patch_ids","landing_commits","landing_commit_patch_ids"}
+ints={"schema_version","implementation_pr","pr_commit_count"}
+landing={key:(value.split(",") if key in arrays else int(value) if key in ints else value) for key,value in env.items()}
+identity={"provider":"github","repository":"acme/widgets","workflow":"docs/ship-flow","entity_slug":"widget-closeout","implementation_pr":40}
+cid=hashlib.sha256("\0".join(("v1","github","acme/widgets","docs/ship-flow","widget-closeout","40")).encode()).hexdigest(); h="a"*64
+receipt={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":identity,
+ "ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{"index":h,"review":h,"ship":h}},
+ "mode":"direct","merge_method_intent":"squash","deterministic_closeout_head":"ship-closeout/"+cid,
+ "landing_proof":landing,"transaction":{"phase":"prepared","generation":1,"closeout_pr":None,"main_commit":None},
+ "outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-07-15-01.md","sha256":h},
+ "ship":{"path":"docs/ship-flow/_archive/widget-closeout/ship.md","sha256":h},
+ "archived_entity":{"path":"docs/ship-flow/_archive/widget-closeout/index.md","sha256":h},
+ "roadmap_row":{"identity":"widget-closeout","sha256":h}}}
+payload={key:receipt[key] for key in ("identity","ownership_proof","landing_proof","outputs")}
+receipt["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+canonical=pathlib.Path(repo)/"docs/ship-flow/_closeouts"/(cid+".json"); canonical.parent.mkdir(parents=True)
+text=json.dumps(receipt,sort_keys=True,indent=2)+"\n"; canonical.write_text(text); pathlib.Path(saved).write_text(text)
+pathlib.Path(metadata).write_text(json.dumps({"source_commits":[first,second]})+"\n")
+print(canonical)
+PY
+)"
+  printf '%s\n' "$canonical"
+}
+
 forge_real_git_receipt() {
   local source="$1" target="$2" metadata="$3" mutation="$4"
   python3 - "$source" "$target" "$metadata" "$mutation" <<'PY'
@@ -260,6 +319,27 @@ for case in unreachable_anchor forged_base_before forged_landing_set forged_topo
     python3 "$VALIDATOR" --receipt "$REAL_RECEIPT" --repo-root "$REAL_REPO"
 done
 cp "$REAL_SAVED" "$REAL_RECEIPT"
+
+SQUASH_REPO="$TMP/real-squash-proof-repo"
+SQUASH_SAVED="$TMP/real-squash-proof-valid.json"
+SQUASH_METADATA="$TMP/real-squash-proof-metadata.json"
+SQUASH_RECEIPT="$(make_real_squash_receipt "$SQUASH_REPO" "$SQUASH_SAVED" "$SQUASH_METADATA")"
+SQUASH_SOURCES="$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1]))["source_commits"]))' "$SQUASH_METADATA")"
+expect_reason "squash validation fails closed without authoritative source commits" closeout-sentinel-invalid \
+  python3 "$VALIDATOR" --receipt "$SQUASH_RECEIPT" --repo-root "$SQUASH_REPO"
+expect_ok "real squash source patch IDs validate against authoritative commits" \
+  python3 "$VALIDATOR" --receipt "$SQUASH_RECEIPT" --repo-root "$SQUASH_REPO" \
+    --source-commits "$SQUASH_SOURCES"
+python3 - "$SQUASH_SAVED" "$SQUASH_RECEIPT" <<'PY'
+import hashlib,json,sys
+r=json.load(open(sys.argv[1])); r["landing_proof"]["source_commit_patch_ids"]=["f"*40,"e"*40]
+payload={key:r[key] for key in ("identity","ownership_proof","landing_proof","outputs")}
+r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+with open(sys.argv[2],"w") as handle: json.dump(r,handle,sort_keys=True,indent=2); handle.write("\n")
+PY
+expect_reason "self-rehashed squash source patch IDs reject against authoritative commits" closeout-sentinel-invalid \
+  python3 "$VALIDATOR" --receipt "$SQUASH_RECEIPT" --repo-root "$SQUASH_REPO" \
+    --source-commits "$SQUASH_SOURCES"
 
 ARCHIVE_ROOT="$TMP/exported-tree"
 ARCHIVE_RECEIPT="$ARCHIVE_ROOT/docs/ship-flow/_closeouts/$(basename "$REAL_RECEIPT")"
@@ -403,6 +483,14 @@ p,line=sys.argv[1:]; r=json.load(open(p)); r["outputs"]["roadmap_row"]["sha256"]
 payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}; r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest(); json.dump(r,open(p,"w"),sort_keys=True)
 PY
 expect_reason "ROADMAP substring cell is not exact identity" closeout-stage-artifacts-incoherent python3 "$VALIDATOR" --receipt "$CANONICAL" --repo-root "$TMP" --allow-any-path --verify-outputs
+LATER_COLUMN_ROW='| unrelated-entity | widget-closeout | today |'
+printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' "$LATER_COLUMN_ROW" '<!-- /section:shipped -->' >"$TMP/ROADMAP.md"
+python3 - "$CANONICAL" "$LATER_COLUMN_ROW" <<'PY'
+import hashlib,json,sys
+p,line=sys.argv[1:]; r=json.load(open(p)); r["outputs"]["roadmap_row"]["sha256"]=hashlib.sha256(line.encode()).hexdigest()
+payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}; r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest(); json.dump(r,open(p,"w"),sort_keys=True)
+PY
+expect_reason "ROADMAP identity in a later column is not the canonical Shipped row" closeout-stage-artifacts-incoherent python3 "$VALIDATOR" --receipt "$CANONICAL" --repo-root "$TMP" --allow-any-path --verify-outputs
 printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '| widget-closeout | One | today |' '| widget-closeout | Two | today |' '<!-- /section:shipped -->' >"$TMP/ROADMAP.md"
 expect_reason "duplicate exact Shipped rows reject" closeout-stage-artifacts-incoherent python3 "$VALIDATOR" --receipt "$CANONICAL" --repo-root "$TMP" --allow-any-path --verify-outputs
 

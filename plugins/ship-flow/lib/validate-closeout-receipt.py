@@ -263,7 +263,7 @@ def aggregate_patch_digest(repo_root: Path, base_before: str, anchor: str) -> st
 
 
 def validate_landing_proof_against_git(
-    receipt: dict[str, Any], repo_root: Path
+    receipt: dict[str, Any], repo_root: Path, source_commits_raw: str | None
 ) -> None:
     landing = receipt["landing_proof"]
     anchor = landing["landing_anchor"]
@@ -307,6 +307,47 @@ def validate_landing_proof_against_git(
             )
         derived_commits = [anchor]
         patch_commits = derived_commits
+
+        if not source_commits_raw:
+            fail(
+                "closeout-sentinel-invalid",
+                "squash proof requires authoritative --source-commits",
+            )
+        source_commits = source_commits_raw.split(",")
+        if len(source_commits) != landing["pr_commit_count"]:
+            fail(
+                "closeout-sentinel-invalid",
+                "authoritative source commit count does not match pr_commit_count",
+            )
+        for source_commit in source_commits:
+            require_full_sha(source_commit, "authoritative source commit")
+            git_output(repo_root, ["cat-file", "-e", f"{source_commit}^{{commit}}"])
+        source_parent_fields = git_output(
+            repo_root, ["rev-list", "--parents", "-n", "1", source_commits[0]]
+        ).decode().split()
+        if len(source_parent_fields) < 2:
+            fail(
+                "closeout-sentinel-invalid",
+                "first authoritative source commit has no parent",
+            )
+        derived_source_patch_ids = [
+            commit_patch_id(repo_root, commit) for commit in source_commits
+        ]
+        if derived_source_patch_ids != landing["source_commit_patch_ids"]:
+            fail(
+                "closeout-sentinel-invalid",
+                "source_commit_patch_ids do not match authoritative source commits",
+            )
+        if (
+            aggregate_patch_digest(
+                repo_root, source_parent_fields[1], source_commits[-1]
+            )
+            != landing["source_patch_digest"]
+        ):
+            fail(
+                "closeout-sentinel-invalid",
+                "source_patch_digest does not match authoritative source range",
+            )
     else:
         if len(parents) != 2 or parents[0] != base_before:
             fail(
@@ -450,7 +491,7 @@ def verify_output_bytes(receipt: dict[str, Any], repo_root: Path) -> None:
         cells = [cell.strip() for cell in stripped[1:-1].split("|")]
         if len(cells) < 2 or all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
             continue
-        if identity in cells:
+        if cells[0] == identity:
             matched_rows.append(line)
     if len(matched_rows) != 1:
         fail("closeout-stage-artifacts-incoherent", "ROADMAP identity must be one exact Shipped table cell")
@@ -636,6 +677,10 @@ def main() -> int:
     parser.add_argument("--previous", type=Path)
     parser.add_argument("--repo-root", type=Path)
     parser.add_argument("--landing-proof-repo-root", type=Path)
+    parser.add_argument(
+        "--source-commits",
+        help="provider-ordered source commit SHAs required for squash proof validation",
+    )
     parser.add_argument("--verify-outputs", action="store_true")
     parser.add_argument("--verify-sources", action="store_true")
     parser.add_argument("--allow-any-path", action="store_true")
@@ -660,7 +705,7 @@ def main() -> int:
         proof_root = validate_git_worktree_root(
             args.landing_proof_repo_root or args.repo_root
         )
-        validate_landing_proof_against_git(receipt, proof_root)
+        validate_landing_proof_against_git(receipt, proof_root, args.source_commits)
     if args.verify_outputs:
         verify_output_bytes(receipt, args.repo_root)
     if args.verify_sources:
