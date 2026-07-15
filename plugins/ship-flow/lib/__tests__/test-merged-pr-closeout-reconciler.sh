@@ -1343,6 +1343,7 @@ set -euo pipefail
 : "${SHIP_FLOW_R5_ORIGIN:?missing local bare origin}"
 
 printf 'call %s\n' "$*" >>"$SHIP_FLOW_R5_LOG"
+[ -z "${SHIP_FLOW_R7_TIMELINE:-}" ] || printf 'provider %s\n' "$*" >>"$SHIP_FLOW_R7_TIMELINE"
 
 provider_field() {
   awk -F= -v key="$1" '$1==key{sub(/^[^=]*=/, ""); print; exit}' "$SHIP_FLOW_R5_PROVIDER_FILE"
@@ -1497,7 +1498,10 @@ last_arg=""
 for arg in "$@"; do
   [ "$arg" != push ] || is_push=yes
   [ "$arg" != ls-remote ] || is_ls_remote=yes
-  case "$arg" in --force-with-lease=*) is_terminal=yes ;; esac
+  case "$arg" in
+    --force-with-lease=refs/heads/*:) is_terminal=no ;;
+    --force-with-lease=*) is_terminal=yes ;;
+  esac
   last_arg="$arg"
 done
 if [ "$is_ls_remote" = yes ]; then
@@ -1512,6 +1516,33 @@ if [ "$is_push" = yes ]; then
   printf '%s' "$kind" >>"$SHIP_FLOW_R6_GIT_LOG"
   printf ' <%s>' "$@" >>"$SHIP_FLOW_R6_GIT_LOG"
   printf '\n' >>"$SHIP_FLOW_R6_GIT_LOG"
+  if [ "$kind" = seed-push ] && [ "${SHIP_FLOW_R7_RACE_MODE:-}" = create-competitor ] && \
+     [ ! -e "${SHIP_FLOW_R7_RACE_MARKER:?missing race marker}" ]; then
+    repo=""; previous=""
+    for arg in "$@"; do
+      if [ "$previous" = -C ]; then repo="$arg"; break; fi
+      previous="$arg"
+    done
+    : "${repo:?seed push omitted repository binding}"
+    : "${SHIP_FLOW_R7_ORIGIN:?missing race origin}"
+    : "${SHIP_FLOW_R7_REMOTE_REF:?missing race remote ref}"
+    : "${SHIP_FLOW_R7_COMPETITOR_OID:?missing competing OID}"
+    : "${SHIP_FLOW_R7_LOCAL_HEAD:?missing deterministic local head}"
+    : "${SHIP_FLOW_R7_SNAPSHOT:?missing pre-push snapshot}"
+    : "${SHIP_FLOW_R7_TIMELINE:?missing race timeline}"
+    receipt="$(find "$repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit)"
+    printf 'head=%s\ntree=%s\nreceipt_hash=%s\nlocal_seed=%s\n' \
+      "$("$SHIP_FLOW_R6_REAL_GIT" -C "$repo" rev-parse HEAD)" \
+      "$("$SHIP_FLOW_R6_REAL_GIT" -C "$repo" rev-parse 'HEAD^{tree}')" \
+      "$("$SHIP_FLOW_R6_REAL_GIT" hash-object "$receipt")" \
+      "$("$SHIP_FLOW_R6_REAL_GIT" -C "$repo" rev-parse "refs/heads/$SHIP_FLOW_R7_LOCAL_HEAD")" \
+      >"$SHIP_FLOW_R7_SNAPSHOT"
+    "$SHIP_FLOW_R6_REAL_GIT" -C "$SHIP_FLOW_R7_ORIGIN" update-ref \
+      "$SHIP_FLOW_R7_REMOTE_REF" "$SHIP_FLOW_R7_COMPETITOR_OID"
+    : >"$SHIP_FLOW_R7_RACE_MARKER"
+    printf 'race-create %s %s\n' "$SHIP_FLOW_R7_REMOTE_REF" "$SHIP_FLOW_R7_COMPETITOR_OID" \
+      >>"$SHIP_FLOW_R7_TIMELINE"
+  fi
 fi
 
 exec "$SHIP_FLOW_R6_REAL_GIT" "$@"
@@ -1899,6 +1930,84 @@ INT|130
 QUIT|131
 TERM|143
 EOF
+}
+
+run_feedback_r7_atomic_seed_race_case() {
+  local setup origin repo provider deterministic_head remote_ref gh_bin git_bin registry provider_log git_log timeline
+  local failure_marker race_marker snapshot temp_root real_git real_mktemp competitor_oid unrelated_ref unrelated_oid
+  local receipt snapshot_head snapshot_tree snapshot_receipt_hash snapshot_seed rc provider_after_race
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r7-atomic-seed-race)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"
+  remote_ref="refs/heads/$deterministic_head"
+  gh_bin="$TMP_DIR/feedback-r7-race-gh-bin"; git_bin="$TMP_DIR/feedback-r7-race-git-bin"
+  registry="$TMP_DIR/feedback-r7-race.registry"; provider_log="$TMP_DIR/feedback-r7-race-provider.log"
+  git_log="$TMP_DIR/feedback-r7-race-git.log"; timeline="$TMP_DIR/feedback-r7-race.timeline"
+  failure_marker="$TMP_DIR/feedback-r7-race-provider.marker"; race_marker="$TMP_DIR/feedback-r7-race.marker"
+  snapshot="$TMP_DIR/feedback-r7-race.snapshot"; temp_root="$TMP_DIR/feedback-r7-race-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$timeline"
+  write_feedback_r5_b1_gh "$gh_bin/gh"
+  write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"
+  prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+  competitor_oid="$(git -C "$origin" rev-parse refs/heads/main)"
+  unrelated_ref=refs/heads/r7-unrelated; unrelated_oid="$competitor_oid"
+  git -C "$origin" update-ref "$unrelated_ref" "$unrelated_oid"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE=create-before \
+    SHIP_FLOW_R5_FAILURE_MARKER="$failure_marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_R7_RACE_MODE=create-competitor \
+    SHIP_FLOW_R7_RACE_MARKER="$race_marker" SHIP_FLOW_R7_ORIGIN="$origin" \
+    SHIP_FLOW_R7_REMOTE_REF="$remote_ref" SHIP_FLOW_R7_COMPETITOR_OID="$competitor_oid" \
+    SHIP_FLOW_R7_LOCAL_HEAD="$deterministic_head" SHIP_FLOW_R7_SNAPSHOT="$snapshot" \
+    SHIP_FLOW_R7_TIMELINE="$timeline" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r7-race.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+
+  assert_exit 'R7 interleaving seed winner routes through stable retry' 1 "$rc"
+  assert_contains 'R7 interleaving seed winner reports PROMPT_CAPTAIN' '^verdict=PROMPT_CAPTAIN$' "$TMP_DIR/feedback-r7-race.out"
+  assert_contains 'R7 interleaving seed winner reports stable checkpoint reason' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r7-race.out"
+  assert_contains 'R7 interleaving seed winner reports prepared checkpoint state' '^state=closeout_pr_prepared$' "$TMP_DIR/feedback-r7-race.out"
+  assert_feedback_r5_receipt 'R7 interleaving seed winner checkpoint' "$repo" prepared null
+  receipt="$(feedback_r5_receipt_path "$repo")"
+  snapshot_head="$(awk -F= '$1=="head"{print $2}' "$snapshot")"
+  snapshot_tree="$(awk -F= '$1=="tree"{print $2}' "$snapshot")"
+  snapshot_receipt_hash="$(awk -F= '$1=="receipt_hash"{print $2}' "$snapshot")"
+  snapshot_seed="$(awk -F= '$1=="local_seed"{print $2}' "$snapshot")"
+  if [ "$snapshot_head" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+     [ "$snapshot_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ] && \
+     [ "$snapshot_receipt_hash" = "$(git hash-object "$receipt")" ] && \
+     [ "$snapshot_seed" = "$(git -C "$repo" rev-parse "refs/heads/$deterministic_head")" ]; then
+    record_pass 'R7 rejected seed publication preserves exact local checkpoint and seed bytes'
+  else
+    record_fail 'R7 rejected seed publication preserves exact local checkpoint and seed bytes'
+  fi
+  if [ "$competitor_oid" = "$(git -C "$origin" rev-parse "$remote_ref")" ]; then
+    record_pass 'R7 rejected seed publication preserves the competing remote ref'
+  else
+    record_fail 'R7 rejected seed publication preserves the competing remote ref'
+  fi
+  if [ "$unrelated_oid" = "$(git -C "$origin" rev-parse "$unrelated_ref")" ]; then
+    record_pass 'R7 rejected seed publication preserves unrelated remote refs'
+  else
+    record_fail 'R7 rejected seed publication preserves unrelated remote refs'
+  fi
+  provider_after_race="$(awk 'seen && /^provider /{print} /^race-create /{seen=1}' "$timeline")"
+  if [ -z "$provider_after_race" ]; then
+    record_pass 'R7 rejected seed publication performs no later provider operation'
+  else
+    record_fail 'R7 rejected seed publication performs no later provider operation'
+  fi
+  assert_feedback_r5_count 'R7 race attempts exactly one seed publication' '^seed-push ' "$git_log" 1
+  assert_contains 'R7 seed publication uses an expected-absence lease' "force-with-lease=${remote_ref}:" "$git_log"
+  assert_contains 'R7 seed publication uses an explicit full-ref destination' "<${deterministic_head}:${remote_ref}>" "$git_log"
+  assert_feedback_r5_count 'R7 rejected seed publication performs no terminal push' '^terminal-push ' "$git_log" 0
+  assert_feedback_r5_count 'R7 rejected seed publication performs no provider create' '^call pr create ' "$provider_log" 0
+  assert_feedback_r5_count 'R7 rejected seed publication performs no provider ready' '^call pr ready ' "$provider_log" 0
+  assert_feedback_r6_temp_ownership 'R7 rejected seed publication' "$temp_root"
 }
 
 run_missing_landing_field_matrix() {
@@ -3050,7 +3159,9 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r5-b1 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r7-b1 ]; then
+    run_feedback_r7_atomic_seed_race_case
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r5-b1 ]; then
     run_feedback_r5_b1_provider_retry_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r4-b1 ]; then
     run_feedback_r4_foreign_cwd_case

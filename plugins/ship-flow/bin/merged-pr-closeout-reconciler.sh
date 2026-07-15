@@ -1129,7 +1129,7 @@ PY
 
 ensure_initial_closeout_head() {
   local deterministic_head="$1" receipt_relative="$2" registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}" seed_root seed_sha
-  local remote_ref remote_record remote_rc=0 expected_remote_record
+  local remote_ref remote_record remote_rc=0 expected_remote_record push_rc=0
   if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$deterministic_head"; then
     seed_sha="$(git -C "$repo_root" rev-parse "$deterministic_head")"
   else
@@ -1171,7 +1171,12 @@ ensure_initial_closeout_head() {
     fi
     state_name="closeout_pr_prepared"
     fail_once seed-push
-    git -C "$repo_root" push origin "$deterministic_head" >/dev/null
+    git -C "$repo_root" push --force-with-lease="${remote_ref}:" origin \
+      "${deterministic_head}:${remote_ref}" >/dev/null || push_rc=$?
+    if [ "$push_rc" -ne 0 ]; then
+      prompt_captain closeout-checkpoint-conflict \
+        "deterministic closeout seed could not be published atomically; prepared checkpoint and exact local seed are retained for retry"
+    fi
   fi
   closeout_pr_remote_oid="$seed_sha"
 }
