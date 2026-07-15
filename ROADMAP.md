@@ -9,6 +9,7 @@
 <!-- section:now -->
 | Entity | Title | Stage |
 | --- | --- | --- |
+| ship-stage-debrief-closeout | Make debrief a native post-merge ship closeout | shape |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
