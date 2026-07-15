@@ -120,19 +120,6 @@ assert_frontmatter_equals() {
   fi
 }
 
-assert_frontmatter_nonempty() {
-  local desc="$1"
-  local file="$2"
-  local field="$3"
-  local actual
-  actual="$(frontmatter_field "$file" "$field")"
-  if [ -n "$actual" ]; then
-    record_pass "$desc"
-  else
-    record_fail "$desc (${field} was empty)"
-  fi
-}
-
 hash_tree() {
   local path="$1"
   if [ ! -d "$path" ]; then
@@ -372,6 +359,44 @@ setup_repo() {
   git -C "$repo" commit -qm initial
 }
 
+prepare_full_d1_repo() {
+  local repo="$1" fixture="$2" worktree_value="${3:-}"
+  local base source_one source_two anchor
+  setup_repo "$repo"
+  printf '%s\n' '.worktrees/' >"$repo/.gitignore"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' \
+    '| Entity | Title |' '| --- | --- |' \
+    '| merged-fixture-entity | Merged fixture entity |' \
+    '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' \
+    '| Entity | Title | Shipped |' '| --- | --- | --- |' \
+    '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  git -C "$repo" add -- .gitignore ROADMAP.md
+  git -C "$repo" commit -qm 'fixture: add roadmap'
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb ship-merged-fixture-entity "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' "$worktree_value"
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$repo/docs/ship-flow/merged-fixture-entity/review.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/merged-fixture-entity/review.md
+  git -C "$repo" commit -qm 'implementation: add reviewed entity'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' \
+    '- Preserve cleanup safety evidence.' '' '### Verdict' \
+    'merge_method_intent: rebase' 'pr: "#131"' \
+    >"$repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$repo" commit -qm 'implementation: add ship evidence'
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" "$source_two" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' \
+    'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=ship-merged-fixture-entity' 'base_ref=main' \
+    'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_one,$source_two" \
+    'pr_commit_count=2' >"$fixture"
+}
+
 run_helper() {
   local repo="$1"
   local output="$2"
@@ -474,38 +499,223 @@ EOF
     --pr-provider fixture \
     --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
     --dry-run)"
-  assert_exit "dry-run survives large worktree list under pipefail" 0 "$rc"
-  assert_contains "dry-run large worktree list plans cleanup" '^worktree_cleanup=planned$' "$TMP_DIR/pipefail-dry-run.out"
-  assert_contains "dry-run large worktree list plans branch cleanup" '^branch_cleanup=planned$' "$TMP_DIR/pipefail-dry-run.out"
+  assert_exit "incomplete dry-run rejects before cleanup preflight" 2 "$rc"
+  assert_contains "incomplete dry-run reports stable anchor reason" '^reason=landing-anchor-missing$' "$TMP_DIR/pipefail-dry-run.out"
+  assert_not_contains "incomplete dry-run does not plan cleanup" '^(worktree_cleanup|branch_cleanup)=planned$' "$TMP_DIR/pipefail-dry-run.out"
 }
 
-run_merged_fixture_case() {
+run_incomplete_landing_contract_case() {
   local repo="$TMP_DIR/merged-repo"
   setup_repo "$repo"
   write_entity "${repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ""
   git -C "$repo" add docs/ship-flow/merged-fixture-entity/index.md
   git -C "$repo" commit -qm "add merged entity"
 
-  local rc
+  local before_head before_tree rc
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "${repo}/docs/ship-flow")"
   rc="$(run_helper "$repo" "$TMP_DIR/merged.out" \
     --entity merged-fixture-entity \
     --pr-provider fixture \
     --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
 
-  assert_exit "merged fixture exits success" 0 "$rc"
-  assert_contains "merged fixture proceeds" '^verdict=PROCEED$' "$TMP_DIR/merged.out"
-  assert_contains "merged fixture reports PR state" '^pr_state=MERGED$' "$TMP_DIR/merged.out"
-  assert_contains "merged fixture terminal action" '^terminal_action=set_done$' "$TMP_DIR/merged.out"
-  assert_file_exists "merged fixture archives folder index" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md"
-  assert_frontmatter_equals "archived entity status done" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" status "done"
-  assert_frontmatter_nonempty "archived entity completed stamped" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" completed
-  assert_frontmatter_equals "archived entity verdict passed" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" verdict PASSED
-  assert_frontmatter_equals "archived entity worktree cleared" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" worktree ""
+  assert_exit "merged fixture without landing anchor rejects" 2 "$rc"
+  assert_contains "incomplete landing envelope reports stable anchor reason" '^reason=landing-anchor-missing$' "$TMP_DIR/merged.out"
+  assert_contains "incomplete landing envelope does not proceed" '^verdict=REJECT$' "$TMP_DIR/merged.out"
+  assert_file_exists "incomplete landing envelope keeps active entity" "${repo}/docs/ship-flow/merged-fixture-entity/index.md"
+  assert_path_missing "incomplete landing envelope creates no archive" "${repo}/docs/ship-flow/_archive/merged-fixture-entity"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$before_tree" = "$(hash_tree "${repo}/docs/ship-flow")" ]; then
+    record_pass "incomplete landing envelope preserves HEAD and workflow bytes"
+  else
+    record_fail "incomplete landing envelope preserves HEAD and workflow bytes"
+  fi
+}
 
-  local archived_rc=0
-  "$STATUS_BIN" --workflow-dir "${repo}/docs/ship-flow" --archived --where "slug = merged-fixture-entity" > "$TMP_DIR/archived-status.out" 2>&1 || archived_rc=$?
-  assert_exit "archived status query succeeds" 0 "$archived_rc"
-  assert_contains "archived status query finds slug" 'merged-fixture-entity' "$TMP_DIR/archived-status.out"
+run_missing_landing_field_matrix() {
+  local template_repo="$TMP_DIR/missing-field-template" template_fixture="$TMP_DIR/missing-field-template.env"
+  local field expected repo fixture output before_head before_tree after_tree rc
+  prepare_full_d1_repo "$template_repo" "$template_fixture"
+  while IFS='|' read -r field expected; do
+    repo="$TMP_DIR/missing-${field}-repo"
+    fixture="$TMP_DIR/missing-${field}.env"
+    output="$TMP_DIR/missing-${field}.out"
+    git clone -q "$template_repo" "$repo"
+    grep -v "^${field}=" "$template_fixture" >"$fixture"
+    before_head="$(git -C "$repo" rev-parse HEAD)"
+    before_tree="$(hash_tree "$repo/docs/ship-flow")"
+    rc="$(run_helper "$repo" "$output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+    assert_exit "missing ${field} rejects" 2 "$rc"
+    assert_contains "missing ${field} reports ${expected}" "^reason=${expected}$" "$output"
+    assert_contains "missing ${field} reports REJECT" '^verdict=REJECT$' "$output"
+    after_tree="$(hash_tree "$repo/docs/ship-flow")"
+    if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$before_tree" = "$after_tree" ]; then
+      record_pass "missing ${field} preserves HEAD and workflow bytes"
+    else
+      record_fail "missing ${field} preserves HEAD and workflow bytes"
+    fi
+    assert_file_exists "missing ${field} keeps active entity" "$repo/docs/ship-flow/merged-fixture-entity/index.md"
+    assert_path_missing "missing ${field} creates no archive" "$repo/docs/ship-flow/_archive/merged-fixture-entity"
+  done <<'EOF'
+merged_at|merged-at-missing
+landing_anchor|landing-anchor-missing
+source_commits|landing-pr-commit-count-mismatch
+pr_commit_count|landing-pr-commit-count-mismatch
+repository|closeout-stage-artifacts-incoherent
+base_ref|closeout-stage-artifacts-incoherent
+EOF
+
+  repo="$TMP_DIR/missing-anchor-pr-repo"
+  fixture="$TMP_DIR/missing-anchor-pr.env"
+  output="$TMP_DIR/missing-anchor-pr.out"
+  local registry="$TMP_DIR/missing-anchor-pr.registry" pr_log="$TMP_DIR/missing-anchor-pr.log"
+  git clone -q "$template_repo" "$repo"
+  grep -v '^landing_anchor=' "$template_fixture" >"$fixture"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "$repo/docs/ship-flow")"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" run_helper "$repo" "$output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit 'pull-request missing landing_anchor rejects' 2 "$rc"
+  assert_contains 'pull-request missing landing_anchor reports stable reason' '^reason=landing-anchor-missing$' "$output"
+  assert_contains 'pull-request missing landing_anchor reports REJECT' '^verdict=REJECT$' "$output"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+     [ "$before_tree" = "$(hash_tree "$repo/docs/ship-flow")" ] && \
+     [ ! -e "$registry" ] && [ ! -e "$pr_log" ]; then
+    record_pass 'pull-request missing landing_anchor precedes repository and provider side effects'
+  else
+    record_fail 'pull-request missing landing_anchor precedes repository and provider side effects'
+  fi
+}
+
+run_cleanup_safety_contract_cases() {
+  local repo fixture output worktree rc before_head before_tree
+
+  repo="$TMP_DIR/full-d1-dirty-repo"
+  fixture="$TMP_DIR/full-d1-dirty.env"
+  worktree="$repo/.worktrees/ship-merged-fixture-entity"
+  prepare_full_d1_repo "$repo" "$fixture" '.worktrees/ship-merged-fixture-entity'
+  git -C "$repo" worktree add "$worktree" ship-merged-fixture-entity >/dev/null 2>&1
+  printf '%s\n' dirty >"$worktree/dirty.txt"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "$repo/docs/ship-flow")"
+  output="$TMP_DIR/full-d1-dirty.out"
+  rc="$(run_helper "$repo" "$output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'full-D1 dirty worktree prompts captain' 1 "$rc"
+  assert_contains 'full-D1 dirty worktree reports stable reason' '^reason=dirty-worktree$' "$output"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$before_tree" = "$(hash_tree "$repo/docs/ship-flow")" ]; then
+    record_pass 'full-D1 dirty worktree preserves HEAD and workflow bytes'
+  else
+    record_fail 'full-D1 dirty worktree preserves HEAD and workflow bytes'
+  fi
+  assert_path_exists 'full-D1 dirty worktree remains registered' "$worktree"
+
+  repo="$TMP_DIR/full-d1-branch-mismatch-repo"
+  fixture="$TMP_DIR/full-d1-branch-mismatch.env"
+  worktree="$repo/.worktrees/not-pr-head"
+  prepare_full_d1_repo "$repo" "$fixture" '.worktrees/not-pr-head'
+  git -C "$repo" worktree add -b unexpected-branch "$worktree" main >/dev/null 2>&1
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "$repo/docs/ship-flow")"
+  output="$TMP_DIR/full-d1-branch-mismatch.out"
+  rc="$(run_helper "$repo" "$output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'full-D1 branch mismatch prompts captain' 1 "$rc"
+  assert_contains 'full-D1 branch mismatch reports stable reason' '^reason=branch-mismatch$' "$output"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$before_tree" = "$(hash_tree "$repo/docs/ship-flow")" ]; then
+    record_pass 'full-D1 branch mismatch preserves HEAD and workflow bytes'
+  else
+    record_fail 'full-D1 branch mismatch preserves HEAD and workflow bytes'
+  fi
+  assert_path_exists 'full-D1 branch mismatch keeps worktree' "$worktree"
+
+  repo="$TMP_DIR/full-d1-missing-local-repo"
+  fixture="$TMP_DIR/full-d1-missing-local.env"
+  prepare_full_d1_repo "$repo" "$fixture" '.worktrees/missing-local'
+  output="$TMP_DIR/full-d1-missing-local.out"
+  rc="$(run_helper "$repo" "$output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'full-D1 missing local worktree still reconciles' 0 "$rc"
+  assert_contains 'full-D1 missing local worktree is reported' '^worktree_cleanup=missing-local$' "$output"
+  assert_contains 'full-D1 missing local worktree uses atomic bundle' '^terminal_action=closeout_bundle$' "$output"
+
+  repo="$TMP_DIR/full-d1-apply-failure-repo"
+  fixture="$TMP_DIR/full-d1-apply-failure.env"
+  worktree="$repo/.worktrees/ship-merged-fixture-entity"
+  prepare_full_d1_repo "$repo" "$fixture" '.worktrees/ship-merged-fixture-entity'
+  git -C "$repo" worktree add "$worktree" ship-merged-fixture-entity >/dev/null 2>&1
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "$repo/docs/ship-flow")"
+  output="$TMP_DIR/full-d1-apply-failure.out"
+  rc="$(SHIP_FLOW_CLOSEOUT_FAILPOINT=before-commit run_helper "$repo" "$output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'full-D1 apply failure stops before cleanup' 1 "$rc"
+  assert_contains 'full-D1 apply failure reports stable reason' '^reason=closeout-checkpoint-conflict$' "$output"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$before_tree" = "$(hash_tree "$repo/docs/ship-flow")" ]; then
+    record_pass 'full-D1 apply failure preserves HEAD and workflow bytes'
+  else
+    record_fail 'full-D1 apply failure preserves HEAD and workflow bytes'
+  fi
+  assert_path_exists 'full-D1 apply failure keeps cleanup worktree' "$worktree"
+  if git -C "$repo" show-ref --verify --quiet refs/heads/ship-merged-fixture-entity; then
+    record_pass 'full-D1 apply failure keeps cleanup branch'
+  else
+    record_fail 'full-D1 apply failure keeps cleanup branch'
+  fi
+
+  repo="$TMP_DIR/full-d1-unmerged-branch-repo"
+  fixture="$TMP_DIR/full-d1-unmerged-branch.env"
+  worktree="$repo/.worktrees/ship-merged-fixture-entity"
+  prepare_full_d1_repo "$repo" "$fixture" '.worktrees/ship-merged-fixture-entity'
+  git -C "$repo" worktree add "$worktree" ship-merged-fixture-entity >/dev/null 2>&1
+  printf '%s\n' 'branch-only evidence' >"$worktree/branch-only.txt"
+  git -C "$worktree" add -- branch-only.txt
+  git -C "$worktree" commit -qm 'fixture: retain unmerged branch'
+  output="$TMP_DIR/full-d1-unmerged-branch.out"
+  rc="$(run_helper "$repo" "$output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'full-D1 unmerged branch still reconciles' 0 "$rc"
+  assert_contains 'full-D1 unmerged branch cleanup is skipped' '^branch_cleanup=skipped$' "$output"
+  assert_path_missing 'full-D1 unmerged branch worktree is removed' "$worktree"
+  if git -C "$repo" show-ref --verify --quiet refs/heads/ship-merged-fixture-entity; then
+    record_pass 'full-D1 unmerged branch is preserved'
+  else
+    record_fail 'full-D1 unmerged branch is preserved'
+  fi
+}
+
+run_pull_request_roadmap_validation_case() {
+  local repo="$TMP_DIR/pull-request-roadmap-validation-repo" fixture="$TMP_DIR/pr-pull-request-roadmap-validation.env"
+  local registry="$TMP_DIR/pull-request-roadmap-validation.registry" pr_log="$TMP_DIR/pull-request-roadmap-validation.pr.log"
+  local base source_one source_two anchor rc before_head before_tree
+  setup_repo "$repo"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' '| merged-fixture-entity | Merged fixture entity |' '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  git -C "$repo" add -- ROADMAP.md
+  git -C "$repo" commit -qm 'fixture: add roadmap'
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb implementation-topic "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' ''
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$repo/docs/ship-flow/merged-fixture-entity/review.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/merged-fixture-entity/review.md
+  git -C "$repo" commit -qm 'implementation: add reviewed entity'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' '- Pull-request validation proof.' '' '### Verdict' 'merge_method_intent: rebase' 'pr: "#131"' >"$repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$repo" commit -qm 'implementation: add ship evidence'
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" "$source_two" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  perl -0pi -e 's/title: "Merged fixture entity"/title: "Merged | fixture entity"/' "$repo/docs/ship-flow/merged-fixture-entity/index.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$repo" commit -qm 'fixture: unsafe ROADMAP title delimiter'
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' 'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=implementation-topic' 'base_ref=main' 'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_one,$source_two" 'pr_commit_count=2' \
+    'closeout_pr_number=141' 'closeout_pr_state=OPEN' 'closeout_pr_head=unused-before-validation' >"$fixture"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(hash_tree "${repo}/docs/ship-flow")"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" SHIP_FLOW_CLOSEOUT_PR_LOG="$pr_log" run_helper "$repo" "$TMP_DIR/pull-request-unsafe-title.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  assert_exit "pull-request mode rejects unsafe ROADMAP title" 2 "$rc"
+  assert_contains "pull-request unsafe title reports stage incoherence" '^reason=closeout-stage-artifacts-incoherent$' "$TMP_DIR/pull-request-unsafe-title.out"
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$before_tree" = "$(hash_tree "${repo}/docs/ship-flow")" ] && [ ! -e "$registry" ] && [ ! -e "$pr_log" ]; then
+    record_pass "pull-request ROADMAP validation precedes checkpoints and provider effects"
+  else
+    record_fail "pull-request ROADMAP validation precedes checkpoints and provider effects"
+  fi
 }
 
 run_refusal_cases() {
@@ -598,8 +808,8 @@ run_usage_and_dry_run_cases() {
     --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
     --dry-run)"
   after="$(hash_tree "${repo}/docs/ship-flow")"
-  assert_exit "dry-run merged exits success" 0 "$rc"
-  assert_contains "dry-run plans terminal action" '^terminal_action=set_done$' "$TMP_DIR/dry-run.out"
+  assert_exit "dry-run incomplete landing rejects" 2 "$rc"
+  assert_contains "dry-run incomplete landing reports stable anchor reason" '^reason=landing-anchor-missing$' "$TMP_DIR/dry-run.out"
   if [ "$before" = "$after" ]; then
     record_pass "dry-run leaves workflow unchanged"
   else
@@ -628,6 +838,9 @@ run_usage_and_dry_run_cases() {
   fi
 }
 
+# Historical sequential-closeout fixture retained for archaeology; the default
+# suite no longer invokes it because incomplete landing proof now fails closed.
+# shellcheck disable=SC2329
 run_cleanup_cases() {
   local repo="$TMP_DIR/cleanup-repo"
   setup_repo "$repo"
@@ -923,17 +1136,19 @@ run_direct_transaction_case() {
     # proof_hash cannot be embedded here: the receipt proof binds these exact ship bytes.
     assert_not_contains 'direct final ship omits circular receipt proof hash' '^proof_hash:' "$final_ship"
   fi
-  if [ -f "$receipt" ] && [ -f "$debrief" ] && [ -f "$final_ship" ] && python3 - "$receipt" "$debrief" "$final_ship" <<'PY'
+  if [ -f "$receipt" ] && [ -f "$debrief" ] && [ -f "$final_ship" ] && python3 - "$receipt" "$debrief" "$final_ship" "$source_one,$source_two" <<'PY'
 import json,sys
-r=json.load(open(sys.argv[1])); debrief=open(sys.argv[2]).read(); ship=open(sys.argv[3]).read(); landing=r["landing_proof"]
+r=json.load(open(sys.argv[1])); debrief=open(sys.argv[2]).read(); ship=open(sys.argv[3]).read(); expected_sources=sys.argv[4]; landing=r["landing_proof"]
 def joined(value): return ",".join(value) if isinstance(value,list) else str(value)
 debrief_fields={
  "Provider merged at":"provider_merged_at","Landing anchor":"landing_anchor","Base ref":"base_ref","Base before":"base_before",
  "Strategy":"strategy","Strategy evidence":"strategy_evidence","Method source":"method_source","PR commit count":"pr_commit_count",
- "Ordered source commits":"source_commits","Source commit patch IDs":"source_commit_patch_ids","Source patch digest":"source_patch_digest",
+ "Source commit patch IDs":"source_commit_patch_ids","Source patch digest":"source_patch_digest",
  "Ordered landing commits":"landing_commits","Landing commit patch IDs":"landing_commit_patch_ids","Landing patch digest":"landing_patch_digest",
  "First landing commit":"first_landing_commit","Last landing commit":"last_landing_commit"}
 for label,key in debrief_fields.items(): assert f"- {label}: {joined(landing[key])}" in debrief
+assert f"- Ordered source commits: {expected_sources}" in debrief
+assert "source_commits" not in landing
 ship_fields={"closeout_id":r["closeout_id"],"receipt":f'{r["identity"]["workflow"]}/_closeouts/{r["closeout_id"]}.json'}
 for key in ("landing_anchor","base_ref","base_before","first_landing_commit","last_landing_commit","landing_commits","source_patch_digest","landing_patch_digest"):
     ship_fields[key]=joined(landing[key])
@@ -1124,18 +1339,36 @@ case_selected() {
 
 run_optional_pr_red_case() {
   local repo="$TMP_DIR/optional-pr-red-repo" rc before after fixture cid
-  setup_repo "$repo"
-  write_entity "${repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ""
+  local landing_fixture="$TMP_DIR/optional-pr-red-landing.env" envelope="$TMP_DIR/optional-pr-red-envelope.out"
+  local landing_anchor source_commits pr_commit_count
+  prepare_full_d1_repo "$repo" "$landing_fixture"
+  landing_anchor="$(awk -F= '$1=="landing_anchor"{print $2; exit}' "$landing_fixture")"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$landing_fixture")"
+  pr_commit_count="$(awk -F= '$1=="pr_commit_count"{print $2; exit}' "$landing_fixture")"
+  "$PLUGIN_ROOT/lib/resolve-landing-envelope.sh" \
+    --repo-dir "$repo" --repository example/repo --base-ref main \
+    --implementation-pr 131 --provider-merged-at 2026-05-06T00:00:00Z \
+    --landing-anchor "$landing_anchor" --source-commits "$source_commits" \
+    --pr-commit-count "$pr_commit_count" >"$envelope"
   mkdir -p "$repo/docs/ship-flow/_closeouts"
-  cid="$(python3 - "$repo/docs/ship-flow/_closeouts" <<'PY'
+  cid="$(python3 - "$repo/docs/ship-flow/_closeouts" "$repo" "$envelope" <<'PY'
 import hashlib,json,pathlib,sys
-root=pathlib.Path(sys.argv[1]); h="a"*64
+root,repo,envelope=map(pathlib.Path,sys.argv[1:]); h="a"*64
 identity={"provider":"github","repository":"example/repo","workflow":"docs/ship-flow","entity_slug":"merged-fixture-entity","implementation_pr":131}
 cid=hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"merged-fixture-entity",b"131"))).hexdigest()
+raw={}
+for line in envelope.read_text().splitlines():
+    if "=" in line:
+        key,value=line.split("=",1); raw[key]=value
+arrays={"source_commit_patch_ids","landing_commits","landing_commit_patch_ids"}
+ints={"schema_version","implementation_pr","pr_commit_count"}
+landing={key:(value.split(",") if key in arrays else int(value) if key in ints else value) for key,value in raw.items()}
+entity=repo/"docs/ship-flow/merged-fixture-entity"
+def file_hash(name): return hashlib.sha256((entity/name).read_bytes()).hexdigest()
 r={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":identity,
-"ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{"index":h,"review":h,"ship":h}},
+"ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{"index":file_hash("index.md"),"review":file_hash("review.md"),"ship":file_hash("ship.md")}},
 "mode":"pull_request","merge_method_intent":None,"deterministic_closeout_head":"ship-closeout/"+cid,
-"landing_proof":{"landing_anchor":"b"*40,"strategy":"rebase"},
+"landing_proof":landing,
 "transaction":{"phase":"awaiting_closeout_pr","generation":2,"closeout_pr":141,"main_commit":None},
 "outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-05-06-01.md","sha256":h},"ship":{"path":"docs/ship-flow/_archive/merged-fixture-entity/ship.md","sha256":h},"archived_entity":{"path":"docs/ship-flow/_archive/merged-fixture-entity/index.md","sha256":h},"roadmap_row":{"identity":"merged-fixture-entity","sha256":h}}}
 payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}
@@ -1418,6 +1651,9 @@ run_doc_scope_cases() {
   assert_contains "pr merge doc scopes v1 provider support" 'v1 reconciler supports GitHub `gh` and fixture-backed tests only' "$pr_merge_doc"
   # shellcheck disable=SC2016 # Backticks are literal documentation text and regex syntax.
   assert_not_contains "pr merge doc does not advertise GitLab closeout state checks" 'glab mr view|If `MERGED` .*GitLab|If `MERGED` \(GitHub\) or `merged` \(GitLab\)' "$pr_merge_doc"
+  assert_contains "pr merge doc assigns terminal projection to the reconciler only" 'reconciler owns terminal projection and idempotency; this mod only schedules calls and reports outcomes' "$pr_merge_doc"
+  assert_not_contains "pr merge doc does not prescribe a second terminal status mutation" 'spacedock status .*status=\{terminal\}' "$pr_merge_doc"
+  assert_not_contains "pr merge doc does not prescribe a second archive mutation" 'spacedock status .*--archive' "$pr_merge_doc"
 }
 
 TMP_DIR="$(mktemp -d)"
@@ -1434,11 +1670,19 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-f1 ]; then
+    run_incomplete_landing_contract_case
+    run_missing_landing_field_matrix
+    run_cleanup_safety_contract_cases
+    run_pull_request_roadmap_validation_case
+    run_doc_scope_cases
+  else
   run_runtime_regression_cases
-  run_merged_fixture_case
+  run_incomplete_landing_contract_case
+  run_missing_landing_field_matrix
+  run_cleanup_safety_contract_cases
   run_refusal_cases
   run_usage_and_dry_run_cases
-  run_cleanup_cases
   run_idempotency_cases
   if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = direct-transaction ]; then
     run_direct_transaction_case
@@ -1456,6 +1700,7 @@ else
   fi
   run_scope_guard
   run_doc_scope_cases
+  fi
 fi
 
 echo ""

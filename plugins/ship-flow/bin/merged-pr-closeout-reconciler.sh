@@ -301,13 +301,6 @@ verify_archived_entity() {
   run_status --archived --resolve "archive:${entity_slug}" >/dev/null
 }
 
-set_terminal_fields() {
-  if [ "$dry_run" = "yes" ]; then
-    return 0
-  fi
-  run_status --set "$entity_slug" status=done completed verdict=PASSED worktree= >/dev/null
-}
-
 cleanup_branch_if_safe() {
   if [ -z "${cleanup_branch:-}" ]; then
     if [ "$branch_cleanup" = "not_applicable" ]; then
@@ -331,9 +324,21 @@ sha256_file() {
   else shasum -a 256 "$1" | awk '{print $1}'; fi
 }
 
-direct_contract_available() {
-  [ -n "${repository:-}" ] && [ -n "${landing_anchor:-}" ] &&
-    [ -n "${source_commits:-}" ] && [ -n "${pr_commit_count:-}" ]
+require_landing_contract() {
+  [ -n "${landing_anchor:-}" ] || reject_input landing-anchor-missing "merged PR provider response is missing the landing anchor"
+  [ -n "${source_commits:-}" ] && [ -n "${pr_commit_count:-}" ] ||
+    reject_input landing-pr-commit-count-mismatch "merged PR provider response is missing the ordered source commits or commit count"
+  [ -n "${repository:-}" ] && [ -n "${base_ref:-}" ] ||
+    reject_input closeout-stage-artifacts-incoherent "merged PR provider response is missing repository or base-ref identity"
+}
+
+validate_roadmap_title() {
+  local title="$1"
+  python3 - "$title" <<'PY' >/dev/null || reject_input closeout-stage-artifacts-incoherent "entity title contains an unsafe ROADMAP table delimiter or control character"
+import sys
+value=sys.argv[1]
+raise SystemExit(1 if "|" in value or any(ord(char)<32 or ord(char)==127 for char in value) else 0)
+PY
 }
 
 registry_field() {
@@ -780,8 +785,9 @@ out=roadmap[:now_rows[0]]+roadmap[now_rows[0]+1:]
 if now_rows[0]<shipped_close: shipped_close-=1
 out.insert(shipped_close,row)
 write("ROADMAP.md","\n".join(out)+"\n")
-arrays={"source_commits","source_commit_patch_ids","landing_commits","landing_commit_patch_ids"}; ints={"schema_version","implementation_pr","pr_commit_count"}
-landing={key:(value.split(",") if key in arrays else int(value) if key in ints else value) for key,value in env.items()}
+arrays={"source_commit_patch_ids","landing_commits","landing_commit_patch_ids"}; ints={"schema_version","implementation_pr","pr_commit_count"}
+# source_commits is provider/rendering input, not part of the canonical D1 receipt proof.
+landing={key:(value.split(",") if key in arrays else int(value) if key in ints else value) for key,value in env.items() if key != "source_commits"}
 participants=[] if not participants_csv else participants_csv.split(",")
 receipt={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":identity,
  "ownership_proof":{"unique_entity_matches":int(match_count),"participant_entities":participants,"source_hashes":{"index":h(entity),"review":h(entity.parent/"review.md"),"ship":h(entity.parent/"ship.md")}},
@@ -804,11 +810,7 @@ reconcile_direct_bundle() {
   local landing_args
   merge_intent="$(resolve_merge_method_intent "$ship_file")"
   title="$(read_frontmatter_field "$entity_path" title)"; [ -n "$title" ] || title="$entity_slug"
-  python3 - "$title" <<'PY' >/dev/null || reject_input closeout-stage-artifacts-incoherent "entity title contains an unsafe ROADMAP table delimiter or control character"
-import sys
-value=sys.argv[1]
-raise SystemExit(1 if "|" in value or any(ord(char)<32 or ord(char)==127 for char in value) else 0)
-PY
+  validate_roadmap_title "$title"
   envelope_file="$(mktemp)"
   landing_args=(--repo-dir "$repo_root" --repository "$repository" --base-ref "$base_ref" --implementation-pr "$pr_number" --provider-merged-at "$merged_at" --landing-anchor "$landing_anchor" --source-commits "$source_commits" --pr-commit-count "$pr_commit_count")
   [ -n "$merge_intent" ] && landing_args+=(--merge-method-intent "$merge_intent")
@@ -1041,6 +1043,7 @@ reconcile_pull_request_bundle() {
   [ -z "$(git -C "$repo_root" status --porcelain --untracked-files=all)" ] || reject_input closeout-checkpoint-conflict "authoritative main worktree is not clean"
   resolve_closeout_ownership
   merge_intent="$(resolve_merge_method_intent "$ship_file")"; title="$(read_frontmatter_field "$entity_path" title)"; [ -n "$title" ] || title="$entity_slug"
+  validate_roadmap_title "$title"
   envelope_file="$(mktemp)"
   landing_args=(--repo-dir "$repo_root" --repository "$repository" --base-ref "$base_ref" --implementation-pr "$pr_number" --provider-merged-at "$merged_at" --landing-anchor "$landing_anchor" --source-commits "$source_commits" --pr-commit-count "$pr_commit_count")
   [ -n "$merge_intent" ] && landing_args+=(--merge-method-intent "$merge_intent")
@@ -1301,8 +1304,9 @@ case "$pr_state" in
     ;;
 esac
 
+require_landing_contract
+
 if [ "$closeout_mode" = pull-request ]; then
-  direct_contract_available || reject_input closeout-stage-artifacts-incoherent "pull-request closeout requires the full landing envelope"
   reconcile_pull_request_bundle
   emit_report
   exit 0
@@ -1311,28 +1315,10 @@ fi
 preflight_worktree_cleanup "$worktree_value"
 terminal_action="set_done"
 
-if direct_contract_available; then
-  reconcile_direct_bundle
-  remove_worktree_if_safe
-  cleanup_branch_if_safe
-  verdict="PROCEED"
-  reason="merged-pr-reconciled"
-  emit_report
-  exit 0
-fi
-
-if [ "$dry_run" = "no" ]; then
-  set_terminal_fields
-  archive_active_entity
-  verify_archived_entity
-  remove_worktree_if_safe
-fi
-
+reconcile_direct_bundle
+remove_worktree_if_safe
 cleanup_branch_if_safe
-
 verdict="PROCEED"
 reason="merged-pr-reconciled"
-state_name="reconciled"
-detail="merged PR reconciled to terminal archived entity state"
 emit_report
 exit 0
