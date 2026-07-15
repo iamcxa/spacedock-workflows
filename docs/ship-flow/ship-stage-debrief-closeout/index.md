@@ -264,28 +264,24 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Re-enter round 4 at metadata-only `a535179`, pinned to cycle-3 implementation range `9b3be77..60f59d9`, and rerun full mechanical, schema/domain, static, pinned-launcher, and C1-C15 evidence.
-  R3 is 107/107 on Bash 3.2 and 5.3; default is 198/198 on both; landing 94/94 on both; bundle 78/78 on both; receipt 85/85; direct 200/200; optional 179/179; PR40/41 141/141; recursion 124/124.
-- DONE: Independently verify the cycle-3 acquisition repair and prior closures without trusting execute self-attestation.
-  True main-only and post-GC direct/optional/OPEN/MERGED replay, provider OIDs, collision, HUP/INT/QUIT/TERM cleanup, mixed-case remotes, and mutation residue pass. R2 native proof, squash validation, ROADMAP cell zero, young root, one owner, full archive, postcommit recovery, and W1 remain closed.
-- FAILED: General/testing/schema review plus an independent non-Git-CWD control find R4-B1.
-  Receipt-first `gh pr view` and optional `gh pr list/create/ready` remain unbound to the authoritative repository. The focused foreign-CWD test exits at dry-run before those calls; the real unbound command fails with `fatal: not a git repository`.
-- GATE: Round 4 VETOs D3/D4 optional and receipt-first location independence and stops at the Captain Verify gate.
-  Verdict is FAILED/PROMPT_CAPTAIN. The recovery panel timed out and was interrupted without softening the blocker. No FO receipt/status/review/push/PR/merge/archive/todo/remote mutation occurred; R4-W1 and W2-W4 remain warnings.
+- DONE: Pin round 5 to `63a47a3..f5e9dbc` at metadata-only `0ef493b`. Close R4-B1/R4-W1: repository discovery and all five PR operations bind authoritative `--repo`; foreign-CWD optional and OPEN/MERGED replay plus repo/PR/OID/count negatives pass 29/29 on Bash 3.2 and 5.3.
+- DONE: Reconfirm R3 acquisition/collision/signals/mixed-case/no-residue at 107/107 on both shells, R2 native/squash at 13/13 + 23/23, landing 94/94, receipt 85/85, bundle 78/78, static checks, C1–C15, and pinned launcher status.
+- FAILED: Recovery panel and an independent injected-failure reproduction find R5-B1. `gh pr list/create/ready` exit 71 without `verdict/reason/state`; list leaves one local checkpoint, create one plus a remote write, and ready two plus a remote write.
+- GATE: Round 5 returns only R5-B1 to execute and preserves all closed R2–R4 claims. Verdict is FAILED/PROMPT_CAPTAIN; no implementation, FO receipt/status/review/push/PR/merge/archive/todo/remote mutation occurred.
 
 ### Summary
 
-Round 4 verifies the source-object acquisition repair itself, but optional and receipt-first GitHub operations still depend on caller CWD after the dry-run boundary. The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
+Round 5 verifies the repository-binding repair, but provider interruptions after durable boundaries still lack stable recovery routing. The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 55 across four verify rounds
-- iteration_count: 4
+- duration_minutes: 65 across five verify rounds
+- iteration_count: 5
 - blocking_findings_count: 1 current
-- warning_findings_count: 4
+- warning_findings_count: 3
 - claim_records: required VERIFIED=7 NOT VERIFIED=1 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 4; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- reviewer_verdict: VETO round 5; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
