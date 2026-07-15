@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -343,4 +343,12 @@ The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](v
   routed_at: 2026-07-15T16:44:42Z
   verify_artifact: verify.md@4e2e91a
   required_fixes: R6-B1 eliminate duplicate seed push invocation on create-before retry with direct push-count regression; R6-W1 bound provider-failure bundle_root cleanup
+  deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
+- cycle: 7
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-15T17:50:03Z
+  verify_artifact: verify.md@db921e0
+  required_fixes: R7-B1 atomic expected-absence seed publication with inspection-to-push interleaving regression
   deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
