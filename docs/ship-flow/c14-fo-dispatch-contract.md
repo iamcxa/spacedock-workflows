@@ -8,7 +8,7 @@ verdict:
 score:
 worktree: /Users/kent/conductor/workspaces/spacedock-workflows/yangon/.worktrees/c14-frontmatter-authority-integration
 issue: "#30"
-pr:
+pr: "#47"
 ---
 
 The First Officer owns stage entry and currently records it with `dispatch: <feature> entering <stage>`, while C14 recognizes only the completion-side `advance-stage.sh` commit signature. The mismatch makes a legitimate FO `draft -> shape` transition fail the invariant and shell-suite baseline before feature work starts.
@@ -280,3 +280,24 @@ Ordered 10-path `shasum -a 256` manifest reconstruction at HEAD and `930b4bb`; `
 ### Summary
 
 Cycle 3 confirms the frozen Slice B recovery is the intended `+184/-186` change under the captain-approved additions/churn controls, with obsolete body-parser authority removed and no product/test drift after `930b4bb`. Exact fingerprints preserve the fresh full-suite evidence, lightweight live gates are green, and the verify verdict is PASS with no implementation or workflow-state mutation.
+
+## Stage Report: ship
+
+- DONE: Resolve the canonical entity before consuming ship evidence and apply the authorized legacy-flat adapter.
+  Evidence: pinned Spacedock resolution selects `docs/ship-flow/c14-fo-dispatch-contract.md`; its latest inline `Stage Report: verify (cycle 3)` PASS is authoritative. The stale same-stem folder and its failed `verify.md` were explicitly ignored and left untouched.
+- DONE: Confirm the exact live-main integration range and PR readiness without weakening the two transition contracts or importing deferred work.
+  Evidence: focused C14 Cases 1-31, the local full invariant gate, contribution-contract rows, and diff checks pass; integration evidence records the full shell suite at 109/109 and Node at 79/79. PR-creation readiness verdict: **GO**; merge readiness remains blocked pending live CI.
+- DONE: Materialize the approved pull request reference and release disposition without merging or terminalizing the entity.
+  Evidence: PR [#47](https://github.com/iamcxa/spacedock-workflows/pull/47) tracks the exact branch; this backward-compatible workflow repair is a patch-release candidate with no version bump in this PR.
+
+### Follow-up boundary
+
+Native flat `ship-review` support and same-stem shadowing regression coverage are tracked in [issue #48](https://github.com/iamcxa/spacedock-workflows/issues/48) and remain nonblocking for C14.
+
+### Live CI status
+
+GitHub `doc_impact` passed. The invariants job failed only in `test-advance-stage.sh`, whose fixture set Git identity on the initial commit alone, so later `git commit --amend` calls failed on the identity-less CI runner (Cases 3, 7, 8). Fixed by setting repo-local `user.email`/`user.name` immediately after `git init`, matching the suite convention (`test-allocate-id.sh`), so every fixture commit is hermetic; verified by reproducing the identity-less runner locally (`GIT_CONFIG_GLOBAL=/dev/null` + `user.useConfigOnly=true`) — 103/103 cases pass. GitGuardian incident `34883744` flagged the disposable fixture literal `--token=foreign` (a false-positive non-matching lease token in a cooperative-lease negative test); it is now routed through `FOREIGN_LEASE_FIXTURE_TOKEN`, confirmed scanner-clean by `ggshield`. Because that literal still exists in the in-range commit `10ce627`, clearing the remote GitGuardian check requires resolving incident `34883744` on the dashboard as a false positive or rewriting that commit — a forward-only file fix may not clear a full-range PR scan.
+
+### Summary
+
+C14 is in ship with canonical flat evidence, verified transition safety, local readiness gates, and PR #47 recorded. It is not merge-ready while GitGuardian and remaining live CI are unresolved. The same-stem legacy folder remains byte-untouched and non-authoritative; merge, release, terminal advancement, and follow-up issue creation remain outside this report.

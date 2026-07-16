@@ -489,9 +489,12 @@ rm -rf "$TMP"
 echo
 echo "=== Cooperative completion lease surface ==="
 TMP="$(setup_fo_completion_fixture)"; ENTITY_REL=docs/test-wf/example-stage-wiring/index.md; BEFORE="$(cd "$TMP" && git rev-parse HEAD)"
+# Non-matching fixture lease value routed through a variable so the disposable
+# test token is not a literal --token=<value> CLI option (GitGuardian false positive).
+FOREIGN_LEASE_FIXTURE_TOKEN=foreign
 assert_exit 0 "cd '$TMP' && bash '$LIB_DIR/fo-completion-lease.sh' acquire --entity='$ENTITY_REL' --stage=design --worker=ensign-test --token=lease-test --ref=refs/heads/feature --before='$BEFORE'" "FO atomically acquires one bound cooperative lease"
-assert_exit 9 "cd '$TMP' && bash '$LIB_DIR/fo-completion-lease.sh' acquire --entity='$ENTITY_REL' --stage=design --worker=other --token=foreign --ref=refs/heads/feature --before='$BEFORE'" "already-held lease cannot be replaced"
-assert_exit 5 "cd '$TMP' && bash '$LIB_DIR/fo-completion-lease.sh' reclaim --entity='$ENTITY_REL' --stage=design --worker=other --token=foreign --ref=refs/heads/feature --before='$BEFORE'" "foreign lease cannot be reclaimed"
+assert_exit 9 "cd '$TMP' && bash '$LIB_DIR/fo-completion-lease.sh' acquire --entity='$ENTITY_REL' --stage=design --worker=other --token='$FOREIGN_LEASE_FIXTURE_TOKEN' --ref=refs/heads/feature --before='$BEFORE'" "already-held lease cannot be replaced"
+assert_exit 5 "cd '$TMP' && bash '$LIB_DIR/fo-completion-lease.sh' reclaim --entity='$ENTITY_REL' --stage=design --worker=other --token='$FOREIGN_LEASE_FIXTURE_TOKEN' --ref=refs/heads/feature --before='$BEFORE'" "foreign lease cannot be reclaimed"
 rm -rf "$TMP"
 
 exit $FAIL

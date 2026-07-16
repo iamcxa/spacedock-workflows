@@ -73,8 +73,9 @@ EOF
   # Create a dummy plan.md artifact
   echo "# Shape" > "$entity_dir/shape.md"
   echo "# Plan" > "$entity_dir/plan.md"
-  (cd "$dir" && git init -q -b main && git add -- docs && \
-    git -c user.email=test@test -c user.name=test commit -qm "init")
+  (cd "$dir" && git init -q -b main && \
+    git config user.email test@test && git config user.name test && \
+    git add -- docs && git commit -qm "init")
   echo "$entity_dir"
 }
 
