@@ -261,20 +261,22 @@ Planned native post-merge closeout as five ordered TDD waves: landing proof, dur
   Commit `9e8cc8c` rejects multiple, missing, malformed, or unresolvable destinations as stable `PROMPT_CAPTAIN / closeout-checkpoint-conflict / closeout_pr_prepared`; seed inspection/CAS and terminal OID-lease publication directly reuse the same URL and full ref.
 - DONE: Preserve R2-R7 recovery, cleanup, and retry semantics and complete independent Cycle 8 review.
   R8 is 50/50, R7 is 19/19, R6 is 289/289, R4 is 29/29, R3 is 107/107, R2 is 13/13 + 23/23, and default is 198/198 on Bash 3.2 and 5.3; spec/quality reviews APPROVED with no findings, pinned validation passes, and full C1-C15 exits 0.
+- DONE: Re-enter Execute for Verify feedback cycle 9 and close R9-B1/B2 while preserving R2-R8 and deferring W2/W3/W4.
+  Commit `90bd6dd` binds the durable checkpoint to one provider-matching non-reinterpretable endpoint, uses that leaf for inspection plus leased seed/terminal publication, and requires an exact post-terminal provider requery before ready. Nested remote aliases, chained URL rewrites, provider drift, and unsafe legacy endpoint hydration fail closed; R9 is 59/59 and receipt validation is 92/92 on Bash 3.2 and 5.3, the complete prior regression matrix remains green, and independent spec/quality reviews APPROVED.
 - BOUNDARY: No external PR, push, merge, deployment, issue update, archive, or verify-stage advance occurred. Non-UI render fidelity is N/A.
 
 ### Summary
 
-Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, one bound authoritative publication URL with leased seed/terminal refs, receipt-first crash recovery, bounded provider/object binding, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
+Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, one durable provider-matching publication endpoint with leased seed/terminal refs and terminal provider convergence, receipt-first crash recovery, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
 
 ### Metrics
 
 - status: passed
-- duration_minutes: 852
-- iteration_count: 26 implementation/review repair loops
-- task_count: 19
-- commit_count: 24 implementation/docs/test commits
-- reviewer_verdict: APPROVED after all eight feedback cycles received independent re-review
+- duration_minutes: 1516
+- iteration_count: 27 implementation/review repair loops
+- task_count: 20
+- commit_count: 25 implementation/docs/test commits
+- reviewer_verdict: APPROVED after all nine feedback cycles received independent re-review
 <!-- /section:execute-stage-report -->
 
 <!-- section:verify-stage-report -->
