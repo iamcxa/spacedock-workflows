@@ -4,10 +4,15 @@
 set -u
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." >/dev/null 2>&1 && pwd)"
+RULE_LIB="${SCRIPT_DIR}/../lib/pr-title-format.sh"
+
+if [ ! -f "$RULE_LIB" ]; then
+  printf 'ERROR: PR title format helper not found\n' >&2
+  exit 1
+fi
 
 # shellcheck source=plugins/ship-flow/lib/pr-title-format.sh
-. "${REPO_ROOT}/plugins/ship-flow/lib/pr-title-format.sh"
+. "$RULE_LIB"
 
 usage() {
   printf 'Usage: %s "<pull request title>"\n' "$(basename "$0")" >&2
