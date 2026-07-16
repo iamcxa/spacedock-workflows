@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -366,3 +366,12 @@ Captain-gated VETO, causal Git probes, panel ownership, and falsifiable claims a
   verify_artifact: verify.md@453c4f1
   required_fixes: R11-B1 accept a unique valid nearby awaiting predecessor on mature main while preserving bounded-failure semantics; R11-B2 require landed terminal bytes and any local deterministic ref to bind the authoritative provider headRefOid with ancestry proof; R11-B3 move every receipt/preflight validator temp into signal-owned cleanup and cover HUP/INT/QUIT/TERM residue behavior
   deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
+- cycle: 12
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-16T16:58:26Z
+  verify_artifact: verify.md@05c6c70
+  required_fixes: R12-B1 resolve awaiting/OPEN/build deterministic heads exactly (fully-qualified refs/heads/ or verified OID) so a same-name tag can never be DWIM-selected; R12-B2 bind ancestry to the awaiting predecessor that is an actual ancestor of the provider terminal, not the newest commit carrying identical awaiting bytes; R12-W1 propagate ensure_owned_validator_root failure explicitly so an empty root cannot feed /validator.XXXXXX under suppressed errexit
+  deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
+  scope_boundary: Captain-set BOUNDED CONVERGENCE round. Execute fixes ONLY R12-B1/B2/W1 plus their focused regressions; no new hardening surface, no unrelated refactor. Verify re-review is DELTA+REGRESSION scoped only (prove B1/B2 closed on both shells, then run the existing green suite for regressions) and MUST NOT open a new adversarial-Git frontier (no fresh multi-endpoint/nested-remote/URL-rewrite/provider-drift class). Stop rule (Captain): verify PROCEED -> advance to Review/ship; a brand-new blocker CLASS that is not a B1/B2 regression is the non-convergence signal -> FO defers it to a tracked follow-up entity and ships on the green core; do NOT auto-route a Cycle 13.
