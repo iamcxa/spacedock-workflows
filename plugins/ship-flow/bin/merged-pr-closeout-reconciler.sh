@@ -18,10 +18,26 @@ source_object_target_repos=()
 source_object_target_refs=()
 source_object_target_tips=()
 owned_bundle_root=""
+owned_predecessor_root=""
+owned_terminal_validation_root=""
+recovered_predecessor_path=""
 
 cleanup_owned_bundle_root() {
   local root="${owned_bundle_root:-}"
   owned_bundle_root=""
+  [ -z "$root" ] || rm -rf -- "$root" >/dev/null 2>&1 || true
+}
+
+cleanup_owned_predecessor_root() {
+  local root="${owned_predecessor_root:-}"
+  owned_predecessor_root=""
+  recovered_predecessor_path=""
+  [ -z "$root" ] || rm -rf -- "$root" >/dev/null 2>&1 || true
+}
+
+cleanup_owned_terminal_validation_root() {
+  local root="${owned_terminal_validation_root:-}"
+  owned_terminal_validation_root=""
   [ -z "$root" ] || rm -rf -- "$root" >/dev/null 2>&1 || true
 }
 
@@ -30,6 +46,8 @@ cleanup_source_object_acquisition() {
   local status=$? index=0
   trap - EXIT HUP INT QUIT TERM
   cleanup_owned_bundle_root
+  cleanup_owned_predecessor_root
+  cleanup_owned_terminal_validation_root
   while [ "$index" -lt "${#source_object_target_repos[@]}" ]; do
     git -C "${source_object_target_repos[$index]}" update-ref -d \
       "${source_object_target_refs[$index]}" "${source_object_target_tips[$index]}" >/dev/null 2>&1 || true
@@ -677,7 +695,7 @@ PY
   receipt_path="$(printf '%s\n' "$scan_output" | sed -n '2p')"
   receipt_path="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$receipt_path")"
   validator_out="$(mktemp)"
-  validate_receipt_normal "$receipt_path" --repo-root "$repo_root" >"$validator_out" 2>&1 || validator_rc=$?
+  python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --allow-any-path >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
   IFS=$'\t' read -r mode phase recorded_pr expected_head expected_proof expected_endpoint < <(python3 - "$receipt_path" <<'PY'
@@ -688,15 +706,34 @@ PY
 )
   [ "$mode" = pull_request ] || return 0
   [ -n "$recorded_pr" ] || reject_input closeout-checkpoint-conflict "receipt-only PR recovery lacks a closeout PR number"
+  if [ "$pr_provider" = gh ]; then
+    ensure_gh_repository
+  elif [ -z "$repository" ]; then
+    pr_number="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["identity"]["implementation_pr"])' "$receipt_path")"
+    read_provider_fixture "$pr_fixture"
+  fi
   if [ "$pr_provider" = gh ] && [ -z "$expected_endpoint" ]; then
     state_name="closeout_pr_prepared"
     prompt_captain closeout-checkpoint-conflict \
       "legacy awaiting checkpoint lacks a provable publication endpoint"
   fi
+  if [ -n "$expected_endpoint" ]; then
+    validate_closeout_endpoint_provider_binding "$expected_endpoint"
+    validate_closeout_leaf_endpoint "$expected_endpoint"
+  fi
+  validator_out="$(mktemp)"; validator_rc=0
+  validate_receipt_normal "$receipt_path" --repo-root "$repo_root" >"$validator_out" 2>&1 || validator_rc=$?
+  if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
+  rm -f "$validator_out"
   case "$pr_provider" in
     fixture) read_closeout_pr_fixture "$pr_fixture" ;;
     gh) read_closeout_pr_gh "$recorded_pr" ;;
   esac
+  receipt_relative="$(python3 - "$repo_root" "$receipt_path" <<'PY'
+import pathlib,sys
+print(pathlib.Path(sys.argv[2]).resolve().relative_to(pathlib.Path(sys.argv[1]).resolve()).as_posix())
+PY
+)"
   if [ "$phase" = awaiting_closeout_pr ]; then
     case "$closeout_pr_state" in
       MERGED) reject_input closeout-sentinel-missing "closeout PR is MERGED but authoritative landed sentinel bytes are absent" ;;
@@ -705,12 +742,7 @@ PY
       *) prompt_captain closeout-pr-awaiting-merge "deterministic closeout PR state is unsupported" ;;
     esac
     active_candidate="$workflow_dir/$entity_ref/index.md"
-    receipt_relative="$(python3 - "$repo_root" "$receipt_path" <<'PY'
-import pathlib,sys
-print(pathlib.Path(sys.argv[2]).resolve().relative_to(pathlib.Path(sys.argv[1]).resolve()).as_posix())
-PY
-)"
-    if optional_terminal_head_matches "$expected_head" "$receipt_relative" "$recorded_pr" "$expected_proof"; then
+    if optional_terminal_head_matches "$expected_head" "$receipt_relative" "$recorded_pr" "$expected_proof" "$receipt_path"; then
       terminal_sha="$(git -C "$repo_root" rev-parse "$expected_head")"
       if [ "$closeout_pr_number" = "$recorded_pr" ] && [ "$closeout_pr_head" = "$expected_head" ] && [ "$closeout_pr_remote_oid" = "$terminal_sha" ] && [ "$closeout_pr_is_draft" = false ]; then
         terminal_ready=yes
@@ -729,10 +761,60 @@ PY
   [ "$closeout_pr_number" = "$recorded_pr" ] || reject_input closeout-sentinel-identity-mismatch "resolved closeout PR number differs from receipt"
   [ "$closeout_pr_head" = "$expected_head" ] || reject_input closeout-sentinel-identity-mismatch "resolved closeout PR head differs from deterministic receipt head"
   [ "$closeout_pr_state" = MERGED ] || prompt_captain closeout-pr-awaiting-merge "landed receipt claims an unmerged closeout PR"
-  validator_out="$(mktemp)"; validator_rc=0
-  validate_receipt_normal "$receipt_path" --repo-root "$repo_root" --verify-outputs >"$validator_out" 2>&1 || validator_rc=$?
-  if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
-  rm -f "$validator_out"
+  local awaiting_predecessor="" terminal_receipt="" terminal_sha="" terminal_source="$expected_head" recovery_rc=0
+  if ! git -C "$repo_root" rev-parse --verify "${terminal_source}^{commit}" >/dev/null 2>&1; then
+    if [[ "$closeout_pr_remote_oid" =~ ^[0-9a-f]{40}$ ]] &&
+       git -C "$repo_root" cat-file -e "${closeout_pr_remote_oid}^{commit}" 2>/dev/null; then
+      terminal_source="$closeout_pr_remote_oid"
+    fi
+  fi
+  recover_awaiting_closeout_predecessor "$receipt_relative" "$recorded_pr" "$expected_proof" || recovery_rc=$?
+  awaiting_predecessor="$recovered_predecessor_path"
+  if [ "$recovery_rc" -eq 2 ]; then
+    state_name="closeout_pr_awaiting_merge"
+    prompt_captain closeout-checkpoint-conflict \
+      "durable awaiting predecessor is outside the bounded authoritative main history"
+  elif [ "$recovery_rc" -eq 3 ]; then
+    state_name="closeout_pr_awaiting_merge"
+    prompt_captain closeout-checkpoint-conflict \
+      "multiple distinct durable awaiting predecessors exist on authoritative main"
+  fi
+  terminal_receipt="$owned_predecessor_root/terminal.json"
+  git -C "$repo_root" show "${terminal_source}:${receipt_relative}" >"$terminal_receipt" 2>/dev/null || {
+    reject_input closeout-checkpoint-conflict "landed closeout terminal receipt cannot be recovered"
+  }
+  if [ -n "$awaiting_predecessor" ]; then
+    optional_terminal_head_matches "$terminal_source" "$receipt_relative" "$recorded_pr" "$expected_proof" "$awaiting_predecessor" || {
+      state_name="closeout_pr_awaiting_merge"
+      prompt_captain closeout-checkpoint-conflict \
+        "landed closeout terminal head does not extend its durable awaiting predecessor"
+    }
+  else
+    terminal_sha="$(git -C "$repo_root" rev-parse --verify "${terminal_source}^{commit}" 2>/dev/null || true)"
+    if [ -z "$terminal_sha" ] || [ "$closeout_pr_remote_oid" != "$terminal_sha" ] || ! cmp -s "$terminal_receipt" "$receipt_path"; then
+      reject_input closeout-checkpoint-conflict \
+        "landed closeout receipt without local predecessor lacks an exact provider-bound terminal proof"
+    fi
+  fi
+  if ! python3 - "$terminal_receipt" "$receipt_path" <<'PY'
+import json,sys
+terminal=json.load(open(sys.argv[1])); current=json.load(open(sys.argv[2]))
+raise SystemExit(0 if terminal["transaction"].get("publication_endpoint")==current["transaction"].get("publication_endpoint") else 1)
+PY
+  then
+    state_name="closeout_pr_awaiting_merge"
+    prompt_captain closeout-checkpoint-conflict \
+      "landed closeout receipt changed the predecessor-bound publication endpoint"
+  fi
+  validator_out="$owned_predecessor_root/validator.out"; validator_rc=0
+  if cmp -s "$terminal_receipt" "$receipt_path"; then
+    validate_receipt_normal "$receipt_path" --repo-root "$repo_root" --verify-outputs >"$validator_out" 2>&1 || validator_rc=$?
+  else
+    validate_receipt_normal "$receipt_path" --repo-root "$repo_root" --verify-outputs \
+      --previous "$terminal_receipt" >"$validator_out" 2>&1 || validator_rc=$?
+  fi
+  if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; cleanup_owned_predecessor_root; exit "$validator_rc"; fi
+  cleanup_owned_predecessor_root
   verdict="PROCEED"; pr_number="$recorded_pr"; pr_state="MERGED"
   terminal_action="already_reconciled"; reason="closeout-pr-terminal-noop"; state_name="closeout_pr_terminal_noop"
   detail="one landed receipt validates deterministic head, identity, manifest, and proof hash"
@@ -1200,12 +1282,66 @@ closeout_fixture_endpoint_repository() {
     *) return 1 ;;
   esac
   [ -d "$path" ] || return 1
-  git -C "$path" config --get ship-flow.closeoutFixtureRepository 2>/dev/null
+  git -C "$path" config --local --get ship-flow.closeoutFixtureRepository 2>/dev/null
+}
+
+validate_closeout_endpoint_provider_binding() {
+  local endpoint="$1" resolved_repository fixture_repository repository_fold resolved_fold fixture_fold
+  resolved_repository="$(normalize_github_remote_repository "$endpoint" 2>/dev/null || true)"
+  fixture_repository="$(closeout_fixture_endpoint_repository "$endpoint" 2>/dev/null || true)"
+  repository_fold="$(printf '%s' "$repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  resolved_fold="$(printf '%s' "$resolved_repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  fixture_fold="$(printf '%s' "$fixture_repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  if [ -z "$repository_fold" ] || { [ "$resolved_fold" != "$repository_fold" ] && [ "$fixture_fold" != "$repository_fold" ]; }; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "optional closeout publication endpoint cannot be bound to the provider repository"
+  fi
+}
+
+preflight_active_persisted_closeout_endpoint() {
+  local scan_output scan_count receipt_path validator_out validator_rc=0 phase deterministic_head endpoint
+  [ "$closeout_mode" = pull-request ] || return 0
+  scan_output="$(python3 - "$workflow_dir" "$entity_slug" <<'PY'
+import json,pathlib,sys
+root,slug=pathlib.Path(sys.argv[1]),sys.argv[2]
+matches=[]
+for path in sorted((root/"_closeouts").glob("*.json")):
+    try: receipt=json.loads(path.read_text())
+    except Exception: continue
+    identity=receipt.get("identity",{}); transaction=receipt.get("transaction",{})
+    if (receipt.get("mode")=="pull_request" and identity.get("entity_slug")==slug
+            and transaction.get("phase") in ("prepared","awaiting_closeout_pr")):
+        matches.append(path)
+print(len(matches))
+if len(matches)==1: print(matches[0])
+PY
+)"
+  scan_count="$(printf '%s\n' "$scan_output" | sed -n '1p')"
+  [ "$scan_count" = 0 ] && return 0
+  [ "$scan_count" = 1 ] || reject_input closeout-sentinel-multiple "multiple active closeout checkpoints match the entity"
+  receipt_path="$(printf '%s\n' "$scan_output" | sed -n '2p')"
+  validator_out="$(mktemp)"
+  python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --allow-any-path >"$validator_out" 2>&1 || validator_rc=$?
+  if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
+  rm -f "$validator_out"
+  IFS=$'\t' read -r phase deterministic_head endpoint < <(python3 - "$receipt_path" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); t=r["transaction"]
+print(t["phase"],r["deterministic_closeout_head"],t.get("publication_endpoint") or "",sep="\t")
+PY
+)
+  if [ -n "$endpoint" ]; then
+    validate_closeout_endpoint_provider_binding "$endpoint"
+    validate_closeout_leaf_endpoint "$endpoint"
+  elif [ "$pr_provider" = gh ] && [ "$phase" = awaiting_closeout_pr ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict "legacy awaiting checkpoint lacks a provable publication endpoint"
+  fi
 }
 
 bind_closeout_push_destination() {
   local deterministic_head="$1" resolved="" resolve_rc=0 destination_count raw_origin raw_count
-  local resolved_repository fixture_repository repository_fold resolved_fold fixture_fold
   resolved="$(git -C "$repo_root" remote get-url --push --all origin 2>/dev/null)" || resolve_rc=$?
   destination_count="$(printf '%s\n' "$resolved" | awk 'NF{n++} END{print n+0}')"
   if [ "$resolve_rc" -ne 0 ] || [ "$destination_count" -ne 1 ] || [ -z "$resolved" ]; then
@@ -1216,16 +1352,7 @@ bind_closeout_push_destination() {
   raw_origin="$(git -C "$repo_root" config --get-all remote.origin.url 2>/dev/null || true)"
   raw_count="$(printf '%s\n' "$raw_origin" | awk 'NF{n++} END{print n+0}')"
   [ "$raw_count" -eq 1 ] || { state_name="closeout_pr_prepared"; prompt_captain closeout-checkpoint-conflict "optional closeout origin lacks one provider-bound URL"; }
-  resolved_repository="$(normalize_github_remote_repository "$resolved" 2>/dev/null || true)"
-  fixture_repository="$(closeout_fixture_endpoint_repository "$resolved" 2>/dev/null || true)"
-  repository_fold="$(printf '%s' "$repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
-  resolved_fold="$(printf '%s' "$resolved_repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
-  fixture_fold="$(printf '%s' "$fixture_repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
-  if [ "$resolved_fold" != "$repository_fold" ] && [ "$fixture_fold" != "$repository_fold" ]; then
-    state_name="closeout_pr_prepared"
-    prompt_captain closeout-checkpoint-conflict \
-      "optional closeout publication endpoint cannot be bound to the provider repository"
-  fi
+  validate_closeout_endpoint_provider_binding "$resolved"
   closeout_push_destination="$resolved"
   inspect_closeout_leaf_endpoint "$deterministic_head"
 }
@@ -1365,22 +1492,78 @@ refresh_closeout_pr_gh_for_publication() {
 }
 
 optional_terminal_head_matches() {
-  local deterministic_head="$1" receipt_relative="$2" expected_pr="$3" expected_proof="$4" shown exported
+  local deterministic_head="$1" receipt_relative="$2" expected_pr="$3" expected_proof="$4" previous_receipt="${5:-}" shown exported
+  [ -n "$previous_receipt" ] && [ -f "$previous_receipt" ] || return 1
   shown="$(git -C "$repo_root" show "${deterministic_head}:${receipt_relative}" 2>/dev/null || true)"
   [ -n "$shown" ] || return 1
   printf '%s' "$shown" | python3 -c 'import json,sys; r=json.load(sys.stdin); t=r["transaction"]; raise SystemExit(0 if r["mode"]=="pull_request" and t["phase"]=="applied" and t["closeout_pr"]==int(sys.argv[1]) and r["proof_hash"]==sys.argv[2] else 1)' "$expected_pr" "$expected_proof" || return 1
-  exported="$(mktemp -d)"
+  cleanup_owned_terminal_validation_root
+  owned_terminal_validation_root="$(mktemp -d)"
+  exported="$owned_terminal_validation_root"
   git -C "$repo_root" archive "$deterministic_head" | tar -x -C "$exported"
-  validate_receipt_normal "$exported/$receipt_relative" --repo-root "$exported" --landing-proof-repo-root "$repo_root" --verify-outputs >/dev/null 2>&1 || { rm -rf "$exported"; return 1; }
-  rm -rf "$exported"
+  validate_receipt_normal "$exported/$receipt_relative" --repo-root "$exported" --landing-proof-repo-root "$repo_root" \
+    --verify-outputs --previous "$previous_receipt" >/dev/null 2>&1 || { cleanup_owned_terminal_validation_root; return 1; }
+  cleanup_owned_terminal_validation_root
+}
+
+recover_awaiting_closeout_predecessor() {
+  local receipt_relative="$1" expected_pr="$2" expected_proof="$3"
+  local commit candidate candidate_hash history_file match_hash="" shallow scanned=0 first=yes
+  cleanup_owned_predecessor_root
+  owned_predecessor_root="$(mktemp -d)"
+  shallow="$(git -C "$repo_root" rev-parse --is-shallow-repository 2>/dev/null || true)"
+  [ "$shallow" = false ] || return 2
+  history_file="$owned_predecessor_root/main-history"
+  git -C "$repo_root" rev-list --first-parent --max-count=34 refs/heads/main >"$history_file" 2>/dev/null || return 2
+  while IFS= read -r commit; do
+    [ -n "$commit" ] || continue
+    if [ "$first" = yes ]; then first=no; continue; fi
+    scanned=$((scanned + 1))
+    [ "$scanned" -le 32 ] || break
+    candidate="$owned_predecessor_root/candidate-${scanned}.json"
+    if ! git -C "$repo_root" show "${commit}:${receipt_relative}" >"$candidate" 2>/dev/null; then
+      rm -f "$candidate"
+      continue
+    fi
+    if python3 - "$candidate" "$expected_pr" "$expected_proof" <<'PY'
+import json,sys
+try: r=json.load(open(sys.argv[1])); t=r["transaction"]
+except Exception: raise SystemExit(1)
+expected=("pull_request","awaiting_closeout_pr",int(sys.argv[2]),sys.argv[3],True)
+actual=(r.get("mode"),t.get("phase"),t.get("closeout_pr"),r.get("proof_hash"),bool(t.get("publication_endpoint")))
+raise SystemExit(0 if actual==expected else 1)
+PY
+    then
+      if python3 "$RECEIPT_VALIDATOR" --receipt "$candidate" --allow-any-path >/dev/null 2>&1; then
+        candidate_hash="$(git hash-object "$candidate")"
+        if [ -z "$match_hash" ]; then
+          match_hash="$candidate_hash"
+          recovered_predecessor_path="$candidate"
+          continue
+        elif [ "$candidate_hash" != "$match_hash" ]; then
+          return 3
+        fi
+      fi
+    fi
+    rm -f "$candidate"
+  done <"$history_file"
+  [ "$scanned" -le 32 ] || return 2
+  [ -z "$recovered_predecessor_path" ] || return 0
+  return 1
 }
 
 build_optional_terminal_head() {
   local bundle_root="$1" receipt_relative="$2" active_relative="$3" deterministic_head="$4" bound_pr="$5"
   local expected_proof clone_root apply_out apply_rc=0 push_rc=0 ready_rc=0 terminal_sha registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}"
   expected_proof="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proof_hash"])' "$bundle_root/$receipt_relative")"
-  if optional_terminal_head_matches "$deterministic_head" "$receipt_relative" "$bound_pr" "$expected_proof"; then
-    terminal_sha="$(git -C "$repo_root" rev-parse "$deterministic_head")"
+  if git -C "$repo_root" cat-file -e "${deterministic_head}:${receipt_relative}" 2>/dev/null; then
+    if optional_terminal_head_matches "$deterministic_head" "$receipt_relative" "$bound_pr" "$expected_proof" "$repo_root/$receipt_relative"; then
+      terminal_sha="$(git -C "$repo_root" rev-parse "$deterministic_head")"
+    else
+      state_name="closeout_pr_awaiting_merge"
+      prompt_captain closeout-checkpoint-conflict \
+        "existing terminal closeout head does not extend the durable awaiting predecessor"
+    fi
   else
     clone_root="$(mktemp -d)"; git clone -q "$repo_root" "$clone_root"
     git -C "$clone_root" config user.email "$(git -C "$repo_root" config user.email)"
@@ -1402,7 +1585,8 @@ endpoint=sys.argv[3]
 if endpoint!="null": r["transaction"]["publication_endpoint"]=endpoint
 p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
 PY
-    python3 "$RECEIPT_VALIDATOR" --receipt "$clone_root/$receipt_relative" --allow-any-path >/dev/null
+    python3 "$RECEIPT_VALIDATOR" --receipt "$clone_root/$receipt_relative" \
+      --previous "$repo_root/$receipt_relative" --allow-any-path >/dev/null
     git -C "$clone_root" add -- "$receipt_relative"
     git -C "$clone_root" commit -qm "closeout(${entity_slug}): bind pull request sentinel" -- "$receipt_relative"
     terminal_sha="$(git -C "$clone_root" rev-parse HEAD)"
@@ -1412,7 +1596,7 @@ PY
   fi
   closeout_pr_local_oid="$terminal_sha"
   [ "$pr_provider" != fixture ] || set_registry_field "$registry" local_oid "$terminal_sha"
-  optional_terminal_head_matches "$deterministic_head" "$receipt_relative" "$bound_pr" "$expected_proof" || reject_input closeout-sentinel-invalid "terminal deterministic head failed exact output validation"
+  optional_terminal_head_matches "$deterministic_head" "$receipt_relative" "$bound_pr" "$expected_proof" "$repo_root/$receipt_relative" || reject_input closeout-sentinel-invalid "terminal deterministic head failed exact output validation"
   if [ "$closeout_pr_remote_oid" != "$terminal_sha" ]; then
     [[ "$closeout_pr_remote_oid" =~ ^[0-9a-f]{40}$ ]] || reject_input closeout-checkpoint-conflict "provider closeout head OID is unavailable for force-with-lease"
     fail_once terminal-push
@@ -1507,6 +1691,7 @@ PY
   if [ "$pr_provider" = gh ]; then
     if [ -n "$existing_endpoint" ]; then
       closeout_push_destination="$existing_endpoint"
+      validate_closeout_endpoint_provider_binding "$closeout_push_destination"
       inspect_closeout_leaf_endpoint "$deterministic_head"
     elif [ "$existing_phase" = awaiting_closeout_pr ]; then
       cleanup_owned_bundle_root
@@ -1635,6 +1820,11 @@ fi
 
 repo_root="$(git -C "$workflow_dir" rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$repo_root" ] || reject_input "workflow-dir-not-in-git" "workflow directory is not in a git repository"
+if [ "$closeout_mode" = pull-request ] &&
+   [ "$(git -C "$repo_root" symbolic-ref --quiet --short HEAD || true)" != main ]; then
+  reject_input closeout-main-not-authoritative \
+    "pull-request closeout recovery requires authoritative main"
+fi
 
 # Receipt-only crash recovery must run before ordinary active/archive entity
 # lookup because the terminal projection intentionally removes the active path.
@@ -1729,6 +1919,7 @@ case "$pr_state" in
 esac
 
 require_landing_contract
+preflight_active_persisted_closeout_endpoint
 acquire_source_objects "$repo_root"
 
 if [ "$closeout_mode" = pull-request ]; then

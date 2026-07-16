@@ -1465,11 +1465,12 @@ closeout_remote_oid() {
 }
 
 emit_closeout_record() {
-  local number head
+  local number head state
   number="$(registry_field number)"; head="$(registry_field head)"
   [ -n "$number" ] || return 0
-  printf '%s|OPEN|%s|%s|%s\n' \
-    "$number" "$head" "$(closeout_remote_oid)" "$(registry_field is_draft)"
+  state="$(registry_field state)"; [ -n "$state" ] || state=OPEN
+  printf '%s|%s|%s|%s|%s\n' \
+    "$number" "$state" "$head" "$(closeout_remote_oid)" "$(registry_field is_draft)"
 }
 
 if [ "${1:-}" = repo ] && [ "${2:-}" = view ]; then
@@ -1495,6 +1496,13 @@ fi
 
 if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 141 ]; then
   require_repo_binding "$@"
+  if [ "${SHIP_FLOW_R10_REFRESH_FAILURE:-}" = after-terminal-once ] && \
+     grep -q '^terminal-push ' "${SHIP_FLOW_R6_GIT_LOG:?missing git log for refresh seam}" && \
+     [ ! -e "${SHIP_FLOW_R10_REFRESH_FAILURE_MARKER:?missing refresh failure marker}" ]; then
+    : >"$SHIP_FLOW_R10_REFRESH_FAILURE_MARKER"
+    printf 'failure refresh-after-terminal\n' >>"$SHIP_FLOW_R5_LOG"
+    exit 71
+  fi
   emit_closeout_record
   exit 0
 fi
@@ -1565,17 +1573,23 @@ set -euo pipefail
 is_push=no
 is_terminal=no
 is_ls_remote=no
+is_fetch=no
+is_update_ref=no
 last_arg=""
 for arg in "$@"; do
   [ "$arg" != push ] || is_push=yes
   [ "$arg" != send-pack ] || is_push=yes
   [ "$arg" != ls-remote ] || is_ls_remote=yes
+  [ "$arg" != fetch ] || is_fetch=yes
+  [ "$arg" != update-ref ] || is_update_ref=yes
   case "$arg" in
     --force-with-lease=refs/heads/*:) is_terminal=no ;;
     --force-with-lease=*) is_terminal=yes ;;
   esac
   last_arg="$arg"
 done
+[ "$is_fetch" != yes ] || printf 'source-fetch <%s>\n' "$*" >>"$SHIP_FLOW_R6_GIT_LOG"
+[ "$is_update_ref" != yes ] || printf 'source-update-ref <%s>\n' "$*" >>"$SHIP_FLOW_R6_GIT_LOG"
 if [ "$is_ls_remote" = yes ]; then
   printf 'remote-inspection <%s>\n' "$last_arg" >>"$SHIP_FLOW_R6_GIT_LOG"
   case "${SHIP_FLOW_R6_LS_REMOTE_MODE:-}" in
@@ -1583,7 +1597,7 @@ if [ "$is_ls_remote" = yes ]; then
     malformed) printf 'not-an-object-id\t%s\n' "$last_arg"; exit 0 ;;
   esac
 fi
-if [ "$is_push" = yes ]; then
+  if [ "$is_push" = yes ]; then
   if [ "$is_terminal" = yes ]; then kind=terminal-push; else kind=seed-push; fi
   printf '%s' "$kind" >>"$SHIP_FLOW_R6_GIT_LOG"
   printf ' <%s>' "$@" >>"$SHIP_FLOW_R6_GIT_LOG"
@@ -1615,6 +1629,33 @@ if [ "$is_push" = yes ]; then
     : >"$SHIP_FLOW_R7_RACE_MARKER"
     printf 'race-create %s %s\n' "$SHIP_FLOW_R7_REMOTE_REF" "$SHIP_FLOW_R7_COMPETITOR_OID" \
       >>"$SHIP_FLOW_R7_TIMELINE"
+  fi
+  if [ "$kind" = terminal-push ] && [ "${SHIP_FLOW_R10_TERMINAL_RACE_MODE:-}" = create-competitor ] && \
+     [ ! -e "${SHIP_FLOW_R10_TERMINAL_RACE_MARKER:?missing terminal race marker}" ]; then
+    : "${SHIP_FLOW_R10_TERMINAL_RACE_ORIGIN:?missing terminal race origin}"
+    : "${SHIP_FLOW_R10_TERMINAL_RACE_REF:?missing terminal race ref}"
+    : "${SHIP_FLOW_R10_TERMINAL_RACE_OID:?missing terminal race oid}"
+    "$SHIP_FLOW_R6_REAL_GIT" -C "$SHIP_FLOW_R10_TERMINAL_RACE_ORIGIN" update-ref \
+      "$SHIP_FLOW_R10_TERMINAL_RACE_REF" "$SHIP_FLOW_R10_TERMINAL_RACE_OID"
+    : >"$SHIP_FLOW_R10_TERMINAL_RACE_MARKER"
+    [ -z "${SHIP_FLOW_R7_TIMELINE:-}" ] || printf 'terminal-race-create %s %s\n' \
+      "$SHIP_FLOW_R10_TERMINAL_RACE_REF" "$SHIP_FLOW_R10_TERMINAL_RACE_OID" >>"$SHIP_FLOW_R7_TIMELINE"
+  fi
+fi
+
+if [ -n "${SHIP_FLOW_R10_TRANSPORT_LITERAL:-}" ]; then
+  get_url=no
+  for arg in "$@"; do [ "$arg" != --get-url ] || get_url=yes; done
+  if [ "$get_url" != yes ]; then
+    mapped=()
+    for arg in "$@"; do
+      if [ "$arg" = "$SHIP_FLOW_R10_TRANSPORT_LITERAL" ]; then
+        mapped+=("file://${SHIP_FLOW_R10_TRANSPORT_ORIGIN:?missing transport origin}")
+      else
+        mapped+=("$arg")
+      fi
+    done
+    set -- "${mapped[@]}"
   fi
 fi
 
@@ -2493,6 +2534,523 @@ PY
   assert_feedback_r5_count 'R9 legacy awaiting performs no closeout provider query or mutation' '^call pr (view 141|list|create|ready) ' "$provider_log" 0
   assert_feedback_r5_count 'R9 legacy awaiting performs no publication' '^(seed|terminal)-push ' "$git_log" 0
   assert_feedback_r5_count 'R9 legacy awaiting performs no bundle application' '^apply ' "$bundle_log" 0
+}
+
+run_feedback_r10_endpoint_authority_case() {
+  local setup endpoint_a endpoint_b repo provider deterministic_head remote_ref gh_bin git_bin registry
+  local provider_log git_log bundle_log temp_root real_git real_mktemp receipt global_config source_commits rc
+  local before_b after_b before_receipt_hash before_head before_tree seed_a terminal_b
+
+  # R10-B1: a matching ambient marker must not authorize an endpoint whose own
+  # repository config carries no fixture identity.
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r10-ambient-marker)"
+  IFS='|' read -r endpoint_a repo provider <<<"$setup"
+  endpoint_b="$TMP_DIR/feedback-r10-ambient-endpoint-b.git"
+  git clone -q --bare "$endpoint_a" "$endpoint_b"
+  git -C "$endpoint_b" config --local --unset-all ship-flow.closeoutFixtureRepository 2>/dev/null || true
+  deterministic_head="$(feedback_r5_deterministic_head)"; remote_ref="refs/heads/$deterministic_head"
+  git -C "$endpoint_b" update-ref -d "$remote_ref"
+  git -C "$repo" config --unset-all "url.file://${endpoint_a}.insteadOf" 2>/dev/null || true
+  git -C "$repo" config remote.origin.url "file://${endpoint_b}"
+  git -C "$repo" remote add provider-source https://github.com/example/repo.git
+  git -C "$repo" config "url.file://${endpoint_a}.insteadOf" https://github.com/example/repo.git
+  global_config="$TMP_DIR/feedback-r10-ambient-global.config"
+  git config --file "$global_config" ship-flow.closeoutFixtureRepository example/repo
+  gh_bin="$TMP_DIR/feedback-r10-ambient-gh-bin"; git_bin="$TMP_DIR/feedback-r10-ambient-git-bin"
+  registry="$TMP_DIR/feedback-r10-ambient.registry"; provider_log="$TMP_DIR/feedback-r10-ambient-provider.log"
+  git_log="$TMP_DIR/feedback-r10-ambient-git.log"; bundle_log="$TMP_DIR/feedback-r10-ambient-bundle.log"
+  temp_root="$TMP_DIR/feedback-r10-ambient-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+  before_b="$(git -C "$endpoint_b" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+  before_head="$(git -C "$repo" rev-parse HEAD)"; before_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  rc="$(GIT_CONFIG_GLOBAL="$global_config" TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" \
+    SHIP_FLOW_R5_REGISTRY="$registry" SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" \
+    SHIP_FLOW_R6_REAL_GIT="$real_git" SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r10-ambient.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  after_b="$(git -C "$endpoint_b" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+  assert_exit 'R10 ambient marker leakage fails closed before endpoint effects' 1 "$rc"
+  assert_contains 'R10 ambient marker leakage reports checkpoint conflict' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r10-ambient.out"
+  assert_contains 'R10 ambient marker leakage reports prepared state' '^state=closeout_pr_prepared$' "$TMP_DIR/feedback-r10-ambient.out"
+  if [ "$before_b" = "$after_b" ] && [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+     [ "$before_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ]; then
+    record_pass 'R10 ambient marker leakage preserves endpoint and durable repository bytes'
+  else
+    record_fail "R10 ambient marker leakage preserves endpoint and durable repository bytes (B ${before_b}->${after_b})"
+  fi
+  assert_feedback_r5_count 'R10 ambient marker leakage performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+  assert_feedback_r5_count 'R10 ambient marker leakage performs no closeout provider effect' '^effect (create|ready) ' "$provider_log" 0
+  assert_feedback_r5_count 'R10 ambient marker leakage performs no bundle application' '^apply ' "$bundle_log" 0
+
+  # R10-B2: an awaiting checkpoint whose endpoint bytes are changed to a
+  # provider-inequivalent repository must fail before terminal publication.
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r10-awaiting-provider)"
+  IFS='|' read -r endpoint_a repo provider <<<"$setup"
+  endpoint_b="$TMP_DIR/feedback-r10-awaiting-endpoint-b.git"; git clone -q --bare "$endpoint_a" "$endpoint_b"
+  git -C "$endpoint_b" config --local ship-flow.closeoutFixtureRepository wrong/repository
+  deterministic_head="$(feedback_r5_deterministic_head)"; remote_ref="refs/heads/$deterministic_head"
+  gh_bin="$TMP_DIR/feedback-r10-awaiting-gh-bin"; git_bin="$TMP_DIR/feedback-r10-awaiting-git-bin"
+  registry="$TMP_DIR/feedback-r10-awaiting.registry"; provider_log="$TMP_DIR/feedback-r10-awaiting-provider.log"
+  git_log="$TMP_DIR/feedback-r10-awaiting-git.log"; bundle_log="$TMP_DIR/feedback-r10-awaiting-bundle.log"
+  temp_root="$TMP_DIR/feedback-r10-awaiting-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r10-awaiting-seed.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R10 altered-awaiting fixture establishes the durable predecessor' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"
+  python3 - "$receipt" "file://${endpoint_b}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -q --amend --no-edit
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  rm -f "$repo/.git/FETCH_HEAD"
+  git -C "$repo" reflog expire --expire=now --all
+  git -C "$repo" gc -q --prune=now
+  assert_feedback_r3_b1_objects_missing 'R10 provider-mismatched awaiting precondition prunes provider source objects' "$repo" "$source_commits"
+  before_receipt_hash="$(git hash-object "$receipt")"; before_b="$(git -C "$endpoint_b" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+  seed_a="$(git -C "$endpoint_a" rev-parse "$remote_ref")"
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r10-awaiting-reject.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  terminal_b="$(git -C "$endpoint_b" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+  assert_exit 'R10 provider-mismatched awaiting endpoint fails before terminal publication' 1 "$rc"
+  assert_contains 'R10 provider-mismatched awaiting endpoint reports checkpoint conflict' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r10-awaiting-reject.out"
+  assert_contains 'R10 provider-mismatched awaiting endpoint reports prepared state' '^state=closeout_pr_prepared$' "$TMP_DIR/feedback-r10-awaiting-reject.out"
+  if [ "$before_b" = "$terminal_b" ] && [ "$seed_a" = "$(git -C "$endpoint_a" rev-parse "$remote_ref")" ] && \
+     [ "$before_receipt_hash" = "$(git hash-object "$receipt")" ]; then
+    record_pass 'R10 provider-mismatched awaiting endpoint preserves both endpoint refs and predecessor bytes'
+  else
+    record_fail "R10 provider-mismatched awaiting endpoint preserves both endpoint refs and predecessor bytes (B ${before_b}->${terminal_b})"
+  fi
+  assert_feedback_r5_count 'R10 provider-mismatched awaiting endpoint performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+  assert_feedback_r5_count 'R10 provider-mismatched awaiting endpoint rejects before source acquisition' '^source-(fetch|update-ref) ' "$git_log" 0
+  assert_feedback_r5_count 'R10 provider-mismatched awaiting endpoint performs no closeout provider operation' '^call pr (view 141|list|create|ready) ' "$provider_log" 0
+  assert_feedback_r5_count 'R10 provider-mismatched awaiting endpoint performs no bundle application' '^apply ' "$bundle_log" 0
+}
+
+run_feedback_r10_terminal_predecessor_case() {
+  local mode setup endpoint_a endpoint_b repo provider deterministic_head remote_ref gh_bin git_bin registry
+  local provider_log git_log bundle_log temp_root real_git real_mktemp receipt relative rc
+  local awaiting_hash remote_before remote_after head_before tree_before
+  for mode in ${SHIP_FLOW_R10_TERMINAL_MODES:-reused landed forged-landed forged-main-landed stale-main-landed}; do
+    setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r10-terminal-${mode}")"
+    IFS='|' read -r endpoint_a repo provider <<<"$setup"
+    endpoint_b="$TMP_DIR/feedback-r10-terminal-${mode}-endpoint-b.git"
+    git clone -q --bare "$endpoint_a" "$endpoint_b"
+    git -C "$endpoint_b" config --local ship-flow.closeoutFixtureRepository example/repo
+    deterministic_head="$(feedback_r5_deterministic_head)"; remote_ref="refs/heads/$deterministic_head"
+    gh_bin="$TMP_DIR/feedback-r10-terminal-${mode}-gh-bin"; git_bin="$TMP_DIR/feedback-r10-terminal-${mode}-git-bin"
+    registry="$TMP_DIR/feedback-r10-terminal-${mode}.registry"
+    provider_log="$TMP_DIR/feedback-r10-terminal-${mode}-provider.log"
+    git_log="$TMP_DIR/feedback-r10-terminal-${mode}-git.log"
+    bundle_log="$TMP_DIR/feedback-r10-terminal-${mode}-bundle.log"
+    temp_root="$TMP_DIR/feedback-r10-terminal-${mode}-tmp"
+    mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+    write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+    write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+    real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+      SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+      SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+      run_helper_with_path "$repo" "$TMP_DIR/feedback-r10-terminal-${mode}-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    assert_exit "R10 ${mode} fixture establishes awaiting predecessor" 1 "$rc"
+    receipt="$(feedback_r5_receipt_path "$repo")"; relative="${receipt#"$repo/"}"
+    awaiting_hash="$(git hash-object "$receipt")"
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+      SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+      SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+        "$TMP_DIR/feedback-r10-terminal-${mode}-built.out" "$git_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    assert_exit "R10 ${mode} fixture publishes one valid terminal head" 0 "$rc"
+    if [ "$rc" != 0 ]; then
+      sed "s/^/    R10 ${mode} build: /" "$TMP_DIR/feedback-r10-terminal-${mode}-built.out"
+      continue
+    fi
+
+    if [ "$mode" = reused ]; then
+      git -C "$repo" checkout -q "$deterministic_head"
+      python3 - "$repo/$relative" "file://${endpoint_b}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+      git -C "$repo" add -- "$relative"
+      git -C "$repo" commit -q --amend --no-edit
+      git -C "$repo" checkout -q main
+    else
+      if [ "$mode" = forged-landed ] || [ "$mode" = forged-main-landed ]; then
+        git -C "$repo" checkout -q "$deterministic_head"
+        cp "$repo/$relative" "$TMP_DIR/feedback-r10-${mode}-applied-a.json"
+        git -C "$repo" reset -q --hard main
+        python3 - "$repo/$relative" "file://${endpoint_b}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+        git -C "$repo" add -- "$relative"
+        git -C "$repo" commit -qm 'fixture: forge nearest awaiting endpoint'
+        cp "$repo/$relative" "$TMP_DIR/feedback-r10-${mode}-awaiting-b.json"
+        cp "$TMP_DIR/feedback-r10-${mode}-applied-a.json" "$repo/$relative"
+        python3 - "$repo/$relative" "file://${endpoint_b}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+        git -C "$repo" add -- "$relative"
+        git -C "$repo" commit -qm 'fixture: forge matching applied endpoint'
+        cp "$repo/$relative" "$TMP_DIR/feedback-r10-${mode}-applied-b.json"
+        terminal_oid="$(git -C "$repo" rev-parse HEAD)"
+        git -C "$repo" push -q "file://${endpoint_a}" "+$terminal_oid:$remote_ref"
+        python3 - "$registry" "$terminal_oid" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); oid=sys.argv[2]; rows=[]
+for line in p.read_text().splitlines():
+    rows.append("remote_oid="+oid if line.startswith("remote_oid=") else line)
+p.write_text("\n".join(rows)+"\n")
+PY
+        : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+        rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+          SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+          SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+          SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+            "$TMP_DIR/feedback-r10-forged-off-main.out" "$git_bin:$gh_bin:$PATH" \
+            --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+        assert_exit 'R10 forged terminal branch invocation rejects before receipt recovery' 2 "$rc"
+        assert_contains 'R10 forged terminal branch invocation requires authoritative main' '^reason=closeout-main-not-authoritative$' "$TMP_DIR/feedback-r10-forged-off-main.out"
+        git -C "$repo" checkout -q main
+      fi
+      if [ "$mode" = forged-main-landed ]; then
+        cp "$TMP_DIR/feedback-r10-${mode}-awaiting-b.json" "$repo/$relative"
+        git -C "$repo" add -- "$relative"
+        git -C "$repo" commit -qm 'fixture: rebase forged awaiting endpoint onto main'
+        cp "$TMP_DIR/feedback-r10-${mode}-applied-b.json" "$repo/$relative"
+        git -C "$repo" add -- "$relative"
+        git -C "$repo" commit -qm 'fixture: rebase forged applied endpoint onto main'
+      else
+        if ! git -C "$repo" merge -q --no-ff "$deterministic_head" -m 'fixture: land R10 optional terminal head' >/dev/null 2>&1; then
+          [ "$(git -C "$repo" diff --name-only --diff-filter=U)" = "$relative" ] || exit 1
+          git -C "$repo" checkout -q --theirs -- "$relative"
+          git -C "$repo" add -- "$relative"
+          git -C "$repo" commit -qm 'fixture: land R10 optional terminal head'
+        fi
+      fi
+      receipt="$repo/$relative"
+      if [ "$mode" = landed ]; then
+        python3 - "$receipt" "file://${endpoint_b}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+        git -C "$repo" add -- "$relative"
+        git -C "$repo" commit -q --amend --no-edit
+      fi
+      if [ "$mode" = stale-main-landed ]; then
+        for filler in $(seq 1 33); do
+          git -C "$repo" commit -q --allow-empty -m "fixture: stale main predecessor filler $filler"
+        done
+      fi
+      if [ "$mode" = forged-main-landed ]; then
+        if [ "$(git -C "$repo" show "HEAD^:$relative" | python3 -c 'import json,sys; print(json.load(sys.stdin)["transaction"]["phase"])')" = awaiting_closeout_pr ] && \
+           [ "$(git -C "$repo" show "HEAD^^:$relative" | python3 -c 'import json,sys; print(json.load(sys.stdin)["transaction"]["phase"])')" = awaiting_closeout_pr ]; then
+          record_pass 'R10 forged main fixture carries two awaiting predecessor versions'
+        else
+          record_fail 'R10 forged main fixture carries two awaiting predecessor versions'
+        fi
+        if [ "$(git -C "$repo" show "HEAD^:$relative" | python3 -c 'import json,sys; print(json.load(sys.stdin)["transaction"].get("publication_endpoint"))')" != \
+             "$(git -C "$repo" show "HEAD^^:$relative" | python3 -c 'import json,sys; print(json.load(sys.stdin)["transaction"].get("publication_endpoint"))')" ]; then
+          record_pass 'R10 forged main fixture binds distinct predecessor endpoints'
+        else
+          record_fail 'R10 forged main fixture binds distinct predecessor endpoints'
+        fi
+      fi
+      python3 - "$registry" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); rows=[]
+for line in p.read_text().splitlines():
+    rows.append("state=MERGED" if line.startswith("state=") else line)
+p.write_text("\n".join(rows)+"\n")
+PY
+    fi
+
+    head_before="$(git -C "$repo" rev-parse HEAD)"; tree_before="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+    remote_before="$(git -C "$endpoint_a" rev-parse "$remote_ref")"
+    : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+      SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+      SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+        "$TMP_DIR/feedback-r10-terminal-${mode}-reject.out" "$git_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    remote_after="$(git -C "$endpoint_a" rev-parse "$remote_ref")"
+    assert_exit "R10 endpoint-only ${mode} terminal alteration fails closed" 1 "$rc"
+    assert_contains "R10 endpoint-only ${mode} alteration reports checkpoint conflict" '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r10-terminal-${mode}-reject.out"
+    if [ "$mode" = forged-main-landed ]; then
+      if ! grep -Eq '^detail=multiple distinct durable awaiting predecessors exist on authoritative main$' \
+        "$TMP_DIR/feedback-r10-terminal-${mode}-reject.out"; then
+        sed 's/^/    R10 forged-main: /' "$TMP_DIR/feedback-r10-terminal-${mode}-reject.out"
+      fi
+      assert_contains 'R10 forged main history rejects distinct awaiting predecessors as ambiguous' \
+        '^detail=multiple distinct durable awaiting predecessors exist on authoritative main$' \
+        "$TMP_DIR/feedback-r10-terminal-${mode}-reject.out"
+    fi
+    if [ "$head_before" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+       [ "$tree_before" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ] && [ "$remote_before" = "$remote_after" ]; then
+      record_pass "R10 endpoint-only ${mode} alteration preserves repository and provider ref bytes"
+    else
+      record_fail "R10 endpoint-only ${mode} alteration preserves repository and provider ref bytes"
+    fi
+    if [ "$mode" = reused ] && [ "$awaiting_hash" = "$(git hash-object "$receipt")" ]; then
+      record_pass 'R10 reused terminal rejection preserves the exact awaiting predecessor bytes'
+    elif [ "$mode" = landed ] || [ "$mode" = forged-landed ] || [ "$mode" = forged-main-landed ] || [ "$mode" = stale-main-landed ]; then
+      record_pass 'R10 landed terminal rejection leaves the landed receipt commit unchanged'
+    else
+      record_fail 'R10 reused terminal rejection preserves the exact awaiting predecessor bytes'
+    fi
+    assert_feedback_r5_count "R10 endpoint-only ${mode} alteration performs no publication" '^(seed|terminal)-push ' "$git_log" 0
+    assert_feedback_r5_count "R10 endpoint-only ${mode} alteration performs no ready effect" '^effect ready ' "$provider_log" 0
+    assert_feedback_r5_count "R10 endpoint-only ${mode} alteration performs no bundle application" '^apply ' "$bundle_log" 0
+  done
+}
+
+run_feedback_r10_terminal_race_case() {
+  local setup origin repo provider deterministic_head remote_ref gh_bin git_bin registry provider_log git_log bundle_log timeline
+  local temp_root real_git real_mktemp receipt receipt_hash awaiting_head awaiting_tree seed_oid competitor_oid race_marker rc
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r10-terminal-race)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"; remote_ref="refs/heads/$deterministic_head"
+  gh_bin="$TMP_DIR/feedback-r10-terminal-race-gh-bin"; git_bin="$TMP_DIR/feedback-r10-terminal-race-git-bin"
+  registry="$TMP_DIR/feedback-r10-terminal-race.registry"; provider_log="$TMP_DIR/feedback-r10-terminal-race-provider.log"
+  git_log="$TMP_DIR/feedback-r10-terminal-race-git.log"; bundle_log="$TMP_DIR/feedback-r10-terminal-race-bundle.log"
+  timeline="$TMP_DIR/feedback-r10-terminal-race.timeline"; temp_root="$TMP_DIR/feedback-r10-terminal-race-tmp"
+  race_marker="$TMP_DIR/feedback-r10-terminal-race.marker"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"; : >"$timeline"
+  write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r10-terminal-race-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R10 terminal race fixture establishes awaiting predecessor' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"; receipt_hash="$(git hash-object "$receipt")"
+  awaiting_head="$(git -C "$repo" rev-parse HEAD)"; awaiting_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  seed_oid="$(git -C "$origin" rev-parse "$remote_ref")"
+  competitor_oid="$(git -C "$origin" rev-parse refs/heads/main)"
+  [ "$competitor_oid" != "$seed_oid" ] || { record_fail 'R10 terminal race competitor differs from seed'; return; }
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"; : >"$timeline"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_R7_TIMELINE="$timeline" \
+    SHIP_FLOW_R10_TERMINAL_RACE_MODE=create-competitor SHIP_FLOW_R10_TERMINAL_RACE_MARKER="$race_marker" \
+    SHIP_FLOW_R10_TERMINAL_RACE_ORIGIN="$origin" SHIP_FLOW_R10_TERMINAL_RACE_REF="$remote_ref" \
+    SHIP_FLOW_R10_TERMINAL_RACE_OID="$competitor_oid" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r10-terminal-race-reject.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R10 real terminal receive-pack race routes through stable retry' 1 "$rc"
+  assert_contains 'R10 terminal race reports checkpoint conflict' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r10-terminal-race-reject.out"
+  assert_contains 'R10 terminal race reports awaiting state' '^state=closeout_pr_awaiting_merge$' "$TMP_DIR/feedback-r10-terminal-race-reject.out"
+  if [ "$(git -C "$origin" rev-parse "$remote_ref")" = "$competitor_oid" ]; then record_pass 'R10 terminal lease rejection preserves the competing endpoint ref'; else record_fail 'R10 terminal lease rejection preserves the competing endpoint ref'; fi
+  if [ "$awaiting_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$awaiting_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ] && \
+     [ "$receipt_hash" = "$(git hash-object "$receipt")" ]; then record_pass 'R10 terminal lease rejection preserves exact awaiting checkpoint bytes'; else record_fail 'R10 terminal lease rejection preserves exact awaiting checkpoint bytes'; fi
+  assert_feedback_r5_count 'R10 terminal race performs exactly one leased publication attempt' '^terminal-push ' "$git_log" 1
+  assert_feedback_r5_count 'R10 terminal race performs no post-rejection provider refresh' '^call pr view 141 ' "$provider_log" 1
+  assert_feedback_r5_count 'R10 terminal race performs no ready effect' '^effect ready ' "$provider_log" 0
+}
+
+run_feedback_r10_refresh_and_legacy_case() {
+  local mode setup origin endpoint_b repo provider deterministic_head gh_bin git_bin registry provider_log git_log bundle_log temp_root
+  local real_git real_mktemp receipt receipt_hash head_before terminal_oid marker source_commits rc hydrated_head hydrated_hash
+  for mode in refresh legacy; do
+    setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r10-${mode}")"
+    IFS='|' read -r origin repo provider <<<"$setup"
+    deterministic_head="$(feedback_r5_deterministic_head)"
+    gh_bin="$TMP_DIR/feedback-r10-${mode}-gh-bin"; git_bin="$TMP_DIR/feedback-r10-${mode}-git-bin"
+    registry="$TMP_DIR/feedback-r10-${mode}.registry"; provider_log="$TMP_DIR/feedback-r10-${mode}-provider.log"
+    git_log="$TMP_DIR/feedback-r10-${mode}-git.log"; bundle_log="$TMP_DIR/feedback-r10-${mode}-bundle.log"
+    temp_root="$TMP_DIR/feedback-r10-${mode}-tmp"; marker="$TMP_DIR/feedback-r10-${mode}.marker"
+    mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+    write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+    write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+    real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+    if [ "$mode" = refresh ]; then
+      rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+        SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+        SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+        SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+        run_helper_with_path "$repo" "$TMP_DIR/feedback-r10-refresh-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+          --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+      assert_exit 'R10 refresh fixture establishes awaiting predecessor' 1 "$rc"
+      receipt="$(feedback_r5_receipt_path "$repo")"; receipt_hash="$(git hash-object "$receipt")"; head_before="$(git -C "$repo" rev-parse HEAD)"
+      rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+        SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+        SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+        SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_R10_REFRESH_FAILURE=after-terminal-once \
+        SHIP_FLOW_R10_REFRESH_FAILURE_MARKER="$marker" run_helper_with_path "$repo" \
+          "$TMP_DIR/feedback-r10-refresh-fail.out" "$git_bin:$gh_bin:$PATH" \
+          --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+      terminal_oid="$(git -C "$origin" rev-parse "refs/heads/$deterministic_head")"
+      assert_exit 'R10 post-terminal provider refresh failure routes through stable retry' 1 "$rc"
+      assert_contains 'R10 refresh failure retains awaiting state' '^state=closeout_pr_awaiting_merge$' "$TMP_DIR/feedback-r10-refresh-fail.out"
+      if [ "$head_before" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$receipt_hash" = "$(git hash-object "$receipt")" ]; then record_pass 'R10 refresh failure preserves exact awaiting checkpoint'; else record_fail 'R10 refresh failure preserves exact awaiting checkpoint'; fi
+      assert_feedback_r5_count 'R10 refresh failure publishes terminal exactly once' '^terminal-push ' "$git_log" 1
+      assert_feedback_r5_count 'R10 refresh failure performs no ready effect' '^effect ready ' "$provider_log" 0
+      rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+        SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+        SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+        SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_R10_REFRESH_FAILURE=after-terminal-once \
+        SHIP_FLOW_R10_REFRESH_FAILURE_MARKER="$marker" run_helper_with_path "$repo" \
+          "$TMP_DIR/feedback-r10-refresh-retry.out" "$git_bin:$gh_bin:$PATH" \
+          --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+      assert_exit 'R10 refresh retry converges' 0 "$rc"
+      if [ "$(git -C "$origin" rev-parse "refs/heads/$deterministic_head")" = "$terminal_oid" ]; then record_pass 'R10 refresh retry preserves exact terminal endpoint OID'; else record_fail 'R10 refresh retry preserves exact terminal endpoint OID'; fi
+      assert_feedback_r5_count 'R10 refresh retry performs no second terminal push' '^terminal-push ' "$git_log" 1
+      assert_feedback_r5_count 'R10 refresh retry performs ready exactly once' '^effect ready ' "$provider_log" 1
+    else
+      rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+        SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE=list-before \
+        SHIP_FLOW_R5_FAILURE_MARKER="$marker" SHIP_FLOW_R6_REAL_GIT="$real_git" SHIP_FLOW_R6_GIT_LOG="$git_log" \
+        SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+        run_helper_with_path "$repo" "$TMP_DIR/feedback-r10-legacy-prepared.out" "$git_bin:$gh_bin:$PATH" \
+          --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+      assert_exit 'R10 legacy fixture establishes prepared checkpoint' 1 "$rc"
+      receipt="$(feedback_r5_receipt_path "$repo")"
+      python3 - "$receipt" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text()); r["transaction"].pop("publication_endpoint",None)
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+      git -C "$repo" add -- "${receipt#"$repo/"}"; git -C "$repo" commit -q --amend --no-edit
+      : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+      rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+        SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+        SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+        SHIP_FLOW_CLOSEOUT_FAILPOINT=after-prepared run_helper_with_path "$repo" \
+          "$TMP_DIR/feedback-r10-legacy-hydrate.out" "$git_bin:$gh_bin:$PATH" \
+          --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+      assert_exit 'R10 legacy prepared hydration stops at durable hydrated checkpoint' 1 "$rc"
+      hydrated_head="$(git -C "$repo" rev-parse HEAD)"; hydrated_hash="$(git hash-object "$receipt")"
+      if python3 - "$receipt" "file://${origin}" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); t=r["transaction"]
+raise SystemExit(0 if (t["phase"],t["generation"],t.get("publication_endpoint"))==("prepared",1,sys.argv[2]) else 1)
+PY
+      then record_pass 'R10 legacy prepared checkpoint hydrates the provider endpoint in place'; else record_fail 'R10 legacy prepared checkpoint hydrates the provider endpoint in place'; fi
+      assert_feedback_r5_count 'R10 legacy hydration performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+      assert_feedback_r5_count 'R10 legacy hydration performs no closeout provider operation' '^call pr (list|create|ready) ' "$provider_log" 0
+      assert_feedback_r5_count 'R10 legacy hydration performs no bundle application' '^apply ' "$bundle_log" 0
+      rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+        SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+        SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+        SHIP_FLOW_CLOSEOUT_FAILPOINT=after-prepared run_helper_with_path "$repo" \
+          "$TMP_DIR/feedback-r10-legacy-replay.out" "$git_bin:$gh_bin:$PATH" \
+          --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+      assert_exit 'R10 hydrated prepared replay stops at the same failpoint' 1 "$rc"
+      if [ "$hydrated_head" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$hydrated_hash" = "$(git hash-object "$receipt")" ]; then record_pass 'R10 hydrated prepared replay is commit and byte idempotent'; else record_fail 'R10 hydrated prepared replay is commit and byte idempotent'; fi
+
+      endpoint_b="$TMP_DIR/feedback-r10-legacy-wrong-endpoint.git"
+      git clone -q --bare "$origin" "$endpoint_b"
+      git -C "$endpoint_b" config --local ship-flow.closeoutFixtureRepository wrong/repository
+      python3 - "$receipt" "file://${endpoint_b}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+      git -C "$repo" add -- "${receipt#"$repo/"}"; git -C "$repo" commit -q --amend --no-edit
+      source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+      rm -f "$repo/.git/FETCH_HEAD"
+      git -C "$repo" reflog expire --expire=now --all
+      git -C "$repo" gc -q --prune=now
+      assert_feedback_r3_b1_objects_missing 'R10 invalid prepared endpoint precondition prunes provider source objects' "$repo" "$source_commits"
+      : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+      rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+        SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+        SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+        SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+          "$TMP_DIR/feedback-r10-invalid-prepared.out" "$git_bin:$gh_bin:$PATH" \
+          --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+      assert_exit 'R10 invalid prepared endpoint fails closed' 1 "$rc"
+      assert_contains 'R10 invalid prepared endpoint reports checkpoint conflict' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r10-invalid-prepared.out"
+      assert_feedback_r5_count 'R10 invalid prepared endpoint rejects before source acquisition' '^source-(fetch|update-ref) ' "$git_log" 0
+      assert_feedback_r5_count 'R10 invalid prepared endpoint performs no bundle application' '^apply ' "$bundle_log" 0
+    fi
+  done
+}
+
+run_feedback_r10_transport_matrix() {
+  local label literal setup origin repo provider deterministic_head remote_ref gh_bin git_bin registry provider_log git_log
+  local bundle_log temp_root real_git real_mktemp receipt terminal_oid persisted rc
+  while IFS='|' read -r label literal; do
+    setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r10-transport-${label}")"
+    IFS='|' read -r origin repo provider <<<"$setup"
+    git -C "$repo" config --local --unset-all "url.file://${origin}.insteadOf" 2>/dev/null || true
+    git -C "$repo" config --local remote.origin.url "$literal"
+    deterministic_head="$(feedback_r5_deterministic_head)"; remote_ref="refs/heads/$deterministic_head"
+    gh_bin="$TMP_DIR/feedback-r10-transport-${label}-gh-bin"; git_bin="$TMP_DIR/feedback-r10-transport-${label}-git-bin"
+    registry="$TMP_DIR/feedback-r10-transport-${label}.registry"
+    provider_log="$TMP_DIR/feedback-r10-transport-${label}-provider.log"
+    git_log="$TMP_DIR/feedback-r10-transport-${label}-git.log"
+    bundle_log="$TMP_DIR/feedback-r10-transport-${label}-bundle.log"
+    temp_root="$TMP_DIR/feedback-r10-transport-${label}-tmp"
+    mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+    write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+    write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+    real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+      SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+      SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_R10_TRANSPORT_LITERAL="$literal" \
+      SHIP_FLOW_R10_TRANSPORT_ORIGIN="$origin" run_helper_with_path "$repo" \
+        "$TMP_DIR/feedback-r10-transport-${label}.out" "$git_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    if [ "$rc" != 0 ]; then sed "s/^/    R10 ${label}: /" "$TMP_DIR/feedback-r10-transport-${label}.out"; fi
+    assert_exit "R10 ${label} fake transport completes non-dry-run closeout publication" 0 "$rc"
+    receipt="$(feedback_r5_receipt_path "$repo")"
+    persisted="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["transaction"].get("publication_endpoint", ""))' "$receipt")"
+    if [ "$persisted" = "$literal" ]; then record_pass "R10 ${label} preserves the exact provider spelling in the awaiting checkpoint"; else record_fail "R10 ${label} preserves the exact provider spelling in the awaiting checkpoint"; fi
+    terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head" 2>/dev/null || true)"
+    if [ -n "$terminal_oid" ] && [ "$(git -C "$origin" rev-parse "$remote_ref" 2>/dev/null || true)" = "$terminal_oid" ]; then
+      record_pass "R10 ${label} actual local receive-pack reaches the exact terminal endpoint ref"
+    else
+      record_fail "R10 ${label} actual local receive-pack reaches the exact terminal endpoint ref"
+    fi
+    assert_feedback_r5_count "R10 ${label} performs one expected-absence seed receive-pack" '^seed-push ' "$git_log" 1
+    assert_feedback_r5_count "R10 ${label} performs one leased terminal receive-pack" '^terminal-push ' "$git_log" 1
+    assert_feedback_r5_count "R10 ${label} readies only after provider convergence" '^effect ready ' "$provider_log" 1
+  done <<'EOF'
+https|HTTPS://GitHub.com/Example/Repo.git
+ssh|SSH://git@GitHub.com/Example/Repo.git
+scp|git@GitHub.com:Example/Repo.git
+EOF
 }
 
 run_missing_landing_field_matrix() {
@@ -3532,6 +4090,7 @@ PY
   printf '%s\n' 'tampered sentinel output' >>"$tampered_repo/$tampered_ship"
   tampered_head="$(git -C "$tampered_repo" rev-parse HEAD)"
   rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$registry" run_helper "$tampered_repo" "$TMP_DIR/optional-merged-tampered.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --closeout-mode pull-request)"
+  if [ "$rc" != 1 ]; then sed 's/^/    optional-merged-tampered: /' "$TMP_DIR/optional-merged-tampered.out"; fi
   assert_exit 'optional tampered landed sentinel rejects' 1 "$rc"
   assert_contains 'optional tampered landed sentinel reports payload mismatch' '^reason=closeout-sentinel-payload-mismatch$' "$TMP_DIR/optional-merged-tampered.out"
   if [ "$tampered_head" = "$(git -C "$tampered_repo" rev-parse HEAD)" ]; then record_pass 'optional tampered sentinel preserves HEAD'; else record_fail 'optional tampered sentinel preserves HEAD'; fi
@@ -3644,7 +4203,17 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r9-b1-b2 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r10-b1-b2 ]; then
+    if [ "${SHIP_FLOW_R10_ONLY:-}" = terminal ]; then
+      run_feedback_r10_terminal_predecessor_case
+    else
+      run_feedback_r10_endpoint_authority_case
+      run_feedback_r10_terminal_predecessor_case
+      run_feedback_r10_terminal_race_case
+      run_feedback_r10_refresh_and_legacy_case
+      run_feedback_r10_transport_matrix
+    fi
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r9-b1-b2 ]; then
     run_feedback_r9_alias_and_rewrite_case
     run_feedback_r9_bound_endpoint_drift_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r8-b1 ]; then
