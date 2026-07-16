@@ -251,30 +251,29 @@ Implemented one fail-closed closeout authority chain from authoritative provider
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Fresh Cycle 11 treatment verifies the reported Cycle 10 cases: R10 is 120/120 and the signal/provider suite is
-  289/289 on Bash 3.2 and 5.3; R9-R2, receipt, default, landing, optional, and dogfood neighbors are green on both shells.
-- DONE: Static/TDD/schema-registry/C1-C15 and focused C14 pass. Three fresh read-only reviewer lanes independently
-  audited current bytes and every verdict-bearing citation was spot-checked.
-- FAILED: R11-B1 rejects every mature main even when one valid awaiting predecessor is `HEAD^1`; R11-B2 validates a
-  local landed terminal ref without requiring its SHA to equal provider `headRefOid`; R11-B3 leaks bare validator temps
-  on HUP/INT/QUIT/TERM. Exact-function repros observed `recovery_rc=2` with `candidate-1.json` and exit 143 with residue.
-- GATE: Round 11 is FAILED/PROMPT_CAPTAIN and routes R11-B1..B3 to execute. No implementation/test bytes, Review
-  advance, network, remote, PR, merge, archive, todo, or RoboRev state changed.
+- DONE: Fresh Cycle 11 treatment is 91/91, R10 is 120/120, signal/provider is 289/289, and default is 198/198 on Bash
+  3.2 and 5.3; landing 94/94 and receipt 92/92 are dual-shell, while optional 179/179 and dogfood 141/141 are green.
+- DONE: Static/TDD/schema-registry/C1-C15 and focused C14 pass. Valid read-only general, silent, testing-replacement,
+  maintainability, security/ordinary-correctness, and schema-intent owners ran; every retained citation was spot-checked.
+- FAILED: R12-B1 leaves awaiting/OPEN/build deterministic-head reads vulnerable to same-name tag DWIM; R12-B2 binds
+  provider-terminal ancestry to the newest identical receipt carrier, falsely rejecting a legal terminal after main advances.
+- GATE: Round 12 is FAILED/PROMPT_CAPTAIN and routes R12-B1/B2 plus coupled R12-W1 hardening to execute. No
+  implementation/test behavior, Review advance, network, remote, PR, merge, archive, todo, or RoboRev state changed.
 
 ### Summary
 
-Cycle 10's targeted regressions are green, but Cycle 11 finds three acceptance-path recovery defects outside that
-matrix. The Captain-gated VETO and falsifiable claim records are in [verify.md](verify.md).
+Cycle 11's named repairs are green, but Round 12 finds two ordinary acceptance-path gaps outside that matrix. The
+Captain-gated VETO, causal Git probes, panel ownership, and falsifiable claims are in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 28 for round 11
-- iteration_count: 11
-- blocking_findings_count: 3 current
-- warning_findings_count: 0
-- claim_records: required VERIFIED=2 NOT VERIFIED=3 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 11; artifact cross-review PROCEED; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- duration_minutes: 35 for round 12
+- iteration_count: 12
+- blocking_findings_count: 2 current
+- warning_findings_count: 1
+- claim_records: required VERIFIED=2 NOT VERIFIED=2 INCONCLUSIVE=0
+- reviewer_verdict: VETO round 12; Rule C artifact cross-review PROCEED; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
