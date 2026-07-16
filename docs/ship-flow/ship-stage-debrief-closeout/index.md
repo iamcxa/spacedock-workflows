@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -383,4 +383,12 @@ and local fixture identity. The Captain-gated VETO is in [verify.md](verify.md).
   routed_at: 2026-07-16T02:39:01Z
   verify_artifact: verify.md@bbe943f
   required_fixes: R9-B1 bind a non-reinterpretable leaf publication endpoint across nested remotes and URL rewrites; R9-B2 persist and validate provider-bound endpoint identity across retries and re-query provider head before ready/success; add coupled seed/terminal regressions
+  deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
+- cycle: 10
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-16T08:21:18Z
+  verify_artifact: verify.md@13af3c3
+  required_fixes: R10-B1 require endpoint-local fixture authorization and revalidate every loaded persisted endpoint against the authoritative provider before effects; R10-B2 predecessor-bind reused/landed terminal receipts and add actual transport, terminal-lease, legacy-hydration, and provider-refresh recovery regressions
   deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
