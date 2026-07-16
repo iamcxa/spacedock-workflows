@@ -280,29 +280,31 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Pin round 8 to implementation/test `e3adebe` at metadata-only `15ec239`. Current tests with pre-fix
-  production reproduce 14/19 RED on both Bash versions; current production is 19/19 GREEN on both.
-- DONE: Verify single-endpoint expected-absence CAS, checkpoint/provider preservation, terminal lease, R6 279/279
-  both shells, R4 29/29 both, R3 107/107, R2 13/13 + 23/23, default 198/198, static/contracts, and pinned status.
-- FAILED: Two panels and an independent local Git probe find R8-B1. With two pushurls, endpoint A accepts the seed
-  before endpoint B rejects its competitor; aggregate exit 1 therefore follows partial remote mutation.
-- GATE: Round 8 returns only R8-B1 and its coupled multi-pushurl regression to execute. Verdict is
-  FAILED/PROMPT_CAPTAIN; no implementation, receipt/status/Review dispatch/external push/PR/merge/archive/todo/network mutation occurred.
+- DONE: Verify Cycle 8 direct destination behavior on current bytes. Direct multiple, missing, malformed, and
+  unresolvable origin destinations fail closed before modeled provider, publication, or bundle effects; R8 is 50/50
+  on Bash 3.2 and 5.3.
+- DONE: Re-run the complete proportional recovery/compatibility envelope and three fresh panels. R7 is 19/19, R6
+  289/289, R4 29/29, R3 107/107, R2 13/13 + 23/23, and default 198/198 on both shells; static/contracts and C1-C15 pass.
+- FAILED: R9-B1 proves a one-line token can still be reinterpreted through a nested remote or chained
+  `pushInsteadOf`, separating inspection from publication or reintroducing fan-out. R9-B2 proves the destination is
+  not persisted/provider-bound and terminal success is not re-queried before ready/success.
+- GATE: Round 9 returns R9-B1/B2 and their nested/rewrite/provider-drift seed+terminal regressions to execute.
+  Verdict is FAILED/PROMPT_CAPTAIN; no implementation, Review advance, external push/PR/merge/archive/todo/network/RoboRev mutation occurred.
 
 ### Summary
 
-Round 8 closes the prior single-endpoint race, but a named remote can fan out and fail after partial publication.
-The bounded failed artifact and Captain-gated VETO are recorded in [verify.md](verify.md).
+Round 9 confirms the direct Cycle 8 fix but disproves the broader authoritative-endpoint claim: Git can reinterpret
+the stored token and the transaction can diverge from the provider repository. The Captain-gated VETO is in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 101 across eight verify rounds
-- iteration_count: 8
-- blocking_findings_count: 1 current
+- duration_minutes: 128 across nine verify rounds
+- iteration_count: 9
+- blocking_findings_count: 2 current
 - warning_findings_count: 4
-- claim_records: required VERIFIED=7 NOT VERIFIED=1 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 8; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- claim_records: required VERIFIED=7 NOT VERIFIED=2 INCONCLUSIVE=0
+- reviewer_verdict: VETO round 9; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
