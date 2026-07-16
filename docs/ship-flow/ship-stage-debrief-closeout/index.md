@@ -375,3 +375,46 @@ Captain-gated VETO, causal Git probes, panel ownership, and falsifiable claims a
   required_fixes: R12-B1 resolve awaiting/OPEN/build deterministic heads exactly (fully-qualified refs/heads/ or verified OID) so a same-name tag can never be DWIM-selected; R12-B2 bind ancestry to the awaiting predecessor that is an actual ancestor of the provider terminal, not the newest commit carrying identical awaiting bytes; R12-W1 propagate ensure_owned_validator_root failure explicitly so an empty root cannot feed /validator.XXXXXX under suppressed errexit
   deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
   scope_boundary: Captain-set BOUNDED CONVERGENCE round. Execute fixes ONLY R12-B1/B2/W1 plus their focused regressions; no new hardening surface, no unrelated refactor. Verify re-review is DELTA+REGRESSION scoped only (prove B1/B2 closed on both shells, then run the existing green suite for regressions) and MUST NOT open a new adversarial-Git frontier (no fresh multi-endpoint/nested-remote/URL-rewrite/provider-drift class). Stop rule (Captain): verify PROCEED -> advance to Review/ship; a brand-new blocker CLASS that is not a B1/B2 regression is the non-convergence signal -> FO defers it to a tracked follow-up entity and ships on the green core; do NOT auto-route a Cycle 13.
+
+## Stage Report: execute (cycle 12)
+
+- DONE: R12-B1 closed. `resolve_exact_deterministic_commit()` added (verified 40-hex OID passes
+  through as-is; a branch-name-shaped head resolves only via `refs/heads/<name>^{commit}`), used
+  by `optional_terminal_head_matches` internally and mirrored at the four external bare-resolution
+  sites (`scan_closeout_receipts` awaiting check, `ensure_initial_closeout_head`,
+  `resolve_or_create_closeout_pr` fixture reuse, `build_optional_terminal_head`). A same-name tag
+  with a different OID/tree is never DWIM-selected. Proven by
+  `run_feedback_r12_b1_tag_dwim_case`, RED confirmed against the pre-fix reconciler via
+  `git stash` (exit 1, `detail=existing terminal closeout head does not extend the durable
+  awaiting predecessor`), GREEN 21/21 on Bash 3.2 and 5.3.
+- DONE: R12-B2 closed. `recover_awaiting_closeout_predecessor` gained a `terminal_ref` parameter
+  and now prefers the first ancestor-of-terminal candidate (`git merge-base --is-ancestor`) among
+  commits carrying identical awaiting bytes, falling back to the legacy newest-carrier pick only
+  when no candidate is an ancestor at all (preserving existing bounded-failure semantics for
+  genuinely-ambiguous / no-valid-ancestor cases — verified against the existing R11
+  provider-ancestry regression, 91/91). A legal A/B/T/M recovery proceeds. Proven by
+  `run_feedback_r12_b2_ancestry_case` (one `--allow-empty` main commit reproduces the
+  concurrent-main-movement carrier B), RED confirmed via `git stash` (exit 1, `detail=landed
+  closeout provider head does not descend from its durable awaiting checkpoint`), GREEN 21/21 on
+  both shells.
+- DONE: R12-W1 closed + gate green. `ensure_owned_validator_root` now calls
+  `reject_input closeout-checkpoint-conflict` (unconditional `exit 2`, independent of any
+  `set -e` suppression in the calling context) instead of a bare `return 1`, covering all 6 call
+  sites uniformly. Proven by `run_feedback_r12_w1_validator_root_case` (PATH-shadowed `mkdir`),
+  RED confirmed via `git stash` (exit 1, no `reason=` line at all), GREEN 21/21 on both shells.
+  Full local gate: R12 21/21, R11 91/91, R10 120/120, default 198/198 — all dual-shell (Bash 3.2
+  and 5.3); `check-invariants.sh` C1-C15 exit 0; `check-no-dangling.sh` PASS;
+  `check-version-triple.sh` PASS; `bash -n`/`shellcheck -s bash`/`git diff --check` all clean; TDD
+  ledger unchanged (`status=pass records=5`, matching prior-cycle convention). No scope growth
+  beyond B1/B2/W1 — see execute.md "Deferred / out-of-scope observations" for one uncited,
+  out-of-scope bare-refspec DWIM instance in the optional-PR push-destination path, left for FO
+  triage.
+
+### Summary
+
+Cycle 12 closed the two Round-12 BLOCKING findings and the coupled WARNING with the smallest
+correct fix for each: exact `refs/heads/` resolution (never DWIM to a same-name tag), an
+ancestor-of-terminal-first predecessor scan with a legacy fallback that preserves prior
+bounded-failure behavior, and an unconditional fail-closed validator-root guard. All three RED
+before fix (verified against the pre-fix code via git stash) and GREEN after, with the full
+existing regression suite (R10/R11/default) unaffected on both shells.

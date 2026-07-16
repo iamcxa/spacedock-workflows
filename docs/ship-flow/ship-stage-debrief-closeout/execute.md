@@ -143,4 +143,110 @@ context_read_receipts:
 ```
 <!-- /section:hand-off-to-verify -->
 
+## Cycle 12 Bounded Fix (R12-B1, R12-B2, R12-W1)
+
+Closed R12-B1 (exact `refs/heads/` deterministic-head resolution, no tag DWIM), R12-B2 (ancestor-of-terminal-first awaiting-predecessor scan with a legacy fallback), and R12-W1 (unconditional fail-closed validator-root guard) in `merged-pr-closeout-reconciler.sh`. RED confirmed via `git stash` against the pre-fix code (5/5 defects reproduced exactly); GREEN 21/21 both shells; full existing suite (R11 91/91, R10 120/120, default 198/198) and C1-C15/no-dangling/version-triple unaffected. Full findings, fixes, and evidence below.
+
+<details>
+<summary>Cycle 12 detail: findings, fixes, RED/GREEN evidence</summary>
+
+### R12-B1 — exact deterministic-head resolution (no tag DWIM)
+
+Defect: `scan_closeout_receipts`'s awaiting-phase check, `ensure_initial_closeout_head`,
+`resolve_or_create_closeout_pr`'s fixture-registered-PR reuse, and `build_optional_terminal_head`
+all read the deterministic closeout head via a bare `git rev-parse "$deterministic_head"` /
+`git cat-file -e "${deterministic_head}:..."` / `git show "${deterministic_head}:..."` /
+`git archive "$deterministic_head"`. Git's own ref-DWIM prefers `refs/tags/<name>` over
+`refs/heads/<name>` for a bare short name, so a same-name tag with a different OID/tree could be
+silently selected instead of the branch.
+
+Fix: added `resolve_exact_deterministic_commit()` (accepts a verified 40-hex OID as-is — never
+DWIM-ambiguous — or resolves a branch-name-shaped head only through
+`refs/heads/<name>^{commit}`), used inside `optional_terminal_head_matches` for its internal
+`git show`/`git archive` calls. The four external bare-resolution call sites (`scan_closeout_receipts`
+awaiting check, `ensure_initial_closeout_head`, `resolve_or_create_closeout_pr` fixture reuse,
+`build_optional_terminal_head`) now resolve via `git rev-parse --verify "refs/heads/${name}^{commit}"`
+and `git cat-file -e "refs/heads/${name}:${path}"`, mirroring the pre-existing, already-correct
+LANDED-path pattern (`plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh:794-795`).
+
+### R12-B2 — ancestry-bound awaiting-predecessor selection
+
+Defect: `recover_awaiting_closeout_predecessor` scanned bounded main history and bound the
+awaiting predecessor to the NEWEST commit carrying byte-identical awaiting bytes, without
+checking that commit is an actual ancestor of the provider terminal. Topology A/B/T/M — terminal
+T built from real checkpoint A; a later main-only commit B (e.g. concurrent unrelated main
+movement) inherits the same unchanged receipt bytes but is not an ancestor of T — picked B, the
+caller's separate `merge-base --is-ancestor` check then failed, false-rejecting the legal
+recovery via A.
+
+Fix: the scan now tracks two candidates per iteration — the legacy newest-carrier (unchanged, to
+preserve existing bounded-failure semantics when NO candidate is an ancestor at all) and the
+first (newest) ancestor-of-terminal carrier found via `git merge-base --is-ancestor "$commit"
+"$terminal_ref"`. `recover_awaiting_closeout_predecessor` gained a 4th `terminal_ref` parameter
+(the call site passes the already-verified `terminal_source` OID). When an ancestor candidate
+exists, it wins; otherwise the function falls back to the legacy pick so the caller's existing
+ancestry check still fails closed with its established `closeout-checkpoint-conflict` /
+"does not descend from its durable awaiting checkpoint" reason for genuinely-ambiguous /
+no-valid-ancestor cases (verified via the existing R11 provider-ancestry regression, which
+regressed on the first (filter-only) design attempt and was fixed by adding the legacy-fallback
+track — see Issues Found below). Legacy hash-mismatch ambiguity detection (two candidates with
+genuinely different content) is untouched.
+
+### R12-W1 — explicit fail-closed validator-root propagation
+
+Defect: `ensure_owned_validator_root()` returned 1 on `mkdir` failure via a bare `return 1`. Several
+callers reach this function through another function's own `|| return $?` chain (e.g.
+`validate_receipt_normal`'s internal call to `prepare_receipt_source_commits`), which disables
+`set -e` for the callee's entire dynamic extent — an unpropagated failure could let the resulting
+empty `owned_validator_root` flow into `mktemp "$owned_validator_root/validator.XXXXXX"`
+(i.e. `mktemp /validator.XXXXXX`) instead of stopping.
+
+Fix: `ensure_owned_validator_root()` now calls `reject_input closeout-checkpoint-conflict
+"closeout validator root could not be created"` on `mkdir` failure — an unconditional `exit 2`
+with the tool's normal structured REJECT report, independent of any `set -e` suppression in the
+calling context. This covers all 6 call sites uniformly without depending on caller discipline.
+
+### RED -> GREEN evidence
+
+New focused dual-shell regressions (`SHIP_FLOW_CLOSEOUT_CASE=feedback-r12-b1-b2-w1`,
+`plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh`):
+`run_feedback_r12_b1_tag_dwim_case` (same-name colliding tag with a different OID on the
+awaiting/OPEN path), `run_feedback_r12_b2_ancestry_case` (A/B/T/M topology reproduced via one
+`--allow-empty` main commit after T is built from A), `run_feedback_r12_w1_validator_root_case`
+(PATH-shadowed `mkdir` fails only the `ship-flow-closeout-validator.*` path).
+
+RED (verified against the pre-fix reconciler via `git stash push -- \
+plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh`, same test file): 16/21 passed, 5 failed
+— `R12-B1 ... resolves the exact branch, not the tag` (expected exit 0, got 1,
+`detail=existing terminal closeout head does not extend the durable awaiting predecessor`);
+`R12-B2 ... accepts the true ancestor A` and `... converges to terminal no-op` (expected exit 0,
+got 1, `detail=landed closeout provider head does not descend from its durable awaiting
+checkpoint`); `R12-W1 ... fails closed with the REJECT contract` and `... reports a stable
+reason` (expected exit 2, got 1, no `reason=` line at all). All five failures reproduce the exact
+defects named above; `git stash pop` restored the fix afterward.
+
+GREEN (fixed reconciler): R12 21/21 on Bash 5.3 and 3.2. Full local gate, both shells: R11
+91/91, R10 120/120, default 198/198 (all previously-established suites unaffected). One
+regression was caught and corrected mid-cycle: an earlier filter-only R12-B2 design broke `R11
+provider terminal bytes outside awaiting ancestry fail closed` (a real no-valid-ancestor case) by
+turning its established `prompt_captain`/exit-1 rejection into a different `reject_input`/exit-2
+path; the legacy-fallback design above restored it to 91/91 (see Issues Found).
+
+Static/hygiene: `bash -n` on both shells and `shellcheck -s bash` clean for both the reconciler
+and the test file; `git diff --check` exit 0. `check-invariants.sh` (C1-C15) exit 0;
+`scripts/check-no-dangling.sh` PASS; `scripts/check-version-triple.sh` PASS. TDD ledger unchanged
+(`status=pass records=5`) — consistent with prior feedback cycles, which record fixes under the
+originating task's ledger entry rather than adding new records per cycle.
+
+### Deferred / out-of-scope observations
+
+- `bind_closeout_push_destination`'s `git send-pack ... "${deterministic_head}:${remote_ref}"`
+  (`plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh` `ensure_initial_closeout_head`, non-fixture
+  branch) also passes the bare `deterministic_head` as a refspec source, which is technically the
+  same DWIM class as R12-B1 but was not cited by Round 12 and touches push-destination code the
+  captain marked out-of-scope for this bounded round. Left as-is per the scope boundary; flagging
+  for FO triage as a possible future finding.
+
+</details>
+
 <!-- /section:execute-report -->
