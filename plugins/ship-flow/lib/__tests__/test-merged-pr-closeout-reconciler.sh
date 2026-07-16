@@ -3053,6 +3053,335 @@ scp|git@GitHub.com:Example/Repo.git
 EOF
 }
 
+land_feedback_terminal_head() {
+  local repo="$1" deterministic_head="$2" relative="$3"
+  if ! git -C "$repo" merge -q --no-ff "$deterministic_head" \
+    -m 'fixture: land optional terminal head' >/dev/null 2>&1; then
+    [ "$(git -C "$repo" diff --name-only --diff-filter=U)" = "$relative" ] || return 1
+    git -C "$repo" checkout -q --theirs -- "$relative"
+    git -C "$repo" add -- "$relative"
+    git -C "$repo" commit -qm 'fixture: land optional terminal head'
+  fi
+}
+
+set_feedback_registry_merge() {
+  local registry="$1" remote_oid="$2"
+  python3 - "$registry" "$remote_oid" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); oid=sys.argv[2]; rows=[]
+for line in p.read_text().splitlines():
+    if line.startswith("state="): rows.append("state=MERGED")
+    elif line.startswith("remote_oid="): rows.append("remote_oid="+oid)
+    else: rows.append(line)
+p.write_text("\n".join(rows)+"\n")
+PY
+}
+
+run_feedback_r11_mature_main_case() {
+  local setup origin repo provider deterministic_head remote_ref gh_bin git_bin registry provider_log git_log
+  local bundle_log temp_root real_git real_mktemp receipt relative awaiting_oid terminal_oid head_before tree_before rc filler
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r11-mature-main)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  for filler in $(seq 1 40); do
+    git -C "$repo" commit -q --allow-empty -m "fixture: mature main filler $filler"
+  done
+  deterministic_head="$(feedback_r5_deterministic_head)"; remote_ref="refs/heads/$deterministic_head"
+  gh_bin="$TMP_DIR/feedback-r11-mature-main-gh-bin"; git_bin="$TMP_DIR/feedback-r11-mature-main-git-bin"
+  registry="$TMP_DIR/feedback-r11-mature-main.registry"; provider_log="$TMP_DIR/feedback-r11-mature-main-provider.log"
+  git_log="$TMP_DIR/feedback-r11-mature-main-git.log"; bundle_log="$TMP_DIR/feedback-r11-mature-main-bundle.log"
+  temp_root="$TMP_DIR/feedback-r11-mature-main-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r11-mature-main-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R11 mature-main fixture establishes awaiting predecessor' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"; relative="${receipt#"$repo/"}"; awaiting_oid="$(git -C "$repo" rev-parse HEAD)"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r11-mature-main-built.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R11 mature-main fixture publishes one terminal head' 0 "$rc"
+  terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head")"
+  land_feedback_terminal_head "$repo" "$deterministic_head" "$relative"
+  set_feedback_registry_merge "$registry" "$terminal_oid"
+  git -C "$repo" tag "$deterministic_head" "$awaiting_oid"
+  if [ "$(git -C "$repo" rev-parse "refs/tags/$deterministic_head")" != \
+       "$(git -C "$repo" rev-parse "refs/heads/$deterministic_head")" ]; then
+    record_pass 'R11 mature-main precondition carries a colliding nonterminal tag'
+  else
+    record_fail 'R11 mature-main precondition carries a colliding nonterminal tag'
+  fi
+  if [ "$(git -C "$repo" rev-parse HEAD^1)" = "$awaiting_oid" ]; then
+    record_pass 'R11 mature-main precondition keeps the unique awaiting predecessor at HEAD^1'
+  else
+    record_fail 'R11 mature-main precondition keeps the unique awaiting predecessor at HEAD^1'
+  fi
+  head_before="$(git -C "$repo" rev-parse HEAD)"; tree_before="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r11-mature-main-recovery.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R11 mature main accepts its unique nearby awaiting predecessor' 0 "$rc"
+  assert_contains 'R11 mature main converges to terminal no-op' '^reason=closeout-pr-terminal-noop$' "$TMP_DIR/feedback-r11-mature-main-recovery.out"
+  if [ "$head_before" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$tree_before" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ]; then
+    record_pass 'R11 mature-main recovery preserves repository bytes'
+  else
+    record_fail 'R11 mature-main recovery preserves repository bytes'
+  fi
+  assert_feedback_r5_count 'R11 mature-main recovery performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+  assert_feedback_r5_count 'R11 mature-main recovery performs no provider effect' '^effect (create|ready) ' "$provider_log" 0
+  assert_feedback_r5_count 'R11 mature-main recovery performs no bundle application' '^apply ' "$bundle_log" 0
+}
+
+run_feedback_r11_provider_oid_case() {
+  local setup origin repo provider deterministic_head gh_bin git_bin registry provider_log git_log bundle_log
+  local temp_root real_git real_mktemp receipt relative awaiting_oid terminal_oid unrelated_terminal_oid terminal_tree head_before tree_before rc
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r11-provider-oid)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"
+  gh_bin="$TMP_DIR/feedback-r11-provider-oid-gh-bin"; git_bin="$TMP_DIR/feedback-r11-provider-oid-git-bin"
+  registry="$TMP_DIR/feedback-r11-provider-oid.registry"; provider_log="$TMP_DIR/feedback-r11-provider-oid-provider.log"
+  git_log="$TMP_DIR/feedback-r11-provider-oid-git.log"; bundle_log="$TMP_DIR/feedback-r11-provider-oid-bundle.log"
+  temp_root="$TMP_DIR/feedback-r11-provider-oid-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r11-provider-oid-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R11 provider-OID fixture establishes awaiting predecessor' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"; relative="${receipt#"$repo/"}"; awaiting_oid="$(git -C "$repo" rev-parse HEAD)"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r11-provider-oid-built.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R11 provider-OID fixture publishes one terminal head' 0 "$rc"
+  terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head")"
+  land_feedback_terminal_head "$repo" "$deterministic_head" "$relative"
+  set_feedback_registry_merge "$registry" "$awaiting_oid"
+  git -C "$origin" update-ref "refs/heads/$deterministic_head" "$awaiting_oid" "$terminal_oid"
+  head_before="$(git -C "$repo" rev-parse HEAD)"; tree_before="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r11-provider-oid-reject.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$terminal_oid" != "$(git -C "$origin" rev-parse "refs/heads/$deterministic_head")" ]; then
+    record_pass 'R11 provider-OID divergence fixture uses distinct terminal and provider OIDs'
+  else
+    record_fail 'R11 provider-OID divergence fixture uses distinct terminal and provider OIDs'
+  fi
+  assert_exit 'R11 landed recovery rejects provider/local terminal OID divergence' 1 "$rc"
+  assert_contains 'R11 provider/local divergence reports checkpoint conflict' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r11-provider-oid-reject.out"
+  if [ "$head_before" = "$(git -C "$repo" rev-parse HEAD)" ] && [ "$tree_before" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ]; then
+    record_pass 'R11 provider-OID rejection preserves repository bytes'
+  else
+    record_fail 'R11 provider-OID rejection preserves repository bytes'
+  fi
+  assert_feedback_r5_count 'R11 provider-OID rejection performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+  assert_feedback_r5_count 'R11 provider-OID rejection performs no provider effect' '^effect (create|ready) ' "$provider_log" 0
+  assert_feedback_r5_count 'R11 provider-OID rejection performs no bundle application' '^apply ' "$bundle_log" 0
+
+  terminal_tree="$(git -C "$repo" rev-parse "${terminal_oid}^{tree}")"
+  unrelated_terminal_oid="$(printf '%s\n' 'fixture: provider terminal tree without awaiting ancestry' | \
+    git -C "$repo" commit-tree "$terminal_tree")"
+  git -C "$origin" fetch -q "$repo" "$unrelated_terminal_oid"
+  git -C "$origin" update-ref "refs/heads/$deterministic_head" "$unrelated_terminal_oid" "$awaiting_oid"
+  git -C "$repo" update-ref -d "refs/heads/$deterministic_head" "$terminal_oid"
+  if ! git -C "$repo" merge-base --is-ancestor "$awaiting_oid" "$unrelated_terminal_oid"; then
+    record_pass 'R11 ancestry fixture reuses valid terminal bytes outside awaiting lineage'
+  else
+    record_fail 'R11 ancestry fixture reuses valid terminal bytes outside awaiting lineage'
+  fi
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r11-provider-ancestry-reject.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R11 provider terminal bytes outside awaiting ancestry fail closed' 1 "$rc"
+  assert_contains 'R11 provider ancestry rejection names the durable checkpoint relation' \
+    '^detail=landed closeout provider head does not descend from its durable awaiting checkpoint$' \
+    "$TMP_DIR/feedback-r11-provider-ancestry-reject.out"
+  assert_feedback_r5_count 'R11 provider ancestry rejection performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+  assert_feedback_r5_count 'R11 provider ancestry rejection performs no provider effect' '^effect (create|ready) ' "$provider_log" 0
+  assert_feedback_r5_count 'R11 provider ancestry rejection performs no bundle application' '^apply ' "$bundle_log" 0
+}
+
+write_feedback_r11_mktemp_signal_wrapper() {
+  local bin="$1"
+  cat >"$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+: "${SHIP_FLOW_R11_REAL_MKTEMP:?missing real mktemp path}"
+: "${SHIP_FLOW_R11_TEMP_ROOT:?missing scoped temp root}"
+export TMPDIR="$SHIP_FLOW_R11_TEMP_ROOT"
+args=("$@")
+if [ "$#" = 0 ]; then
+  args=("$SHIP_FLOW_R11_TEMP_ROOT/ship-flow-r11-file.XXXXXX")
+elif [ "$#" = 1 ] && [ "$1" = -d ]; then
+  args=(-d "$SHIP_FLOW_R11_TEMP_ROOT/ship-flow-r11-dir.XXXXXX")
+fi
+created="$("$SHIP_FLOW_R11_REAL_MKTEMP" "${args[@]}")"
+is_validator_candidate=no
+if [ "$#" = 0 ]; then
+  is_validator_candidate=yes
+elif [ "$#" = 1 ]; then
+  case "$1" in */ship-flow-closeout-validator.*/validator.XXXXXX) is_validator_candidate=yes ;; esac
+fi
+if [ "$is_validator_candidate" = yes ] && [ -n "${SHIP_FLOW_R11_SIGNAL:-}" ]; then
+  count=0
+  [ ! -f "${SHIP_FLOW_R11_SIGNAL_COUNTER:?missing signal counter}" ] || \
+    count="$(sed -n '1p' "$SHIP_FLOW_R11_SIGNAL_COUNTER")"
+  count=$((count + 1)); printf '%s\n' "$count" >"$SHIP_FLOW_R11_SIGNAL_COUNTER"
+  if [ "$count" = "${SHIP_FLOW_R11_SIGNAL_OCCURRENCE:?missing signal occurrence}" ]; then
+    printf '%s\n' "$created"
+    printf '%s|%s\n' "$SHIP_FLOW_R11_SIGNAL" "$count" >"${SHIP_FLOW_R11_SIGNAL_MARKER:?missing signal marker}"
+    kill -s "$SHIP_FLOW_R11_SIGNAL" "$PPID"
+    exit 0
+  fi
+fi
+printf '%s\n' "$created"
+EOF
+  chmod +x "$bin"
+}
+
+write_feedback_r11_validator_root_signal_wrappers() {
+  local dir="$1"
+  cat >"$dir/mktemp" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+created="$("${SHIP_FLOW_R11_REAL_MKTEMP:?missing real mktemp}" "$@")"
+if [ "$#" = 2 ] && [ "$1" = -d ]; then
+  case "$2" in */ship-flow-closeout-validator.XXXXXX)
+    printf '%s\n' "${SHIP_FLOW_R11_SIGNAL:?missing signal}" >"${SHIP_FLOW_R11_SIGNAL_MARKER:?missing marker}"
+    kill -s "$SHIP_FLOW_R11_SIGNAL" "$PPID"
+    exit 0
+    ;;
+  esac
+fi
+printf '%s\n' "$created"
+EOF
+  cat >"$dir/mkdir" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+"${SHIP_FLOW_R11_REAL_MKDIR:?missing real mkdir}" "$@"
+for arg in "$@"; do
+  case "$arg" in */ship-flow-closeout-validator.*)
+    printf '%s\n' "${SHIP_FLOW_R11_SIGNAL:?missing signal}" >"${SHIP_FLOW_R11_SIGNAL_MARKER:?missing marker}"
+    kill -s "$SHIP_FLOW_R11_SIGNAL" "$PPID"
+    ;;
+  esac
+done
+EOF
+  chmod +x "$dir/mktemp" "$dir/mkdir"
+}
+
+run_feedback_r11_validator_signal_case() {
+  local setup origin seed_repo provider gh_bin registry provider_log initial_tmp real_mktemp rc receipt
+  local occurrence seam signal expected label repo mktemp_bin temp_root counter marker output
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r11-validator-signal-seed)"
+  IFS='|' read -r origin seed_repo provider <<<"$setup"
+  gh_bin="$TMP_DIR/feedback-r11-validator-signal-gh-bin"; registry="$TMP_DIR/feedback-r11-validator-signal.registry"
+  provider_log="$TMP_DIR/feedback-r11-validator-signal-provider.log"; initial_tmp="$TMP_DIR/feedback-r11-validator-signal-seed-tmp"
+  mkdir -p "$gh_bin"; : >"$provider_log"; prepare_feedback_r6_temp_root "$initial_tmp"
+  write_feedback_r5_b1_gh "$gh_bin/gh"
+  rc="$(TMPDIR="$initial_tmp" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$seed_repo" "$TMP_DIR/feedback-r11-validator-signal-seed.out" "$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R11 validator-signal fixture establishes awaiting checkpoint' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$seed_repo")"
+  [ -f "$receipt" ] || { record_fail 'R11 validator-signal fixture has a receipt'; return; }
+  real_mktemp="$(command -v mktemp)"
+
+  while IFS='|' read -r occurrence seam; do
+    while IFS='|' read -r signal expected; do
+      label="$(printf '%s-%s' "$seam" "$signal" | tr '[:upper:]' '[:lower:]')"
+      repo="$seed_repo"
+      mktemp_bin="$TMP_DIR/feedback-r11-validator-${label}-mktemp-bin"
+      temp_root="$TMP_DIR/feedback-r11-validator-${label}-tmp"
+      counter="$TMP_DIR/feedback-r11-validator-${label}.counter"
+      marker="$TMP_DIR/feedback-r11-validator-${label}.marker"
+      output="$TMP_DIR/feedback-r11-validator-${label}.out"
+      mkdir -p "$mktemp_bin"; prepare_feedback_r6_temp_root "$temp_root"
+      write_feedback_r11_mktemp_signal_wrapper "$mktemp_bin/mktemp"
+      rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+        SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R11_REAL_MKTEMP="$real_mktemp" \
+        SHIP_FLOW_R11_TEMP_ROOT="$temp_root" \
+        SHIP_FLOW_R11_SIGNAL="$signal" SHIP_FLOW_R11_SIGNAL_OCCURRENCE="$occurrence" \
+        SHIP_FLOW_R11_SIGNAL_COUNTER="$counter" SHIP_FLOW_R11_SIGNAL_MARKER="$marker" \
+        run_helper_with_path "$repo" "$output" "$mktemp_bin:$gh_bin:$PATH" \
+          --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+      assert_exit "R11 $signal during $seam validator exits with signal contract" "$expected" "$rc"
+      if [ "$(sed -n '1p' "$marker" 2>/dev/null || true)" = "$signal|$occurrence" ]; then
+        record_pass "R11 $signal reaches the $seam validator seam"
+      else
+        record_fail "R11 $signal reaches the $seam validator seam"
+      fi
+      assert_feedback_r6_temp_ownership "R11 $signal during $seam validator" "$temp_root"
+    done <<'EOF'
+HUP|129
+INT|130
+QUIT|131
+TERM|143
+EOF
+  done <<'EOF'
+1|receipt structural
+2|receipt normal
+3|active preflight
+EOF
+
+  while IFS='|' read -r signal expected; do
+    label="$(printf '%s' "$signal" | tr '[:upper:]' '[:lower:]')"
+    mktemp_bin="$TMP_DIR/feedback-r11-validator-root-${label}-bin"
+    temp_root="$TMP_DIR/feedback-r11-validator-root-${label}-tmp"
+    marker="$TMP_DIR/feedback-r11-validator-root-${label}.marker"
+    output="$TMP_DIR/feedback-r11-validator-root-${label}.out"
+    mkdir -p "$mktemp_bin"; prepare_feedback_r6_temp_root "$temp_root"
+    write_feedback_r11_validator_root_signal_wrappers "$mktemp_bin"
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" \
+      SHIP_FLOW_R11_REAL_MKTEMP="$(command -v mktemp)" SHIP_FLOW_R11_REAL_MKDIR="$(command -v mkdir)" \
+      SHIP_FLOW_R11_SIGNAL="$signal" SHIP_FLOW_R11_SIGNAL_MARKER="$marker" \
+      run_helper_with_path "$seed_repo" "$output" "$mktemp_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    assert_exit "R11 $signal during validator-root creation exits with signal contract" "$expected" "$rc"
+    if [ "$(sed -n '1p' "$marker" 2>/dev/null || true)" = "$signal" ]; then
+      record_pass "R11 $signal reaches validator-root creation"
+    else
+      record_fail "R11 $signal reaches validator-root creation"
+    fi
+    assert_feedback_r6_temp_ownership "R11 $signal during validator-root creation" "$temp_root"
+  done <<'EOF'
+HUP|129
+INT|130
+QUIT|131
+TERM|143
+EOF
+}
+
 run_missing_landing_field_matrix() {
   local template_repo="$TMP_DIR/missing-field-template" template_fixture="$TMP_DIR/missing-field-template.env"
   local field expected repo fixture output before_head before_tree after_tree rc
@@ -4203,7 +4532,19 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r10-b1-b2 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r11-b1-b2-b3 ]; then
+    case "${SHIP_FLOW_R11_ONLY:-all}" in
+      history) run_feedback_r11_mature_main_case ;;
+      provider) run_feedback_r11_provider_oid_case ;;
+      signals) run_feedback_r11_validator_signal_case ;;
+      all)
+        run_feedback_r11_mature_main_case
+        run_feedback_r11_provider_oid_case
+        run_feedback_r11_validator_signal_case
+        ;;
+      *) record_fail "unknown SHIP_FLOW_R11_ONLY selection" ;;
+    esac
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r10-b1-b2 ]; then
     if [ "${SHIP_FLOW_R10_ONLY:-}" = terminal ]; then
       run_feedback_r10_terminal_predecessor_case
     else

@@ -20,7 +20,9 @@ source_object_target_tips=()
 owned_bundle_root=""
 owned_predecessor_root=""
 owned_terminal_validation_root=""
+owned_validator_root=""
 recovered_predecessor_path=""
+recovered_predecessor_commit=""
 
 cleanup_owned_bundle_root() {
   local root="${owned_bundle_root:-}"
@@ -32,6 +34,7 @@ cleanup_owned_predecessor_root() {
   local root="${owned_predecessor_root:-}"
   owned_predecessor_root=""
   recovered_predecessor_path=""
+  recovered_predecessor_commit=""
   [ -z "$root" ] || rm -rf -- "$root" >/dev/null 2>&1 || true
 }
 
@@ -41,6 +44,22 @@ cleanup_owned_terminal_validation_root() {
   [ -z "$root" ] || rm -rf -- "$root" >/dev/null 2>&1 || true
 }
 
+# shellcheck disable=SC2329 # Invoked indirectly by the EXIT trap cleanup.
+cleanup_owned_validator_root() {
+  local root="${owned_validator_root:-}"
+  owned_validator_root=""
+  [ -z "$root" ] || rm -rf -- "$root" >/dev/null 2>&1 || true
+}
+
+ensure_owned_validator_root() {
+  [ -z "$owned_validator_root" ] || return 0
+  owned_validator_root="${TMPDIR:-/tmp}/ship-flow-closeout-validator.$$"
+  if ! mkdir -m 700 -- "$owned_validator_root"; then
+    owned_validator_root=""
+    return 1
+  fi
+}
+
 # shellcheck disable=SC2329 # Invoked indirectly by the EXIT trap.
 cleanup_source_object_acquisition() {
   local status=$? index=0
@@ -48,6 +67,7 @@ cleanup_source_object_acquisition() {
   cleanup_owned_bundle_root
   cleanup_owned_predecessor_root
   cleanup_owned_terminal_validation_root
+  cleanup_owned_validator_root
   while [ "$index" -lt "${#source_object_target_repos[@]}" ]; do
     git -C "${source_object_target_repos[$index]}" update-ref -d \
       "${source_object_target_refs[$index]}" "${source_object_target_tips[$index]}" >/dev/null 2>&1 || true
@@ -441,7 +461,8 @@ acquire_source_objects() {
 prepare_receipt_source_commits() {
   local receipt_path="$1" receipt_strategy receipt_pr receipt_repository structural_out structural_rc=0
   local receipt_repository_fold repository_fold
-  structural_out="$(mktemp)"
+  ensure_owned_validator_root
+  structural_out="$(mktemp "$owned_validator_root/validator.XXXXXX")"
   python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --allow-any-path >"$structural_out" 2>&1 || structural_rc=$?
   if [ "$structural_rc" -ne 0 ]; then cat "$structural_out"; rm -f "$structural_out"; return "$structural_rc"; fi
   rm -f "$structural_out"
@@ -694,7 +715,8 @@ PY
   [ "$scan_count" = 1 ] || reject_input closeout-sentinel-multiple "multiple receipt-only closeout candidates match the entity"
   receipt_path="$(printf '%s\n' "$scan_output" | sed -n '2p')"
   receipt_path="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$receipt_path")"
-  validator_out="$(mktemp)"
+  ensure_owned_validator_root
+  validator_out="$(mktemp "$owned_validator_root/validator.XXXXXX")"
   python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --allow-any-path >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
@@ -721,7 +743,8 @@ PY
     validate_closeout_endpoint_provider_binding "$expected_endpoint"
     validate_closeout_leaf_endpoint "$expected_endpoint"
   fi
-  validator_out="$(mktemp)"; validator_rc=0
+  ensure_owned_validator_root
+  validator_out="$(mktemp "$owned_validator_root/validator.XXXXXX")"; validator_rc=0
   validate_receipt_normal "$receipt_path" --repo-root "$repo_root" >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
@@ -761,11 +784,19 @@ PY
   [ "$closeout_pr_number" = "$recorded_pr" ] || reject_input closeout-sentinel-identity-mismatch "resolved closeout PR number differs from receipt"
   [ "$closeout_pr_head" = "$expected_head" ] || reject_input closeout-sentinel-identity-mismatch "resolved closeout PR head differs from deterministic receipt head"
   [ "$closeout_pr_state" = MERGED ] || prompt_captain closeout-pr-awaiting-merge "landed receipt claims an unmerged closeout PR"
-  local awaiting_predecessor="" terminal_receipt="" terminal_sha="" terminal_source="$expected_head" recovery_rc=0
-  if ! git -C "$repo_root" rev-parse --verify "${terminal_source}^{commit}" >/dev/null 2>&1; then
-    if [[ "$closeout_pr_remote_oid" =~ ^[0-9a-f]{40}$ ]] &&
-       git -C "$repo_root" cat-file -e "${closeout_pr_remote_oid}^{commit}" 2>/dev/null; then
-      terminal_source="$closeout_pr_remote_oid"
+  local awaiting_predecessor="" terminal_receipt="" terminal_sha="" terminal_source="" local_terminal_sha="" recovery_rc=0
+  if [[ ! "$closeout_pr_remote_oid" =~ ^[0-9a-f]{40}$ ]] ||
+     ! git -C "$repo_root" cat-file -e "${closeout_pr_remote_oid}^{commit}" 2>/dev/null; then
+    reject_input closeout-checkpoint-conflict \
+      "landed closeout provider head OID is unavailable locally"
+  fi
+  terminal_source="$closeout_pr_remote_oid"
+  if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$expected_head"; then
+    local_terminal_sha="$(git -C "$repo_root" rev-parse --verify "refs/heads/${expected_head}^{commit}" 2>/dev/null || true)"
+    if [ "$local_terminal_sha" != "$terminal_source" ]; then
+      state_name="closeout_pr_awaiting_merge"
+      prompt_captain closeout-checkpoint-conflict \
+        "local deterministic closeout head differs from the authoritative provider head OID"
     fi
   fi
   recover_awaiting_closeout_predecessor "$receipt_relative" "$recorded_pr" "$expected_proof" || recovery_rc=$?
@@ -784,6 +815,11 @@ PY
     reject_input closeout-checkpoint-conflict "landed closeout terminal receipt cannot be recovered"
   }
   if [ -n "$awaiting_predecessor" ]; then
+    git -C "$repo_root" merge-base --is-ancestor "$recovered_predecessor_commit" "$terminal_source" || {
+      state_name="closeout_pr_awaiting_merge"
+      prompt_captain closeout-checkpoint-conflict \
+        "landed closeout provider head does not descend from its durable awaiting checkpoint"
+    }
     optional_terminal_head_matches "$terminal_source" "$receipt_relative" "$recorded_pr" "$expected_proof" "$awaiting_predecessor" || {
       state_name="closeout_pr_awaiting_merge"
       prompt_captain closeout-checkpoint-conflict \
@@ -887,7 +923,8 @@ PY
   }
   receipt_path="$(printf '%s\n' "$match_output" | sed -n '2p')"
   receipt_path="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$receipt_path")"
-  validator_out="$(mktemp)"
+  ensure_owned_validator_root
+  validator_out="$(mktemp "$owned_validator_root/validator.XXXXXX")"
   validate_receipt_normal "$receipt_path" --repo-root "$repo_root" --verify-outputs >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
@@ -1202,7 +1239,8 @@ PY
     previous="$(mktemp)"; cp "$target" "$previous"
     if cmp -s "$target" "$transition_tmp"; then rm -f "$transition_tmp" "$previous"; return 0; fi
   fi
-  validator_out="$(mktemp)"
+  ensure_owned_validator_root
+  validator_out="$(mktemp "$owned_validator_root/validator.XXXXXX")"
   if [ -n "$previous" ]; then
     python3 "$RECEIPT_VALIDATOR" --receipt "$transition_tmp" --previous "$previous" --allow-any-path >"$validator_out" 2>&1 || validator_rc=$?
   else
@@ -1321,7 +1359,8 @@ PY
   [ "$scan_count" = 0 ] && return 0
   [ "$scan_count" = 1 ] || reject_input closeout-sentinel-multiple "multiple active closeout checkpoints match the entity"
   receipt_path="$(printf '%s\n' "$scan_output" | sed -n '2p')"
-  validator_out="$(mktemp)"
+  ensure_owned_validator_root
+  validator_out="$(mktemp "$owned_validator_root/validator.XXXXXX")"
   python3 "$RECEIPT_VALIDATOR" --receipt "$receipt_path" --allow-any-path >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
@@ -1539,6 +1578,7 @@ PY
         if [ -z "$match_hash" ]; then
           match_hash="$candidate_hash"
           recovered_predecessor_path="$candidate"
+          recovered_predecessor_commit="$commit"
           continue
         elif [ "$candidate_hash" != "$match_hash" ]; then
           return 3
@@ -1547,8 +1587,8 @@ PY
     fi
     rm -f "$candidate"
   done <"$history_file"
-  [ "$scanned" -le 32 ] || return 2
   [ -z "$recovered_predecessor_path" ] || return 0
+  [ "$scanned" -le 32 ] || return 2
   return 1
 }
 
