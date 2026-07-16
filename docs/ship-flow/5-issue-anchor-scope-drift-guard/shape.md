@@ -57,7 +57,21 @@ small-batch (2-3 days)
 
 ## Assumptions
 
-(fill in at shape stage)
+- **A1 (critical, 90%)** — The only real route-back into shape is a captain
+  re-invoking `/shape <entity-id>` on an entity already carrying later-stage
+  artifacts; no stage declares `feedback-to: shape`, and ship-shape's Intake
+  table is the attach point. _Verified by: skill-source-read (L0) —
+  workflow-template.yaml declares feedback-to only on verify (→execute);
+  ship-design VETO loops within design; ship-shape Intake table lines 49-57._
+- **A2 (critical, 88%)** — The original issue is fetchable at re-shape time
+  because ship-shape runs in the MAIN FO context (README: shape is FO-direct,
+  not via ensign), so `gh issue view` + the entity `issue:` field suffice and
+  the "subagents cannot call MCP" limit does not bite. _Verified by:
+  skill-source-read — docs/ship-flow/README.md shape stage._
+- **A3 (important, 80%)** — Most drift-prone entities carry an `issue:` field
+  (`tracker: gh|linear`); free-text-origin entities are the minority and get
+  the surface-to-captain exception. _Verified by: codebase-grep —
+  entity-body-schema.yaml lines 40-41._
 
 ## Rabbit Holes
 
@@ -65,6 +79,15 @@ small-batch (2-3 days)
 - reverse-recovery-audit-dangling-path
 - issue-anchor-guard-remaining-triggers
 
-## Deletes
+## Deletes (rejected alternatives)
 
-(fill in from deleted_from_shape)
+- **Mirror reverse-recovery-audit.md as unenforced prose (no Hook, no test)** —
+  the stated analog is itself dangling and untested; ship this guard wired +
+  pinned by a shell test instead, so its AC is enforced not just asserted.
+- **Introduce new SO/EM route values `re-anchor`/`split`** (per issue #49 text) —
+  the real existing vocabulary is `proceed/narrow/return/block/costly_no`; adding
+  values changes the science-officer-em.md contract + its tests. Reconcile onto
+  existing vocab (`re-anchor` → `return`) instead.
+- **Implement all three trigger points this round** — small-batch proves the
+  wedge first; cycle-3 lives in a different repo (spacedock core) and
+  child-creation has no single chokepoint. Deferred to rabbit-holes.
