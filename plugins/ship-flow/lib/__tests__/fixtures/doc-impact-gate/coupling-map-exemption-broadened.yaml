@@ -1,0 +1,8 @@
+schema_version: "1.1"
+couplings:
+  - name: helm-ledger-boundary
+    srcGlobs: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/*.schema.json"]
+    docPaths: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/docs/ledger/boundary-contract.md"]
+    directions: ["source-to-doc", "doc-to-source"]
+    exemptGlobs: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/**"]
+    rationale: "Broad exemption would otherwise bypass protected source changes."

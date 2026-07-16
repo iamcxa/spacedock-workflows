@@ -1,0 +1,7 @@
+schema_version: "99.0"
+couplings:
+  - name: helm-ledger-boundary
+    srcGlobs: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/*.schema.json"]
+    docPaths: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/docs/ledger/boundary-contract.md"]
+    directions: ["source-to-doc", "doc-to-source"]
+    rationale: "Unknown schema versions must fail even when the changed pair is complete."

@@ -1,0 +1,7 @@
+schema_version: "1.1"
+couplings:
+  - name: helm-ledger-boundary
+    srcGlobs: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/*.schema.json"]
+    docPaths: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/docs/ledger/renamed-away.md"]
+    directions: ["source-to-doc", "doc-to-source"]
+    rationale: "A protected doc rename must fail closed until the map changes."

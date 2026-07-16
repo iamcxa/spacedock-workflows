@@ -6,6 +6,7 @@ on:
     paths:
       - 'plugins/ship-flow/**'
       - '.github/workflows/ship-flow-invariants.yml'
+      - '.github/workflows/ship-flow-doc-impact.yml'
       - '.claude-plugin/marketplace.json'
       - 'README.md'
       - 'scripts/**'
@@ -13,9 +14,13 @@ on:
     paths:
       - 'plugins/ship-flow/**'
       - '.github/workflows/ship-flow-invariants.yml'
+      - '.github/workflows/ship-flow-doc-impact.yml'
       - '.claude-plugin/marketplace.json'
       - 'README.md'
       - 'scripts/**'
+
+permissions:
+  contents: read
 
 jobs:
   invariants:
@@ -23,8 +28,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history: the scope diff needs the merge base with the PR base
-          # SHA (or push-event before SHA) and HEAD~1, unavailable at depth 1.
+          # Full history: scope needs the PR merge base or push-event before
+          # SHA, neither of which is reliably available at checkout depth 1.
           fetch-depth: 0
 
       - name: Detect changed-file scope
@@ -33,8 +38,8 @@ jobs:
           BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
           EVENT_NAME="${{ github.event_name }}"
           # Branch-creation push events set `before` to the all-zeros SHA.
-          # Conservatively scan every tracked file: HEAD~1 would miss plugin
-          # changes from earlier commits in a multi-commit initial push.
+          # Conservatively scan every tracked file: a last-commit-only diff
+          # would miss plugin changes earlier in a multi-commit initial push.
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
             CHANGED=$(git ls-files)
           elif ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
@@ -43,11 +48,11 @@ jobs:
           elif [ "$EVENT_NAME" = "pull_request" ]; then
             # PR scope is the topic branch relative to its merge base. This
             # excludes base-only changes added after the branch diverged.
-            CHANGED=$(git diff --name-only "$BASE"...HEAD)
+            CHANGED=$(git diff --no-renames --name-only "$BASE"...HEAD)
           else
             # Push scope is the exact before/after tree delta. Three-dot would
             # lose old-side removals on a non-fast-forward push.
-            CHANGED=$(git diff --name-only "$BASE" HEAD)
+            CHANGED=$(git diff --no-renames --name-only "$BASE" HEAD)
           fi
           echo "Changed files:"
           echo "$CHANGED"
@@ -56,6 +61,11 @@ jobs:
           PLUGIN_CHANGED=false
           DOCS_ONLY=true
           FULL_SUITE=false
+          SOURCE_REPO=false
+
+          if [ -d plugins/ship-flow ]; then
+            SOURCE_REPO=true
+          fi
 
           while IFS= read -r f; do
             if [[ "$f" == plugins/ship-flow/* ]]; then
@@ -79,25 +89,13 @@ jobs:
             echo "full_suite=$FULL_SUITE" >> "$GITHUB_OUTPUT"
           fi
           echo "plugin_changed=$PLUGIN_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "source_repo=$SOURCE_REPO" >> "$GITHUB_OUTPUT"
 
       - name: Lightweight gate (docs-only / non-plugin changes)
-        if: steps.ship_flow_scope.outputs.full_suite == 'false'
+        if: steps.ship_flow_scope.outputs.source_repo == 'true' && steps.ship_flow_scope.outputs.full_suite == 'false'
         run: |
           echo "Docs-only or non-plugin change — running lightweight gate only"
           CI=true bash plugins/ship-flow/bin/check-invariants.sh
-
-      - name: doc-impact-gate (mechanical coupling gate)
-        # Scoped to pull_request events only: on push (post-merge to main),
-        # github.event.pull_request.body is structurally absent — a
-        # legitimately-waived PR would otherwise go green pre-merge and then
-        # RED on main post-merge (codex-gate P1-1).
-        if: steps.ship_flow_scope.outputs.plugin_changed == 'true' && github.event_name == 'pull_request'
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          bash plugins/ship-flow/bin/doc-impact-gate.sh \
-            --changed=/tmp/ship_flow_changed_files.txt \
-            --declaration="$PR_BODY"
 
       - name: Run full ship-flow shell test suite
         if: steps.ship_flow_scope.outputs.full_suite == 'true'
@@ -130,7 +128,9 @@ jobs:
           node --test plugins/ship-flow/bin/*.test.mjs
 
       - name: Check version triple consistency
+        if: steps.ship_flow_scope.outputs.source_repo == 'true'
         run: bash scripts/check-version-triple.sh
 
       - name: Check no dangling references
+        if: steps.ship_flow_scope.outputs.source_repo == 'true'
         run: bash scripts/check-no-dangling.sh
