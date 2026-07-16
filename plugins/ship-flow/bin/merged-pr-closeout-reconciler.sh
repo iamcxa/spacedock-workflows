@@ -1127,6 +1127,39 @@ PY
   git -C "$repo_root" commit -qm "closeout(${entity_slug}): checkpoint ${phase}" -- "$receipt_relative"
 }
 
+bind_closeout_push_destination() {
+  local deterministic_head="$1" resolved="" resolve_rc=0 destination_count remote_ref remote_record="" remote_rc=0
+  resolved="$(git -C "$repo_root" remote get-url --push --all origin 2>/dev/null)" || resolve_rc=$?
+  destination_count="$(printf '%s\n' "$resolved" | awk 'NF{n++} END{print n+0}')"
+  if [ "$resolve_rc" -ne 0 ] || [ "$destination_count" -ne 1 ] || [ -z "$resolved" ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "optional closeout publication requires exactly one authoritative push destination"
+  fi
+  case "$resolved" in
+    -*)
+      state_name="closeout_pr_prepared"
+      prompt_captain closeout-checkpoint-conflict \
+        "optional closeout push destination is malformed"
+      ;;
+  esac
+  closeout_push_destination="$resolved"
+  remote_ref="refs/heads/$deterministic_head"
+  remote_record="$(git -C "$repo_root" ls-remote --exit-code --refs \
+    "$closeout_push_destination" "$remote_ref" 2>/dev/null)" || remote_rc=$?
+  if [ "$remote_rc" -eq 0 ]; then
+    if ! [[ "$remote_record" =~ ^[0-9a-f]{40}[[:space:]]${remote_ref}$ ]]; then
+      state_name="closeout_pr_prepared"
+      prompt_captain closeout-checkpoint-conflict \
+        "optional closeout push destination returned a malformed authoritative ref"
+    fi
+  elif [ "$remote_rc" -ne 2 ] || [ -n "$remote_record" ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "optional closeout push destination cannot be inspected authoritatively"
+  fi
+}
+
 ensure_initial_closeout_head() {
   local deterministic_head="$1" receipt_relative="$2" registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}" seed_root seed_sha
   local remote_ref remote_record remote_rc=0 expected_remote_record push_rc=0
@@ -1155,7 +1188,8 @@ ensure_initial_closeout_head() {
     fi
   else
     remote_ref="refs/heads/$deterministic_head"
-    remote_record="$(git -C "$repo_root" ls-remote --exit-code --refs origin "$remote_ref" 2>/dev/null)" || remote_rc=$?
+    remote_record="$(git -C "$repo_root" ls-remote --exit-code --refs \
+      "$closeout_push_destination" "$remote_ref" 2>/dev/null)" || remote_rc=$?
     if [ "$remote_rc" -eq 0 ]; then
       expected_remote_record="${seed_sha}"$'\t'"${remote_ref}"
       if [ "$remote_record" != "$expected_remote_record" ]; then
@@ -1171,7 +1205,7 @@ ensure_initial_closeout_head() {
     fi
     state_name="closeout_pr_prepared"
     fail_once seed-push
-    git -C "$repo_root" push --force-with-lease="${remote_ref}:" origin \
+    git -C "$repo_root" push --force-with-lease="${remote_ref}:" "$closeout_push_destination" \
       "${deterministic_head}:${remote_ref}" >/dev/null || push_rc=$?
     if [ "$push_rc" -ne 0 ]; then
       prompt_captain closeout-checkpoint-conflict \
@@ -1218,6 +1252,7 @@ resolve_or_create_closeout_pr() {
     fi
     return 0
   fi
+  bind_closeout_push_destination "$deterministic_head"
   ensure_gh_repository
   found="$(gh pr list --head "$deterministic_head" --state all --json number,state,headRefName,headRefOid,isDraft --jq '.[] | [.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")' --repo "$repository")" || list_rc=$?
   if [ "$list_rc" -ne 0 ]; then
@@ -1297,7 +1332,8 @@ PY
     [[ "$closeout_pr_remote_oid" =~ ^[0-9a-f]{40}$ ]] || reject_input closeout-checkpoint-conflict "provider closeout head OID is unavailable for force-with-lease"
     fail_once terminal-push
     if [ "$pr_provider" = gh ]; then
-      git -C "$repo_root" push --force-with-lease="refs/heads/${deterministic_head}:${closeout_pr_remote_oid}" origin "$deterministic_head" >/dev/null
+      git -C "$repo_root" push --force-with-lease="refs/heads/${deterministic_head}:${closeout_pr_remote_oid}" \
+        "$closeout_push_destination" "${deterministic_head}:refs/heads/${deterministic_head}" >/dev/null
     else
       [ -z "${SHIP_FLOW_CLOSEOUT_PR_LOG:-}" ] || printf 'force-with-lease %s %s\n' "$closeout_pr_remote_oid" "$terminal_sha" >>"$SHIP_FLOW_CLOSEOUT_PR_LOG"
       set_registry_field "$registry" remote_oid "$terminal_sha"
@@ -1425,6 +1461,7 @@ closeout_pr_head=""
 closeout_pr_local_oid=""
 closeout_pr_remote_oid=""
 closeout_pr_is_draft=""
+closeout_push_destination=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in

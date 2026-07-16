@@ -1668,7 +1668,7 @@ run_feedback_r5_failure_scenario() {
   local setup origin repo provider gh_bin git_bin registry log marker git_log real_git real_mktemp deterministic_head receipt expected_failure_state
   local first_temp_root rerun_temp_root expected_first_seed_pushes expected_first_terminal_pushes
   local base_head first_head first_tree expected_first_tree first_receipt_hash first_ref_oid="" rc
-  local rerun_head rerun_tree expected_rerun_tree rerun_receipt_hash
+  local rerun_head rerun_tree expected_rerun_tree rerun_receipt_hash bound_push_url publication_refspec
 
   setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r5-$seam")"
   IFS='|' read -r origin repo provider <<<"$setup"
@@ -1676,6 +1676,8 @@ run_feedback_r5_failure_scenario() {
   registry="$TMP_DIR/feedback-r5-$seam.registry"
   log="$TMP_DIR/feedback-r5-$seam.log"; marker="$TMP_DIR/feedback-r5-$seam.marker"
   git_log="$TMP_DIR/feedback-r5-$seam-git.log"; deterministic_head="$(feedback_r5_deterministic_head)"
+  bound_push_url="$(git -C "$repo" remote get-url --push --all origin)"
+  publication_refspec="<${deterministic_head}:refs/heads/${deterministic_head}>"
   first_temp_root="$TMP_DIR/feedback-r5-$seam-first-tmp"; rerun_temp_root="$TMP_DIR/feedback-r5-$seam-rerun-tmp"
   mkdir -p "$gh_bin" "$git_bin"; : >"$log"; : >"$git_log"
   write_feedback_r5_b1_gh "$gh_bin/gh"
@@ -1761,6 +1763,18 @@ run_feedback_r5_failure_scenario() {
   fi
   assert_feedback_r5_count "R6 $seam rerun has one total seed push invocation" '^seed-push ' "$git_log" 1
   assert_feedback_r5_count "R6 $seam rerun has one total terminal force-with-lease invocation" '^terminal-push ' "$git_log" 1
+  if awk -v destination="$bound_push_url" -v refspec="$publication_refspec" \
+    '$1=="seed-push" && index($0,destination) && index($0,refspec){found=1} END{exit !found}' "$git_log"; then
+    record_pass "R8 $seam seed publication binds the single authoritative destination and full ref"
+  else
+    record_fail "R8 $seam seed publication binds the single authoritative destination and full ref"
+  fi
+  if awk -v destination="$bound_push_url" -v refspec="$publication_refspec" \
+    '$1=="terminal-push" && index($0,destination) && index($0,refspec){found=1} END{exit !found}' "$git_log"; then
+    record_pass "R8 $seam terminal publication reuses the authoritative destination and OID lease ref"
+  else
+    record_fail "R8 $seam terminal publication reuses the authoritative destination and OID lease ref"
+  fi
   assert_feedback_r5_count "R5 $seam rerun has exact list call count" '^call pr list ' "$log" "$expected_final_list_calls"
   assert_feedback_r5_count "R5 $seam rerun has exact create call count" '^call pr create ' "$log" "$expected_final_create_calls"
   assert_feedback_r5_count "R5 $seam rerun has exact ready call count" '^call pr ready ' "$log" "$expected_final_ready_calls"
@@ -2008,6 +2022,164 @@ run_feedback_r7_atomic_seed_race_case() {
   assert_feedback_r5_count 'R7 rejected seed publication performs no provider create' '^call pr create ' "$provider_log" 0
   assert_feedback_r5_count 'R7 rejected seed publication performs no provider ready' '^call pr ready ' "$provider_log" 0
   assert_feedback_r6_temp_ownership 'R7 rejected seed publication' "$temp_root"
+}
+
+run_feedback_r8_multi_pushurl_case() {
+  local setup endpoint_a endpoint_b repo provider deterministic_head remote_ref gh_bin git_bin registry
+  local provider_log git_log bundle_log failure_marker temp_root real_git real_mktemp receipt
+  local before_head before_tree before_receipt_hash before_a before_b after_a after_b rc
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r8-multi-pushurl)"
+  IFS='|' read -r endpoint_a repo provider <<<"$setup"
+  endpoint_b="$TMP_DIR/feedback-r8-endpoint-b.git"
+  git clone -q --bare "$endpoint_a" "$endpoint_b"
+  deterministic_head="$(feedback_r5_deterministic_head)"
+  remote_ref="refs/heads/$deterministic_head"
+  git -C "$endpoint_a" update-ref -d "$remote_ref"
+  git -C "$endpoint_b" update-ref "$remote_ref" "$(git -C "$endpoint_b" rev-parse refs/heads/main)"
+
+  gh_bin="$TMP_DIR/feedback-r8-gh-bin"; git_bin="$TMP_DIR/feedback-r8-git-bin"
+  registry="$TMP_DIR/feedback-r8.registry"; provider_log="$TMP_DIR/feedback-r8-provider.log"
+  git_log="$TMP_DIR/feedback-r8-git.log"; bundle_log="$TMP_DIR/feedback-r8-bundle.log"
+  failure_marker="$TMP_DIR/feedback-r8-provider.marker"; temp_root="$TMP_DIR/feedback-r8-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"
+  write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"
+  prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R5_FAILURE=create-before \
+    SHIP_FLOW_R5_FAILURE_MARKER="$failure_marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" \
+    SHIP_FLOW_CLOSEOUT_FAILPOINT=after-prepared run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r8-prepare.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R8 fixture establishes a prepared checkpoint before destination rejection' 1 "$rc"
+  assert_contains 'R8 prepared checkpoint uses stable conflict routing' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r8-prepare.out"
+  receipt="$(feedback_r5_receipt_path "$repo")"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  before_receipt_hash="$(git hash-object "$receipt")"
+
+  git -C "$repo" config --unset-all remote.origin.pushurl 2>/dev/null || true
+  git -C "$repo" config --add remote.origin.pushurl "$endpoint_a"
+  git -C "$repo" config --add remote.origin.pushurl "$endpoint_b"
+  before_a="$(git -C "$endpoint_a" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+  before_b="$(git -C "$endpoint_b" rev-parse --verify "$remote_ref")"
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R5_FAILURE=create-before \
+    SHIP_FLOW_R5_FAILURE_MARKER="$failure_marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r8-reject.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  after_a="$(git -C "$endpoint_a" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+  after_b="$(git -C "$endpoint_b" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+
+  assert_exit 'R8 ambiguous push destination routes through stable retry' 1 "$rc"
+  assert_contains 'R8 ambiguous push destination reports PROMPT_CAPTAIN' '^verdict=PROMPT_CAPTAIN$' "$TMP_DIR/feedback-r8-reject.out"
+  assert_contains 'R8 ambiguous push destination reports stable checkpoint reason' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r8-reject.out"
+  assert_contains 'R8 ambiguous push destination reports prepared checkpoint state' '^state=closeout_pr_prepared$' "$TMP_DIR/feedback-r8-reject.out"
+  assert_feedback_r5_receipt 'R8 ambiguous push destination checkpoint' "$repo" prepared null
+  if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+     [ "$before_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ] && \
+     [ "$before_receipt_hash" = "$(git hash-object "$receipt")" ] && \
+     ! git -C "$repo" show-ref --verify --quiet "$remote_ref"; then
+    record_pass 'R8 destination rejection preserves exact local checkpoint and creates no local seed'
+  else
+    record_fail 'R8 destination rejection preserves exact local checkpoint and creates no local seed'
+  fi
+  if [ "$before_a" = "$after_a" ] && [ "$before_b" = "$after_b" ]; then
+    record_pass "R8 destination rejection preserves both endpoints exactly (A=$after_a B=$after_b)"
+  else
+    record_fail "R8 destination rejection preserves both endpoints exactly (A ${before_a}->${after_a}, B ${before_b}->${after_b})"
+  fi
+  assert_feedback_r5_count 'R8 ambiguous destination performs no seed publication' '^seed-push ' "$git_log" 0
+  assert_feedback_r5_count 'R8 ambiguous destination performs no terminal publication' '^terminal-push ' "$git_log" 0
+  assert_feedback_r5_count 'R8 ambiguous destination performs no provider list' '^call pr list ' "$provider_log" 0
+  assert_feedback_r5_count 'R8 ambiguous destination performs no provider create' '^call pr create ' "$provider_log" 0
+  assert_feedback_r5_count 'R8 ambiguous destination performs no provider ready' '^call pr ready ' "$provider_log" 0
+  assert_feedback_r5_count 'R8 ambiguous destination performs no bundle application' '^apply ' "$bundle_log" 0
+  assert_feedback_r6_temp_ownership 'R8 ambiguous destination rejection' "$temp_root"
+}
+
+run_feedback_r8_invalid_destination_matrix() {
+  local setup origin repo provider deterministic_head remote_ref gh_bin git_bin registry provider_log git_log bundle_log
+  local failure_marker temp_root real_git real_mktemp receipt before_head before_tree before_receipt_hash mode rc
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r8-invalid-destinations)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"
+  remote_ref="refs/heads/$deterministic_head"
+  gh_bin="$TMP_DIR/feedback-r8-invalid-gh-bin"; git_bin="$TMP_DIR/feedback-r8-invalid-git-bin"
+  registry="$TMP_DIR/feedback-r8-invalid.registry"; provider_log="$TMP_DIR/feedback-r8-invalid-provider.log"
+  git_log="$TMP_DIR/feedback-r8-invalid-git.log"; bundle_log="$TMP_DIR/feedback-r8-invalid-bundle.log"
+  failure_marker="$TMP_DIR/feedback-r8-invalid-provider.marker"; temp_root="$TMP_DIR/feedback-r8-invalid-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"
+  write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"
+  prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE=create-before \
+    SHIP_FLOW_R5_FAILURE_MARKER="$failure_marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" \
+    SHIP_FLOW_CLOSEOUT_FAILPOINT=after-prepared run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r8-invalid-prepare.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R8 invalid-destination matrix establishes one prepared checkpoint' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  before_receipt_hash="$(git hash-object "$receipt")"
+  git -C "$repo" remote add upstream https://github.com/example/repo.git
+
+  for mode in missing malformed unresolvable; do
+    git -C "$repo" config --unset-all remote.origin.pushurl 2>/dev/null || true
+    git -C "$repo" config --unset-all remote.origin.url 2>/dev/null || true
+    case "$mode" in
+      missing) ;;
+      malformed)
+        git -C "$repo" config remote.origin.url "$origin"
+        git -C "$repo" config --add remote.origin.pushurl '::malformed-closeout-destination'
+        ;;
+      unresolvable)
+        git -C "$repo" config remote.origin.url "$origin"
+        git -C "$repo" config --add remote.origin.pushurl "$TMP_DIR/feedback-r8-does-not-exist.git"
+        ;;
+    esac
+    : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R5_FAILURE=create-before \
+      SHIP_FLOW_R5_FAILURE_MARKER="$failure_marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+      SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+      SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" \
+      run_helper_with_path "$repo" "$TMP_DIR/feedback-r8-invalid-$mode.out" "$git_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+
+    assert_exit "R8 $mode destination routes through stable retry" 1 "$rc"
+    assert_contains "R8 $mode destination reports PROMPT_CAPTAIN" '^verdict=PROMPT_CAPTAIN$' "$TMP_DIR/feedback-r8-invalid-$mode.out"
+    assert_contains "R8 $mode destination reports stable checkpoint reason" '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r8-invalid-$mode.out"
+    assert_contains "R8 $mode destination reports prepared checkpoint state" '^state=closeout_pr_prepared$' "$TMP_DIR/feedback-r8-invalid-$mode.out"
+    if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+       [ "$before_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ] && \
+       [ "$before_receipt_hash" = "$(git hash-object "$receipt")" ] && \
+       ! git -C "$repo" show-ref --verify --quiet "$remote_ref"; then
+      record_pass "R8 $mode destination preserves exact checkpoint and creates no local seed"
+    else
+      record_fail "R8 $mode destination preserves exact checkpoint and creates no local seed"
+    fi
+    assert_feedback_r5_count "R8 $mode destination performs no publication" '^(seed|terminal)-push ' "$git_log" 0
+    assert_feedback_r5_count "R8 $mode destination performs no provider operation" '^call pr (list|create|ready) ' "$provider_log" 0
+    assert_feedback_r5_count "R8 $mode destination performs no bundle application" '^apply ' "$bundle_log" 0
+    assert_feedback_r6_temp_ownership "R8 $mode destination rejection" "$temp_root"
+  done
 }
 
 run_missing_landing_field_matrix() {
@@ -3159,7 +3331,10 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r7-b1 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r8-b1 ]; then
+    run_feedback_r8_multi_pushurl_case
+    run_feedback_r8_invalid_destination_matrix
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r7-b1 ]; then
     run_feedback_r7_atomic_seed_race_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r5-b1 ]; then
     run_feedback_r5_b1_provider_retry_case
