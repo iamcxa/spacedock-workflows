@@ -9,7 +9,6 @@
 <!-- section:now -->
 | Entity | Title | Stage |
 | --- | --- | --- |
-| c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | ship |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
@@ -53,4 +52,5 @@
 | 1-self-adoption-dogfood-bootstrap | Self-adoption dogfood bootstrap — canonical docs + doc-impact gate | 2026-07-12 (PR #14) |
 | fixture-pollution-discovery-helpers | Fixture-tree exclusion for discovery helpers | 2026-07-15 (landed via PR #39; runtime-reconciled) |
 | 3-root-readme-stale-claims | Refresh root README stale compatibility claims | 2026-07-15 (PR #40) |
+| c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | 2026-07-16 (PR #47) |
 <!-- /section:shipped -->
