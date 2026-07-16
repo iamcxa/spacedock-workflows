@@ -1,0 +1,2 @@
+D	plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/docs/ledger/legacy-renamed-away.md
+D	plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/legacy-renamed-away.schema.json

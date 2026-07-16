@@ -1,0 +1,6 @@
+schema_version: "1.1"
+couplings:
+  - name: stable-row
+    srcGlobs: ["src/stable/**"]
+    docPaths: ["docs/stable.md"]
+    rationale: "Keeps head maps non-empty."

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016 # malicious fixture scripts intentionally preserve variables literally
 # test-check-invariants.sh — DC-3/5/6/7/8/10/11/12/13 runner for #067 ship-flow-invariants
 # Pattern: test-map-layer.sh (same dir) — FAIL=0, exit $FAIL
 # Tests initially FAIL because plugins/ship-flow/bin/check-invariants.sh doesn't exist yet (T3).
@@ -14,6 +15,7 @@ HOOK_SCRIPT="${PLUGIN_DIR}/hooks/warn-direct-read.js"
 FAIL=0
 
 # Load map-helpers for kebab-case validator (reused by check-invariants.sh)
+# shellcheck disable=SC1091 # resolved from sibling lib directory at runtime
 [ -f "${LIB_DIR}/map-helpers.sh" ] && source "${LIB_DIR}/map-helpers.sh"
 
 # ---- Assertion helpers (copied from test-map-layer.sh:13-31) ----
@@ -42,6 +44,7 @@ assert_stderr_contains() {
 
 # Precondition: if check-invariants.sh isn't built yet (T3 not shipped), fail fast
 # with a clear marker — tests that pass only due to exit 127 are a false-pass trap.
+# shellcheck disable=SC2329 # precondition helper retained for progressive task fixtures
 precondition_check_script_exists() {
   if [ ! -x "$CHECK_SCRIPT" ]; then
     echo "PRECONDITION-FAIL: $CHECK_SCRIPT missing or non-executable (T3 not shipped yet)"
@@ -50,6 +53,7 @@ precondition_check_script_exists() {
   fi
 }
 # Precondition: hook script for DC-3
+# shellcheck disable=SC2329 # precondition helper retained for progressive task fixtures
 precondition_hook_exists() {
   if [ ! -f "$HOOK_SCRIPT" ]; then
     echo "PRECONDITION-FAIL: $HOOK_SCRIPT missing (T4 not shipped yet)"
@@ -532,6 +536,7 @@ else echo "FAIL stage-artifact-path: missing plan.md → fail"; FAIL=1; fi
 layer_a_pass_invocation_backtick() {
   local d; d="$(create_mock_plugin_dir)" || return 1
   mkdir -p "$d/plugins/ship-flow/skills/ship-plan"
+  # shellcheck disable=SC2016 # literal Markdown backticks in fixture
   printf '# ship-plan\n\nInvoke `Skill: superpowers:writing-plans` for plan authoring.\n' > "$d/plugins/ship-flow/skills/ship-plan/SKILL.md"
   local rc
   bash "$CHECK_SCRIPT" --test-fixture "$d" --check layer-a-delegation >/dev/null 2>&1; rc=$?
@@ -1292,5 +1297,24 @@ if dc_visible_surface_map_contract_present 2>/dev/null; then
 else
   echo "FAIL visible surface map contract present"; FAIL=1
 fi
+
+assert_exit 0 "bash '$CHECK_SCRIPT' --check frontmatter-stage-output-authority" \
+  "C14 frontmatter authority owner contract present"
+assert_exit 0 "grep -Fq 'frontmatter stage_outputs authority tail' '$PLUGIN_DIR/README.md' && grep -Fq 'read-only stdout renderer' '$PLUGIN_DIR/README.md' && ! sed -n '506,508p' '$PLUGIN_DIR/README.md' | grep -q 'entity body\|triggers render-stage-links'" \
+  "C14 README inventory names frontmatter authority and read-only renderer"
+assert_exit 0 "! sed -n '/_frontmatter_status_at_rev_path()/,/_workflow_transition_allowed_at_rev()/p' '$CHECK_SCRIPT' | grep -Eq 'stage-artifact-links|_entity_bodytable' && ! sed -n '/check_entity_status_via_advance_stage_only()/,/check_frontmatter_stage_output_authority()/p' '$CHECK_SCRIPT' | grep -Eq 'body-table|_entity_bodytable'" \
+  "C14 status checker never parses or classifies historical body tables"
+AUTH_TMP="$(mktemp -d)"
+mkdir -p "$AUTH_TMP/plugins/ship-flow/lib" "$AUTH_TMP/plugins/ship-flow/references"
+cp "$PLUGIN_DIR/lib/render-stage-links.sh" "$AUTH_TMP/plugins/ship-flow/lib/render-stage-links.sh"
+cp "$PLUGIN_DIR/lib/completion-v1.sh" "$AUTH_TMP/plugins/ship-flow/lib/completion-v1.sh"
+cp "$PLUGIN_DIR/references/entity-body-schema.yaml" "$AUTH_TMP/plugins/ship-flow/references/entity-body-schema.yaml"
+printf '%s\n' '#!/usr/bin/env bash' '# source "${SCRIPT_DIR}/completion-v1.sh"' 'printf hacked > "$ENTITY"' "printf '| Stage | File |\\n| --- | --- |\\n'" > "$AUTH_TMP/plugins/ship-flow/lib/render-stage-links.sh"
+assert_stderr_contains "renderer mutated entity" "bash '$CHECK_SCRIPT' --test-fixture '$AUTH_TMP' --check frontmatter-stage-output-authority" \
+  "C14 runtime proof rejects direct entity mutation"
+printf '%s\n' '#!/usr/bin/env bash' '# source "${SCRIPT_DIR}/completion-v1.sh"' 'spacedock --json status >/dev/null' "printf '| Stage | File |\\n| --- | --- |\\n'" > "$AUTH_TMP/plugins/ship-flow/lib/render-stage-links.sh"
+assert_stderr_contains "renderer invoked external spacedock" "bash '$CHECK_SCRIPT' --test-fixture '$AUTH_TMP' --check frontmatter-stage-output-authority" \
+  "C14 runtime proof rejects external status invocation"
+rm -rf "$AUTH_TMP"
 
 exit $FAIL

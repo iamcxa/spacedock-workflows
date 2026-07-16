@@ -4,11 +4,12 @@
 #
 # Usage:
 #   bash write-stage-artifact.sh \
-#     --stage=<plan|execute|verify|review|ship> \
+#     --stage=<plan|design|execute|verify|review|ship> \
 #     --entity=<id>-<slug> \
 #     --content=<path-to-draft-md> \
 #     --workflow-dir=<dir> \
-#     [--if-hash=<sha256>]
+#     [--if-hash=<sha256>] \
+#     [--commit-as=<message>]
 #
 # Exit codes:
 #   0 success
@@ -31,6 +32,8 @@ ENTITY=""
 CONTENT=""
 WORKFLOW_DIR=""
 IF_HASH=""
+COMMIT_MSG=""
+COMMIT_AS_SUPPLIED=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -39,16 +42,21 @@ for arg in "$@"; do
     --content=*)      CONTENT="${arg#--content=}" ;;
     --workflow-dir=*) WORKFLOW_DIR="${arg#--workflow-dir=}" ;;
     --if-hash=*)      IF_HASH="${arg#--if-hash=}" ;;
+    --commit-as=*)    COMMIT_MSG="${arg#--commit-as=}"; COMMIT_AS_SUPPLIED=1 ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
 
-USAGE="Usage: write-stage-artifact.sh --stage=<plan|design|execute|verify|review|ship> --entity=<id>-<slug> --content=<path> --workflow-dir=<dir> [--if-hash=<sha256>]"
+USAGE="Usage: write-stage-artifact.sh --stage=<plan|design|execute|verify|review|ship> --entity=<id>-<slug> --content=<path> --workflow-dir=<dir> [--if-hash=<sha256>] [--commit-as=<message>]"
 
 [ -n "$STAGE" ]        || { echo "Error: --stage required. $USAGE" >&2; exit 1; }
 [ -n "$ENTITY" ]       || { echo "Error: --entity required. $USAGE" >&2; exit 1; }
 [ -n "$CONTENT" ]      || { echo "Error: --content required. $USAGE" >&2; exit 1; }
 [ -n "$WORKFLOW_DIR" ] || { echo "Error: --workflow-dir required. $USAGE" >&2; exit 1; }
+if [ "$COMMIT_AS_SUPPLIED" = "1" ] && [ -z "$COMMIT_MSG" ]; then
+  echo "Error: --commit-as must not be empty. $USAGE" >&2
+  exit 1
+fi
 
 # Validate stage value
 case "$STAGE" in
@@ -213,7 +221,9 @@ if [ -z "$GIT_CONTEXT" ]; then
   exit 0
 fi
 
-COMMIT_MSG="${STAGE}(${ENTITY}): stage artifact landed (${ISO_TS})"
+if [ "$COMMIT_AS_SUPPLIED" = "0" ]; then
+  COMMIT_MSG="${STAGE}(${ENTITY}): stage artifact landed (${ISO_TS})"
+fi
 
 if ! git -C "$GIT_OPERATION_CONTEXT" add -- "$OUT_FILE_GIT_PATH"; then
   if ! restore_artifact_and_index; then

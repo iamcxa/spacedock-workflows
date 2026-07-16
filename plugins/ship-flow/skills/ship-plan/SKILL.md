@@ -411,19 +411,24 @@ C8 enforcement: `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/check-invari
 
 Mark TaskCreate sub-task `emit-plan.md` completed; return to /ship for advance to execute.
 
-### Step 6.1 — Advance entity status (frontmatter wiring)
+### Step 6.1 — Register plan completion
 
 After stage artifact lands, advance sibling `index.md` frontmatter atomically:
 
     INDEX_MD="<entity-folder>/index.md"
-    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    H="$(if command -v sha256sum >/dev/null 2>&1; then sha256sum "$INDEX_MD" | awk '{print $1}'; else shasum -a 256 "$INDEX_MD" | awk '{print $1}'; fi)"
     bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
       --entity="$INDEX_MD" \
       --new-status=plan \
       --stage-name=plan \
       --stage-file=plan.md \
       --if-hash="$H" \
+      --lease-file="$SHIP_FLOW_COMPLETION_LEASE_FILE" --lease-token="$SHIP_FLOW_COMPLETION_LEASE_TOKEN" --worker-id="$SHIP_FLOW_COMPLETION_WORKER_ID" \
       --commit-as="plan(<id>): advance status to plan"
+
+This registers plan completion; it does not enter execute. Return to the First Officer for a separate execute stage-entry transition.
+Return the receipt verbatim. FO reclaims the lease: `published` runs path reconcile;
+`already-registered` runs clean/no-lag. Only `reconciled|ready` may precede Contract 1.
 
 On exit 6 (stale hash): write `## Plan Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 

@@ -226,20 +226,16 @@ if [ "$LAYOUT" = "folder" ]; then
 ---
 id: "${PITCH_ID}"
 title: "${PITCH_TITLE}"
-status: sharp
 pattern: pitch
 appetite: "${PITCH_APPETITE}"
 layout: folder
 harvest_required: true
 $([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
 $([ -n "${PITCH_PRE_MORTEM_YAML}" ] && printf '%s' "${PITCH_PRE_MORTEM_YAML}" || true)
+status: shape
+stage_outputs:
+  shape: shape.md
 ---
-
-<!-- section:stage-artifact-links -->
-| Stage | File |
-|-------|------|
-| shape | [shape.md](shape.md) |
-<!-- /section:stage-artifact-links -->
 EOF
   # shape.md — problem / appetite / children / assumptions / rabbit-holes
   cat > "$PITCH_SHAPE" <<EOF
@@ -334,11 +330,12 @@ for ((i = 0; i < CHILD_COUNT; i++)); do
 ---
 id: "${c_id}"
 title: "${c_title}"
-status: sharp
 pattern: shaped-child
 parent_pitch: "${PITCH_ID}"
 harvest_required: true
 $([ "$LAYOUT" = "folder" ] && echo "layout: folder" || true)
+status: sharp
+stage_outputs: {}
 ---
 
 ### Problem

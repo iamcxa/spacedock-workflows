@@ -17,8 +17,10 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./map-helpers.sh
+# shellcheck disable=SC1091 # resolved relative to this script at runtime
 source "${SCRIPT_DIR}/map-helpers.sh"
+# shellcheck disable=SC1091 # resolved relative to this script at runtime
+source "${SCRIPT_DIR}/completion-v1.sh"
 
 ENTITY=""
 NEW_STATUS=""
@@ -51,21 +53,22 @@ CURRENT_HASH="$(sha256_of "$ENTITY")"
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT INT TERM
 
-# awk state machine: replace ^status: line within frontmatter (between first and second ---)
-awk -v new_status="$NEW_STATUS" '
-  BEGIN { dash_count = 0; in_fm = 0; replaced = 0 }
-  /^---$/ {
-    dash_count++
-    if (dash_count == 1) { in_fm = 1; print; next }
-    if (dash_count == 2) { in_fm = 0; print; next }
+completion_parse_entity "$ENTITY" '' shape shape.md >/dev/null 2>&1 || {
+  echo "Error: malformed canonical frontmatter authority" >&2
+  exit 10
+}
+
+FINAL_LF=0
+[ "$(LC_ALL=C tail -c 1 "$ENTITY" | od -An -t u1 | tr -d ' ')" = 10 ] && FINAL_LF=1
+awk -v new_status="$NEW_STATUS" -v final_lf="$FINAL_LF" '
+  {
+    line=$0
+    if (line=="---") { dash_count++; if (dash_count==1) in_fm=1; else if (dash_count==2) in_fm=0 }
+    else if (in_fm && line ~ /^status:[[:space:]]/ && !replaced) { line="status: " new_status; replaced=1 }
+    if (have) print previous
+    previous=line; have=1
   }
-  in_fm && /^status:[[:space:]]/ && !replaced {
-    print "status: " new_status
-    replaced = 1
-    next
-  }
-  { print }
-  END { if (!replaced) exit 10 }
+  END { if (have) { printf "%s", previous; if (final_lf) printf "%s", ORS }; if (!replaced) exit 10 }
 ' "$ENTITY" > "$TMP"
 AWK_RC=$?
 
@@ -73,6 +76,10 @@ if [ "$AWK_RC" != "0" ]; then
   echo "Error: status field not found in frontmatter (exit $AWK_RC)" >&2
   exit 10
 fi
+completion_parse_entity "$TMP" "$NEW_STATUS" shape shape.md >/dev/null 2>&1 || {
+  echo "Error: invalid status or malformed canonical frontmatter authority" >&2
+  exit 10
+}
 
 mv "$TMP" "$ENTITY"
 trap - EXIT INT TERM

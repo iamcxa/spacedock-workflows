@@ -1,0 +1,7 @@
+schema_version: "1.1"
+couplings:
+  - name: adopter-ledger-contract
+    srcGlobs: ["apps/contracts/*.schema.json"]
+    docPaths: ["docs/contracts/ledger.md"]
+    directions: ["source-to-doc", "doc-to-source"]
+    rationale: "Fixture proves repo-local adopter paths are gated without plugin-path changes."

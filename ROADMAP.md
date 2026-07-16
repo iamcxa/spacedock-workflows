@@ -16,7 +16,6 @@
 <!-- section:next -->
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
-| 2-deterministic-manual-adopter-routing | Deterministic manual adopter skill routing | (pitch) | small-batch (2-3 days) |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
@@ -42,6 +41,7 @@
 | Automatically migrate existing adopters or introduce multiple routing manifests | The selected contract keeps legacy configs readable and adds one canonical manual source. |
 | Refresh README literals to the current release numbers | New hardcoded values would become stale again and preserve the same failure mode. |
 | Record README coupling without a negative grep | A coupling row documents ownership but does not mechanically reject version-shaped drift. |
+| Full-replacement deterministic manual adopter routing (pitch 2 → child 2.1) | Parked 2026-07-16. The original driver #20 (discovery scanning test fixtures) is already fixed and closed, so the acute problem is gone. The ambitious tree-scan→manual-manifest replacement never converged (391 commits, 21 Plan EM re-review/repair cycles, shape cycle 25, `max_dispatches` 32→44) while far exceeding its 2-3 day appetite. Revive only via a fresh minimal shape (e.g. just remove the discovery helper's production reachability + stale docs), not this over-shaped line. Sharp entities `2-deterministic-manual-adopter-routing` / `2.1-manual-fail-closed-adopter-routing` stay dormant (not dispatchable); worktree evidence preserved under `.claude/worktrees/issue20-routing-*`. |
 <!-- /section:not-doing -->
 
 ## Shipped
@@ -52,4 +52,5 @@
 | 1-self-adoption-dogfood-bootstrap | Self-adoption dogfood bootstrap — canonical docs + doc-impact gate | 2026-07-12 (PR #14) |
 | fixture-pollution-discovery-helpers | Fixture-tree exclusion for discovery helpers | 2026-07-15 (landed via PR #39; runtime-reconciled) |
 | 3-root-readme-stale-claims | Refresh root README stale compatibility claims | 2026-07-15 (PR #40) |
+| c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | 2026-07-16 (PR #47) |
 <!-- /section:shipped -->
