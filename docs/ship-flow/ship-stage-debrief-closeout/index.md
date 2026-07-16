@@ -253,32 +253,30 @@ Implemented one fail-closed closeout authority chain from authoritative provider
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Verify current endpoint normalization, rewrite rejection, literal leased send-pack behavior, persisted config
-  drift, and provider refresh with temporary local repositories/fake provider only. Modeled R9 is 59/59 and receipt
-  transitions are 92/92 on Bash 3.2 and 5.3.
-- DONE: Re-run the complete dual-Bash recovery/compatibility envelope and three fresh read-only panels. R8 is 50,
-  R7 19, R5/R6 289, R4 29, R3 107, R2 13+23, and default 198 on both shells; TDD/static and C1-C15 pass.
-- FAILED: R10-B1 proves ambient Git config can authorize an unrelated unmarked fixture endpoint and mutate its ref.
-  R10-B2 proves changed awaiting/terminal endpoint bytes are not provider-bound or predecessor-checked on every
-  recovery/reuse path; a wrong endpoint can receive terminal bytes before provider refresh stops ready.
-- GATE: Round 10 returns R10-B1/B2 plus causal global-marker, altered awaiting/terminal receipt, transport,
-  terminal-lease, legacy-hydration, and provider-refresh regressions to execute. Verdict is FAILED/PROMPT_CAPTAIN;
-  no implementation/test bytes, Review advance, network, repository remote, PR, merge, archive, todo, or RoboRev state changed.
+- DONE: Fresh Cycle 11 treatment verifies the reported Cycle 10 cases: R10 is 120/120 and the signal/provider suite is
+  289/289 on Bash 3.2 and 5.3; R9-R2, receipt, default, landing, optional, and dogfood neighbors are green on both shells.
+- DONE: Static/TDD/schema-registry/C1-C15 and focused C14 pass. Three fresh read-only reviewer lanes independently
+  audited current bytes and every verdict-bearing citation was spot-checked.
+- FAILED: R11-B1 rejects every mature main even when one valid awaiting predecessor is `HEAD^1`; R11-B2 validates a
+  local landed terminal ref without requiring its SHA to equal provider `headRefOid`; R11-B3 leaks bare validator temps
+  on HUP/INT/QUIT/TERM. Exact-function repros observed `recovery_rc=2` with `candidate-1.json` and exit 143 with residue.
+- GATE: Round 11 is FAILED/PROMPT_CAPTAIN and routes R11-B1..B3 to execute. No implementation/test bytes, Review
+  advance, network, remote, PR, merge, archive, todo, or RoboRev state changed.
 
 ### Summary
 
-Round 10 confirms Cycle 9's modeled controls but disproves the provider-bound immutable-endpoint claim on recovery
-and local fixture identity. The Captain-gated VETO is in [verify.md](verify.md).
+Cycle 10's targeted regressions are green, but Cycle 11 finds three acceptance-path recovery defects outside that
+matrix. The Captain-gated VETO and falsifiable claim records are in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 180 across ten verify rounds
-- iteration_count: 10
-- blocking_findings_count: 2 current
-- warning_findings_count: 4
-- claim_records: required VERIFIED=2 NOT VERIFIED=2 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 10; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- duration_minutes: 28 for round 11
+- iteration_count: 11
+- blocking_findings_count: 3 current
+- warning_findings_count: 0
+- claim_records: required VERIFIED=2 NOT VERIFIED=3 INCONCLUSIVE=0
+- reviewer_verdict: VETO round 11; artifact cross-review PROCEED; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
