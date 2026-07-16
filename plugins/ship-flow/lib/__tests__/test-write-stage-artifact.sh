@@ -766,4 +766,143 @@ if (cd "$TMP" && git diff --cached --quiet -- docs/ship-flow/test-entity/verify.
 else echo "FAIL Case-18f artifact has staged diff"; FAIL=1; fi
 rm -rf "$TMP"
 
+echo
+echo "--- Case 19: commit override passes a strict adopter hook unchanged ---"
+TMP="$(setup_repo)"
+CONTENT="$TMP/content.md"
+printf '# Review\n\nAdopter-compatible commit.\n' > "$CONTENT"
+ERR="$TMP/stderr.txt"
+EXPECTED_SUBJECT="docs(ship-flow): write review artifact"
+cat > "$TMP/.git/hooks/commit-msg" <<EOF
+#!/usr/bin/env bash
+SUBJECT="\$(sed -n '1p' "\$1")"
+[ "\$SUBJECT" = "$EXPECTED_SUBJECT" ] || {
+  echo "strict hook rejected subject: \$SUBJECT" >&2
+  exit 1
+}
+EOF
+chmod +x "$TMP/.git/hooks/commit-msg"
+COMMITS_BEFORE="$(cd "$TMP" && git rev-list --count HEAD)"
+(
+  cd "$TMP" || exit 1
+  bash "$WRITER" \
+    --stage=review \
+    --entity=test-entity \
+    --content="$CONTENT" \
+    --workflow-dir=docs/ship-flow \
+    --commit-as="$EXPECTED_SUBJECT"
+) > /dev/null 2> "$ERR"
+RC=$?
+assert_exit 0 "$RC" "Case-19a commit override passes strict hook"
+COMMITS_AFTER="$(cd "$TMP" && git rev-list --count HEAD)"
+if [ $(( COMMITS_AFTER - COMMITS_BEFORE )) = 1 ]; then echo "OK Case-19b override creates one commit"
+else echo "FAIL Case-19b override did not create exactly one commit"; FAIL=1; fi
+ACTUAL_SUBJECT="$(cd "$TMP" && git log -1 --format=%s)"
+if [ "$ACTUAL_SUBJECT" = "$EXPECTED_SUBJECT" ]; then echo "OK Case-19c override subject is exact"
+else echo "FAIL Case-19c expected '$EXPECTED_SUBJECT', got '$ACTUAL_SUBJECT'"; FAIL=1; fi
+if [ -z "$(cd "$TMP" && git status --porcelain -- docs/ship-flow/test-entity/review.md)" ]; then echo "OK Case-19d override artifact committed cleanly"
+else echo "FAIL Case-19d override artifact left dirty"; FAIL=1; fi
+rm -rf "$TMP"
+
+echo
+echo "--- Case 20: explicitly empty commit override fails before mutation ---"
+TMP="$(setup_repo)"
+CONTENT="$(mktemp)"
+printf '# Review\n\nEmpty override must fail early.\n' > "$CONTENT"
+ERR="$TMP/stderr.txt"
+GIT_WRAPPER_DIR="$(mktemp -d)"
+GIT_MUTATIONS="$TMP/git-mutations.txt"
+REAL_GIT="$(command -v git)"
+cat > "$GIT_WRAPPER_DIR/git" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+    add|commit) printf '%s\n' "\$arg" >> "$GIT_MUTATIONS" ;;
+  esac
+done
+exec "$REAL_GIT" "\$@"
+EOF
+chmod +x "$GIT_WRAPPER_DIR/git"
+COMMITS_BEFORE="$(cd "$TMP" && git rev-list --count HEAD)"
+(
+  cd "$TMP" || exit 1
+  PATH="$GIT_WRAPPER_DIR:$PATH" bash "$WRITER" \
+    --stage=review \
+    --entity=test-entity \
+    --content="$CONTENT" \
+    --workflow-dir=docs/ship-flow \
+    --commit-as=
+) > /dev/null 2> "$ERR"
+RC=$?
+assert_exit 1 "$RC" "Case-20a empty override exits 1"
+assert_contains "$ERR" "commit-as must not be empty" "Case-20b empty override error is readable"
+if [ ! -e "$TMP/docs/ship-flow/test-entity" ]; then echo "OK Case-20c entity folder not created"
+else echo "FAIL Case-20c entity folder was created"; FAIL=1; fi
+if [ ! -s "$GIT_MUTATIONS" ]; then echo "OK Case-20d no git mutation command ran"
+else echo "FAIL Case-20d git mutation command ran: $(tr '\n' ' ' < "$GIT_MUTATIONS")"; FAIL=1; fi
+COMMITS_AFTER="$(cd "$TMP" && git rev-list --count HEAD)"
+if [ "$COMMITS_AFTER" = "$COMMITS_BEFORE" ]; then echo "OK Case-20e no commit created"
+else echo "FAIL Case-20e unexpected commit created"; FAIL=1; fi
+rm -rf "$TMP" "$CONTENT" "$GIT_WRAPPER_DIR"
+
+echo
+echo "--- Case 21: omitted override preserves the generated subject exactly ---"
+TMP="$(setup_repo)"
+CONTENT="$TMP/content.md"
+printf '# Review\n\nDefault commit subject.\n' > "$CONTENT"
+ERR="$TMP/stderr.txt"
+DATE_WRAPPER_DIR="$(mktemp -d)"
+REAL_DATE="$(command -v date)"
+cat > "$DATE_WRAPPER_DIR/date" <<EOF
+#!/usr/bin/env bash
+if [ "\${1:-}" = "-u" ] && [ "\${2:-}" = "+%Y-%m-%dT%H:%M:%SZ" ]; then
+  printf '%s\n' '2026-07-15T12:34:56Z'
+  exit 0
+fi
+exec "$REAL_DATE" "\$@"
+EOF
+chmod +x "$DATE_WRAPPER_DIR/date"
+(
+  cd "$TMP" || exit 1
+  PATH="$DATE_WRAPPER_DIR:$PATH" bash "$WRITER" \
+    --stage=review \
+    --entity=test-entity \
+    --content="$CONTENT" \
+    --workflow-dir=docs/ship-flow
+) > /dev/null 2> "$ERR"
+RC=$?
+assert_exit 0 "$RC" "Case-21a default commit exits 0"
+EXPECTED_SUBJECT="review(test-entity): stage artifact landed (2026-07-15T12:34:56Z)"
+ACTUAL_SUBJECT="$(cd "$TMP" && git log -1 --format=%s)"
+if [ "$ACTUAL_SUBJECT" = "$EXPECTED_SUBJECT" ]; then echo "OK Case-21b generated subject is byte-identical"
+else echo "FAIL Case-21b expected '$EXPECTED_SUBJECT', got '$ACTUAL_SUBJECT'"; FAIL=1; fi
+rm -rf "$TMP" "$DATE_WRAPPER_DIR"
+
+echo
+echo "--- Case 22: commit override is passed as data, not evaluated ---"
+TMP="$(setup_repo)"
+CONTENT="$TMP/content.md"
+printf '# Verify\n\nSafe argv commit subject.\n' > "$CONTENT"
+ERR="$TMP/stderr.txt"
+INJECTION_TARGET="$TMP/should-not-exist"
+# shellcheck disable=SC2016 # Literal command-substitution syntax is the security fixture.
+EXPECTED_SUBJECT='docs(ship-flow): literal $(touch should-not-exist) subject'
+(
+  cd "$TMP" || exit 1
+  bash "$WRITER" \
+    --stage=verify \
+    --entity=test-entity \
+    --content="$CONTENT" \
+    --workflow-dir=docs/ship-flow \
+    --commit-as="$EXPECTED_SUBJECT"
+) > /dev/null 2> "$ERR"
+RC=$?
+assert_exit 0 "$RC" "Case-22a metacharacter override exits 0"
+ACTUAL_SUBJECT="$(cd "$TMP" && git log -1 --format=%s)"
+if [ "$ACTUAL_SUBJECT" = "$EXPECTED_SUBJECT" ]; then echo "OK Case-22b metacharacters remain literal"
+else echo "FAIL Case-22b expected literal subject, got '$ACTUAL_SUBJECT'"; FAIL=1; fi
+if [ ! -e "$INJECTION_TARGET" ]; then echo "OK Case-22c override was not evaluated"
+else echo "FAIL Case-22c override executed shell content"; FAIL=1; fi
+rm -rf "$TMP"
+
 exit $FAIL
