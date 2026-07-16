@@ -770,13 +770,19 @@ if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
 fi
 
 if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 141 ]; then
+  number="$(field closeout_pr_number)"; state="$(field closeout_pr_state)"
+  head="$(field closeout_pr_head)"; remote_oid="$(field closeout_pr_remote_oid)"
+  is_draft="$(field closeout_pr_is_draft)"
   require_repo_binding "$@"
+  [ -n "$number" ] || number=141
+  [ -n "$state" ] || state=OPEN
+  [ -n "$head" ] || head="${SHIP_FLOW_R3_CLOSEOUT_HEAD:-}"
+  if [ -z "$remote_oid" ] && [ -n "${SHIP_FLOW_R3_CLOSEOUT_ORIGIN:-}" ] && [ -n "$head" ]; then
+    remote_oid="$(git -C "$SHIP_FLOW_R3_CLOSEOUT_ORIGIN" rev-parse --verify "refs/heads/$head" 2>/dev/null || true)"
+  fi
+  [ -n "$is_draft" ] || is_draft=true
   printf '%s|%s|%s|%s|%s\n' \
-    "$(field closeout_pr_number)" \
-    "$(field closeout_pr_state)" \
-    "$(field closeout_pr_head)" \
-    "$(field closeout_pr_remote_oid)" \
-    "$(field closeout_pr_is_draft)"
+    "$number" "$state" "$head" "$remote_oid" "$is_draft"
   exit 0
 fi
 
@@ -822,6 +828,7 @@ prepare_feedback_r3_b1_main_only_clone() {
   prepare_full_d1_squash_repo "$source_repo" "$source_fixture"
   source_tip="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); n=split($0,oids,","); print oids[n]; exit}' "$source_fixture")"
   git clone -q --bare "$source_repo" "$origin"
+  git -C "$origin" config ship-flow.closeoutFixtureRepository example/repo
   git -C "$origin" update-ref refs/pull/131/head "$source_tip"
   git -C "$origin" update-ref -d refs/heads/ship-merged-fixture-entity
   git -C "$origin" symbolic-ref HEAD refs/heads/main
@@ -1037,6 +1044,25 @@ PY
     run_helper "$repo" "$TMP_DIR/feedback-r3-b1-optional-replay-seed.out" \
       --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$provider" --closeout-mode pull-request)"
   assert_exit 'R3 optional replay fixture seeds exact OPEN receipt candidate' 0 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"
+  git -C "$repo" checkout -q "$deterministic_head"
+  python3 - "$receipt" "file://${origin}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -qm 'fixture: bind R3 terminal publication endpoint'
+  git -C "$repo" checkout -q main
+  python3 - "$receipt" "file://${origin}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -q --amend --no-edit
   terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head")"
   printf '%s\n' "closeout_pr_remote_oid=$terminal_oid" 'closeout_pr_is_draft=false' >>"$provider"
   rm -f "$repo/.git/FETCH_HEAD"
@@ -1060,7 +1086,20 @@ PY
   remote_after="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
   if [ "$remote_before" = "$remote_after" ]; then record_pass 'R3 receipt-only OPEN acquisition performs no remote write'; else record_fail 'R3 receipt-only OPEN acquisition performs no remote write'; fi
 
-  git -C "$repo" merge -q --no-ff "$deterministic_head" -m 'fixture: land optional terminal head'
+  python3 - "$receipt" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"].pop("publication_endpoint",None)
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -q --amend --no-edit
+  if ! git -C "$repo" merge -q --no-ff "$deterministic_head" -m 'fixture: land optional terminal head' >/dev/null 2>&1; then
+    [ "$(git -C "$repo" diff --name-only --diff-filter=U)" = "${receipt#"$repo/"}" ] || exit 1
+    git -C "$repo" checkout -q --theirs -- "${receipt#"$repo/"}"
+    git -C "$repo" add -- "${receipt#"$repo/"}"
+    git -C "$repo" commit -qm 'fixture: land optional terminal head'
+  fi
   perl -0pi -e 's/closeout_pr_state=OPEN/closeout_pr_state=MERGED/' "$provider"
   rm -f "$repo/.git/FETCH_HEAD"
   git -C "$repo" reflog expire --expire=now --all
@@ -1226,11 +1265,12 @@ run_feedback_r4_foreign_cwd_case() {
 
   setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r4-foreign-optional)"
   IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"
   source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
   before_head="$(git -C "$repo" rev-parse HEAD)"
   remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
   rc="$(cd "$outside" && SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
-    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" \
+    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" SHIP_FLOW_R3_CLOSEOUT_ORIGIN="$origin" SHIP_FLOW_R3_CLOSEOUT_HEAD="$deterministic_head" \
     run_helper_with_path "$repo" "$TMP_DIR/feedback-r4-optional.out" "$gh_bin_dir:$PATH" \
       --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
   if [ "$rc" != 0 ]; then sed 's/^/    r4-optional: /' "$TMP_DIR/feedback-r4-optional.out"; fi
@@ -1258,6 +1298,24 @@ PY
       --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$provider" --closeout-mode pull-request)"
   assert_exit 'R4 receipt fixture seeds an exact OPEN replay candidate' 0 "$rc"
   receipt="$(find "$repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  git -C "$repo" checkout -q "$deterministic_head"
+  python3 - "$receipt" "file://${origin}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -qm 'fixture: bind R4 terminal publication endpoint'
+  git -C "$repo" checkout -q main
+  python3 - "$receipt" "file://${origin}" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"]["publication_endpoint"]=sys.argv[2]
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -q --amend --no-edit
   terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head")"
   printf '%s\n' "closeout_pr_remote_oid=$terminal_oid" 'closeout_pr_is_draft=false' >>"$provider"
   rm -f "$repo/.git/FETCH_HEAD"
@@ -1266,7 +1324,7 @@ PY
   before_head="$(git -C "$repo" rev-parse HEAD)"
   remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
   rc="$(cd "$outside" && SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
-    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" \
+    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" SHIP_FLOW_R3_CLOSEOUT_ORIGIN="$origin" SHIP_FLOW_R3_CLOSEOUT_HEAD="$deterministic_head" \
     run_helper_with_path "$repo" "$TMP_DIR/feedback-r4-open.out" "$gh_bin_dir:$PATH" \
       --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
   assert_exit 'R4 foreign-CWD receipt-only OPEN replay succeeds' 0 "$rc"
@@ -1279,12 +1337,25 @@ PY
     record_fail 'R4 foreign-CWD receipt-only OPEN replay is mutation-free'
   fi
 
-  git -C "$repo" merge -q --no-ff "$deterministic_head" -m 'fixture: land R4 optional terminal head'
+  python3 - "$receipt" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"].pop("publication_endpoint",None)
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -q --amend --no-edit
+  if ! git -C "$repo" merge -q --no-ff "$deterministic_head" -m 'fixture: land R4 optional terminal head' >/dev/null 2>&1; then
+    [ "$(git -C "$repo" diff --name-only --diff-filter=U)" = "${receipt#"$repo/"}" ] || exit 1
+    git -C "$repo" checkout -q --theirs -- "${receipt#"$repo/"}"
+    git -C "$repo" add -- "${receipt#"$repo/"}"
+    git -C "$repo" commit -qm 'fixture: land R4 optional terminal head'
+  fi
   perl -0pi -e 's/closeout_pr_state=OPEN/closeout_pr_state=MERGED/' "$provider"
   before_head="$(git -C "$repo" rev-parse HEAD)"
   remote_before="$(git -C "$origin" for-each-ref --format='%(refname) %(objectname)' | sort)"
   rc="$(cd "$outside" && SHIP_FLOW_R3_PROVIDER_FILE="$provider" SHIP_FLOW_R3_GH_LOG="$gh_log" \
-    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" \
+    SHIP_FLOW_R3_GH_REPO_LOG="$repo_log" SHIP_FLOW_R3_CLOSEOUT_ORIGIN="$origin" SHIP_FLOW_R3_CLOSEOUT_HEAD="$deterministic_head" \
     run_helper_with_path "$repo" "$TMP_DIR/feedback-r4-merged.out" "$gh_bin_dir:$PATH" \
       --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
   assert_exit 'R4 foreign-CWD receipt-only MERGED replay succeeds' 0 "$rc"
@@ -1497,6 +1568,7 @@ is_ls_remote=no
 last_arg=""
 for arg in "$@"; do
   [ "$arg" != push ] || is_push=yes
+  [ "$arg" != send-pack ] || is_push=yes
   [ "$arg" != ls-remote ] || is_ls_remote=yes
   case "$arg" in
     --force-with-lease=refs/heads/*:) is_terminal=no ;;
@@ -1516,6 +1588,7 @@ if [ "$is_push" = yes ]; then
   printf '%s' "$kind" >>"$SHIP_FLOW_R6_GIT_LOG"
   printf ' <%s>' "$@" >>"$SHIP_FLOW_R6_GIT_LOG"
   printf '\n' >>"$SHIP_FLOW_R6_GIT_LOG"
+  [ -z "${SHIP_FLOW_R7_TIMELINE:-}" ] || printf 'git %s\n' "$kind" >>"$SHIP_FLOW_R7_TIMELINE"
   if [ "$kind" = seed-push ] && [ "${SHIP_FLOW_R7_RACE_MODE:-}" = create-competitor ] && \
      [ ! -e "${SHIP_FLOW_R7_RACE_MARKER:?missing race marker}" ]; then
     repo=""; previous=""
@@ -2059,6 +2132,14 @@ run_feedback_r8_multi_pushurl_case() {
   assert_exit 'R8 fixture establishes a prepared checkpoint before destination rejection' 1 "$rc"
   assert_contains 'R8 prepared checkpoint uses stable conflict routing' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r8-prepare.out"
   receipt="$(feedback_r5_receipt_path "$repo")"
+  python3 - "$receipt" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"].pop("publication_endpoint",None)
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -q --amend --no-edit
   before_head="$(git -C "$repo" rev-parse HEAD)"
   before_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
   before_receipt_hash="$(git hash-object "$receipt")"
@@ -2135,6 +2216,14 @@ run_feedback_r8_invalid_destination_matrix() {
       --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
   assert_exit 'R8 invalid-destination matrix establishes one prepared checkpoint' 1 "$rc"
   receipt="$(feedback_r5_receipt_path "$repo")"
+  python3 - "$receipt" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"].pop("publication_endpoint",None)
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -q --amend --no-edit
   before_head="$(git -C "$repo" rev-parse HEAD)"
   before_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
   before_receipt_hash="$(git hash-object "$receipt")"
@@ -2180,6 +2269,230 @@ run_feedback_r8_invalid_destination_matrix() {
     assert_feedback_r5_count "R8 $mode destination performs no bundle application" '^apply ' "$bundle_log" 0
     assert_feedback_r6_temp_ownership "R8 $mode destination rejection" "$temp_root"
   done
+}
+
+run_feedback_r9_alias_and_rewrite_case() {
+  local mode setup endpoint_a endpoint_b repo provider deterministic_head remote_ref gh_bin git_bin registry
+  local provider_log git_log bundle_log failure_marker temp_root real_git real_mktemp receipt
+  local before_head before_tree before_receipt_hash before_a before_b after_a after_b rc
+  for mode in nested-remote chained-rewrite non-provider-local; do
+    setup="$(prepare_feedback_r3_b1_main_only_clone "feedback-r9-${mode}")"
+    IFS='|' read -r endpoint_a repo provider <<<"$setup"
+    endpoint_b="$TMP_DIR/feedback-r9-${mode}-endpoint-b.git"
+    git clone -q --bare "$endpoint_a" "$endpoint_b"
+    deterministic_head="$(feedback_r5_deterministic_head)"
+    remote_ref="refs/heads/$deterministic_head"
+    git -C "$endpoint_a" update-ref -d "$remote_ref"
+    git -C "$endpoint_b" update-ref -d "$remote_ref"
+
+    gh_bin="$TMP_DIR/feedback-r9-${mode}-gh-bin"; git_bin="$TMP_DIR/feedback-r9-${mode}-git-bin"
+    registry="$TMP_DIR/feedback-r9-${mode}.registry"; provider_log="$TMP_DIR/feedback-r9-${mode}-provider.log"
+    git_log="$TMP_DIR/feedback-r9-${mode}-git.log"; bundle_log="$TMP_DIR/feedback-r9-${mode}-bundle.log"
+    failure_marker="$TMP_DIR/feedback-r9-${mode}-provider.marker"; temp_root="$TMP_DIR/feedback-r9-${mode}-tmp"
+    mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+    write_feedback_r5_b1_gh "$gh_bin/gh"
+    write_feedback_r6_git_wrapper "$git_bin/git"
+    write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"
+    prepare_feedback_r6_temp_root "$temp_root"
+    real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R5_FAILURE=create-before \
+      SHIP_FLOW_R5_FAILURE_MARKER="$failure_marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+      SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+      SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" \
+      SHIP_FLOW_CLOSEOUT_FAILPOINT=after-prepared run_helper_with_path "$repo" \
+        "$TMP_DIR/feedback-r9-${mode}-prepare.out" "$git_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    assert_exit "R9 $mode fixture establishes one prepared checkpoint" 1 "$rc"
+    receipt="$(feedback_r5_receipt_path "$repo")"
+    python3 - "$receipt" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"].pop("publication_endpoint",None)
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+    git -C "$repo" add -- "${receipt#"$repo/"}"
+    git -C "$repo" commit -q --amend --no-edit
+    before_head="$(git -C "$repo" rev-parse HEAD)"
+    before_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+    before_receipt_hash="$(git hash-object "$receipt")"
+
+    git -C "$repo" remote add provider-source https://github.com/example/repo.git
+    git -C "$repo" config --unset-all remote.origin.pushurl 2>/dev/null || true
+    case "$mode" in
+      nested-remote)
+        git -C "$endpoint_b" update-ref "$remote_ref" "$(git -C "$endpoint_b" rev-parse refs/heads/main)"
+        git -C "$repo" remote add nested-publication "$endpoint_a"
+        git -C "$repo" config --add remote.nested-publication.pushurl "$endpoint_a"
+        git -C "$repo" config --add remote.nested-publication.pushurl "$endpoint_b"
+        git -C "$repo" config remote.origin.url nested-publication
+        ;;
+      chained-rewrite)
+        git -C "$repo" config remote.origin.url https://github.com/example/repo.git
+        git -C "$repo" config "url.file://${endpoint_a}.pushInsteadOf" https://github.com/example/repo.git
+        git -C "$repo" config "url.file://${endpoint_b}.pushInsteadOf" "file://${endpoint_a}"
+        ;;
+      non-provider-local)
+        git -C "$endpoint_b" update-ref refs/pull/131/head "$(git -C "$endpoint_a" rev-parse refs/pull/131/head)"
+        git -C "$endpoint_b" config --unset-all ship-flow.closeoutFixtureRepository 2>/dev/null || true
+        git -C "$repo" config --unset-all "url.file://${endpoint_a}.insteadOf" 2>/dev/null || true
+        git -C "$repo" config remote.origin.url https://github.com/example/repo.git
+        git -C "$repo" config "url.file://${endpoint_b}.insteadOf" https://github.com/example/repo.git
+        ;;
+    esac
+    before_a="$(git -C "$endpoint_a" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+    before_b="$(git -C "$endpoint_b" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+    : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+
+    rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+      SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$endpoint_a" SHIP_FLOW_R5_FAILURE=create-before \
+      SHIP_FLOW_R5_FAILURE_MARKER="$failure_marker" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+      SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+      SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" \
+      run_helper_with_path "$repo" "$TMP_DIR/feedback-r9-${mode}-reject.out" "$git_bin:$gh_bin:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+    after_a="$(git -C "$endpoint_a" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+    after_b="$(git -C "$endpoint_b" rev-parse --verify "$remote_ref" 2>/dev/null || printf absent)"
+
+    assert_exit "R9 $mode routes through stable retry" 1 "$rc"
+    assert_contains "R9 $mode reports PROMPT_CAPTAIN" '^verdict=PROMPT_CAPTAIN$' "$TMP_DIR/feedback-r9-${mode}-reject.out"
+    assert_contains "R9 $mode reports checkpoint conflict" '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r9-${mode}-reject.out"
+    assert_contains "R9 $mode reports prepared state" '^state=closeout_pr_prepared$' "$TMP_DIR/feedback-r9-${mode}-reject.out"
+    if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+       [ "$before_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ] && \
+       [ "$before_receipt_hash" = "$(git hash-object "$receipt")" ] && \
+       ! git -C "$repo" show-ref --verify --quiet "$remote_ref"; then
+      record_pass "R9 $mode preserves exact prepared checkpoint and creates no local seed"
+    else
+      record_fail "R9 $mode preserves exact prepared checkpoint and creates no local seed"
+    fi
+    if [ "$before_a" = "$after_a" ] && [ "$before_b" = "$after_b" ]; then
+      record_pass "R9 $mode preserves every concrete endpoint ref"
+    else
+      record_fail "R9 $mode preserves every concrete endpoint ref (A ${before_a}->${after_a}, B ${before_b}->${after_b})"
+    fi
+    assert_feedback_r5_count "R9 $mode performs no publication" '^(seed|terminal)-push ' "$git_log" 0
+    assert_feedback_r5_count "R9 $mode performs no provider operation" '^call pr (list|create|ready) ' "$provider_log" 0
+    assert_feedback_r5_count "R9 $mode performs no bundle application" '^apply ' "$bundle_log" 0
+    assert_feedback_r6_temp_ownership "R9 $mode rejection" "$temp_root"
+  done
+}
+
+run_feedback_r9_bound_endpoint_drift_case() {
+  local setup provider_endpoint endpoint_b endpoint_c repo provider deterministic_head remote_ref gh_bin git_bin registry
+  local provider_log git_log bundle_log timeline temp_root real_git real_mktemp receipt bound_endpoint seed_oid terminal_oid rc post_terminal_query
+  local legacy_head legacy_tree legacy_receipt_hash legacy_a legacy_b legacy_c
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r9-bound-endpoint-drift)"
+  IFS='|' read -r provider_endpoint repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"; remote_ref="refs/heads/$deterministic_head"
+  gh_bin="$TMP_DIR/feedback-r9-drift-gh-bin"; git_bin="$TMP_DIR/feedback-r9-drift-git-bin"
+  registry="$TMP_DIR/feedback-r9-drift.registry"; provider_log="$TMP_DIR/feedback-r9-drift-provider.log"
+  git_log="$TMP_DIR/feedback-r9-drift-git.log"; bundle_log="$TMP_DIR/feedback-r9-drift-bundle.log"
+  timeline="$TMP_DIR/feedback-r9-drift.timeline"
+  temp_root="$TMP_DIR/feedback-r9-drift-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"; : >"$timeline"
+  write_feedback_r5_b1_gh "$gh_bin/gh"
+  write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"
+  prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$provider_endpoint" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_R7_TIMELINE="$timeline" \
+    SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r9-drift-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R9 drift fixture establishes awaiting checkpoint before terminal publication' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"
+  seed_oid="$(git -C "$provider_endpoint" rev-parse "$remote_ref")"
+  bound_endpoint="file://${provider_endpoint}"
+  if python3 - "$receipt" "$bound_endpoint" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+raise SystemExit(0 if r["transaction"].get("publication_endpoint")==sys.argv[2] else 1)
+PY
+  then record_pass 'R9 awaiting checkpoint persists the provider-bound leaf endpoint'; else record_fail 'R9 awaiting checkpoint persists the provider-bound leaf endpoint'; fi
+
+  endpoint_b="$TMP_DIR/feedback-r9-drift-endpoint-b.git"; endpoint_c="$TMP_DIR/feedback-r9-drift-endpoint-c.git"
+  git clone -q --bare "$provider_endpoint" "$endpoint_b"
+  git clone -q --bare "$provider_endpoint" "$endpoint_c"
+  git -C "$repo" remote add provider-source https://github.com/example/repo.git
+  git -C "$repo" remote add drift-publication "$endpoint_b"
+  git -C "$repo" config --add remote.drift-publication.pushurl "$endpoint_b"
+  git -C "$repo" config --add remote.drift-publication.pushurl "$endpoint_c"
+  git -C "$repo" config remote.origin.url drift-publication
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"; : >"$timeline"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$provider_endpoint" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_R7_TIMELINE="$timeline" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r9-drift-rerun.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head")"
+  assert_exit 'R9 endpoint drift retry converges through the persisted provider leaf' 0 "$rc"
+  assert_contains 'R9 endpoint drift retry awaits merge' '^reason=closeout-pr-awaiting-merge$' "$TMP_DIR/feedback-r9-drift-rerun.out"
+  if [ "$(git -C "$provider_endpoint" rev-parse "$remote_ref")" = "$terminal_oid" ] && \
+     [ "$(git -C "$endpoint_b" rev-parse "$remote_ref")" = "$seed_oid" ] && \
+     [ "$(git -C "$endpoint_c" rev-parse "$remote_ref")" = "$seed_oid" ]; then
+    record_pass 'R9 retry publishes terminal bytes only to the persisted provider endpoint'
+  else
+    record_fail 'R9 retry publishes terminal bytes only to the persisted provider endpoint'
+  fi
+  post_terminal_query="$(awk '/^git terminal-push$/{seen=1; next} seen && /^provider pr view 141 /{print; exit}' "$timeline")"
+  if [ -n "$post_terminal_query" ]; then record_pass 'R9 terminal publication re-queries the bound provider PR'; else record_fail 'R9 terminal publication re-queries the bound provider PR'; fi
+  assert_contains 'R9 provider becomes ready only while reporting the terminal OID' "^effect ready 141 ${terminal_oid}$" "$provider_log"
+  assert_feedback_r5_count 'R9 endpoint drift performs one terminal publication' '^terminal-push ' "$git_log" 1
+  assert_feedback_r5_count 'R9 endpoint drift performs one ready side effect' '^effect ready ' "$provider_log" 1
+  assert_feedback_r5_receipt 'R9 endpoint drift preserves awaiting checkpoint' "$repo" awaiting_closeout_pr 141
+  if python3 - "$receipt" "$bound_endpoint" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+raise SystemExit(0 if r["transaction"].get("publication_endpoint")==sys.argv[2] else 1)
+PY
+  then record_pass 'R9 retry preserves the exact bound endpoint bytes'; else record_fail 'R9 retry preserves the exact bound endpoint bytes'; fi
+  assert_feedback_r6_temp_ownership 'R9 endpoint drift retry' "$temp_root"
+
+  python3 - "$receipt" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text())
+r["transaction"].pop("publication_endpoint",None)
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+  git -C "$repo" add -- "${receipt#"$repo/"}"
+  git -C "$repo" commit -q --amend --no-edit
+  legacy_head="$(git -C "$repo" rev-parse HEAD)"; legacy_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  legacy_receipt_hash="$(git hash-object "$receipt")"
+  legacy_a="$(git -C "$provider_endpoint" rev-parse "$remote_ref")"
+  legacy_b="$(git -C "$endpoint_b" rev-parse "$remote_ref")"
+  legacy_c="$(git -C "$endpoint_c" rev-parse "$remote_ref")"
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"; : >"$timeline"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$provider_endpoint" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" \
+    SHIP_FLOW_R6_TEMP_ROOT="$temp_root" SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_R7_TIMELINE="$timeline" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r9-legacy-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R9 legacy awaiting checkpoint routes through stable retry' 1 "$rc"
+  assert_contains 'R9 legacy awaiting checkpoint reports PROMPT_CAPTAIN' '^verdict=PROMPT_CAPTAIN$' "$TMP_DIR/feedback-r9-legacy-awaiting.out"
+  assert_contains 'R9 legacy awaiting checkpoint reports checkpoint conflict' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r9-legacy-awaiting.out"
+  assert_contains 'R9 legacy awaiting checkpoint reports prepared recovery state' '^state=closeout_pr_prepared$' "$TMP_DIR/feedback-r9-legacy-awaiting.out"
+  if [ "$legacy_head" = "$(git -C "$repo" rev-parse HEAD)" ] && \
+     [ "$legacy_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ] && \
+     [ "$legacy_receipt_hash" = "$(git hash-object "$receipt")" ] && \
+     [ "$legacy_a" = "$(git -C "$provider_endpoint" rev-parse "$remote_ref")" ] && \
+     [ "$legacy_b" = "$(git -C "$endpoint_b" rev-parse "$remote_ref")" ] && \
+     [ "$legacy_c" = "$(git -C "$endpoint_c" rev-parse "$remote_ref")" ]; then
+    record_pass 'R9 legacy awaiting rejection preserves checkpoint and every endpoint ref'
+  else
+    record_fail 'R9 legacy awaiting rejection preserves checkpoint and every endpoint ref'
+  fi
+  assert_feedback_r5_count 'R9 legacy awaiting performs no closeout provider query or mutation' '^call pr (view 141|list|create|ready) ' "$provider_log" 0
+  assert_feedback_r5_count 'R9 legacy awaiting performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+  assert_feedback_r5_count 'R9 legacy awaiting performs no bundle application' '^apply ' "$bundle_log" 0
 }
 
 run_missing_landing_field_matrix() {
@@ -3331,7 +3644,10 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r8-b1 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r9-b1-b2 ]; then
+    run_feedback_r9_alias_and_rewrite_case
+    run_feedback_r9_bound_endpoint_drift_case
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r8-b1 ]; then
     run_feedback_r8_multi_pushurl_case
     run_feedback_r8_invalid_destination_matrix
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r7-b1 ]; then

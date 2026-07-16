@@ -49,6 +49,7 @@ r={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":i
  "transaction":{"phase":phase,"generation":1,"closeout_pr":None,"main_commit":None},
  "outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-07-15-01.md","sha256":h},"ship":{"path":"docs/ship-flow/_archive/widget-closeout/ship.md","sha256":h},"archived_entity":{"path":"docs/ship-flow/_archive/widget-closeout/index.md","sha256":h},"roadmap_row":{"identity":"widget-closeout","sha256":h}}}
 payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}
+if mode=="pull_request": r["transaction"]["publication_endpoint"]="file:///tmp/acme-widgets.git"
 r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
 pathlib.Path(path).parent.mkdir(parents=True,exist_ok=True); pathlib.Path(path).write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
 PY
@@ -529,6 +530,39 @@ transition_receipt "$TMP/pr-applied.json" "$TMP/pr-changed.json" complete 4 89 "
 expect_reason "closeout PR is immutable" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/pr-changed.json" --previous "$TMP/pr-applied.json" --allow-any-path
 transition_receipt "$TMP/pr-applied.json" "$TMP/main-changed.json" complete 4 88 "e$(printf 'e%.0s' {1..39})"
 expect_reason "main commit is immutable" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/main-changed.json" --previous "$TMP/pr-applied.json" --allow-any-path
+python3 - "$TMP/pr-prepared.json" "$TMP/pr-endpoint-mutated.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); r["transaction"]["publication_endpoint"]="file:///tmp/other.git"
+json.dump(r,open(sys.argv[2],"w"),sort_keys=True,indent=2); open(sys.argv[2],"a").write("\n")
+PY
+expect_reason "publication endpoint is immutable across replay" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/pr-endpoint-mutated.json" --previous "$TMP/pr-prepared.json" --allow-any-path
+python3 - "$TMP/direct-prepared.json" "$TMP/direct-with-endpoint.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); r["transaction"]["publication_endpoint"]="file:///tmp/acme-widgets.git"
+json.dump(r,open(sys.argv[2],"w"),sort_keys=True,indent=2); open(sys.argv[2],"a").write("\n")
+PY
+expect_reason "direct mode cannot bind a publication endpoint" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/direct-with-endpoint.json" --allow-any-path
+python3 - "$TMP/pr-prepared.json" "$TMP/pr-legacy-prepared.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); del r["transaction"]["publication_endpoint"]
+json.dump(r,open(sys.argv[2],"w"),sort_keys=True,indent=2); open(sys.argv[2],"a").write("\n")
+PY
+expect_ok "legacy prepared checkpoint remains structurally readable" python3 "$VALIDATOR" --receipt "$TMP/pr-legacy-prepared.json" --allow-any-path
+expect_ok "legacy prepared checkpoint can bind one proven endpoint without generation drift" python3 "$VALIDATOR" --receipt "$TMP/pr-prepared.json" --previous "$TMP/pr-legacy-prepared.json" --allow-any-path
+expect_reason "legacy prepared checkpoint cannot first bind endpoint while advancing to awaiting" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/pr-awaiting.json" --previous "$TMP/pr-legacy-prepared.json" --allow-any-path
+python3 - "$TMP/pr-awaiting.json" "$TMP/pr-legacy-awaiting.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); del r["transaction"]["publication_endpoint"]
+json.dump(r,open(sys.argv[2],"w"),sort_keys=True,indent=2); open(sys.argv[2],"a").write("\n")
+PY
+expect_reason "legacy awaiting checkpoint cannot first bind endpoint while advancing to applied" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/pr-applied.json" --previous "$TMP/pr-legacy-awaiting.json" --allow-any-path
+python3 - "$TMP/pr-applied.json" "$TMP/pr-legacy-applied.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1])); del r["transaction"]["publication_endpoint"]
+json.dump(r,open(sys.argv[2],"w"),sort_keys=True,indent=2); open(sys.argv[2],"a").write("\n")
+PY
+transition_receipt "$TMP/pr-applied.json" "$TMP/pr-complete.json" complete 4 88 "$(printf 'b%.0s' {1..40})"
+expect_reason "legacy applied checkpoint cannot first bind endpoint while advancing to complete" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/pr-complete.json" --previous "$TMP/pr-legacy-applied.json" --allow-any-path
 
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

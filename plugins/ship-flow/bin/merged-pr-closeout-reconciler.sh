@@ -654,7 +654,7 @@ read_closeout_pr_gh() {
 }
 
 scan_closeout_receipts() {
-  local scan_output scan_count receipt_path receipt_relative phase mode expected_head recorded_pr expected_proof validator_out validator_rc=0 active_candidate terminal_sha="" terminal_ready=no
+  local scan_output scan_count receipt_path receipt_relative phase mode expected_head recorded_pr expected_proof expected_endpoint validator_out validator_rc=0 active_candidate terminal_sha="" terminal_ready=no
   scan_output="$(python3 - "$workflow_dir" "$entity_ref" <<'PY'
 import json,pathlib,sys
 root,ref=pathlib.Path(sys.argv[1]),sys.argv[2]
@@ -680,14 +680,19 @@ PY
   validate_receipt_normal "$receipt_path" --repo-root "$repo_root" >"$validator_out" 2>&1 || validator_rc=$?
   if [ "$validator_rc" -ne 0 ]; then cat "$validator_out"; rm -f "$validator_out"; exit "$validator_rc"; fi
   rm -f "$validator_out"
-  IFS=$'\t' read -r mode phase recorded_pr expected_head expected_proof < <(python3 - "$receipt_path" <<'PY'
+  IFS=$'\t' read -r mode phase recorded_pr expected_head expected_proof expected_endpoint < <(python3 - "$receipt_path" <<'PY'
 import json,sys
 r=json.load(open(sys.argv[1])); t=r["transaction"]
-print(r["mode"],t["phase"],t["closeout_pr"] or "",r["deterministic_closeout_head"],r["proof_hash"],sep="\t")
+print(r["mode"],t["phase"],t["closeout_pr"] or "",r["deterministic_closeout_head"],r["proof_hash"],t.get("publication_endpoint") or "",sep="\t")
 PY
 )
   [ "$mode" = pull_request ] || return 0
   [ -n "$recorded_pr" ] || reject_input closeout-checkpoint-conflict "receipt-only PR recovery lacks a closeout PR number"
+  if [ "$pr_provider" = gh ] && [ -z "$expected_endpoint" ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "legacy awaiting checkpoint lacks a provable publication endpoint"
+  fi
   case "$pr_provider" in
     fixture) read_closeout_pr_fixture "$pr_fixture" ;;
     gh) read_closeout_pr_gh "$recorded_pr" ;;
@@ -1101,13 +1106,14 @@ checkpoint_optional_receipt() {
   local source="$1" receipt_relative="$2" phase="$3" generation="$4" bound_pr="$5"
   local target="$repo_root/$receipt_relative" previous="" transition_tmp validator_out validator_rc=0
   transition_tmp="$(mktemp)"
-  python3 - "$source" "$transition_tmp" "$phase" "$generation" "$bound_pr" <<'PY'
+  python3 - "$source" "$transition_tmp" "$phase" "$generation" "$bound_pr" "${closeout_push_destination:-null}" <<'PY'
 import json,pathlib,sys
-source,target,phase,generation,bound_pr=sys.argv[1:]
+source,target,phase,generation,bound_pr,publication_endpoint=sys.argv[1:]
 r=json.load(open(source)); r["mode"]="pull_request"
 r["transaction"]={"phase":phase,"generation":int(generation),
                   "closeout_pr":None if bound_pr=="null" else int(bound_pr),
                   "main_commit":None}
+if publication_endpoint!="null": r["transaction"]["publication_endpoint"]=publication_endpoint
 pathlib.Path(target).write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
 PY
   if [ -f "$target" ]; then
@@ -1127,23 +1133,49 @@ PY
   git -C "$repo_root" commit -qm "closeout(${entity_slug}): checkpoint ${phase}" -- "$receipt_relative"
 }
 
-bind_closeout_push_destination() {
-  local deterministic_head="$1" resolved="" resolve_rc=0 destination_count remote_ref remote_record="" remote_rc=0
-  resolved="$(git -C "$repo_root" remote get-url --push --all origin 2>/dev/null)" || resolve_rc=$?
-  destination_count="$(printf '%s\n' "$resolved" | awk 'NF{n++} END{print n+0}')"
-  if [ "$resolve_rc" -ne 0 ] || [ "$destination_count" -ne 1 ] || [ -z "$resolved" ]; then
-    state_name="closeout_pr_prepared"
-    prompt_captain closeout-checkpoint-conflict \
-      "optional closeout publication requires exactly one authoritative push destination"
-  fi
-  case "$resolved" in
-    -*)
+closeout_endpoint_rewrite_applies() {
+  local endpoint="$1" key value keys
+  keys="$(git -C "$repo_root" config --name-only --get-regexp '^url\..*\.(insteadOf|pushInsteadOf)$' 2>/dev/null || true)"
+  while IFS= read -r key; do
+    [ -n "$key" ] || continue
+    while IFS= read -r value; do
+      [ -n "$value" ] || continue
+      case "$endpoint" in "$value"*) return 0 ;; esac
+    done < <(git -C "$repo_root" config --get-all "$key" 2>/dev/null || true)
+  done <<<"$keys"
+  return 1
+}
+
+validate_closeout_leaf_endpoint() {
+  local endpoint="$1" resolved_again="" resolve_rc=0
+  case "$endpoint" in
+    ""|-*|*$'\n'*|*$'\r'*)
       state_name="closeout_pr_prepared"
       prompt_captain closeout-checkpoint-conflict \
-        "optional closeout push destination is malformed"
+        "optional closeout publication endpoint is malformed"
       ;;
   esac
-  closeout_push_destination="$resolved"
+  if git -C "$repo_root" remote | grep -Fqx -- "$endpoint"; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "optional closeout publication endpoint resolves through another configured remote"
+  fi
+  if closeout_endpoint_rewrite_applies "$endpoint"; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "optional closeout publication endpoint remains subject to URL rewriting"
+  fi
+  resolved_again="$(git -C "$repo_root" ls-remote --get-url "$endpoint" 2>/dev/null)" || resolve_rc=$?
+  if [ "$resolve_rc" -ne 0 ] || [ "$resolved_again" != "$endpoint" ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "optional closeout publication endpoint is not a stable literal leaf"
+  fi
+}
+
+inspect_closeout_leaf_endpoint() {
+  local deterministic_head="$1" remote_ref remote_record="" remote_rc=0
+  validate_closeout_leaf_endpoint "$closeout_push_destination"
   remote_ref="refs/heads/$deterministic_head"
   remote_record="$(git -C "$repo_root" ls-remote --exit-code --refs \
     "$closeout_push_destination" "$remote_ref" 2>/dev/null)" || remote_rc=$?
@@ -1151,13 +1183,51 @@ bind_closeout_push_destination() {
     if ! [[ "$remote_record" =~ ^[0-9a-f]{40}[[:space:]]${remote_ref}$ ]]; then
       state_name="closeout_pr_prepared"
       prompt_captain closeout-checkpoint-conflict \
-        "optional closeout push destination returned a malformed authoritative ref"
+        "optional closeout publication endpoint returned a malformed authoritative ref"
     fi
   elif [ "$remote_rc" -ne 2 ] || [ -n "$remote_record" ]; then
     state_name="closeout_pr_prepared"
     prompt_captain closeout-checkpoint-conflict \
-      "optional closeout push destination cannot be inspected authoritatively"
+      "optional closeout publication endpoint cannot be inspected authoritatively"
   fi
+}
+
+closeout_fixture_endpoint_repository() {
+  local endpoint="$1" path
+  case "$endpoint" in
+    file:///*) path="${endpoint#file://}" ;;
+    /*) path="$endpoint" ;;
+    *) return 1 ;;
+  esac
+  [ -d "$path" ] || return 1
+  git -C "$path" config --get ship-flow.closeoutFixtureRepository 2>/dev/null
+}
+
+bind_closeout_push_destination() {
+  local deterministic_head="$1" resolved="" resolve_rc=0 destination_count raw_origin raw_count
+  local resolved_repository fixture_repository repository_fold resolved_fold fixture_fold
+  resolved="$(git -C "$repo_root" remote get-url --push --all origin 2>/dev/null)" || resolve_rc=$?
+  destination_count="$(printf '%s\n' "$resolved" | awk 'NF{n++} END{print n+0}')"
+  if [ "$resolve_rc" -ne 0 ] || [ "$destination_count" -ne 1 ] || [ -z "$resolved" ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "optional closeout publication requires exactly one authoritative push destination"
+  fi
+  raw_origin="$(git -C "$repo_root" config --get-all remote.origin.url 2>/dev/null || true)"
+  raw_count="$(printf '%s\n' "$raw_origin" | awk 'NF{n++} END{print n+0}')"
+  [ "$raw_count" -eq 1 ] || { state_name="closeout_pr_prepared"; prompt_captain closeout-checkpoint-conflict "optional closeout origin lacks one provider-bound URL"; }
+  resolved_repository="$(normalize_github_remote_repository "$resolved" 2>/dev/null || true)"
+  fixture_repository="$(closeout_fixture_endpoint_repository "$resolved" 2>/dev/null || true)"
+  repository_fold="$(printf '%s' "$repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  resolved_fold="$(printf '%s' "$resolved_repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  fixture_fold="$(printf '%s' "$fixture_repository" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  if [ "$resolved_fold" != "$repository_fold" ] && [ "$fixture_fold" != "$repository_fold" ]; then
+    state_name="closeout_pr_prepared"
+    prompt_captain closeout-checkpoint-conflict \
+      "optional closeout publication endpoint cannot be bound to the provider repository"
+  fi
+  closeout_push_destination="$resolved"
+  inspect_closeout_leaf_endpoint "$deterministic_head"
 }
 
 ensure_initial_closeout_head() {
@@ -1205,7 +1275,7 @@ ensure_initial_closeout_head() {
     fi
     state_name="closeout_pr_prepared"
     fail_once seed-push
-    git -C "$repo_root" push --force-with-lease="${remote_ref}:" "$closeout_push_destination" \
+    git -C "$repo_root" send-pack --force-with-lease="${remote_ref}:" "$closeout_push_destination" \
       "${deterministic_head}:${remote_ref}" >/dev/null || push_rc=$?
     if [ "$push_rc" -ne 0 ]; then
       prompt_captain closeout-checkpoint-conflict \
@@ -1252,7 +1322,8 @@ resolve_or_create_closeout_pr() {
     fi
     return 0
   fi
-  bind_closeout_push_destination "$deterministic_head"
+  [ -n "$closeout_push_destination" ] || { state_name="closeout_pr_prepared"; prompt_captain closeout-checkpoint-conflict "optional closeout publication endpoint is not durably bound"; }
+  inspect_closeout_leaf_endpoint "$deterministic_head"
   ensure_gh_repository
   found="$(gh pr list --head "$deterministic_head" --state all --json number,state,headRefName,headRefOid,isDraft --jq '.[] | [.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")' --repo "$repository")" || list_rc=$?
   if [ "$list_rc" -ne 0 ]; then
@@ -1281,6 +1352,18 @@ resolve_or_create_closeout_pr() {
   closeout_pr_state=OPEN; closeout_pr_is_draft=true
 }
 
+refresh_closeout_pr_gh_for_publication() {
+  local number="$1" output query_rc=0
+  ensure_gh_repository
+  output="$(gh pr view "$number" --repo "$repository" --json number,state,headRefName,headRefOid,isDraft --jq '[.number,.state,.headRefName,.headRefOid,.isDraft] | join("|")')" || query_rc=$?
+  if [ "$query_rc" -ne 0 ]; then
+    state_name="closeout_pr_awaiting_merge"
+    prompt_captain closeout-checkpoint-conflict \
+      "closeout PR head could not be re-queried after terminal publication"
+  fi
+  IFS='|' read -r closeout_pr_number closeout_pr_state closeout_pr_head closeout_pr_remote_oid closeout_pr_is_draft <<<"$output"
+}
+
 optional_terminal_head_matches() {
   local deterministic_head="$1" receipt_relative="$2" expected_pr="$3" expected_proof="$4" shown exported
   shown="$(git -C "$repo_root" show "${deterministic_head}:${receipt_relative}" 2>/dev/null || true)"
@@ -1294,7 +1377,7 @@ optional_terminal_head_matches() {
 
 build_optional_terminal_head() {
   local bundle_root="$1" receipt_relative="$2" active_relative="$3" deterministic_head="$4" bound_pr="$5"
-  local expected_proof clone_root apply_out apply_rc=0 ready_rc=0 terminal_sha registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}"
+  local expected_proof clone_root apply_out apply_rc=0 push_rc=0 ready_rc=0 terminal_sha registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}"
   expected_proof="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proof_hash"])' "$bundle_root/$receipt_relative")"
   if optional_terminal_head_matches "$deterministic_head" "$receipt_relative" "$bound_pr" "$expected_proof"; then
     terminal_sha="$(git -C "$repo_root" rev-parse "$deterministic_head")"
@@ -1310,11 +1393,13 @@ build_optional_terminal_head() {
     "$BUNDLE_APPLIER" --repo-root "$clone_root" --bundle-root "$bundle_root" --receipt-relative "$receipt_relative" --active-entity-relative "$active_relative" --if-head "$(git -C "$clone_root" rev-parse HEAD)" --if-roadmap-hash "$(sha256_file "$clone_root/ROADMAP.md")" --commit-as "ship(${entity_slug}): advance status to done" --source-commits "$source_commits" >"$apply_out" 2>&1 || apply_rc=$?
     if [ "$apply_rc" -ne 0 ]; then cat "$apply_out"; rm -f "$apply_out"; rm -rf "$clone_root"; exit "$apply_rc"; fi
     rm -f "$apply_out"
-    python3 - "$clone_root/$receipt_relative" "$bound_pr" <<'PY'
+    python3 - "$clone_root/$receipt_relative" "$bound_pr" "${closeout_push_destination:-null}" <<'PY'
 import json,pathlib,sys
 p=pathlib.Path(sys.argv[1]); r=json.loads(p.read_text()); r["mode"]="pull_request"
 r["transaction"]={"phase":"applied","generation":3,"closeout_pr":int(sys.argv[2]),
                   "main_commit":r["landing_proof"]["landing_anchor"]}
+endpoint=sys.argv[3]
+if endpoint!="null": r["transaction"]["publication_endpoint"]=endpoint
 p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
 PY
     python3 "$RECEIPT_VALIDATOR" --receipt "$clone_root/$receipt_relative" --allow-any-path >/dev/null
@@ -1332,13 +1417,28 @@ PY
     [[ "$closeout_pr_remote_oid" =~ ^[0-9a-f]{40}$ ]] || reject_input closeout-checkpoint-conflict "provider closeout head OID is unavailable for force-with-lease"
     fail_once terminal-push
     if [ "$pr_provider" = gh ]; then
-      git -C "$repo_root" push --force-with-lease="refs/heads/${deterministic_head}:${closeout_pr_remote_oid}" \
-        "$closeout_push_destination" "${deterministic_head}:refs/heads/${deterministic_head}" >/dev/null
+      git -C "$repo_root" send-pack --force-with-lease="refs/heads/${deterministic_head}:${closeout_pr_remote_oid}" \
+        "$closeout_push_destination" "${deterministic_head}:refs/heads/${deterministic_head}" >/dev/null || push_rc=$?
+      if [ "$push_rc" -ne 0 ]; then
+        state_name="closeout_pr_awaiting_merge"
+        prompt_captain closeout-checkpoint-conflict \
+          "terminal closeout head could not be published atomically; awaiting checkpoint is retained for retry"
+      fi
     else
       [ -z "${SHIP_FLOW_CLOSEOUT_PR_LOG:-}" ] || printf 'force-with-lease %s %s\n' "$closeout_pr_remote_oid" "$terminal_sha" >>"$SHIP_FLOW_CLOSEOUT_PR_LOG"
       set_registry_field "$registry" remote_oid "$terminal_sha"
     fi
     closeout_pr_remote_oid="$terminal_sha"
+  fi
+  if [ "$pr_provider" = gh ]; then
+    refresh_closeout_pr_gh_for_publication "$bound_pr"
+    if [ "$closeout_pr_number" != "$bound_pr" ] || [ "$closeout_pr_head" != "$deterministic_head" ] || \
+       [ "$closeout_pr_state" != OPEN ] || [ "$closeout_pr_remote_oid" != "$terminal_sha" ]; then
+      state_name="closeout_pr_awaiting_merge"
+      prompt_captain closeout-checkpoint-conflict \
+        "provider closeout PR does not report the exact terminal publication"
+    fi
+    case "$closeout_pr_is_draft" in true|false) ;; *) state_name="closeout_pr_awaiting_merge"; prompt_captain closeout-checkpoint-conflict "provider closeout PR draft state is unavailable" ;; esac
   fi
   if [ "$closeout_pr_is_draft" = true ]; then
     fail_once ready
@@ -1361,7 +1461,7 @@ PY
 reconcile_pull_request_bundle() {
   local review_file="$workflow_dir/$entity_slug/review.md" ship_file="$workflow_dir/$entity_slug/ship.md"
   local merge_intent title envelope_file envelope_rc=0 bundle_root receipt_relative render_rc=0
-  local debrief_relative active_relative deterministic_head prepared_source bound_pr landing_args current_receipt existing_phase existing_pr existing_proof rendered_proof resolved_pr
+  local debrief_relative active_relative deterministic_head prepared_source bound_pr landing_args current_receipt existing_phase existing_pr existing_proof existing_endpoint rendered_proof resolved_pr
   [ -f "$review_file" ] || reject_input closeout-review-missing "review.md is required for terminal closeout"
   [ -f "$ship_file" ] || reject_input closeout-ship-missing "ship.md is required for terminal closeout"
   [ "$(git -C "$repo_root" symbolic-ref --quiet --short HEAD || true)" = main ] || reject_input closeout-main-not-authoritative "pull-request checkpoint requires authoritative main"
@@ -1388,12 +1488,12 @@ PY
   deterministic_head="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["deterministic_closeout_head"])' "$bundle_root/$receipt_relative")"
   prepared_source="$bundle_root/$receipt_relative"
   rendered_proof="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proof_hash"])' "$prepared_source")"
-  current_receipt="$repo_root/$receipt_relative"; existing_phase=""; existing_pr=""; existing_proof=""
+  current_receipt="$repo_root/$receipt_relative"; existing_phase=""; existing_pr=""; existing_proof=""; existing_endpoint=""
   if [ -f "$current_receipt" ]; then
-    IFS='|' read -r existing_phase existing_pr existing_proof < <(python3 - "$current_receipt" <<'PY'
+    IFS='|' read -r existing_phase existing_pr existing_proof existing_endpoint < <(python3 - "$current_receipt" <<'PY'
 import json,sys
 r=json.load(open(sys.argv[1])); t=r["transaction"]
-print(t["phase"],t["closeout_pr"] or "",r["proof_hash"],sep="|")
+print(t["phase"],t["closeout_pr"] or "",r["proof_hash"],t.get("publication_endpoint") or "",sep="|")
 PY
 )
     [ "$existing_proof" = "$rendered_proof" ] || { cleanup_owned_bundle_root; reject_input closeout-proof-hash-mismatch "existing optional checkpoint differs from rendered terminal proof"; }
@@ -1404,6 +1504,19 @@ PY
   fi
   terminal_action="closeout_pull_request"
   if [ "$dry_run" = yes ]; then cleanup_owned_bundle_root; state_name="closeout_pr_planned"; detail="prepared checkpoint and deterministic closeout PR planned"; return 0; fi
+  if [ "$pr_provider" = gh ]; then
+    if [ -n "$existing_endpoint" ]; then
+      closeout_push_destination="$existing_endpoint"
+      inspect_closeout_leaf_endpoint "$deterministic_head"
+    elif [ "$existing_phase" = awaiting_closeout_pr ]; then
+      cleanup_owned_bundle_root
+      state_name="closeout_pr_prepared"
+      prompt_captain closeout-checkpoint-conflict \
+        "legacy awaiting checkpoint lacks a provable publication endpoint"
+    else
+      bind_closeout_push_destination "$deterministic_head"
+    fi
+  fi
   if [ "$existing_phase" != awaiting_closeout_pr ]; then
     checkpoint_optional_receipt "$prepared_source" "$receipt_relative" prepared 1 null
     if [ "${SHIP_FLOW_CLOSEOUT_FAILPOINT:-}" = after-prepared ]; then cleanup_owned_bundle_root; prompt_captain closeout-checkpoint-conflict "injected failure after prepared receipt checkpoint"; fi

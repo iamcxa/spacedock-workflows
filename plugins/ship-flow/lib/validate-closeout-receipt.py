@@ -591,7 +591,13 @@ def validate(receipt: dict[str, Any], path: Path | None = None) -> None:
         )
 
     transaction = require_object(receipt["transaction"], "transaction")
-    require_exact_keys(transaction, {"phase", "generation", "closeout_pr", "main_commit"}, "transaction")
+    transaction_keys = set(transaction)
+    base_transaction_keys = {"phase", "generation", "closeout_pr", "main_commit"}
+    if transaction_keys not in (
+        base_transaction_keys,
+        base_transaction_keys | {"publication_endpoint"},
+    ):
+        fail("closeout-sentinel-invalid", "transaction keys mismatch")
     if transaction["phase"] not in PHASES:
         fail("closeout-sentinel-invalid", "transaction phase is invalid")
     generation = transaction["generation"]
@@ -605,10 +611,20 @@ def validate(receipt: dict[str, Any], path: Path | None = None) -> None:
         fail("closeout-sentinel-invalid", "main_commit must be null or full sha")
     phase = transaction["phase"]
     mode = receipt["mode"]
+    publication_endpoint = transaction.get("publication_endpoint")
+    if publication_endpoint is not None and (
+        not isinstance(publication_endpoint, str)
+        or not publication_endpoint
+        or publication_endpoint.startswith("-")
+        or any(char in publication_endpoint for char in ("\0", "\r", "\n"))
+    ):
+        fail("closeout-sentinel-invalid", "publication_endpoint must be a safe nonempty string")
     if phase == "awaiting_closeout_pr" and mode != "pull_request":
         fail("closeout-checkpoint-conflict", "only pull_request mode may await closeout PR")
     if mode == "direct" and closeout_pr is not None:
         fail("closeout-checkpoint-conflict", "direct mode cannot bind closeout_pr")
+    if mode == "direct" and publication_endpoint is not None:
+        fail("closeout-checkpoint-conflict", "direct mode cannot bind a publication endpoint")
     if phase == "prepared" and (closeout_pr is not None or main_commit is not None):
         fail("closeout-checkpoint-conflict", "prepared phase cannot bind external checkpoints")
     if phase == "awaiting_closeout_pr" and (closeout_pr is None or main_commit is not None):
@@ -726,6 +742,17 @@ def main() -> int:
         else:
             old_tx = previous["transaction"]
             new_tx = receipt["transaction"]
+            old_endpoint = old_tx.get("publication_endpoint")
+            new_endpoint = new_tx.get("publication_endpoint")
+            endpoint_hydration = (
+                receipt["mode"] == "pull_request"
+                and old_endpoint is None
+                and new_endpoint is not None
+                and old_tx["phase"] == "prepared"
+                and new_tx["phase"] == "prepared"
+                and old_tx["generation"] == new_tx["generation"]
+                and all(old_tx[key] == new_tx[key] for key in ("closeout_pr", "main_commit"))
+            )
             legal = {
                 "direct": {("prepared", "applied"), ("applied", "complete")},
                 "pull_request": {
@@ -734,10 +761,17 @@ def main() -> int:
                     ("applied", "complete"),
                 },
             }
-            if (old_tx["phase"], new_tx["phase"]) not in legal[receipt["mode"]]:
+            if not endpoint_hydration and (old_tx["phase"], new_tx["phase"]) not in legal[receipt["mode"]]:
                 fail("closeout-checkpoint-conflict", "illegal closeout phase transition")
-            if new_tx["generation"] != old_tx["generation"] + 1:
+            if not endpoint_hydration and new_tx["generation"] != old_tx["generation"] + 1:
                 fail("closeout-checkpoint-conflict", "generation must increment exactly once")
+            if old_endpoint is None and new_endpoint is not None and not endpoint_hydration:
+                fail(
+                    "closeout-checkpoint-conflict",
+                    "publication_endpoint may only bind during legacy prepared checkpoint hydration",
+                )
+            if old_endpoint is not None and new_endpoint != old_endpoint:
+                fail("closeout-checkpoint-conflict", "publication_endpoint changed after binding")
             if old_tx["closeout_pr"] is not None and new_tx["closeout_pr"] != old_tx["closeout_pr"]:
                 fail("closeout-checkpoint-conflict", "closeout_pr changed after binding")
             if old_tx["main_commit"] is not None and new_tx["main_commit"] != old_tx["main_commit"]:

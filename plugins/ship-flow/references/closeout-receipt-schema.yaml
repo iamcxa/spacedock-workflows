@@ -98,6 +98,9 @@ transaction:
   phase: { type: enum, values: [prepared, awaiting_closeout_pr, applied, complete] }
   generation: { type: integer, minimum: 1 }
   closeout_pr: { type: nullable-positive-integer }
+  publication_endpoint:
+    type: optional-safe-nonempty-string
+    semantics: "Immutable literal provider-bound leaf used for optional closeout inspection and leased publication; absent only on direct-mode or legacy checkpoints"
   main_commit:
     type: nullable-40-hex
     semantics: "In applied or complete, equals landing_proof.landing_anchor: the implementation PR's verified authoritative main landing, never the terminal projection commit or closeout-PR merge SHA"
@@ -109,6 +112,7 @@ transaction:
     - "each legal transition increments generation by exactly one"
     - "identity, mode, merge_method_intent, deterministic head, proof_hash, and proof payload are immutable"
     - "closeout_pr binds only entering pull_request awaiting state, then is immutable"
+    - "publication_endpoint is immutable once bound; a legacy pull_request prepared checkpoint may hydrate it once without changing generation"
     - "main_commit binds only entering applied state, then is immutable"
 pull_request_merge_proof:
   invariant: "Provider state is MERGED and exact landed sentinel/output bytes validate with deterministic closeout head and closeout PR bindings"
