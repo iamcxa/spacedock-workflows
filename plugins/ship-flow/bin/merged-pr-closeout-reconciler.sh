@@ -56,7 +56,16 @@ ensure_owned_validator_root() {
   owned_validator_root="${TMPDIR:-/tmp}/ship-flow-closeout-validator.$$"
   if ! mkdir -m 700 -- "$owned_validator_root"; then
     owned_validator_root=""
-    return 1
+    # A bare `return 1` here is not a safe contract: several callers reach
+    # this function through another function's own `|| return $?`/`|| ...`
+    # chain (for example validate_receipt_normal's internal call to
+    # prepare_receipt_source_commits), which disables `set -e` for this
+    # function's entire call chain. An unpropagated failure would let the
+    # empty owned_validator_root flow into `mktemp "$owned_validator_root/validator.XXXXXX"`
+    # (i.e. `mktemp /validator.XXXXXX`) instead of stopping. Fail closed here,
+    # unconditionally, so no caller context can silently swallow this.
+    reject_input closeout-checkpoint-conflict \
+      "closeout validator root could not be created"
   fi
 }
 
@@ -766,7 +775,7 @@ PY
     esac
     active_candidate="$workflow_dir/$entity_ref/index.md"
     if optional_terminal_head_matches "$expected_head" "$receipt_relative" "$recorded_pr" "$expected_proof" "$receipt_path"; then
-      terminal_sha="$(git -C "$repo_root" rev-parse "$expected_head")"
+      terminal_sha="$(git -C "$repo_root" rev-parse --verify "refs/heads/${expected_head}^{commit}")"
       if [ "$closeout_pr_number" = "$recorded_pr" ] && [ "$closeout_pr_head" = "$expected_head" ] && [ "$closeout_pr_remote_oid" = "$terminal_sha" ] && [ "$closeout_pr_is_draft" = false ]; then
         terminal_ready=yes
       fi
@@ -799,7 +808,7 @@ PY
         "local deterministic closeout head differs from the authoritative provider head OID"
     fi
   fi
-  recover_awaiting_closeout_predecessor "$receipt_relative" "$recorded_pr" "$expected_proof" || recovery_rc=$?
+  recover_awaiting_closeout_predecessor "$receipt_relative" "$recorded_pr" "$expected_proof" "$terminal_source" || recovery_rc=$?
   awaiting_predecessor="$recovered_predecessor_path"
   if [ "$recovery_rc" -eq 2 ]; then
     state_name="closeout_pr_awaiting_merge"
@@ -1400,7 +1409,7 @@ ensure_initial_closeout_head() {
   local deterministic_head="$1" receipt_relative="$2" registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}" seed_root seed_sha
   local remote_ref remote_record remote_rc=0 expected_remote_record push_rc=0
   if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$deterministic_head"; then
-    seed_sha="$(git -C "$repo_root" rev-parse "$deterministic_head")"
+    seed_sha="$(git -C "$repo_root" rev-parse --verify "refs/heads/${deterministic_head}^{commit}")"
   else
     seed_root="$(mktemp -d)"; git clone -q "$repo_root" "$seed_root"
     git -C "$seed_root" config user.email "$(git -C "$repo_root" config user.email)"
@@ -1471,7 +1480,7 @@ resolve_or_create_closeout_pr() {
       [ "$registered_number" = "$closeout_pr_number" ] || reject_input closeout-checkpoint-conflict "fixture registry PR differs from provider"
       [ "$(registry_field "$registry" head)" = "$deterministic_head" ] || reject_input closeout-sentinel-identity-mismatch "fixture registry head differs from deterministic head"
       require_open_closeout_pr
-      closeout_pr_local_oid="$(git -C "$repo_root" rev-parse "$deterministic_head")"
+      closeout_pr_local_oid="$(git -C "$repo_root" rev-parse --verify "refs/heads/${deterministic_head}^{commit}")"
       set_registry_field "$registry" local_oid "$closeout_pr_local_oid"
       closeout_pr_remote_oid="$(registry_field "$registry" remote_oid)"
       closeout_pr_is_draft="$(registry_field "$registry" is_draft)"
@@ -1530,24 +1539,43 @@ refresh_closeout_pr_gh_for_publication() {
   IFS='|' read -r closeout_pr_number closeout_pr_state closeout_pr_head closeout_pr_remote_oid closeout_pr_is_draft <<<"$output"
 }
 
+# Resolves a deterministic closeout head to an exact commit SHA without ever
+# falling back to Git's ref-DWIM (which would prefer a same-name tag over the
+# branch). Accepts either an already-verified 40-hex commit OID (returned
+# as-is; a full OID is never subject to DWIM) or a branch-name-shaped
+# deterministic head, which is resolved only through the fully-qualified
+# `refs/heads/<name>^{commit}` path — mirroring the LANDED comparison's exact
+# resolution. Returns nonzero with no stdout when the name cannot be resolved
+# under refs/heads.
+resolve_exact_deterministic_commit() {
+  local ref="$1"
+  if [[ "$ref" =~ ^[0-9a-f]{40}$ ]] && git -C "$repo_root" cat-file -e "${ref}^{commit}" 2>/dev/null; then
+    printf '%s\n' "$ref"
+    return 0
+  fi
+  git -C "$repo_root" rev-parse --verify --quiet "refs/heads/${ref}^{commit}"
+}
+
 optional_terminal_head_matches() {
-  local deterministic_head="$1" receipt_relative="$2" expected_pr="$3" expected_proof="$4" previous_receipt="${5:-}" shown exported
+  local deterministic_head="$1" receipt_relative="$2" expected_pr="$3" expected_proof="$4" previous_receipt="${5:-}" shown exported resolved
   [ -n "$previous_receipt" ] && [ -f "$previous_receipt" ] || return 1
-  shown="$(git -C "$repo_root" show "${deterministic_head}:${receipt_relative}" 2>/dev/null || true)"
+  resolved="$(resolve_exact_deterministic_commit "$deterministic_head")" || return 1
+  shown="$(git -C "$repo_root" show "${resolved}:${receipt_relative}" 2>/dev/null || true)"
   [ -n "$shown" ] || return 1
   printf '%s' "$shown" | python3 -c 'import json,sys; r=json.load(sys.stdin); t=r["transaction"]; raise SystemExit(0 if r["mode"]=="pull_request" and t["phase"]=="applied" and t["closeout_pr"]==int(sys.argv[1]) and r["proof_hash"]==sys.argv[2] else 1)' "$expected_pr" "$expected_proof" || return 1
   cleanup_owned_terminal_validation_root
   owned_terminal_validation_root="$(mktemp -d)"
   exported="$owned_terminal_validation_root"
-  git -C "$repo_root" archive "$deterministic_head" | tar -x -C "$exported"
+  git -C "$repo_root" archive "$resolved" | tar -x -C "$exported"
   validate_receipt_normal "$exported/$receipt_relative" --repo-root "$exported" --landing-proof-repo-root "$repo_root" \
     --verify-outputs --previous "$previous_receipt" >/dev/null 2>&1 || { cleanup_owned_terminal_validation_root; return 1; }
   cleanup_owned_terminal_validation_root
 }
 
 recover_awaiting_closeout_predecessor() {
-  local receipt_relative="$1" expected_pr="$2" expected_proof="$3"
-  local commit candidate candidate_hash history_file match_hash="" shallow scanned=0 first=yes
+  local receipt_relative="$1" expected_pr="$2" expected_proof="$3" terminal_ref="$4"
+  local commit candidate candidate_hash history_file shallow scanned=0 first=yes
+  local match_hash="" match_path="" match_commit="" ancestor_path="" ancestor_commit=""
   cleanup_owned_predecessor_root
   owned_predecessor_root="$(mktemp -d)"
   shallow="$(git -C "$repo_root" rev-parse --is-shallow-repository 2>/dev/null || true)"
@@ -1577,16 +1605,41 @@ PY
         candidate_hash="$(git hash-object "$candidate")"
         if [ -z "$match_hash" ]; then
           match_hash="$candidate_hash"
-          recovered_predecessor_path="$candidate"
-          recovered_predecessor_commit="$commit"
-          continue
+          match_path="$candidate"
+          match_commit="$commit"
         elif [ "$candidate_hash" != "$match_hash" ]; then
           return 3
         fi
+        # Among commits carrying byte-identical awaiting bytes, only one that
+        # is an actual ancestor of the provider terminal can be the real
+        # predecessor. Prefer the first (newest) such ancestor over a merely
+        # newer, non-ancestor carrier of the same bytes (e.g. a later
+        # main-only commit that repeats the checkpoint but branches away from
+        # the terminal's real lineage). When no candidate is an ancestor at
+        # all, fall through to the newest carrier so the caller's existing
+        # ancestry check still fails the case closed with its established
+        # reason -- this preserves prior bounded-failure behavior for the
+        # genuinely-ambiguous / no-valid-ancestor cases.
+        if [ -z "$ancestor_path" ] &&
+           git -C "$repo_root" merge-base --is-ancestor "$commit" "$terminal_ref" 2>/dev/null; then
+          ancestor_path="$candidate"
+          ancestor_commit="$commit"
+        fi
+        if [ "$candidate" != "$match_path" ] && [ "$candidate" != "$ancestor_path" ]; then
+          rm -f "$candidate"
+        fi
+        continue
       fi
     fi
     rm -f "$candidate"
   done <"$history_file"
+  if [ -n "$ancestor_path" ]; then
+    recovered_predecessor_path="$ancestor_path"
+    recovered_predecessor_commit="$ancestor_commit"
+  else
+    recovered_predecessor_path="$match_path"
+    recovered_predecessor_commit="$match_commit"
+  fi
   [ -z "$recovered_predecessor_path" ] || return 0
   [ "$scanned" -le 32 ] || return 2
   return 1
@@ -1596,9 +1649,9 @@ build_optional_terminal_head() {
   local bundle_root="$1" receipt_relative="$2" active_relative="$3" deterministic_head="$4" bound_pr="$5"
   local expected_proof clone_root apply_out apply_rc=0 push_rc=0 ready_rc=0 terminal_sha registry="${SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY:-}"
   expected_proof="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["proof_hash"])' "$bundle_root/$receipt_relative")"
-  if git -C "$repo_root" cat-file -e "${deterministic_head}:${receipt_relative}" 2>/dev/null; then
+  if git -C "$repo_root" cat-file -e "refs/heads/${deterministic_head}:${receipt_relative}" 2>/dev/null; then
     if optional_terminal_head_matches "$deterministic_head" "$receipt_relative" "$bound_pr" "$expected_proof" "$repo_root/$receipt_relative"; then
-      terminal_sha="$(git -C "$repo_root" rev-parse "$deterministic_head")"
+      terminal_sha="$(git -C "$repo_root" rev-parse --verify "refs/heads/${deterministic_head}^{commit}")"
     else
       state_name="closeout_pr_awaiting_merge"
       prompt_captain closeout-checkpoint-conflict \

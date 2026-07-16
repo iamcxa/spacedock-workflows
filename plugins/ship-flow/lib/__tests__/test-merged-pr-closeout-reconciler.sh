@@ -3382,6 +3382,179 @@ TERM|143
 EOF
 }
 
+run_feedback_r12_b1_tag_dwim_case() {
+  local setup origin repo provider deterministic_head gh_bin git_bin registry provider_log git_log bundle_log
+  local temp_root real_git real_mktemp receipt relative awaiting_oid terminal_oid_before rc
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r12-b1-tag-dwim)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"
+  gh_bin="$TMP_DIR/feedback-r12-b1-gh-bin"; git_bin="$TMP_DIR/feedback-r12-b1-git-bin"
+  registry="$TMP_DIR/feedback-r12-b1.registry"; provider_log="$TMP_DIR/feedback-r12-b1-provider.log"
+  git_log="$TMP_DIR/feedback-r12-b1-git.log"; bundle_log="$TMP_DIR/feedback-r12-b1-bundle.log"
+  temp_root="$TMP_DIR/feedback-r12-b1-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r12-b1-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R12-B1 fixture establishes an awaiting predecessor' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"; relative="${receipt#"$repo/"}"; awaiting_oid="$(git -C "$repo" rev-parse HEAD)"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r12-b1-built.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R12-B1 fixture publishes one terminal head' 0 "$rc"
+  terminal_oid_before="$(git -C "$repo" rev-parse "$deterministic_head")"
+
+  # A same-name tag pointing at the durable awaiting checkpoint (different
+  # OID, different tree, different phase) collides with the deterministic
+  # closeout branch. Git's own DWIM prefers refs/tags/<name> over
+  # refs/heads/<name> for a bare short name.
+  git -C "$repo" tag "$deterministic_head" "$awaiting_oid"
+  if [ "$(git -C "$repo" rev-parse "refs/tags/$deterministic_head")" != \
+       "$(git -C "$repo" rev-parse "refs/heads/$deterministic_head")" ]; then
+    record_pass 'R12-B1 precondition carries a colliding same-name tag with a different OID'
+  else
+    record_fail 'R12-B1 precondition carries a colliding same-name tag with a different OID'
+  fi
+
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r12-b1-replay.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    r12-b1-replay: /' "$TMP_DIR/feedback-r12-b1-replay.out"; fi
+  assert_exit 'R12-B1 OPEN replay under a colliding same-name tag resolves the exact branch, not the tag' 0 "$rc"
+  if [ "$(git -C "$repo" rev-parse --verify "refs/heads/${deterministic_head}^{commit}")" = "$terminal_oid_before" ]; then
+    record_pass 'R12-B1 OPEN replay leaves the exact deterministic branch OID unchanged'
+  else
+    record_fail 'R12-B1 OPEN replay leaves the exact deterministic branch OID unchanged'
+  fi
+  assert_feedback_r5_count 'R12-B1 OPEN replay under tag collision performs no rebuild' '^apply ' "$bundle_log" 0
+  assert_feedback_r5_count 'R12-B1 OPEN replay under tag collision performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+}
+
+run_feedback_r12_b2_ancestry_case() {
+  local setup origin repo provider deterministic_head gh_bin git_bin registry provider_log git_log bundle_log
+  local temp_root real_git real_mktemp receipt relative awaiting_oid terminal_oid rc
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r12-b2-ancestry)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"
+  gh_bin="$TMP_DIR/feedback-r12-b2-gh-bin"; git_bin="$TMP_DIR/feedback-r12-b2-git-bin"
+  registry="$TMP_DIR/feedback-r12-b2.registry"; provider_log="$TMP_DIR/feedback-r12-b2-provider.log"
+  git_log="$TMP_DIR/feedback-r12-b2-git.log"; bundle_log="$TMP_DIR/feedback-r12-b2-bundle.log"
+  temp_root="$TMP_DIR/feedback-r12-b2-tmp"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r12-b2-awaiting.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R12-B2 fixture establishes awaiting predecessor A' 1 "$rc"
+  receipt="$(feedback_r5_receipt_path "$repo")"; relative="${receipt#"$repo/"}"; awaiting_oid="$(git -C "$repo" rev-parse HEAD)"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r12-b2-built.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R12-B2 fixture publishes terminal head T built from A' 0 "$rc"
+  terminal_oid="$(git -C "$repo" rev-parse "$deterministic_head")"
+
+  # Concurrent main movement after T was built from A: a later main-only
+  # commit B does not touch the receipt path, so it silently inherits the
+  # exact same awaiting bytes as A while never being an ancestor of T.
+  git -C "$repo" commit -q --allow-empty -m 'fixture: concurrent main movement after terminal was built from A'
+  if ! git -C "$repo" merge-base --is-ancestor "$(git -C "$repo" rev-parse HEAD)" "$terminal_oid"; then
+    record_pass 'R12-B2 precondition B carries identical awaiting bytes but is not an ancestor of T'
+  else
+    record_fail 'R12-B2 precondition B carries identical awaiting bytes but is not an ancestor of T'
+  fi
+
+  land_feedback_terminal_head "$repo" "$deterministic_head" "$relative"
+  set_feedback_registry_merge "$registry" "$terminal_oid"
+  if [ "$(git -C "$repo" rev-parse 'HEAD^2')" = "$terminal_oid" ]; then
+    record_pass 'R12-B2 precondition lands T as the second parent of the terminal merge, after B'
+  else
+    record_fail 'R12-B2 precondition lands T as the second parent of the terminal merge, after B'
+  fi
+
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$TMP_DIR/feedback-r12-b2-recovery.out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    r12-b2-recovery: /' "$TMP_DIR/feedback-r12-b2-recovery.out"; fi
+  assert_exit 'R12-B2 landed recovery accepts the true ancestor A despite a newer non-ancestor carrier B' 0 "$rc"
+  assert_contains 'R12-B2 landed recovery converges to terminal no-op' '^reason=closeout-pr-terminal-noop$' "$TMP_DIR/feedback-r12-b2-recovery.out"
+  assert_feedback_r5_count 'R12-B2 recovery performs no publication' '^(seed|terminal)-push ' "$git_log" 0
+  assert_feedback_r5_count 'R12-B2 recovery performs no provider effect' '^effect (create|ready) ' "$provider_log" 0
+  assert_feedback_r5_count 'R12-B2 recovery performs no bundle application' '^apply ' "$bundle_log" 0
+}
+
+write_feedback_r12_w1_broken_validator_root_mkdir() {
+  local bin="$1"
+  cat >"$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+for arg in "$@"; do
+  case "$arg" in
+    */ship-flow-closeout-validator.*) exit 1 ;;
+  esac
+done
+exec "${SHIP_FLOW_R12_REAL_MKDIR:?missing real mkdir}" "$@"
+EOF
+  chmod +x "$bin"
+}
+
+run_feedback_r12_w1_validator_root_case() {
+  local setup origin repo provider gh_bin mkdir_bin registry temp_root real_mkdir rc
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r12-w1-validator-root)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  gh_bin="$TMP_DIR/feedback-r12-w1-gh-bin"; mkdir -p "$gh_bin"
+  write_feedback_r5_b1_gh "$gh_bin/gh"
+  temp_root="$TMP_DIR/feedback-r12-w1-tmp"; prepare_feedback_r6_temp_root "$temp_root"
+  registry="$TMP_DIR/feedback-r12-w1.registry"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$TMP_DIR/feedback-r12-w1-provider.log" SHIP_FLOW_R5_ORIGIN="$origin" \
+    SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r12-w1-awaiting.out" "$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R12-W1 fixture establishes an awaiting receipt-only checkpoint' 1 "$rc"
+
+  mkdir_bin="$TMP_DIR/feedback-r12-w1-mkdir-bin"; mkdir -p "$mkdir_bin"
+  real_mkdir="$(command -v mkdir)"
+  write_feedback_r12_w1_broken_validator_root_mkdir "$mkdir_bin/mkdir"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$TMP_DIR/feedback-r12-w1-provider2.log" SHIP_FLOW_R5_ORIGIN="$origin" \
+    SHIP_FLOW_R12_REAL_MKDIR="$real_mkdir" \
+    run_helper_with_path "$repo" "$TMP_DIR/feedback-r12-w1-broken-root.out" "$mkdir_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R12-W1 validator root creation failure fails closed with the REJECT contract' 2 "$rc"
+  assert_contains 'R12-W1 validator root creation failure reports a stable reason' '^reason=closeout-checkpoint-conflict$' "$TMP_DIR/feedback-r12-w1-broken-root.out"
+  assert_not_contains 'R12-W1 validator root creation failure never surfaces a raw mktemp error' 'mktemp:' "$TMP_DIR/feedback-r12-w1-broken-root.out"
+}
+
 run_missing_landing_field_matrix() {
   local template_repo="$TMP_DIR/missing-field-template" template_fixture="$TMP_DIR/missing-field-template.env"
   local field expected repo fixture output before_head before_tree after_tree rc
@@ -4532,7 +4705,19 @@ if [ ! -x "$HELPER" ]; then
   record_fail "helper exists and is executable (${HELPER})"
 else
   record_pass "helper exists and is executable"
-  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r11-b1-b2-b3 ]; then
+  if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r12-b1-b2-w1 ]; then
+    case "${SHIP_FLOW_R12_ONLY:-all}" in
+      tag-dwim) run_feedback_r12_b1_tag_dwim_case ;;
+      ancestry) run_feedback_r12_b2_ancestry_case ;;
+      validator-root) run_feedback_r12_w1_validator_root_case ;;
+      all)
+        run_feedback_r12_b1_tag_dwim_case
+        run_feedback_r12_b2_ancestry_case
+        run_feedback_r12_w1_validator_root_case
+        ;;
+      *) record_fail "unknown SHIP_FLOW_R12_ONLY selection" ;;
+    esac
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r11-b1-b2-b3 ]; then
     case "${SHIP_FLOW_R11_ONLY:-all}" in
       history) run_feedback_r11_mature_main_case ;;
       provider) run_feedback_r11_provider_oid_case ;;
