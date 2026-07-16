@@ -229,54 +229,25 @@ Planned native post-merge closeout as five ordered TDD waves: landing proof, dur
 <!-- section:execute-stage-report -->
 ## Stage Report: execute
 
-- DONE: Execute T1-T5 in serial waves with delegated ownership, observable RED before GREEN for every code-bearing task, pathspec-locked commits, and independent spec/quality review before each wave closed.
-  Eight implementation/docs commits cover landing proof, receipt/intent contracts, atomic direct projection, sentinel-first optional PR recovery with PR #40/#41 dogfood, and operator documentation.
-- DONE: Run the complete DC-1..DC-8 acceptance matrix plus optional-PR recovery, ledger, syntax, Python compile, ShellCheck, diff hygiene, and a no-network operator command UAT.
-  Landing is 89/89; reconciler 160/160; PR40/41 103/103; optional PR 141/141; debrief/C15 and the seven-command compatibility chain pass; all ancillary gates exit 0.
-- DONE: Fresh Science Officer execute reverse-audit checks plan-task attribution, stub acknowledgements, deviation capture, evidence completeness, and Hand-off to Verify accuracy before the artifact commit.
-  The first pass returned an artifact-only VETO; after reattributing `42f8e06` to a disclosed cross-wave T2 reopen and recording the unused writing-skills methodology, re-review returned PROCEED with no implementation blocker.
-- DONE: Re-enter Execute for Verify feedback cycle 1 and repair B1-B5 plus W1 through three owned-path TDD lanes, with independent reviews overlapped against later disjoint execution.
-  Commits `3ee8f21`, `490a294`, and `fb6f4aa` make merged envelopes fail closed, assign one projection owner, preserve the full tracked entity tree, validate canonical D1/D4 receipt semantics, survive post-commit signals, and keep PR/direct ROADMAP parity. Fresh re-review APPROVED; receipt 81/81, bundle 69/69 on both shells, optional 176/176, default 195/195, direct 197/197, and PR40/41 138/138 pass. W2 remains deferred hardening.
-- DONE: Close the aggregate C14 compatibility gap without rewriting the feedback transition history.
-  Commit `b5fa535` sanctions only subject/state/body-bound FO feedback receipts; focused C14 is 31/31 and full C1-C15 exits 0 after an independent APPROVED review.
-- DONE: Re-enter Execute for Verify feedback cycle 2 and close R2-B1-R2-B4 without taking the deferred W2 or receipt-scan performance warnings into acceptance scope.
-  Commits `b6cd023`, `91402c7`, `110bc09`, and `85d6dff` require native proof before active legacy closeout, bind authoritative squash source commits through direct/optional/replay paths, restrict ROADMAP identity to cell zero, and guard root-parent speculation. Independent reviews APPROVED; resolver 94/94 both shells, receipt 85/85, bundle 78/78 both shells, integration 23/23, default 198/198, direct 200/200, optional 179/179, and PR40/41 141/141 pass.
-- DONE: Re-enter Execute for Verify feedback cycle 3 and close only R3-B1 while deferring W2/W3/W4.
-  Commits `54a4a9a` and `8d1ac64` boundedly reacquire authoritative GitHub PR source objects in true main-only and post-prune replay states, bind repo/PR/provider OIDs, preserve checkout/remotes, and make temporary-ref creation collision/signal safe. Focused R3 is 107/107 on Bash 3.2 and 5.3; compact R2 regressions are 13/13 and 23/23; the same reviewer APPROVED all three prior findings as closed.
-- DONE: Re-enter Execute for Verify feedback cycle 4 and close only R4-B1 plus directly coupled R4-W1 while deferring W2/W3/W4.
-  Commit `eba76c1` binds implementation and closeout PR view/list/create/ready operations plus validated receipt identity to the authoritative provider repository from any caller CWD. Final RED was 19/10; R4 is 29/29 and R3 is 107/107 on both shells; R2 is 13/13 + 23/23, default is 198/198, and fresh spec/quality reviews APPROVED.
-- DONE: Re-enter Execute for Verify feedback cycle 5 and close only R5-B1 while preserving R2-R4 and deferring W2/W3/W4.
-  Commits `0fdbe25` and `743f1af` map provider list/create/ready failures to one stable checkpoint verdict, resume exact local/remote state without duplicates, and prove the precise base-plus-receipt checkpoint tree. Final RED was 121/20; R5 is 141/141 on Bash 3.2 and 5.3, R4 is 29/29 both shells, isolated R3 is 107/107, R2 is 13/13 + 23/23, default is 198/198, and independent review APPROVED after one test-quality repair.
-- DONE: Re-enter Execute for Verify feedback cycle 6 and close only R6-B1 plus directly coupled R6-W1 while preserving R2-R5 and deferring W2/W3/W4.
-  Commit `0a47e50` counts actual seed/terminal push invocations, skips an already exact remote seed, fails closed on divergent or uninspectable refs, and composes internally owned bundle cleanup with source-object signal cleanup. Final RED was 235/44; R6 is 279/279 both shells, R4 is 29/29 both, isolated R3 is 107/107, R2 is 13/13 + 23/23, default is 198/198, and fresh spec/quality reviews APPROVED.
-- DONE: Add the Cycle 7 deterministic inspection-to-push race regression while production is frozen.
-  The local-bare wrapper inserts an ancestor-valued competitor immediately before the real seed push; the causal RED was 14/5 and failed exactly on competitor overwrite, post-race provider creation, and the missing expected-absence lease/full-ref destination.
-- DONE: Close only R7-B1 with atomic expected-absence seed publication while preserving exact retry and terminal-publication semantics.
-  Commit `e3adebe` uses a create-only full-ref lease, preserves the competing remote ref plus exact local checkpoint bytes on rejection, emits stable `PROMPT_CAPTAIN / closeout-checkpoint-conflict / closeout_pr_prepared`, publishes a missing seed once, skips an exact existing OID, and leaves the terminal OID lease unchanged.
-- DONE: Preserve the Cycle 6 recovery envelope and complete Cycle 7 review/report gates without widening into W2/W3/W4.
-  R7 is 19/19, R6 is 279/279, R4 is 29/29, isolated R3 is 107/107, R2 is 13/13 + 23/23, and default is 198/198 on both Bash 3.2 and 5.3; independent spec/quality reviews APPROVED, the pinned ledger/Spacedock checks pass, and the full compatibility chain plus C1-C15 exit 0.
-- DONE: Establish the Cycle 8 causal two-pushurl RED while production bytes remain frozen.
-  Endpoint A moves `absent -> seed` before endpoint B rejects its ancestor-valued competitor, so the named-remote push returns nonzero only after partial mutation. The focused causal run is 15/4 on both Bash versions; the expanded pre-fix review run is 38/12.
-- DONE: Close only R8-B1 by binding the optional-PR transaction to one authoritative push URL before provider list/create/ready or Git publication.
-  Commit `9e8cc8c` rejects multiple, missing, malformed, or unresolvable destinations as stable `PROMPT_CAPTAIN / closeout-checkpoint-conflict / closeout_pr_prepared`; seed inspection/CAS and terminal OID-lease publication directly reuse the same URL and full ref.
-- DONE: Preserve R2-R7 recovery, cleanup, and retry semantics and complete independent Cycle 8 review.
-  R8 is 50/50, R7 is 19/19, R6 is 289/289, R4 is 29/29, R3 is 107/107, R2 is 13/13 + 23/23, and default is 198/198 on Bash 3.2 and 5.3; spec/quality reviews APPROVED with no findings, pinned validation passes, and full C1-C15 exits 0.
-- DONE: Re-enter Execute for Verify feedback cycle 9 and close R9-B1/B2 while preserving R2-R8 and deferring W2/W3/W4.
-  Commit `90bd6dd` binds the durable checkpoint to one provider-matching non-reinterpretable endpoint, uses that leaf for inspection plus leased seed/terminal publication, and requires an exact post-terminal provider requery before ready. Nested remote aliases, chained URL rewrites, provider drift, and unsafe legacy endpoint hydration fail closed; R9 is 59/59 and receipt validation is 92/92 on Bash 3.2 and 5.3, the complete prior regression matrix remains green, and independent spec/quality reviews APPROVED.
-- BOUNDARY: No external PR, push, merge, deployment, issue update, archive, or verify-stage advance occurred. Non-UI render fidelity is N/A.
+- DONE: Execute T1-T5 and feedback cycles 1-9 delivered proof-backed native post-merge closeout, canonical receipts, atomic direct projection, deterministic optional-PR publication, provider convergence, signal-safe recovery, operator documentation, and hermetic dual-shell coverage.
+- DONE: Feedback cycle 10 closes R10-B1/B2 in `e094f4e`. Every persisted endpoint is provider-bound before source acquisition; terminal transitions require the immediately previous receipt; landed recovery accepts exactly one structurally valid awaiting predecessor from bounded first-parent `refs/heads/main`, rejects ambiguity/shallow/bound exhaustion, and refuses non-main PR mode.
+- DONE: Cycle 10 TDD preserved causal RED from frozen `d7be3e2` (7/9), progressed through predecessor 27/34, ordering/deep 91/4, stale-main 102/2, and off-main guard RED, then reached R10 120/120 on Bash 3.2 and 5.3.
+- DONE: Final regressions and gates pass: R6 signal/provider/cleanup 289/289 on both shells; Bash syntax, ShellCheck, Python compile, and diff hygiene exit 0; full invariants report C1-C15 OK; pinned Spacedock status confirms this entity remains in execute for FO-controlled advancement.
+- DONE: Independent final specification and code-quality re-reviews both PASS after the bounded-history, ambiguity, endpoint-ordering, and owned-temp cleanup repairs.
+- BOUNDARY: No external PR, push, merge, deployment, issue update, archive, RoboRev invocation, or verify-stage advance occurred. Non-UI render fidelity is N/A.
 
 ### Summary
 
-Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, one durable provider-matching publication endpoint with leased seed/terminal refs and terminal provider convergence, receipt-first crash recovery, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
+Implemented one fail-closed closeout authority chain from authoritative provider endpoint through leased publication and exact terminal predecessor recovery. Execute is complete and the First Officer may route Verify.
 
 ### Metrics
 
 - status: passed
-- duration_minutes: 1516
-- iteration_count: 27 implementation/review repair loops
-- task_count: 20
-- commit_count: 25 implementation/docs/test commits
-- reviewer_verdict: APPROVED after all nine feedback cycles received independent re-review
+- duration_minutes: 1833
+- iteration_count: 32 implementation/review repair loops
+- task_count: 21
+- commit_count: 26 implementation/docs/test commits
+- reviewer_verdict: PASS after all ten feedback cycles received independent re-review
 <!-- /section:execute-stage-report -->
 
 <!-- section:verify-stage-report -->
