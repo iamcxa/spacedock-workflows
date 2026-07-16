@@ -76,6 +76,12 @@ extract_section "## References" "" > "$REFERENCES"
 check "ship still loads first officer before classifying or resolving" \
   "grep -q 'before classifying' '${SHIP_SKILL}' && grep -q 'before resolving' '${SHIP_SKILL}' && grep -q 'spacedock:first-officer' '${SHIP_SKILL}'"
 
+check "ship pins the exact fresh-dispatch stage-entry receipt" \
+  "grep -Fqx -- '- fresh dispatch: \`dispatch: {slug-or-bounded-summary} entering {next_stage}\`' '${SHIP_SKILL}'"
+
+check "ship pins the exact same-worker-reuse stage-entry receipt" \
+  "grep -Fqx -- '- same-worker reuse: \`advance: {slug-or-bounded-summary} entering {next_stage}\`' '${SHIP_SKILL}'"
+
 check "ship no longer describes a five-artifact plan-first pipeline" \
   "! grep -q 'Produce 5 per-stage .md artifacts' '${SHIP_SKILL}' && ! grep -q 'Create 5 top-level tasks' '${SHIP_SKILL}'"
 

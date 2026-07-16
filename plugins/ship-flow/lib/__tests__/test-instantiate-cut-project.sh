@@ -113,6 +113,14 @@ assert_grep "DC-2g dag_mermaid rendered"       "$EPIC" '```mermaid'
 assert_nogrep "DC-2h epic has no appetite frontmatter (C2-safe)" "$EPIC" '^appetite:'
 # DC-2i epic must NOT be pattern: pitch (would trip C1 pre_mortem invariant)
 assert_nogrep "DC-2i epic not pattern: pitch (C1-safe)" "$EPIC" '^pattern:[[:space:]]*pitch'
+if awk '
+  /^status: epic$/ { getline a; getline b; exit !(a=="stage_outputs: {}" && b=="---") }
+  END { if (!a) exit 1 }
+' "$EPIC" && ! grep -q '^<!-- section:stage-artifact-links -->$' "$EPIC"; then
+  ok "DC-2j epic has empty terminal authority tail and no body table"
+else
+  bad "DC-2j epic authority tail/body-table disposition"
+fi
 
 # DC-4 dotted children + shaped-child + parent_pitch + external_id
 assert_file "DC-4a child 121.1 written" "$C1"
@@ -132,6 +140,16 @@ assert_grep   "DC-5c child3 plan (no trigger)"        "$C3" '^status:[[:space:]]
 assert_grep   "DC-5d child4 plan (no trigger)"        "$C4" '^status:[[:space:]]*plan'
 assert_nogrep "DC-5e child1 NOT sharp" "$C1" '^status:[[:space:]]*sharp'
 assert_nogrep "DC-5f child3 NOT sharp" "$C3" '^status:[[:space:]]*sharp'
+for child in "$C1" "$C2" "$C3" "$C4"; do
+  if awk '
+    /^status: (design|plan)$/ { getline a; getline b; exit !(a=="stage_outputs: {}" && b=="---") }
+    END { if (!a) exit 1 }
+  ' "$child" && ! grep -q '^<!-- section:stage-artifact-links -->$' "$child"; then
+    ok "DC-5g $(basename "$(dirname "$child")") has empty terminal authority tail"
+  else
+    bad "DC-5g $(basename "$(dirname "$child")") authority tail/body-table disposition"
+  fi
+done
 
 # DC-6 external_id → dotted-id depends-on mapping (NOT raw external_ids)
 assert_grep   "DC-6a child2 depends-on dotted 121.1"  "$C2" '^depends-on:.*121\.1'

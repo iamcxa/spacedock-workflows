@@ -117,8 +117,8 @@ frontmatter:
       invariant: "at least 1 assumption with criticality=critical when pattern=pitch"
     stage_outputs:
       type: object
-      description: "Map of stage_name → relative path to stage artifact .md. Maintained by lib/register-stage-output.sh after each ship-* SKILL emits its artifact. Canonical source of truth for which stages have produced output. Body section <!-- section:stage-artifact-links --> is the derived view."
-      example: '{ plan: "plan.md", execute: "execute.md" }'
+      description: "Sole machine authority for produced stage artifacts. Canonical sparse rank-ordered stage_name → fixed .md basename map; render-stage-links.sh provides a read-only derived view."
+      example: 'canonical block rows: plan: plan.md, then execute: execute.md'
     acceptance_outcome:
       type: string
       description: "User-observable answer to 'what does the captain GET when this pitch ships?' Anchors captain-gate confirm/refine. Pitch 100 source: prevents foundation-only ceremony where children produce placeholder files nothing consumes."
@@ -1343,16 +1343,17 @@ parent_context:
     - { name: contracts_to_implement, type: list, description: "Cross-Entity Contract bullets from parent ## Epic Context → ### Cross-Entity Contracts assigned to this child" }
     - { name: slice_scope, type: string, description: "This child's row from parent ## Epic Context → ### Entity Decomposition" }
 
-stage_artifact_links:
+historical_stage_artifact_links:
   section: "<!-- section:stage-artifact-links -->"
   section_tag: stage-artifact-links
   layer: implementation
-  written_by: "lib/render-stage-links.sh — regenerated from frontmatter stage_outputs after each ship-* SKILL advances the stage"
-  read_by: "spacebridge dashboard (entity detail view) — renders stage artifact navigation links"
-  description: "Derived table of stage artifacts — canonical data lives in frontmatter stage_outputs. This section is auto-maintained; do not hand-edit."
-  fields:
-    - { name: stage, type: string, description: "Stage name (plan, execute, verify, review, ship)" }
-    - { name: file, type: link, description: "Relative markdown link to stage artifact" }
+  authority: "historical and non-authoritative"
+  written_by: "legacy producers only — current stage producers and render-stage-links.sh never write body tables"
+  read_by: "none in the active machine contract; preserved as opaque legacy body bytes"
+  description: "Historical non-authoritative body section. Active stage links derive solely from canonical frontmatter stage_outputs."
+  opaque_bytes:
+    parsing: forbidden
+    preservation: byte-for-byte
 
 # --- Cross-Stage Conventions ---
 conventions:

@@ -122,6 +122,19 @@ Then dispatch each stage to its assigned teammate via SendMessage (hot-context ~
 | review | `planner` | `ship-flow:ship-review` | `<entity-folder>/review.md` |
 | ship-final | ship (this skill) | inline (no stage skill) | `<entity-folder>/ship.md` |
 
+### Completion-v1 FO dispatch seam (mandatory)
+
+For `design|plan|execute|verify|review|ship`, call `fo_completion_begin`, prepend `$FO_COMPLETION_ENV_BLOCK` to the assignment, and pass the entire worker return unchanged to `fo_completion_checkpoint`. Any uncertainty stops and preserves state; only zero permits the next Contract 1. Shape and legacy flat entities (including current flat C14) are Contract-1-only.
+
+```bash
+# shellcheck disable=SC1090 # helper path is supplied by the installed plugin
+source "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/fo-completion-lifecycle.sh"
+fo_completion_begin "$INDEX_MD" "$NEW_STATUS" "$STAGE_NAME" "$STAGE_FILE" "$WORKER_ID" || return
+# Prepend $FO_COMPLETION_ENV_BLOCK to the worker assignment and preserve its return verbatim.
+fo_completion_checkpoint "$WORKER_RETURN" || return
+```
+Sequence: begin; prepend env; dispatch; checkpoint verbatim return; then separate Contract 1. `ship-final` uses the same functions inline.
+
 **Mandatory Science Officer (EM) charter injection for direct dispatch**:
 Before every direct FO-to-stage-worker dispatch, build the stage assignment body
 with `plugins/ship-flow/lib/build-stage-dispatch-prompt.sh`. The helper must
@@ -276,14 +289,19 @@ After the digest is written, ask the captain how to handle newly captured todos:
 **Advance status (independent of the PR ref):**
 
     INDEX_MD="<entity-folder>/index.md"
-    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    H="$(if command -v sha256sum >/dev/null 2>&1; then sha256sum "$INDEX_MD" | awk '{print $1}'; else shasum -a 256 "$INDEX_MD" | awk '{print $1}'; fi)"
     bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
       --entity="$INDEX_MD" \
       --new-status=ship \
       --stage-name=ship \
       --stage-file=ship.md \
       --if-hash="$H" \
+      --lease-file="$SHIP_FLOW_COMPLETION_LEASE_FILE" --lease-token="$SHIP_FLOW_COMPLETION_LEASE_TOKEN" --worker-id="$SHIP_FLOW_COMPLETION_WORKER_ID" \
       --commit-as="ship(<id>): advance status to ship"
+
+This registers the ship artifact idempotently and independently from PR metadata; it does not perform ship-to-done.
+Return the receipt verbatim. FO reclaims the lease: `published` runs path reconcile;
+`already-registered` runs clean/no-lag. Only `reconciled|ready` may precede Contract 1.
 
 Do NOT write frontmatter `pr:` here — the frontmatter `pr:` is written ONLY by `persist-pr-metadata.sh` in Step 6.5, after the PR exists and its body is confirmed. The `status=ship` flip is independent of the PR ref. `ship→done` on PR-merge is out of scope (covered by the inline-on-main `status=done` path; `warn-state-drift` Rule A flags drift if missed). On exit 6 (stale hash): write `## Ship Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 
