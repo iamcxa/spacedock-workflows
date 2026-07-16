@@ -255,20 +255,26 @@ Planned native post-merge closeout as five ordered TDD waves: landing proof, dur
   Commit `e3adebe` uses a create-only full-ref lease, preserves the competing remote ref plus exact local checkpoint bytes on rejection, emits stable `PROMPT_CAPTAIN / closeout-checkpoint-conflict / closeout_pr_prepared`, publishes a missing seed once, skips an exact existing OID, and leaves the terminal OID lease unchanged.
 - DONE: Preserve the Cycle 6 recovery envelope and complete Cycle 7 review/report gates without widening into W2/W3/W4.
   R7 is 19/19, R6 is 279/279, R4 is 29/29, isolated R3 is 107/107, R2 is 13/13 + 23/23, and default is 198/198 on both Bash 3.2 and 5.3; independent spec/quality reviews APPROVED, the pinned ledger/Spacedock checks pass, and the full compatibility chain plus C1-C15 exit 0.
+- DONE: Establish the Cycle 8 causal two-pushurl RED while production bytes remain frozen.
+  Endpoint A moves `absent -> seed` before endpoint B rejects its ancestor-valued competitor, so the named-remote push returns nonzero only after partial mutation. The focused causal run is 15/4 on both Bash versions; the expanded pre-fix review run is 38/12.
+- DONE: Close only R8-B1 by binding the optional-PR transaction to one authoritative push URL before provider list/create/ready or Git publication.
+  Commit `9e8cc8c` rejects multiple, missing, malformed, or unresolvable destinations as stable `PROMPT_CAPTAIN / closeout-checkpoint-conflict / closeout_pr_prepared`; seed inspection/CAS and terminal OID-lease publication directly reuse the same URL and full ref.
+- DONE: Preserve R2-R7 recovery, cleanup, and retry semantics and complete independent Cycle 8 review.
+  R8 is 50/50, R7 is 19/19, R6 is 289/289, R4 is 29/29, R3 is 107/107, R2 is 13/13 + 23/23, and default is 198/198 on Bash 3.2 and 5.3; spec/quality reviews APPROVED with no findings, pinned validation passes, and full C1-C15 exits 0.
 - BOUNDARY: No external PR, push, merge, deployment, issue update, archive, or verify-stage advance occurred. Non-UI render fidelity is N/A.
 
 ### Summary
 
-Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, atomic expected-absence seed publication, receipt-first crash recovery, bounded authoritative provider/object binding, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
+Implemented proof-backed native post-merge closeout with one atomic direct bundle or one deterministic optional closeout PR, one bound authoritative publication URL with leased seed/terminal refs, receipt-first crash recovery, bounded provider/object binding, mechanical recursion prevention, truthful operator docs, and hermetic regression coverage.
 
 ### Metrics
 
 - status: passed
-- duration_minutes: 809
-- iteration_count: 25 implementation/review repair loops
-- task_count: 18
-- commit_count: 23 implementation/docs/test commits
-- reviewer_verdict: APPROVED after all seven feedback cycles received independent re-review
+- duration_minutes: 852
+- iteration_count: 26 implementation/review repair loops
+- task_count: 19
+- commit_count: 24 implementation/docs/test commits
+- reviewer_verdict: APPROVED after all eight feedback cycles received independent re-review
 <!-- /section:execute-stage-report -->
 
 <!-- section:verify-stage-report -->
