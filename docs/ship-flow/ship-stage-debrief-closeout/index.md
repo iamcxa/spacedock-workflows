@@ -1,7 +1,7 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: verify
+status: execute
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -372,4 +372,12 @@ the stored token and the transaction can diverge from the provider repository. T
   routed_at: 2026-07-16T01:02:19Z
   verify_artifact: verify.md@aff77fb
   required_fixes: R8-B1 prevent multi-pushurl partial seed publication by enforcing one authoritative destination or one canonical verified URL, with a two-pushurl zero-endpoint-mutation regression
+  deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
+- cycle: 9
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-16T02:39:01Z
+  verify_artifact: verify.md@bbe943f
+  required_fixes: R9-B1 bind a non-reinterpretable leaf publication endpoint across nested remotes and URL rewrites; R9-B2 persist and validate provider-bound endpoint identity across retries and re-query provider head before ready/success; add coupled seed/terminal regressions
   deferred_hardening: W2 same-user path-swap TOCTOU; W3 O(R+E) receipt scanning; W4 review-scope range tooling
