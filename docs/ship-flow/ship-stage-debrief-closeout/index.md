@@ -282,31 +282,32 @@ Implemented proof-backed native post-merge closeout with one atomic direct bundl
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Verify Cycle 8 direct destination behavior on current bytes. Direct multiple, missing, malformed, and
-  unresolvable origin destinations fail closed before modeled provider, publication, or bundle effects; R8 is 50/50
-  on Bash 3.2 and 5.3.
-- DONE: Re-run the complete proportional recovery/compatibility envelope and three fresh panels. R7 is 19/19, R6
-  289/289, R4 29/29, R3 107/107, R2 13/13 + 23/23, and default 198/198 on both shells; static/contracts and C1-C15 pass.
-- FAILED: R9-B1 proves a one-line token can still be reinterpreted through a nested remote or chained
-  `pushInsteadOf`, separating inspection from publication or reintroducing fan-out. R9-B2 proves the destination is
-  not persisted/provider-bound and terminal success is not re-queried before ready/success.
-- GATE: Round 9 returns R9-B1/B2 and their nested/rewrite/provider-drift seed+terminal regressions to execute.
-  Verdict is FAILED/PROMPT_CAPTAIN; no implementation, Review advance, external push/PR/merge/archive/todo/network/RoboRev mutation occurred.
+- DONE: Verify current endpoint normalization, rewrite rejection, literal leased send-pack behavior, persisted config
+  drift, and provider refresh with temporary local repositories/fake provider only. Modeled R9 is 59/59 and receipt
+  transitions are 92/92 on Bash 3.2 and 5.3.
+- DONE: Re-run the complete dual-Bash recovery/compatibility envelope and three fresh read-only panels. R8 is 50,
+  R7 19, R5/R6 289, R4 29, R3 107, R2 13+23, and default 198 on both shells; TDD/static and C1-C15 pass.
+- FAILED: R10-B1 proves ambient Git config can authorize an unrelated unmarked fixture endpoint and mutate its ref.
+  R10-B2 proves changed awaiting/terminal endpoint bytes are not provider-bound or predecessor-checked on every
+  recovery/reuse path; a wrong endpoint can receive terminal bytes before provider refresh stops ready.
+- GATE: Round 10 returns R10-B1/B2 plus causal global-marker, altered awaiting/terminal receipt, transport,
+  terminal-lease, legacy-hydration, and provider-refresh regressions to execute. Verdict is FAILED/PROMPT_CAPTAIN;
+  no implementation/test bytes, Review advance, network, repository remote, PR, merge, archive, todo, or RoboRev state changed.
 
 ### Summary
 
-Round 9 confirms the direct Cycle 8 fix but disproves the broader authoritative-endpoint claim: Git can reinterpret
-the stored token and the transaction can diverge from the provider repository. The Captain-gated VETO is in [verify.md](verify.md).
+Round 10 confirms Cycle 9's modeled controls but disproves the provider-bound immutable-endpoint claim on recovery
+and local fixture identity. The Captain-gated VETO is in [verify.md](verify.md).
 
 ### Metrics
 
 - status: failed
-- duration_minutes: 128 across nine verify rounds
-- iteration_count: 9
+- duration_minutes: 180 across ten verify rounds
+- iteration_count: 10
 - blocking_findings_count: 2 current
 - warning_findings_count: 4
-- claim_records: required VERIFIED=7 NOT VERIFIED=2 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 9; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- claim_records: required VERIFIED=2 NOT VERIFIED=2 INCONCLUSIVE=0
+- reviewer_verdict: VETO round 10; Captain Verify gate FAIL/PROMPT_CAPTAIN
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
