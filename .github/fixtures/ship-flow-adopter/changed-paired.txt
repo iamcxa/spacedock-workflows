@@ -1,0 +1,2 @@
+apps/contracts/application.schema.json
+docs/contracts/ledger.md

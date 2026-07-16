@@ -1,0 +1,112 @@
+name: ship-flow contribution contract
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  doc_impact:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Discover repo-local contribution contract
+        id: doc_impact_scope
+        run: |
+          PR_BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          if ! git cat-file -e "${PR_BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "ERROR: pull-request base commit is unavailable: $PR_BASE_SHA" >&2
+            exit 1
+          fi
+          MERGE_BASE="$(git merge-base "$PR_BASE_SHA" HEAD)" || {
+            echo "ERROR: cannot resolve merge base for $PR_BASE_SHA and HEAD." >&2
+            exit 1
+          }
+          [ -n "$MERGE_BASE" ] || { echo "ERROR: resolved merge base is empty." >&2; exit 1; }
+          CHANGED=$(git diff --no-renames --name-only "$MERGE_BASE"...HEAD)
+          printf '%s\n' "$CHANGED" > /tmp/ship_flow_doc_impact_changed_files.txt
+          git diff --no-renames --name-status "$MERGE_BASE"...HEAD > /tmp/ship_flow_doc_impact_changed_status.txt
+
+          ADOPTER_MAP=.claude/ship-flow/doc-coupling.yaml
+          ADOPTER_CHECKER=.claude/ship-flow/doc-impact-gate.sh
+          SOURCE_CHECKER=plugins/ship-flow/bin/doc-impact-gate.sh
+          SOURCE_MAP=plugins/ship-flow/references/doc-coupling-map.yaml
+          BASE_MAP=/tmp/ship_flow_base_doc_coupling.yaml
+          BASE_ADOPTER_EXISTS=false
+          BASE_COUPLING_MAP=
+          HEAD_MAP_ABSENT=false
+          if git cat-file -e "${MERGE_BASE}:${ADOPTER_MAP}" 2>/dev/null; then
+            git show "${MERGE_BASE}:${ADOPTER_MAP}" > "$BASE_MAP"
+            BASE_ADOPTER_EXISTS=true
+            BASE_COUPLING_MAP="$BASE_MAP"
+          elif git cat-file -e "${MERGE_BASE}:${SOURCE_MAP}" 2>/dev/null; then
+            git show "${MERGE_BASE}:${SOURCE_MAP}" > "$BASE_MAP"
+            BASE_COUPLING_MAP="$BASE_MAP"
+          fi
+
+          GATE_REQUIRED=false
+          COUPLING_MAP=
+          CHECKER=
+          if [ -f "$ADOPTER_MAP" ]; then
+            if [ ! -f "$ADOPTER_CHECKER" ]; then
+              echo "ERROR: repo-local coupling map exists but its adopted checker is absent; .claude/ship-flow/doc-impact-gate.sh is required." >&2
+              exit 1
+            fi
+            CHECKER="$ADOPTER_CHECKER"
+            GATE_REQUIRED=true
+            COUPLING_MAP="$ADOPTER_MAP"
+          elif [ "$BASE_ADOPTER_EXISTS" = "true" ]; then
+            if [ ! -f "$ADOPTER_CHECKER" ]; then
+              echo "ERROR: repo-local coupling map existed at the PR base but its adopted checker is absent at HEAD; .claude/ship-flow/doc-impact-gate.sh is required to review removal." >&2
+              exit 1
+            fi
+            CHECKER="$ADOPTER_CHECKER"
+            GATE_REQUIRED=true
+            HEAD_MAP_ABSENT=true
+          elif [ -f "$SOURCE_CHECKER" ]; then
+            GATE_REQUIRED=true
+            CHECKER="$SOURCE_CHECKER"
+          elif grep -q '^plugins/ship-flow/' /tmp/ship_flow_doc_impact_changed_files.txt; then
+            echo "ERROR: plugin contribution paths changed but source checker is absent: $SOURCE_CHECKER" >&2
+            exit 1
+          else
+            echo "No repo-local coupling map and no Ship Flow source checker; doc-impact gate skipped."
+          fi
+
+          {
+            echo "gate_required=$GATE_REQUIRED"
+            echo "coupling_map=$COUPLING_MAP"
+            echo "base_coupling_map=$BASE_COUPLING_MAP"
+            echo "head_map_absent=$HEAD_MAP_ABSENT"
+            echo "checker=$CHECKER"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run doc-impact contribution gate
+        if: steps.doc_impact_scope.outputs.gate_required == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          COUPLING_MAP: ${{ steps.doc_impact_scope.outputs.coupling_map }}
+          BASE_COUPLING_MAP: ${{ steps.doc_impact_scope.outputs.base_coupling_map }}
+          HEAD_MAP_ABSENT: ${{ steps.doc_impact_scope.outputs.head_map_absent }}
+          CHECKER: ${{ steps.doc_impact_scope.outputs.checker }}
+        run: |
+          MAP_ARGS=()
+          if [ -n "$COUPLING_MAP" ]; then
+            MAP_ARGS+=("--coupling-map=$COUPLING_MAP")
+          fi
+          if [ -n "$BASE_COUPLING_MAP" ]; then
+            MAP_ARGS+=("--base-coupling-map=$BASE_COUPLING_MAP")
+          fi
+          if [ "$HEAD_MAP_ABSENT" = "true" ]; then
+            MAP_ARGS+=("--head-map-absent")
+          fi
+          bash "$CHECKER" \
+            --changed=/tmp/ship_flow_doc_impact_changed_files.txt \
+            --changed-status=/tmp/ship_flow_doc_impact_changed_status.txt \
+            --declaration="$PR_BODY" \
+            "${MAP_ARGS[@]}"
