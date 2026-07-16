@@ -9,6 +9,7 @@
 <!-- section:now -->
 | Entity | Title | Stage |
 | --- | --- | --- |
+| c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | verify |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)

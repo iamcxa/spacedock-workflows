@@ -361,8 +361,8 @@ If ALL of the following hold:
    ```
    <!-- /section:hand-off-to-plan -->
 2. Phase 9 emits unconditional PROCEED verdict (no cross-review dispatch needed).
-3. Advance entity status `design → plan`.
-4. SendMessage(planner): "Design trivial-pass for pitch-<id>. design-skipped: true — no constraints to import. Advance directly to plan."
+3. Register design completion through the Phase 10 completion contract; do not enter plan directly.
+4. Return to the First Officer. The FO owns the separate plan stage-entry transition and planner dispatch.
 
 Per DC-8: `design-skipped: true` (not `design-skipped: false` with empty constraints) so plan Step 1.6 G14 semantics short-circuit correctly. Cross-reference: INVARIANTS Principle 11 "Design Stage Required".
 
@@ -703,10 +703,34 @@ Coaching note: unresolved design questions here cascade into plan ambiguity and 
 
 Verdict: **PROCEED** / **VETO** (max 2 loops) / **PROMPT_CAPTAIN**. Each verdict MUST include a one-sentence coaching note per INVARIANTS Principle 6 Rule C ABC clause.
 
-### Phase 10 — Advance to plan
+### Phase 10 — Register design completion
 
-1. Advance entity status `design → plan`.
-2. SendMessage to `planner` teammate: `"Design stage complete for pitch-<id>. Read <entity-folder>/design.md §Constraints for Plan Stage before composing plan."`
+Register the completed design artifact without impersonating the next First
+Officer stage-entry receipt.
+
+For a helper-compatible folder entity, `index.md` MUST contain the canonical
+`stage_outputs:` frontmatter authority tail. Historical body tables are ignored. Run:
+
+    INDEX_MD="<entity-folder>/index.md"
+    H="$(if command -v sha256sum >/dev/null 2>&1; then sha256sum "$INDEX_MD" | awk '{print $1}'; else shasum -a 256 "$INDEX_MD" | awk '{print $1}'; fi)"
+    bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
+      --entity="$INDEX_MD" \
+      --new-status=design \
+      --stage-name=design \
+      --stage-file=design.md \
+      --if-hash="$H" \
+      --lease-file="$SHIP_FLOW_COMPLETION_LEASE_FILE" --lease-token="$SHIP_FLOW_COMPLETION_LEASE_TOKEN" --worker-id="$SHIP_FLOW_COMPLETION_WORKER_ID" \
+      --commit-as="design(<id>): register completion"
+
+On exit 6 (stale hash): write `## Design Report status: blocked, reason:
+index.md stale hash; parallel session contaminated` and return.
+
+Do not migrate or auto-convert an incompatible ledger in this stage.
+Legacy flat entities without canonical stage_outputs authority MUST NOT invoke advance-stage.sh; historical body tables are non-authoritative and remain opaque.
+
+This registers design completion; it does not enter plan. Return to the First Officer for a separate plan stage-entry transition.
+Return the receipt verbatim. FO reclaims the lease: `published` runs path reconcile;
+`already-registered` runs clean/no-lag. Only `reconciled|ready` may precede Contract 1.
 
 ---
 

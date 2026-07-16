@@ -505,9 +505,9 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 | `lib/extract-map.sh` | canonical doc section reader (ARCHITECTURE/PRODUCT/ROADMAP) |
 | `lib/patch-map.sh` | canonical doc section writer — atomic + `--if-hash` CAS + mermaid whitelist |
 | `lib/map-helpers.sh` | shared utilities for map-layer primitives (cross-platform sha256, awk body-from-FILE pattern) |
-| `lib/register-stage-output.sh` | appends stage output reference to entity body `stage_outputs[]` (required for render-stage-links compatibility) |
-| `lib/render-stage-links.sh` | rebuilds entity body from `stage_outputs[]` — used by advance-stage; destructive on legacy entities without backfilled stage_outputs |
-| `lib/advance-stage.sh` | advances entity status field atomically; triggers render-stage-links rebuild |
+| `lib/register-stage-output.sh` | atomically updates the canonical frontmatter stage_outputs authority tail |
+| `lib/render-stage-links.sh` | read-only stdout renderer derived solely from canonical frontmatter; never writes the entity |
+| `lib/advance-stage.sh` | atomically registers current-stage completion while leaving current status unchanged; does not enter the next stage or render |
 | `lib/update-entity-status.sh` | raw status field updater (lower-level; prefer advance-stage for pipeline transitions) |
 | `lib/verify-assumption.sh` | asserts a critical assumption by running a shell command and logging result to entity |
 | `lib/density-classify.sh` | classifies entity density (4-tier: low/medium/high/critical) — used by cross-review verdict-flip whitelist (Principle 6 Rule C) |

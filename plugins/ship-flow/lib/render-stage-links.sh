@@ -1,25 +1,21 @@
 #!/usr/bin/env bash
-# render-stage-links.sh — re-render <!-- section:stage-artifact-links --> from frontmatter stage_outputs
+# render-stage-links.sh — print a Markdown view of canonical frontmatter stage_outputs
 #
 # Usage:
 #   bash render-stage-links.sh \
-#     --entity=<path to index.md> \
-#     --if-hash=<sha256> \
-#     [--commit-as="<msg>"] [--no-commit]
+#     --entity=<path to index.md>
 #
 # Exit codes:
 #   0  success (or no-op when section unchanged)
 #   1  usage / unknown option
 #   3  missing entity file
-#   6  stale hash (--if-hash mismatch)
-#   7  missing --if-hash
-#   8  commit failed
-#  10  section markers missing or unbalanced in entity file
-set -uo pipefail
+#   4  malformed or noncanonical authority tail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./map-helpers.sh
-source "${SCRIPT_DIR}/map-helpers.sh"
+# shellcheck source=./completion-v1.sh
+# shellcheck disable=SC1091 # resolved beside this script at runtime
+source "${SCRIPT_DIR}/completion-v1.sh"
 
 ENTITY=""
 IF_HASH=""
@@ -36,12 +32,14 @@ for arg in "$@"; do
   esac
 done
 
-[ -n "$ENTITY" ] || { echo "Usage: render-stage-links.sh --entity=<path> --if-hash=<sha256> [--commit-as=<msg>] [--no-commit]" >&2; exit 1; }
+[ -z "$IF_HASH$COMMIT_MSG" ] && [ "$NO_COMMIT" = 0 ] || { echo "Unknown legacy mutation option" >&2; exit 1; }
+[ -n "$ENTITY" ] || { echo "Usage: render-stage-links.sh --entity=<path>" >&2; exit 1; }
 [ -f "$ENTITY" ] || { echo "Error: entity not found: $ENTITY" >&2; exit 3; }
-[ -n "$IF_HASH" ] || { echo "Error: --if-hash required" >&2; exit 7; }
-
-CURRENT_HASH="$(sha256_of "$ENTITY")"
-[ "$CURRENT_HASH" = "$IF_HASH" ] || { echo "Error: hash mismatch (expected $IF_HASH, got $CURRENT_HASH)" >&2; exit 6; }
+[ ! -L "$ENTITY" ] || { echo "Error: entity is not a regular file: $ENTITY" >&2; exit 3; }
+completion_parse_entity "$ENTITY" '' shape shape.md >/dev/null || {
+  echo "Error: malformed or noncanonical frontmatter authority tail: $ENTITY" >&2
+  exit 4
+}
 
 # Extract stage_outputs from frontmatter and build table rows
 # Reads: stage_outputs block (indented key: value pairs under stage_outputs:)
@@ -76,37 +74,10 @@ NEW_SECTION="| Stage | File |
 |-------|------|
 ${TABLE_BODY}"
 
-# Write to temp file for atomic_replace
 BODY_TMP="$(mktemp)"
 trap 'rm -f "$BODY_TMP"' EXIT INT TERM
 printf '%s' "$NEW_SECTION" > "$BODY_TMP"
-
-# Use atomic_replace from map-helpers.sh to swap the section in-place
-atomic_replace "$ENTITY" "stage-artifact-links" "$BODY_TMP"
-REPLACE_RC=$?
+cat "$BODY_TMP"
 rm -f "$BODY_TMP"
 trap - EXIT INT TERM
-
-if [ "$REPLACE_RC" -ne 0 ]; then
-  echo "Error: section markers <!-- section:stage-artifact-links --> missing or unbalanced in $ENTITY" >&2
-  exit 10
-fi
-
-if [ "$NO_COMMIT" = "0" ] && [ -n "$COMMIT_MSG" ]; then
-  git rev-parse --git-dir >/dev/null 2>&1 || {
-    echo "Warning: not a git repo; skipping commit" >&2
-    exit 0
-  }
-  git add -- "$ENTITY"
-  if git diff --cached --quiet -- "$ENTITY"; then
-    exit 0
-  fi
-  if ! git -c user.email="${GIT_AUTHOR_EMAIL:-author@example.com}" \
-            -c user.name="${GIT_AUTHOR_NAME:-Ship-flow}" \
-            commit -m "$COMMIT_MSG" -- "$ENTITY"; then
-    echo "Error: commit failed" >&2
-    exit 8
-  fi
-fi
-
 exit 0
