@@ -27,6 +27,7 @@
 | shape-confirm-instance-awareness | S | shape-confirm.sh and allocate-id.sh ignore the workflow README id-style declaration, write legacy status sharp (3 sites), and never absorb an existing flat entity — confirm path should be instance-aware | pitch 1 |
 | plugin-readme-model-era-refactor | S | Plugin README still model-era-anchored (4.7 voice) + stale | (todo) |
 | helm-canonical-adapter-registration-dogfood | S | Helm adopts the canonical closeout-adapter registration and dogfoods closeout from a clean isolated checkout (no Helm-specific terminalization code). | pitch 6 |
+| shaped-child-created-off-graph-sharp | S | shaped-child born off-graph (sharp); C14 blocks its first advance | pitch 6 (related: shape-confirm-instance-awareness) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
