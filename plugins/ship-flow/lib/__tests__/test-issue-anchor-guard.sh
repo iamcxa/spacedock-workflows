@@ -366,6 +366,296 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# DC-10 (P1-1) — validate derives goal_still_unmet + verdict from the
+# per-AC met_by_existing_capability rows; never trusts the
+# independently-editable scalar fields alone. A proceed with zero/removed
+# AC rows, or scalars inconsistent with the rows, must BLOCK.
+# ---------------------------------------------------------------------------
+
+EMPTY_ACS_FIXTURE="${TMP_DIR}/empty-acs-source-diff.yaml"
+cat > "$EMPTY_ACS_FIXTURE" <<'EOF'
+schema_version: "1.0"
+entity_id: "fx"
+issue_ref: "gh#49"
+issue_fetched_at: "2026-07-17T00:00:00Z"
+original_issue_acs: []
+current_scope_delta: []
+scope_subset_of_issue: true
+goal_still_unmet: true
+verdict: proceed
+rationale: "claims proceed with zero AC rows to back it"
+EOF
+OUT10A="${TMP_DIR}/dc10a.out"; RC10A=0
+bash "$RESOLVER" validate "--file=${EMPTY_ACS_FIXTURE}" > "$OUT10A" 2>&1 || RC10A=$?
+if [ "$RC10A" != "0" ]; then
+  record_pass "DC-10: validate BLOCKs a proceed with zero/removed original_issue_acs[] rows"
+else
+  record_fail "DC-10: validate BLOCKs a proceed with zero/removed original_issue_acs[] rows (exited 0: $(cat "$OUT10A"))"
+fi
+
+ALL_MET_FIXTURE="${TMP_DIR}/all-met-source-diff.yaml"
+cat > "$ALL_MET_FIXTURE" <<'EOF'
+schema_version: "1.0"
+entity_id: "fx"
+issue_ref: "gh#49"
+issue_fetched_at: "2026-07-17T00:00:00Z"
+original_issue_acs:
+  - text: "AC-1: some criterion"
+    met_by_existing_capability: true
+  - text: "AC-2: another criterion"
+    met_by_existing_capability: true
+current_scope_delta: []
+scope_subset_of_issue: true
+goal_still_unmet: true
+verdict: proceed
+rationale: "falsely claims goal_still_unmet=true though every AC row is met_by_existing_capability=true"
+EOF
+OUT10B="${TMP_DIR}/dc10b.out"; RC10B=0
+bash "$RESOLVER" validate "--file=${ALL_MET_FIXTURE}" > "$OUT10B" 2>&1 || RC10B=$?
+if [ "$RC10B" != "0" ]; then
+  record_pass "DC-10: validate BLOCKs goal_still_unmet=true when every per-AC row is met_by_existing_capability=true (derived=false)"
+else
+  record_fail "DC-10: validate BLOCKs goal_still_unmet=true when every per-AC row is met_by_existing_capability=true (derived=false) (exited 0: $(cat "$OUT10B"))"
+fi
+
+MULTI_ROW_FIXTURE="${TMP_DIR}/multi-row-source-diff.yaml"
+cat > "$MULTI_ROW_FIXTURE" <<'EOF'
+schema_version: "1.0"
+entity_id: "fx"
+issue_ref: "gh#49"
+issue_fetched_at: "2026-07-17T00:00:00Z"
+original_issue_acs:
+  - text: "AC-1: some criterion"
+    met_by_existing_capability: true
+  - text: "AC-2: another criterion"
+    met_by_existing_capability: false
+current_scope_delta: []
+scope_subset_of_issue: true
+goal_still_unmet: true
+verdict: proceed
+rationale: "honest: AC-2 still unmet even though AC-1 is already covered"
+EOF
+OUT10C="${TMP_DIR}/dc10c.out"; RC10C=0
+bash "$RESOLVER" validate "--file=${MULTI_ROW_FIXTURE}" > "$OUT10C" 2>&1 || RC10C=$?
+assert_exit "DC-10: validate accepts a consistent multi-row proceed (derived from ANY-false-row aggregation, not just row 1)" 0 "$RC10C"
+
+# ---------------------------------------------------------------------------
+# DC-11 (P1-2) — AC parser captures a multiline continuation block, or
+# fails closed (never accepts an empty anchor) when a matched AC heading
+# has no substantive criterion text anywhere in its block.
+# ---------------------------------------------------------------------------
+
+MULTILINE_BODY='## Acceptance
+
+AC-1: Guard writes a five-field source-diff YAML for a re-shaped entity.
+AC-2:
+  Guard no-ops on a fresh shape with no later-stage artifacts,
+  even when invoked twice in a row.
+AC-3: Guard never fakes an AC list when the tracker call fails.'
+
+REPO11A="${TMP_DIR}/repo-dc11a"
+new_repo "$REPO11A"
+write_entity_index "${REPO11A}/docs/ship-flow/fx-multiline-ac/index.md" "design" 'issue: "#49"' "gh"
+: > "${REPO11A}/docs/ship-flow/fx-multiline-ac/design.md"
+FAKEBIN11A="${TMP_DIR}/fakebin-dc11a"
+write_fake_gh_ok "$FAKEBIN11A" "$MULTILINE_BODY"
+OUT11A="${TMP_DIR}/dc11a.out"; RC11A="${TMP_DIR}/dc11a.rc"
+run_resolver_emit "$REPO11A" "docs/ship-flow/fx-multiline-ac" "$OUT11A" "$RC11A" "$FAKEBIN11A"
+DIFF11A="${REPO11A}/.context/ship-flow/source-diff-fx.yaml"
+
+assert_exit "DC-11: resolver exits 0 on a multiline-continuation AC body" 0 "$(cat "$RC11A")"
+if [ -f "$DIFF11A" ]; then
+  assert_contains "DC-11: multiline AC-2 continuation text is captured in original_issue_acs" 'no later-stage artifacts, even when invoked twice in a row' "$DIFF11A"
+else
+  record_fail "DC-11: multiline AC-2 continuation text is captured in original_issue_acs (missing: $DIFF11A)"
+fi
+
+EMPTY_HEADING_BODY='## Acceptance
+
+AC-1: Guard writes a five-field source-diff YAML for a re-shaped entity.
+AC-2:
+
+AC-3: Guard never fakes an AC list when the tracker call fails.'
+
+REPO11B="${TMP_DIR}/repo-dc11b"
+new_repo "$REPO11B"
+write_entity_index "${REPO11B}/docs/ship-flow/fx-empty-ac-heading/index.md" "design" 'issue: "#49"' "gh"
+: > "${REPO11B}/docs/ship-flow/fx-empty-ac-heading/design.md"
+FAKEBIN11B="${TMP_DIR}/fakebin-dc11b"
+write_fake_gh_ok "$FAKEBIN11B" "$EMPTY_HEADING_BODY"
+OUT11B="${TMP_DIR}/dc11b.out"; RC11B="${TMP_DIR}/dc11b.rc"
+run_resolver_emit "$REPO11B" "docs/ship-flow/fx-empty-ac-heading" "$OUT11B" "$RC11B" "$FAKEBIN11B"
+DIFF11B="${REPO11B}/.context/ship-flow/source-diff-fx.yaml"
+
+if [ "$(cat "$RC11B")" != "0" ]; then
+  record_pass "DC-11: resolver fails closed (non-zero) when a matched AC heading has no substantive criterion text"
+else
+  record_fail "DC-11: resolver fails closed (non-zero) when a matched AC heading has no substantive criterion text"
+fi
+if [ ! -f "$DIFF11B" ]; then
+  record_pass "DC-11: no YAML written when an AC heading is empty (never an empty-but-accepted anchor)"
+else
+  record_fail "DC-11: no YAML written when an AC heading is empty (never an empty-but-accepted anchor) (found: $DIFF11B)"
+fi
+if grep -qiE 'AC-2|empty|no substantive|BLOCKED' "$OUT11B"; then
+  record_pass "DC-11: empty-AC-heading failure prints a captain-visible error message"
+else
+  record_fail "DC-11: empty-AC-heading failure prints a captain-visible error message (got: $(cat "$OUT11B"))"
+fi
+
+EMPTY_HEADING_AT_EOF_BODY='## Acceptance
+
+AC-1: Guard writes a five-field source-diff YAML for a re-shaped entity.
+AC-2:'
+
+REPO11C="${TMP_DIR}/repo-dc11c"
+new_repo "$REPO11C"
+write_entity_index "${REPO11C}/docs/ship-flow/fx-empty-ac-eof/index.md" "design" 'issue: "#49"' "gh"
+: > "${REPO11C}/docs/ship-flow/fx-empty-ac-eof/design.md"
+FAKEBIN11C="${TMP_DIR}/fakebin-dc11c"
+write_fake_gh_ok "$FAKEBIN11C" "$EMPTY_HEADING_AT_EOF_BODY"
+OUT11C="${TMP_DIR}/dc11c.out"; RC11C="${TMP_DIR}/dc11c.rc"
+run_resolver_emit "$REPO11C" "docs/ship-flow/fx-empty-ac-eof" "$OUT11C" "$RC11C" "$FAKEBIN11C"
+DIFF11C="${REPO11C}/.context/ship-flow/source-diff-fx.yaml"
+
+if [ "$(cat "$RC11C")" != "0" ]; then
+  record_pass "DC-11: resolver fails closed when the empty AC heading is the last line of the issue body (EOF, no trailing blank line)"
+else
+  record_fail "DC-11: resolver fails closed when the empty AC heading is the last line of the issue body (EOF, no trailing blank line)"
+fi
+if [ ! -f "$DIFF11C" ]; then
+  record_pass "DC-11: no YAML written when the empty AC heading is at EOF"
+else
+  record_fail "DC-11: no YAML written when the empty AC heading is at EOF (found: $DIFF11C)"
+fi
+
+# ---------------------------------------------------------------------------
+# DC-12 (P1-3) — issue-ref resolution preserves canonical owner/repo
+# identity; a cross-repo or ambiguous reference fails VISIBLE BLOCK rather
+# than being silently reduced to a bare #N and anchored to the wrong
+# same-number local issue.
+# ---------------------------------------------------------------------------
+
+# Each fixture below is paired with a `gh` stub that WOULD succeed (return
+# CANNED_BODY, exit 0) if the resolver ever invoked it -- proving a BLOCK
+# here comes from the guard's own reference-parsing logic, not a real `gh`
+# CLI 404/auth failure against the placeholder "other-org/other-repo" (which
+# would be a network-dependent false pass/fail, not a deterministic test).
+
+REPO12A="${TMP_DIR}/repo-dc12a"
+new_repo "$REPO12A"
+write_entity_index "${REPO12A}/docs/ship-flow/fx-cross-repo-url/index.md" "design" 'issue: "https://github.com/other-org/other-repo/issues/49"' "gh"
+: > "${REPO12A}/docs/ship-flow/fx-cross-repo-url/design.md"
+FAKEBIN12A="${TMP_DIR}/fakebin-dc12a"
+write_fake_gh_ok "$FAKEBIN12A" "$CANNED_BODY"
+OUT12A="${TMP_DIR}/dc12a.out"; RC12A="${TMP_DIR}/dc12a.rc"
+run_resolver_emit "$REPO12A" "docs/ship-flow/fx-cross-repo-url" "$OUT12A" "$RC12A" "$FAKEBIN12A"
+DIFF12A="${REPO12A}/.context/ship-flow/source-diff-fx.yaml"
+
+if [ "$(cat "$RC12A")" != "0" ]; then
+  record_pass "DC-12: resolver BLOCKs a cross-repo full-URL issue: reference (fail-visible, never silently reduced to local #N)"
+else
+  record_fail "DC-12: resolver BLOCKs a cross-repo full-URL issue: reference (fail-visible, never silently reduced to local #N)"
+fi
+if [ ! -f "$DIFF12A" ]; then
+  record_pass "DC-12: no YAML written for a cross-repo full-URL reference"
+else
+  record_fail "DC-12: no YAML written for a cross-repo full-URL reference (found: $DIFF12A)"
+fi
+if grep -qiE 'cross-repo|other-org/other-repo|BLOCKED' "$OUT12A"; then
+  record_pass "DC-12: cross-repo full-URL failure names the foreign owner/repo in its captain-visible message"
+else
+  record_fail "DC-12: cross-repo full-URL failure names the foreign owner/repo in its captain-visible message (got: $(cat "$OUT12A"))"
+fi
+
+REPO12B="${TMP_DIR}/repo-dc12b"
+new_repo "$REPO12B"
+write_entity_index "${REPO12B}/docs/ship-flow/fx-cross-repo-shorthand/index.md" "design" 'issue: "other-org/other-repo#49"' "gh"
+: > "${REPO12B}/docs/ship-flow/fx-cross-repo-shorthand/design.md"
+FAKEBIN12B="${TMP_DIR}/fakebin-dc12b"
+write_fake_gh_ok "$FAKEBIN12B" "$CANNED_BODY"
+OUT12B="${TMP_DIR}/dc12b.out"; RC12B="${TMP_DIR}/dc12b.rc"
+run_resolver_emit "$REPO12B" "docs/ship-flow/fx-cross-repo-shorthand" "$OUT12B" "$RC12B" "$FAKEBIN12B"
+DIFF12B="${REPO12B}/.context/ship-flow/source-diff-fx.yaml"
+
+if [ "$(cat "$RC12B")" != "0" ]; then
+  record_pass "DC-12: resolver BLOCKs a cross-repo 'owner/repo#N' shorthand reference"
+else
+  record_fail "DC-12: resolver BLOCKs a cross-repo 'owner/repo#N' shorthand reference"
+fi
+if [ ! -f "$DIFF12B" ]; then
+  record_pass "DC-12: no YAML written for a cross-repo shorthand reference"
+else
+  record_fail "DC-12: no YAML written for a cross-repo shorthand reference (found: $DIFF12B)"
+fi
+
+REPO12C="${TMP_DIR}/repo-dc12c"
+new_repo "$REPO12C"
+write_entity_index "${REPO12C}/docs/ship-flow/fx-ambiguous-ref/index.md" "design" 'issue: "not-a-valid-ref"' "gh"
+: > "${REPO12C}/docs/ship-flow/fx-ambiguous-ref/design.md"
+FAKEBIN12C="${TMP_DIR}/fakebin-dc12c"
+write_fake_gh_ok "$FAKEBIN12C" "$CANNED_BODY"
+OUT12C="${TMP_DIR}/dc12c.out"; RC12C="${TMP_DIR}/dc12c.rc"
+run_resolver_emit "$REPO12C" "docs/ship-flow/fx-ambiguous-ref" "$OUT12C" "$RC12C" "$FAKEBIN12C"
+DIFF12C="${REPO12C}/.context/ship-flow/source-diff-fx.yaml"
+
+if [ "$(cat "$RC12C")" != "0" ]; then
+  record_pass "DC-12: resolver BLOCKs an ambiguous issue: reference that is neither a same-repo #N nor a recognized owner/repo form"
+else
+  record_fail "DC-12: resolver BLOCKs an ambiguous issue: reference that is neither a same-repo #N nor a recognized owner/repo form"
+fi
+if [ ! -f "$DIFF12C" ]; then
+  record_pass "DC-12: no YAML written for an ambiguous reference"
+else
+  record_fail "DC-12: no YAML written for an ambiguous reference (found: $DIFF12C)"
+fi
+
+# ---------------------------------------------------------------------------
+# DC-13 (P1-4) — the source-diff artifact is run-scoped/tombstoned: a later
+# failure exit invalidates/removes any earlier file for the same entity, so
+# a prior run's stale `proceed` can never be validated after a later
+# gh-failure (or an overlapping re-shape).
+# ---------------------------------------------------------------------------
+
+REPO13="${TMP_DIR}/repo-dc13"
+new_repo "$REPO13"
+write_entity_index "${REPO13}/docs/ship-flow/fx-tombstone/index.md" "design" 'issue: "#49"' "gh"
+: > "${REPO13}/docs/ship-flow/fx-tombstone/design.md"
+FAKEBIN13_OK="${TMP_DIR}/fakebin-dc13-ok"
+write_fake_gh_ok "$FAKEBIN13_OK" "$CANNED_BODY"
+OUT13A="${TMP_DIR}/dc13a.out"; RC13A="${TMP_DIR}/dc13a.rc"
+run_resolver_emit "$REPO13" "docs/ship-flow/fx-tombstone" "$OUT13A" "$RC13A" "$FAKEBIN13_OK"
+DIFF13="${REPO13}/.context/ship-flow/source-diff-fx.yaml"
+assert_exit "DC-13 setup: first emit run (stale-proceed producer) exits 0" 0 "$(cat "$RC13A")"
+if [ ! -f "$DIFF13" ]; then
+  record_fail "DC-13 setup: first emit run wrote a source-diff (prereq for the tombstone check)"
+fi
+
+FAKEBIN13_FAIL="${TMP_DIR}/fakebin-dc13-fail"
+write_fake_gh_failing "$FAKEBIN13_FAIL"
+OUT13B="${TMP_DIR}/dc13b.out"; RC13B="${TMP_DIR}/dc13b.rc"
+run_resolver_emit "$REPO13" "docs/ship-flow/fx-tombstone" "$OUT13B" "$RC13B" "$FAKEBIN13_FAIL"
+
+if [ "$(cat "$RC13B")" != "0" ]; then
+  record_pass "DC-13: second (gh-failure) emit run on the same entity still exits non-zero"
+else
+  record_fail "DC-13: second (gh-failure) emit run on the same entity still exits non-zero"
+fi
+if [ ! -f "$DIFF13" ]; then
+  record_pass "DC-13: a later gh-failure tombstones the earlier run's source-diff file (no stale proceed survives)"
+else
+  record_fail "DC-13: a later gh-failure tombstones the earlier run's source-diff file (no stale proceed survives) (file still present: $DIFF13)"
+fi
+
+OUT13C="${TMP_DIR}/dc13c.out"; RC13C=0
+(cd "$REPO13" && bash "$RESOLVER" validate "--file=.context/ship-flow/source-diff-fx.yaml") > "$OUT13C" 2>&1 || RC13C=$?
+if [ "$RC13C" != "0" ]; then
+  record_pass "DC-13: validate BLOCKs against the tombstoned path — the stale proceed can never be validated after the later gh-failure"
+else
+  record_fail "DC-13: validate BLOCKs against the tombstoned path — the stale proceed can never be validated after the later gh-failure (exited 0: $(cat "$OUT13C"))"
+fi
+
+# ---------------------------------------------------------------------------
 # Doc-coupling row (T3) — bidirectional coupling for mod <-> SKILL.md
 # ---------------------------------------------------------------------------
 
