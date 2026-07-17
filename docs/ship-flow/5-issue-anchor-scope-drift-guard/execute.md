@@ -1,5 +1,8 @@
 # Execute — Issue-anchor scope-drift guard (route-back re-anchor)
 
+<details>
+<summary>Cycle 1 (T1-T4): Execute Output, TDD Evidence, Issues Found, Knowledge Captures, Execute Report, Execute UAT, Self-Check, Hand-off to Verify — collapsed for Principle 8 (C15 artifact-verbosity); see commits `2315135`/`d2658ac`/`e504a7b`/`f5453e1`</summary>
+
 ## Execute Output
 
 ### Execution Log
@@ -98,6 +101,8 @@ task_count: 4
 - **context_read_receipts**: no non-root `AGENTS.md`/`CLAUDE.md` folder guidance applicable (`plugins/ship-flow/{_mods,skills,lib/__tests__,references}/**` and root canonical docs); plan's Context Manifest recorded `folder_guidance_files=[]`/`folder_guidance_skills=[]` and that was re-confirmed at execute boot.
 <!-- /section:hand_off_to_verify -->
 
+</details>
+
 ## Execute Addendum (cycle 2): T5 — shape-confirm.sh bounded intake-stamping
 
 Route-back from verify: a review found CD5(b) (design.md Reconciliation — bounded
@@ -147,3 +152,81 @@ stamping ONLY — no change to `issue-anchor-guard.md`, no AC-N parsing, no Line
 - **render_fidelity_evidence (cycle 2)**: N/A — non-UI entity.
 - **residual (unchanged from cycle 1)**: the AC-line parser's `AC-N:`/`AC-N.` line requirement still cannot run end-to-end against issue #49's own prose-style ACs — orthogonal to T5, tracked in cycle-1's Issues Found.
 <!-- /section:hand-off-to-verify-cycle-2 -->
+
+## Execute Addendum (cycle 3): P1-1..P1-4 — resolver fail-closed/derivation fixes
+
+Route-back from verify surfaced four resolver-level gaps in
+`issue-anchor-guard.md`, none touched by T1-T5: (P1-1) `validate` trusted the
+file's own `goal_still_unmet`/`verdict` scalars instead of deriving them from
+`original_issue_acs[]`; (P1-2) the AC-N line grep dropped multiline
+continuation text and silently accepted an AC heading with zero criterion
+text; (P1-3) `issue:` resolution did not distinguish a same-repo `#N` from a
+cross-repo URL/`owner/repo#N` reference, risking a silent fall-through to the
+wrong same-number local issue; (P1-4) a later failed `emit` run left an
+earlier successful run's `source-diff-<id>.yaml` (and its `verdict: proceed`)
+on disk for `validate` to find. Bounded scope per dispatch: edits confined to
+`issue-anchor-guard.md` (resolver) + new assertions in
+`test-issue-anchor-guard.sh`; `shape-confirm.sh`, `ship-shape/SKILL.md`, and
+re-entry detection untouched.
+
+### Execution Log (cycle 3)
+
+| Task | Wave | Model | Status | Files Changed | Retries | Review | Commit | Est. Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| P1-1..P1-4 (RED) | W5 | sonnet | done | `plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | 1 (DC-12's first draft used the real `gh` CLI with a placeholder foreign repo — coincidentally "passed" via a real 404 rather than the guard's own logic; rewrote to pair each DC-12 fixture with a `gh` stub that would succeed if invoked, making RED/GREEN depend only on the guard's parsing, not network reachability) | self-review (RED confirmed: 36/53 pass, 17 fail — exactly DC-10/11/12/13, all pre-existing DC-1..8b/T3 assertions still pass) | `8028dcd` | 1 dispatch |
+| P1-1..P1-4 (GREEN) | W5 | sonnet | done | `plugins/ship-flow/_mods/issue-anchor-guard.md` | 0 | self-review (GREEN: 53/53) | `23d7e7e` | 1 dispatch |
+
+### TDD Evidence (cycle 3)
+
+| Task | RED Command | Expected RED Failure | GREEN Command | REFACTOR Check | Result |
+| --- | --- | --- | --- | --- | --- |
+| P1-1 | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-10 (both sub-cases) fail: validate accepts a proceed with zero AC rows, and accepts goal_still_unmet=true when every row is met_by_existing_capability=true | same | `bash -n` on extracted resolver; `shellcheck -s bash` | RED (commit `8028dcd`) → GREEN via `iag_ac_met_values()` + derivation-based BLOCK checks (commit `23d7e7e`) |
+| P1-2 | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-11 (6 assertions) fail: multiline continuation text not captured; empty-heading cases (mid-body and EOF) silently accepted and emit a file instead of failing closed | same | `bash -n`; `shellcheck -s bash` | RED (commit `8028dcd`) → GREEN via `iag_parse_ac_blocks()` awk state machine + `IAG_EMPTY_AC` fail-closed check (commit `23d7e7e`) |
+| P1-3 | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-12 (7 assertions) fail: cross-repo URL / `owner/repo#N` shorthand / ambiguous ref all pass through to a stubbed `gh` and emit a file instead of BLOCKing | same | `bash -n`; `shellcheck -s bash` | RED (commit `8028dcd`) → GREEN via the owner/repo-qualified-reference BLOCK before any `gh` invocation (commit `23d7e7e`) |
+| P1-4 | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-13 (2 assertions) fail: a later gh-failure run leaves the earlier successful run's file in place, and `validate` against that stale path PASSes | same | `bash -n`; `shellcheck -s bash` | RED (commit `8028dcd`) → GREEN via `rm -f "$IAG_OUT_FILE"` at the top of `emit`'s working logic (commit `23d7e7e`) |
+
+### Issues Found (cycle 3)
+
+- DC-12's first draft used the real `gh` CLI (no fakebin) against a
+  placeholder `other-org/other-repo` URL/shorthand. Without the P1-3 fix,
+  that draft still "passed" (exit non-zero) because the real `gh` 404s
+  against a nonexistent repo — a network-dependent, non-deterministic
+  false green that would not have caught the actual bug (the pre-fix code
+  passing the raw URL/shorthand straight through to `gh`). Fixed by pairing
+  each DC-12 fixture with a `write_fake_gh_ok` stub that returns
+  `CANNED_BODY` if invoked; re-confirmed RED against the unmodified mod
+  (emit succeeds via the stub) before implementing the fix.
+- Residual (named, not hidden): P1-4's tombstone-on-start is a practical
+  fix for the two named failure modes (a later gh-failure, a later
+  BLOCK) but is not a file lock — two truly concurrent `emit` invocations
+  for the same entity still race last-writer-wins. Out of this round's
+  bounded scope (resolver-only, no lock-file infrastructure).
+
+### Execute UAT (cycle 3)
+
+| DC | Verify Procedure | Result | Evidence |
+| --- | --- | --- | --- |
+| DC-10 | `validate` on a zero-AC-row proceed, an all-met-but-claims-unmet proceed, and a consistent multi-row proceed | PASS | zero-row and all-met cases BLOCK non-zero; consistent multi-row (derived from ANY-false-row, not just row 1) passes |
+| DC-11 | `emit` against a multiline-continuation AC body, a mid-body empty-heading body, and an EOF empty-heading body | PASS | continuation text captured verbatim in `original_issue_acs`; both empty-heading cases BLOCK non-zero with no file written |
+| DC-12 | `emit` against a cross-repo full URL, an `owner/repo#N` shorthand, and an ambiguous string, each paired with a would-succeed `gh` stub | PASS | all three BLOCK non-zero before invoking `gh`, no file written; the URL/shorthand cases name the foreign owner/repo in the error |
+| DC-13 | `emit` (success) → `emit` (gh-failure) on the same entity → `validate` against the now-tombstoned path | PASS | second run still exits non-zero; the first run's file no longer exists; `validate` against the missing path BLOCKs (file not found) |
+
+### Self-Check (cycle 3)
+
+- typecheck: N/A — shell/Markdown slice, no typed source
+- lint: PASS — `bash -n` on the extracted resolver and the test file; `shellcheck -s bash` on the extracted resolver clean; `git diff --check` clean on both commits
+- unit tests: PASS — `test-issue-anchor-guard.sh` 53/53; `node --test plugins/ship-flow/bin/*.test.mjs` 79/79 unaffected
+- full gate: PASS — `CI=true bash plugins/ship-flow/bin/check-invariants.sh` clean (no FAIL lines, C14 both variants OK); `bash scripts/check-no-dangling.sh` PASS; `bash scripts/check-version-triple.sh` PASS
+- critical-pass lite: PASS — no SQL/data-safety or shell-injection finding; the P1-4 concurrent-overlap residual is named above, not hidden; bounded scope honored (`git diff --stat` across both commits touches only `issue-anchor-guard.md` and `test-issue-anchor-guard.sh`)
+
+### Hand-off to Verify (cycle 3 addendum)
+
+<!-- section:hand-off-to-verify-cycle-3 -->
+- **commit_list (cycle 3)**: `8028dcd` (RED — DC-10..13 test authoring) · `23d7e7e` (GREEN — P1-1..P1-4 resolver fixes + doc updates)
+- **dc_status (cycle 3)**: DC-10 PASS; DC-11 PASS; DC-12 PASS; DC-13 PASS. Full suite 53/53 (was 32/32 at end of cycle 2, before DC-10..13 existed).
+- **tdd_evidence_summary (cycle 3)**: RED confirmed 36/53 (commit `8028dcd`, exactly the 17 new DC-10..13 assertions failing) → GREEN 53/53 (commit `23d7e7e`).
+- **deviations (cycle 3)**: one test-authoring self-fix (DC-12's `gh`-stub redesign, see Issues Found); no production-code deviation from the dispatch's four fix descriptions.
+- **render_fidelity_evidence (cycle 3)**: N/A — non-UI entity.
+- **residual (new, named)**: P1-4's tombstone is last-writer-wins, not a lock, under true concurrent `emit` overlap (see Issues Found).
+- **residual (unchanged from cycle 1)**: the AC-line parser still requires an explicit `AC-N:`/`AC-N.` heading (multiline continuation is now supported, but free-form prose with no heading still yields zero matches and fails visible) — issue #49's own body still cannot run end-to-end against this guard as currently formatted.
+<!-- /section:hand-off-to-verify-cycle-3 -->
