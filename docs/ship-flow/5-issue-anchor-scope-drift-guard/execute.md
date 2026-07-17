@@ -97,3 +97,53 @@ task_count: 4
 - **render_fidelity_evidence**: N/A — non-UI entity (`affects_ui: false`).
 - **context_read_receipts**: no non-root `AGENTS.md`/`CLAUDE.md` folder guidance applicable (`plugins/ship-flow/{_mods,skills,lib/__tests__,references}/**` and root canonical docs); plan's Context Manifest recorded `folder_guidance_files=[]`/`folder_guidance_skills=[]` and that was re-confirmed at execute boot.
 <!-- /section:hand_off_to_verify -->
+
+## Execute Addendum (cycle 2): T5 — shape-confirm.sh bounded intake-stamping
+
+Route-back from verify: a review found CD5(b) (design.md Reconciliation — bounded
+intake-stamping, "future entities are born anchored") was a named, captain-adjudicated
+decision with no task, no DC, and no test — a silent-drop doctrine violation. This
+addendum adds T5 to close that gap. Bounded scope, per dispatch: intake issue/tracker
+stamping ONLY — no change to `issue-anchor-guard.md`, no AC-N parsing, no Linear/
+`external_id` handling.
+
+### Execution Log (cycle 2)
+
+| Task | Wave | Model | Status | Files Changed | Retries | Review | Commit | Est. Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T5 | W4 | sonnet | done | `plugins/ship-flow/lib/__tests__/test-shape-confirm.sh`, `plugins/ship-flow/lib/shape-confirm.sh`, `plugins/ship-flow/skills/ship-shape/SKILL.md` | 1 (self-fix: first fixture draft omitted `pm_skill_receipts`, which folder-layout Mode A requires — DC-5.1-1a/1b failed with `exit 10` instead of the intended RED "field absent"; fixed by adding the same receipts block `proposal_with_pre_mortem` already uses) | self-review (GREEN: DC-5.1-1..3 pass; full `test-shape-confirm.sh`, `test-issue-anchor-guard.sh`, `test-doc-impact-gate.sh`, `test-contribution-contract.sh` unaffected) | `b9598da` (RED) · `b46dc35` (GREEN) | 1 dispatch |
+
+### TDD Evidence (cycle 2)
+
+| Task | RED Command | Expected RED Failure | GREEN Command | REFACTOR Check | Result |
+| --- | --- | --- | --- | --- | --- |
+| T5 | `bash plugins/ship-flow/lib/__tests__/test-shape-confirm.sh` | DC-5.1-1a/1b (folder `index.md` issue:/tracker:) and DC-5.1-2 (flat `.md` issue:/tracker:) fail — `shape-confirm.sh` has zero issue/tracker handling; DC-5.1-1c/DC-5.1-3 (negative cases) pass trivially since nothing is stamped yet | `bash plugins/ship-flow/lib/__tests__/test-shape-confirm.sh` | `bash -n plugins/ship-flow/lib/shape-confirm.sh && bash -n plugins/ship-flow/lib/__tests__/test-shape-confirm.sh` | RED confirmed (commit `b9598da`) → GREEN after the two-line stamping addition (commit `b46dc35`) |
+
+### Issues Found (cycle 2)
+
+- First fixture draft (`proposal_with_issue_tracker`) omitted `pm_skill_receipts`; folder-layout Mode A rejects that with exit 10 before the pitch entity is even written, so DC-5.1-1a/1b failed for the wrong reason (guard rejection, not "field absent"). Fixed by copying the receipts block from the existing `proposal_with_pre_mortem` fixture. No production-code implication — test-fixture-only fix.
+
+### Execute UAT (cycle 2)
+
+| DC | Verify Procedure | Result | Evidence |
+| --- | --- | --- | --- |
+| DC-9 | `test-shape-confirm.sh` DC-5.1-1..3: proposal with `pitch.issue`+`pitch.tracker` → `shape-confirm.sh --layout=folder\|flat` | PASS | Pitch `index.md`/`.md` carry `issue: "#49"` + `tracker: gh`; `090.1-child-a/index.md` carries neither (pitch-only scope); proposal without `pitch.issue` (`sample_proposal`) emits neither |
+
+### Self-Check (cycle 2)
+
+- typecheck: N/A — shell/Markdown slice, no typed source
+- lint: PASS — `bash -n` on `shape-confirm.sh` and the test file; `shellcheck -s bash` on `shape-confirm.sh` clean (pre-existing SC2329 info-level finding on an unrelated trap function, not introduced by this task); `git diff --check` clean
+- unit tests: PASS — `test-shape-confirm.sh` full suite (incl. DC-5.1-1..3); `test-issue-anchor-guard.sh` 32/32; `test-doc-impact-gate.sh` 112/112; `test-contribution-contract.sh` 24/24
+- full gate: PASS — `CI=true bash plugins/ship-flow/bin/check-invariants.sh` clean (no FAIL lines); `bash scripts/check-no-dangling.sh` PASS; `bash scripts/check-version-triple.sh` PASS
+- critical-pass lite: PASS — no SQL/data-safety, race/concurrency, LLM trust-boundary, or shell-injection finding; bounded scope honored (`git diff --stat` shows no change to `issue-anchor-guard.md`, no AC-N parsing, no Linear/`external_id` handling)
+
+### Hand-off to Verify (cycle 2 addendum)
+
+<!-- section:hand-off-to-verify-cycle-2 -->
+- **commit_list (cycle 2)**: `b9598da` (T5 RED — DC-5.1 test authoring) · `b46dc35` (T5 GREEN — shape-confirm.sh stamping + SKILL prose) · `d0668c6` (docs — CD5(b) marked IMPLEMENTED in design.md/plan.md)
+- **dc_status (cycle 2)**: DC-9 PASS (folds DC-5.1-1..3).
+- **tdd_evidence_summary (cycle 2)**: T5 RED-first (commit `b9598da`) → GREEN (commit `b46dc35`). One test-fixture self-fix cycle (missing `pm_skill_receipts`), no production-code deviation.
+- **deviations (cycle 2)**: none from the T5 addendum plan in plan.md.
+- **render_fidelity_evidence (cycle 2)**: N/A — non-UI entity.
+- **residual (unchanged from cycle 1)**: the AC-line parser's `AC-N:`/`AC-N.` line requirement still cannot run end-to-end against issue #49's own prose-style ACs — orthogonal to T5, tracked in cycle-1's Issues Found.
+<!-- /section:hand-off-to-verify-cycle-2 -->
