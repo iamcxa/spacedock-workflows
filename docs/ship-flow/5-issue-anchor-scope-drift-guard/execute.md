@@ -230,3 +230,89 @@ re-entry detection untouched.
 - **residual (new, named)**: P1-4's tombstone is last-writer-wins, not a lock, under true concurrent `emit` overlap (see Issues Found).
 - **residual (unchanged from cycle 1)**: the AC-line parser still requires an explicit `AC-N:`/`AC-N.` heading (multiline continuation is now supported, but free-form prose with no heading still yields zero matches and fails visible) — issue #49's own body still cannot run end-to-end against this guard as currently formatted.
 <!-- /section:hand-off-to-verify-cycle-3 -->
+
+## Execute Addendum (cycle 4): P1-A/P1-B/P1-C/P2-D — structural non-hollow parse, verified same-repo URL, issue+tracker pairing, AC-block indentation boundary
+
+Route-back from verify surfaced four further gaps, none touched by
+T1-T5/P1-1..P1-4: (P1-A) `validate`'s non-hollow check still relied on a
+line-oriented text scan (`iag_ac_met_values`) that never checked
+`text:` for emptiness, never checked `met_by_existing_capability` was a
+real boolean, and could be fooled by a `text:` value that happens to
+contain a `met_by_existing_capability:`-shaped substring (a phantom-row
+miscount); (P1-B) the resolver always cross-repo-BLOCKed a full GitHub
+issue URL even when its owner/repo is actually the local repo, breaking
+ship-shape/SKILL.md's advertised full-URL intake at re-shape time; (P1-C)
+`shape-confirm.sh` stamped `pitch.issue`/`pitch.tracker` independently —
+a proposal carrying one without the other, or an arbitrary
+`pitch.tracker` string, silently produced a half-anchored or malformed
+frontmatter while still reporting success; (P2-D) the AC-block parser
+absorbed ANY non-blank line following a heading into that AC's
+continuation text, regardless of indentation, so an unindented section
+heading/prose immediately after an AC could silently become (or
+corrupt) that AC's criterion text.
+
+Bounded scope per dispatch: edits confined to `issue-anchor-guard.md`
+(resolver, P1-A/P1-B/P2-D) + `shape-confirm.sh` (P1-C) +
+`ship-shape/SKILL.md` (P1-B intake wording only) + new assertions in
+`test-issue-anchor-guard.sh` / `test-shape-confirm.sh`. No new
+features; re-entry detection (CD3) and the guard's core emit/validate
+flow are unchanged.
+
+### Execution Log (cycle 4)
+
+| Task | Wave | Model | Status | Files Changed | Retries | Review | Commit | Est. Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| P1-A/P1-B/P1-C/P2-D (RED) | W6 | sonnet | done | `plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh`, `plugins/ship-flow/lib/__tests__/test-shape-confirm.sh` | 0 | self-review (RED confirmed: 9 new failures in test-issue-anchor-guard.sh — DC-14/15/16; 6 new failures in test-shape-confirm.sh — DC-5.1-4/5/7; all pre-existing assertions in both files still pass) | `fd0781f` | 1 dispatch |
+| P1-A/P1-B/P1-C/P2-D (GREEN) | W6 | sonnet | done | `plugins/ship-flow/_mods/issue-anchor-guard.md`, `plugins/ship-flow/lib/shape-confirm.sh`, `plugins/ship-flow/skills/ship-shape/SKILL.md` | 0 | self-review (GREEN: test-issue-anchor-guard.sh 66/66; test-shape-confirm.sh full suite green) | `3e6eeda` | 1 dispatch |
+
+### TDD Evidence (cycle 4)
+
+| Task | RED Command | Expected RED Failure | GREEN Command | REFACTOR Check | Result |
+| --- | --- | --- | --- | --- | --- |
+| P1-A | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-14 (3 assertions) fail: `validate` accepts an empty-text row, accepts a non-boolean `met_by_existing_capability` value ("maybe"), and BLOCKs a consistent single-row `verdict: return` because a text-embedded substring is miscounted as a phantom second row | same | `bash -n` on extracted resolver; `shellcheck -s bash` | RED (commit `fd0781f`) → GREEN via `iag_ac_rows_count()`/`iag_ac_row_met_value()` yq structural parse replacing `iag_ac_met_values()` (commit `3e6eeda`) |
+| P1-B | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-15 (2 assertions) fail: resolver BLOCKs a full GitHub issue URL even when its owner/repo matches the local git remote | same | `bash -n`; `shellcheck -s bash` | RED (commit `fd0781f`) → GREEN via `iag_local_owner_repo()` + same-repo-verified canonicalization to `#N` (commit `3e6eeda`) |
+| P1-C | `bash plugins/ship-flow/lib/__tests__/test-shape-confirm.sh` | DC-5.1-4/5/7 (6 assertions) fail: shape-confirm.sh accepts a half-anchored issue-only pair, an unrecognized `pitch.tracker` value, and a `pitch.issue` value with an embedded newline, writing entity files in all three cases | same | `bash -n`; `shellcheck -s bash` | RED (commit `fd0781f`) → GREEN via the all-or-nothing pairing + enum + newline gate added right after `PITCH_ISSUE`/`PITCH_TRACKER` extraction (commit `3e6eeda`) |
+| P2-D | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-16 (4 assertions) fail: AC-1's captured text absorbs a following unindented section's heading/prose; a no-inline-text AC heading followed by an unindented section is wrongly accepted with fabricated criterion text instead of failing closed | same | `bash -n`; `shellcheck -s bash` | RED (commit `fd0781f`) → GREEN via the `have && /^[^[:space:]]/ { flush(); ... }` indentation-boundary rule in `iag_parse_ac_blocks()` (commit `3e6eeda`) |
+
+### Issues Found (cycle 4)
+
+- None outside the four named fixes. The DC-15 "verified same-repo"
+  fixture requires `git init` + a matching `origin` remote inside the
+  scratch repo (mirrors real ship-shape invocation, which always runs
+  from the repo root); the existing DC-12 cross-repo fixtures (no `git
+  init` at all) continue to exercise the "cannot verify → BLOCK" default
+  unchanged.
+- Residual (named, not hidden): P1-C's newline check is the only
+  YAML-unsafety check needed for `pitch.issue` — embedded double-quote
+  characters are already neutralized upstream by the existing `tr -d
+  '"'` extraction (confirmed empirically), so a separate quote check
+  would be untestable dead code.
+
+### Execute UAT (cycle 4)
+
+| DC | Verify Procedure | Result | Evidence |
+| --- | --- | --- | --- |
+| DC-14 | `validate` on an empty-text row, a non-boolean `met_by_existing_capability` value, and a single true-row whose `text` contains a `met_by_existing_capability:`-shaped substring | PASS | empty-text and non-boolean cases BLOCK non-zero; the substring case PASSes with the correct single-row derivation (`goal_still_unmet: false`, `verdict: return`) |
+| DC-15 | `emit` against a full GitHub URL verified against a matching `git remote origin`, and against a full GitHub URL with a mismatched `origin` | PASS | verified case canonicalizes to `issue_ref: "gh#49"` and succeeds; mismatched case still BLOCKs non-zero with no file written |
+| DC-16 | `emit` against an AC with indented continuation followed by an unindented section, and against a no-inline-text AC heading immediately followed by an unindented section | PASS | first case captures only the indented continuation (no absorption of the following section); second case fails closed (non-zero, no file written) instead of fabricating criterion text |
+| DC-5.1-4/5/7 | `shape-confirm.sh` on a half-anchored pair, an unrecognized tracker value, and a newline-containing issue value | PASS | all three exit 10 with no entity file written; DC-5.1-6 (tracker=linear, complete pair) continues to be accepted |
+
+### Self-Check (cycle 4)
+
+- typecheck: N/A — shell/Markdown slice, no typed source
+- lint: PASS — `bash -n` on the extracted resolver and both test files; `shellcheck -s bash` on the extracted resolver clean; `git diff --check` clean on both commits
+- unit tests: PASS — `test-issue-anchor-guard.sh` 66/66; `test-shape-confirm.sh` full suite green; `node --test plugins/ship-flow/bin/*.test.mjs` 79/79 unaffected
+- full gate: PASS — `test-doc-impact-gate.sh` 112/112; `test-contribution-contract.sh` 24/24; `CI=true bash plugins/ship-flow/bin/check-invariants.sh` clean (no FAIL lines, C14 both variants + C15 OK); `bash scripts/check-no-dangling.sh` PASS; `bash scripts/check-version-triple.sh` PASS
+- critical-pass lite: PASS — no SQL/data-safety or shell-injection finding; bounded scope honored (`git diff --stat` across the RED+GREEN commits touches only the two test files, `issue-anchor-guard.md`, `shape-confirm.sh`, and `ship-shape/SKILL.md`'s intake paragraph)
+
+### Hand-off to Verify (cycle 4 addendum)
+
+<!-- section:hand-off-to-verify-cycle-4 -->
+- **commit_list (cycle 4)**: `fd0781f` (RED — DC-14/15/16 + DC-5.1-4/5/7 test authoring) · `3e6eeda` (GREEN — P1-A/P1-B/P1-C/P2-D fixes + SKILL.md wording)
+- **dc_status (cycle 4)**: DC-14 PASS; DC-15 PASS; DC-16 PASS; DC-5.1-4 PASS; DC-5.1-5 PASS; DC-5.1-6 PASS (unchanged-behavior control); DC-5.1-7 PASS. `test-issue-anchor-guard.sh` 66/66 (was 53/53 at end of cycle 3); `test-shape-confirm.sh` full suite green (+6 new DC-5.1-4/5/7 assertions).
+- **tdd_evidence_summary (cycle 4)**: RED confirmed — 9 new failures in `test-issue-anchor-guard.sh` (57/66), 6 new failures in `test-shape-confirm.sh` (commit `fd0781f`) → GREEN — 66/66 and full green respectively (commit `3e6eeda`).
+- **deviations (cycle 4)**: none — all four fixes match the dispatch's descriptions; no production-code deviation.
+- **render_fidelity_evidence (cycle 4)**: N/A — non-UI entity.
+- **residual (new, named)**: none beyond the P1-C quote-check note in Issues Found (already-neutralized by upstream `tr -d '"'`, not a gap).
+- **residual (unchanged)**: P1-4's tombstone-on-start remains last-writer-wins, not a lock, under true concurrent `emit` overlap (cycle 3); the AC-line parser still requires an explicit `AC-N:`/`AC-N.` heading (cycle 1); the model-judgment residual named in the mod's own Boundary section (a model can still overwrite the scaffold's `scope_subset_of_issue`/`goal_still_unmet` fields with a false judgment) is explicitly named+accepted per this cycle's dispatch, not chased.
+<!-- /section:hand-off-to-verify-cycle-4 -->
