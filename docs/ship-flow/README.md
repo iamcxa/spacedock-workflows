@@ -59,7 +59,10 @@ stages:
 # Ship-Flow — dogfood instance for the ship-flow plugin itself
 
 Ship-focused pipeline: SHAPE once with the captain, then agents run design
-for contract-bearing work before plan → execute → verify → ship. This is the
+for contract-bearing work before plan → execute → verify → ship. The captain's
+review surface is the shape/spec (and design.md when the design gate fires),
+never plan.md or execute.md — the FO drives plan→execute→verify autonomously,
+stopping only for a direction-confirm or UAT (INVARIANTS Principle 17). This is the
 plugin's own development workflow — every feature here changes the ship-flow
 plugin (stage skills, lib/bin helpers, references/schemas, templates, docs)
 or this repo's canonical docs. The methodology source is
