@@ -1,7 +1,6 @@
 ---
 id: ""
 title: "Make debrief a native post-merge ship closeout"
-status: ship
 pattern: pitch
 appetite: "medium-batch (1-2 weeks)"
 shape_mode: mode-a
@@ -47,10 +46,11 @@ stated_assumptions:
 pre_mortem:
     category: wrong-dcs
     one_liner: "All strategy fixtures pass, but non-atomic debrief, archive, and ROADMAP writes still force a second manual FO cycle after a crash."
-stage_outputs:
-    shape: shape.md
-    verify: verify.md
 worktree: .worktrees/spacedock-ensign-ship-stage-debrief-closeout
+status: ship
+stage_outputs:
+  shape: shape.md
+  verify: verify.md
 ---
 
 <!-- section:stage-artifact-links -->
