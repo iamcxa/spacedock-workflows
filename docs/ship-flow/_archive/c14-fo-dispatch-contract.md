@@ -3,13 +3,13 @@ title: Align C14 with First Officer stage-entry transitions
 status: done
 source: blocker discovered while starting issue #20
 started: 2026-07-14T08:07:52Z
-completed: 2026-07-16T16:56:47Z
+completed: 2026-07-16T17:34:56Z
 verdict: PASSED
 score:
 worktree: /Users/kent/conductor/workspaces/spacedock-workflows/yangon/.worktrees/c14-frontmatter-authority-integration
 issue: "#30"
 pr: "#47"
-archived: 2026-07-16T16:56:47Z
+archived: 2026-07-16T17:34:56Z
 ---
 
 The First Officer owns stage entry and currently records it with `dispatch: <feature> entering <stage>`, while C14 recognizes only the completion-side `advance-stage.sh` commit signature. The mismatch makes a legitimate FO `draft -> shape` transition fail the invariant and shell-suite baseline before feature work starts.

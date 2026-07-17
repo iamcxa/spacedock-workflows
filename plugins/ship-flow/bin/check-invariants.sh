@@ -1398,6 +1398,73 @@ _workflow_transition_allowed_at_rev() {
   ' <<<"$content"
 }
 
+# Returns the declared feedback-to target for <stage>, read from
+# <before-rev>'s owning workflow README. Prints the target and exits 0 when
+# <stage> declares one; exits 1 (silent) otherwise.
+# Dependency of _commit_has_fo_feedback_stage_receipt. _workflow_transition_
+# allowed_at_rev's shared gate accepts EITHER a next-stage edge OR a
+# feedback-to edge — it cannot tell a feedback: receipt apart from a
+# dispatch/advance receipt riding the same forward edge. This helper
+# re-resolves the SPECIFIC feedback-to edge for the receipt's own
+# rejected_stage so a feedback: receipt can be bound to exactly that edge,
+# never a merely-legal forward edge (Principle 15 feedback-to-edge bind).
+_workflow_feedback_to_target_at_rev() {
+  local before_rev="$1" path="$2" stage="$3"
+  local workflow_relative workflow_slug workflow_readme content
+  workflow_relative="${path#docs/}"
+  [ "$workflow_relative" != "$path" ] || return 1
+  workflow_slug="${workflow_relative%%/*}"
+  [ -n "$workflow_slug" ] || return 1
+  workflow_readme="docs/${workflow_slug}/README.md"
+  content="$( { git show "${before_rev}:${workflow_readme}" 2>/dev/null || true; } )"
+  [ -n "$content" ] || return 1
+
+  awk -v stage="$stage" '
+    BEGIN { frontmatter = 0; in_stages = 0; in_states = 0; current_stage = "" }
+    /^---[[:space:]]*$/ {
+      frontmatter++
+      if (frontmatter >= 2) exit
+      next
+    }
+    frontmatter != 1 { next }
+    /^stages:[[:space:]]*$/ { in_stages = 1; in_states = 0; next }
+    in_stages && /^[^[:space:]#][^:]*:[[:space:]]*/ {
+      in_stages = 0
+      in_states = 0
+      current_stage = ""
+      next
+    }
+    !in_stages { next }
+    /^  states:[[:space:]]*$/ { in_states = 1; current_stage = ""; next }
+    in_states && /^  [^[:space:]#][^:]*:[[:space:]]*/ {
+      in_states = 0
+      current_stage = ""
+      next
+    }
+    !in_states { next }
+    /^    - name:[[:space:]]*/ {
+      name = $0
+      sub(/^    - name:[[:space:]]*/, "", name)
+      sub(/[[:space:]\r]+$/, "", name)
+      gsub(/^["\047]|["\047]$/, "", name)
+      current_stage = name
+      next
+    }
+    current_stage != "" && /^      feedback-to:[[:space:]]*/ {
+      target = $0
+      sub(/^      feedback-to:[[:space:]]*/, "", target)
+      sub(/[[:space:]\r]+$/, "", target)
+      gsub(/^["\047]|["\047]$/, "", target)
+      if (current_stage == stage) found_target = target
+      next
+    }
+    END {
+      if (length(found_target) > 0) { print found_target; exit 0 }
+      exit 1
+    }
+  ' <<<"$content"
+}
+
 # Returns 0 when <sha> carries the canonical First Officer stage-entry receipt,
 # every entity status mutated by that commit entered the receipt's stage.
 # The caller validates workflow edges for every receipt kind before this check.
@@ -1417,6 +1484,343 @@ _commit_has_fo_stage_entry_receipt() {
   for path in "$@"; do
     after_status="$(_frontmatter_status_at_rev_path "$sha" "$path")"
     [ "$after_status" = "$entry_stage" ] || return 1
+  done
+  return 0
+}
+
+# Returns 0 when <value> is a valid UTC RFC3339 timestamp (YYYY-MM-DDTHH:MM:SSZ,
+# zero-padded, exact round-trip). Dependency of _entity_has_fo_feedback_cycle_record.
+_valid_utc_rfc3339_timestamp() {
+  python3 - "$1" <<'PY'
+from datetime import datetime
+import sys
+
+value = sys.argv[1]
+try:
+    parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+except ValueError:
+    raise SystemExit(1)
+raise SystemExit(0 if parsed.strftime("%Y-%m-%dT%H:%M:%SZ") == value else 1)
+PY
+}
+
+# Shared awk fragment: fence-state tracking for ``` and ~~~ code fences
+# (0-3 leading spaces tolerated, CommonMark-style — close requires the same
+# fence char and length >= the opening length). While fenced, a line is
+# inert to every rule that follows it in the same awk program: it can never
+# start, continue, or close a ### Feedback Cycles record. Indented (4-space/
+# tab) example blocks need no separate rule — every heading/field regex
+# below is column-anchored (`^### `, `^- cycle:`, `^  rejected_stage:`, …),
+# so a 4-space-shifted copy already fails to match on indentation alone.
+# Both _entity_has_fo_feedback_cycle_record and
+# _feedback_cycle_well_formed_records_at_rev embed this verbatim so a
+# fenced/example "### Feedback Cycles" block is ignored identically on the
+# commit under scrutiny and on its parent (Principle 15 fence-safety bind).
+# shellcheck disable=SC2016 # literal awk source held for reuse across two callers; intentionally unexpanded
+_FEEDBACK_CYCLES_FENCE_AWK='
+    function strip_lead3(s,   t) {
+      t = s
+      sub(/^ {0,3}/, "", t)
+      return t
+    }
+    !fence_open && (substr(strip_lead3($0), 1, 3) == "```" || substr(strip_lead3($0), 1, 3) == "~~~") {
+      fence_line = strip_lead3($0)
+      fence_char = substr(fence_line, 1, 1)
+      if (fence_char == "`") { match(fence_line, /^`+/) } else { match(fence_line, /^~+/) }
+      fence_open = 1
+      fence_len = RLENGTH
+      next
+    }
+    fence_open {
+      fence_line = strip_lead3($0)
+      if (substr(fence_line, 1, 1) == fence_char) {
+        if (fence_char == "`") { match(fence_line, /^`+/) } else { match(fence_line, /^~+/) }
+        fence_rest = substr(fence_line, RLENGTH + 1)
+        gsub(/[[:space:]]+$/, "", fence_rest)
+        if (RLENGTH >= fence_len && fence_rest == "") { fence_open = 0 }
+      }
+      next
+    }
+'
+
+# Returns every well-formed ### Feedback Cycles record found at <rev>:<path>,
+# one per line as cycle<TAB>rejected_stage<TAB>feedback_to<TAB>
+# captain_decision<TAB>routed_at<TAB>verify_artifact. Fence-aware (shares
+# _FEEDBACK_CYCLES_FENCE_AWK). Accumulates across every section found rather
+# than requiring exactly one — that single-section strictness applies only
+# to the commit under scrutiny (_entity_has_fo_feedback_cycle_record), not
+# to already-settled parent history being read for a freshness/monotonic
+# bound. Dependency of _entity_has_fo_feedback_cycle_record's P1-#2 fix
+# (stale cycle-record replay / monotonic cycle numbering).
+_feedback_cycle_well_formed_records_at_rev() {
+  local rev="$1" path="$2" content
+  content="$( { git show "${rev}:${path}" 2>/dev/null || true; } )"
+  [ -n "$content" ] || return 0
+  awk "$_FEEDBACK_CYCLES_FENCE_AWK"'
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function reset_record() {
+      active = 0
+      cycle = rejected = target = decision = routed = artifact = ""
+      cycle_count = rejected_count = target_count = 0
+      decision_count = routed_count = artifact_count = 0
+    }
+    function finish_record(artifact_parts, artifact_count_parts, artifact_sha) {
+      if (!active) return
+      artifact_count_parts = split(artifact, artifact_parts, "@")
+      artifact_sha = artifact_parts[2]
+      if (cycle_count == 1 && rejected_count == 1 && target_count == 1 &&
+          decision_count == 1 && routed_count == 1 && artifact_count == 1 &&
+          cycle ~ /^[1-9][0-9]{0,8}$/ &&
+          decision == "fix" &&
+          routed ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ &&
+          artifact_count_parts == 2 && artifact_parts[1] == rejected ".md" &&
+          artifact_sha ~ /^[0-9a-f]+$/ && length(artifact_sha) >= 7 && length(artifact_sha) <= 40) {
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n", cycle, rejected, target, decision, routed, artifact
+      }
+      reset_record()
+    }
+    $0 == "### Feedback Cycles" {
+      finish_record()
+      in_section = 1
+      next
+    }
+    in_section && substr($0, 1, 2) == "##" {
+      finish_record()
+      in_section = 0
+      next
+    }
+    in_section && /^- cycle:[[:space:]]*/ {
+      finish_record()
+      active = 1
+      cycle_count = 1
+      cycle = $0
+      sub(/^- cycle:[[:space:]]*/, "", cycle)
+      cycle = trim(cycle)
+      next
+    }
+    in_section && active && /^  rejected_stage:[[:space:]]*/ {
+      rejected_count++
+      rejected = $0
+      sub(/^  rejected_stage:[[:space:]]*/, "", rejected)
+      rejected = trim(rejected)
+      next
+    }
+    in_section && active && /^  feedback_to:[[:space:]]*/ {
+      target_count++
+      target = $0
+      sub(/^  feedback_to:[[:space:]]*/, "", target)
+      target = trim(target)
+      next
+    }
+    in_section && active && /^  captain_decision:[[:space:]]*/ {
+      decision_count++
+      decision = $0
+      sub(/^  captain_decision:[[:space:]]*/, "", decision)
+      decision = trim(decision)
+      next
+    }
+    in_section && active && /^  routed_at:[[:space:]]*/ {
+      routed_count++
+      routed = $0
+      sub(/^  routed_at:[[:space:]]*/, "", routed)
+      routed = trim(routed)
+      next
+    }
+    in_section && active && /^  verify_artifact:[[:space:]]*/ {
+      artifact_count++
+      artifact = $0
+      sub(/^  verify_artifact:[[:space:]]*/, "", artifact)
+      artifact = trim(artifact)
+      next
+    }
+    END { finish_record() }
+  ' <<<"$content"
+}
+
+# Returns 0 when one entity's after-state contains exactly one canonical
+# Feedback Cycles record matching the subject-bound rejected stage, cycle, and
+# feedback target. Additional fields bind the captain decision and verify
+# evidence that authorized the route back; prose elsewhere cannot substitute.
+# Fence-aware (shares _FEEDBACK_CYCLES_FENCE_AWK) — a fenced or indented
+# example block can never manufacture this bind (Principle 15 fence-safety).
+# Also binds freshness and monotonic cycle numbering against the PARENT
+# revision via _feedback_cycle_well_formed_records_at_rev: the matching
+# record must be newly introduced in THIS commit (absent from the parent —
+# closes stale cycle-record replay) and its cycle must exceed every prior
+# cycle already recorded for this entity (closes non-monotonic replay).
+# cycle is compared as a forced string ((cycle "") == (expected_cycle "")),
+# never a coerced number, and is bounded to <=9 canonical decimal digits —
+# safely inside both IEEE-754 double integer precision and the POSIX-
+# guaranteed minimum 32-bit bash arithmetic range used for the monotonic
+# `-gt` comparison below (Principle 15 bounded-cycle bind).
+_entity_has_fo_feedback_cycle_record() {
+  local rev="$1" path="$2" expected_cycle="$3" expected_rejected="$4" expected_target="$5"
+  local content matched_signature matched_routed
+  [[ "$expected_cycle" =~ ^[1-9][0-9]{0,8}$ ]] || return 1
+
+  content="$( { git show "${rev}:${path}" 2>/dev/null || true; } )"
+  matched_signature="$(awk \
+    -v expected_cycle="$expected_cycle" \
+    -v expected_rejected="$expected_rejected" \
+    -v expected_target="$expected_target" \
+    "$_FEEDBACK_CYCLES_FENCE_AWK"'
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function reset_record() {
+      active = 0
+      cycle = rejected = target = decision = routed = artifact = ""
+      cycle_count = rejected_count = target_count = 0
+      decision_count = routed_count = artifact_count = 0
+    }
+    function finish_record(artifact_parts, artifact_count_parts, artifact_sha) {
+      if (!active) return
+      artifact_count_parts = split(artifact, artifact_parts, "@")
+      artifact_sha = artifact_parts[2]
+      if (cycle_count == 1 && rejected_count == 1 && target_count == 1 &&
+          decision_count == 1 && routed_count == 1 && artifact_count == 1 &&
+          cycle ~ /^[1-9][0-9]{0,8}$/ &&
+          ((cycle "") == (expected_cycle "")) && rejected == expected_rejected &&
+          target == expected_target && decision == "fix" &&
+          routed ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ &&
+          artifact_count_parts == 2 && artifact_parts[1] == rejected ".md" &&
+          artifact_sha ~ /^[0-9a-f]+$/ && length(artifact_sha) >= 7 && length(artifact_sha) <= 40) {
+        matches++
+        matching_signature = cycle "\t" rejected "\t" target "\t" decision "\t" routed "\t" artifact
+      }
+      reset_record()
+    }
+    $0 == "### Feedback Cycles" {
+      finish_record()
+      sections++
+      in_section = 1
+      next
+    }
+    in_section && substr($0, 1, 2) == "##" {
+      finish_record()
+      in_section = 0
+      next
+    }
+    in_section && /^- cycle:[[:space:]]*/ {
+      finish_record()
+      active = 1
+      cycle_count = 1
+      cycle = $0
+      sub(/^- cycle:[[:space:]]*/, "", cycle)
+      cycle = trim(cycle)
+      next
+    }
+    in_section && active && /^  rejected_stage:[[:space:]]*/ {
+      rejected_count++
+      rejected = $0
+      sub(/^  rejected_stage:[[:space:]]*/, "", rejected)
+      rejected = trim(rejected)
+      next
+    }
+    in_section && active && /^  feedback_to:[[:space:]]*/ {
+      target_count++
+      target = $0
+      sub(/^  feedback_to:[[:space:]]*/, "", target)
+      target = trim(target)
+      next
+    }
+    in_section && active && /^  captain_decision:[[:space:]]*/ {
+      decision_count++
+      decision = $0
+      sub(/^  captain_decision:[[:space:]]*/, "", decision)
+      decision = trim(decision)
+      next
+    }
+    in_section && active && /^  routed_at:[[:space:]]*/ {
+      routed_count++
+      routed = $0
+      sub(/^  routed_at:[[:space:]]*/, "", routed)
+      routed = trim(routed)
+      next
+    }
+    in_section && active && /^  verify_artifact:[[:space:]]*/ {
+      artifact_count++
+      artifact = $0
+      sub(/^  verify_artifact:[[:space:]]*/, "", artifact)
+      artifact = trim(artifact)
+      next
+    }
+    END {
+      finish_record()
+      if (sections == 1 && matches == 1) {
+        print matching_signature
+        exit 0
+      }
+      exit 1
+    }
+  ' <<<"$content")" || return 1
+
+  IFS=$'\t' read -r _ _ _ _ matched_routed _ <<<"$matched_signature"
+  _valid_utc_rfc3339_timestamp "$matched_routed" || return 1
+
+  # P1-#2 fix: freshness (stale replay) + monotonic cycle numbering, bound
+  # against the PARENT revision's own well-formed Feedback Cycles records.
+  local parent_records line p_cycle max_parent_cycle=0
+  parent_records="$(_feedback_cycle_well_formed_records_at_rev "${rev}^" "$path")"
+  if [ -n "$parent_records" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      if [ "$line" = "$matched_signature" ]; then
+        return 1 # identical record already present in parent — stale replay
+      fi
+      p_cycle="${line%%$'\t'*}"
+      if [[ "$p_cycle" =~ ^[1-9][0-9]{0,8}$ ]] && [ "$p_cycle" -gt "$max_parent_cycle" ]; then
+        max_parent_cycle="$p_cycle"
+      fi
+    done <<<"$parent_records"
+  fi
+  [ "$expected_cycle" -gt "$max_parent_cycle" ] || return 1
+
+  return 0
+}
+
+# Returns 0 when <sha> carries a canonical subject-only feedback-stage receipt
+# and every mutated entity agrees on parent stage, resulting status, and body
+# Feedback Cycles evidence. The caller validates workflow edges before this
+# check; this function additionally binds cycle, captain decision, and verify
+# evidence so a forged subject over a legal edge still cannot manufacture the
+# receipt (Principle 15 feedback-stage contract). It also re-resolves the
+# rejected_stage's OWN declared feedback-to target and requires target_stage
+# to match it exactly — the shared graph gate at the call site accepts
+# EITHER a next-stage edge or a feedback-to edge, so without this bind a
+# feedback: receipt could ride a merely-legal forward edge instead of the
+# specific feedback-to edge it claims (Principle 15 feedback-to-edge bind).
+_commit_has_fo_feedback_stage_receipt() {
+  local sha="$1"
+  shift
+  local subject feedback_summary rejected_stage cycle target_stage path before_status after_status
+  subject="$(git log -1 --format=%s "$sha")"
+  if [[ ! "$subject" =~ ^feedback:[[:space:]]+(.+)[[:space:]]+([a-z][a-z0-9-]*)[[:space:]]+cycle[[:space:]]+([1-9][0-9]{0,8})[[:space:]]+to[[:space:]]+([a-z][a-z0-9-]*)$ ]]; then
+    return 1
+  fi
+  feedback_summary="${BASH_REMATCH[1]}"
+  rejected_stage="${BASH_REMATCH[2]}"
+  cycle="${BASH_REMATCH[3]}"
+  target_stage="${BASH_REMATCH[4]}"
+  [[ "$feedback_summary" =~ [^[:space:]] ]] || return 1
+  [ "$#" -gt 0 ] || return 1
+
+  local declared_target
+  for path in "$@"; do
+    before_status="$(_frontmatter_status_at_rev_path "${sha}^" "$path")"
+    after_status="$(_frontmatter_status_at_rev_path "$sha" "$path")"
+    [ "$before_status" = "$rejected_stage" ] || return 1
+    [ "$after_status" = "$target_stage" ] || return 1
+    declared_target="$(_workflow_feedback_to_target_at_rev "${sha}^" "$path" "$rejected_stage")" || return 1
+    [ "$declared_target" = "$target_stage" ] || return 1
+    _entity_has_fo_feedback_cycle_record \
+      "$sha" "$path" "$cycle" "$rejected_stage" "$target_stage" || return 1
   done
   return 0
 }
@@ -1529,6 +1933,15 @@ check_entity_status_via_advance_stage_only() {
         fi
         violations=$((violations + 1))
         echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} used malformed First Officer stage-entry grammar." >&2
+        echo "       commit msg head: $subject" >&2
+        continue
+        ;;
+      feedback:*)
+        if _commit_has_fo_feedback_stage_receipt "$sha" "${mutated_paths[@]}"; then
+          continue
+        fi
+        violations=$((violations + 1))
+        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} used malformed First Officer feedback-stage grammar." >&2
         echo "       commit msg head: $subject" >&2
         continue
         ;;

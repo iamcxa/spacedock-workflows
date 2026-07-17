@@ -30,6 +30,8 @@ Run before any shape work. Stop and SendMessage(FO) if any check fails.
 
 **Escape hatch (skip shape):** directive <80 chars AND contains `fix | typo | rename | bump | patch | bugfix | hotfix` as whole word → `shape unnecessary — run /ship directly` and EXIT. Concrete directive (files / reproducible bug / typed acceptance) → suggest `/ship <requirement>` and EXIT.
 
+**Skip-when-small (proportionality):** even beyond the escape hatch, a single-seam change (one surface, no dependent stages) does NOT need the full FO team pipeline — it can be version-gate-blocked and is disproportionate. Prefer lean TDD in an isolated worktree + one `code-reviewer` pass; reserve the full shape → … → ship pipeline for multi-surface / dependent-stage work.
+
 **Mode auto-routing** (on `/shape "<text>"` without `--discuss`):
 
 1. **Mode C (skill-authoring)** — FIRST. Triggers: keywords `create/build/write/improve/modify a skill`, `SKILL.md`, `add a skill`; target paths `*/skills/*`, `*/SKILL.md`, `.claude/agents/*`; entity frontmatter `type: skill` or `domain: skill-authoring`.

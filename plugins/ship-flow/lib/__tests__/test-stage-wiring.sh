@@ -464,13 +464,6 @@ fi
 rm -rf "$TMP"
 
 echo
-echo "=== Current flat C14 activation boundary ==="
-CURRENT_C14="$REPO_ROOT/docs/ship-flow/c14-fo-dispatch-contract.md"
-if [ -f "$CURRENT_C14" ] && [ "$(basename "$CURRENT_C14")" != index.md ] && ! bash -c 'source "$1"; completion_path_ok "$2"' _ "$LIB_DIR/completion-v1.sh" docs/ship-flow/c14-fo-dispatch-contract.md; then
-  echo "OK current flat C14 is Contract-1-only and ineligible for completion-v1"
-else echo "FAIL current flat C14 activation boundary is not executable"; FAIL=1; fi
-
-echo
 echo "=== C14 immediate activation negatives ==="
 TMP="$(setup_fo_completion_fixture)"
 sed -i.bak 's/^status: shape$/status: design/' "$TMP/docs/test-wf/example-stage-wiring/index.md"

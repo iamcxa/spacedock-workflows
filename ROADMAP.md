@@ -9,8 +9,7 @@
 <!-- section:now -->
 | Entity | Title | Stage |
 | --- | --- | --- |
-| c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | ship |
-| 5-issue-anchor-scope-drift-guard | Issue-anchor scope-drift guard (route-back re-anchor) | execute |
+| 5-issue-anchor-scope-drift-guard | Issue-anchor scope-drift guard (route-back re-anchor) | ship |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
@@ -18,7 +17,6 @@
 <!-- section:next -->
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
-| 2-deterministic-manual-adopter-routing | Deterministic manual adopter skill routing | (pitch) | small-batch (2-3 days) |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
@@ -51,6 +49,7 @@
 | Mirror reverse-recovery-audit.md as an unenforced prose reference (no Hook, no shell test) | The stated analog is itself dangling and untested; ship this guard wired + pinned by a shell test instead, so its AC is enforced not just asserted. |
 | Introduce new SO/EM route values re-anchor and split (per issue #49 text) | The real existing vocabulary is proceed/narrow/return/block/costly_no; adding values would change the science-officer-em.md contract + its tests. Reconcile onto existing vocab (re-anchor maps to return) instead. |
 | Implement all three trigger points (route-back, cycle-3, child-creation) this round | small-batch proves the wedge first; cycle-3 lives in a different repo (spacedock core) and child-creation has no single chokepoint. Deferred to rabbit-holes. |
+| Full-replacement deterministic manual adopter routing (pitch 2 → child 2.1) | Parked 2026-07-16. The original driver #20 (discovery scanning test fixtures) is already fixed and closed, so the acute problem is gone. The ambitious tree-scan→manual-manifest replacement never converged (391 commits, 21 Plan EM re-review/repair cycles, shape cycle 25, `max_dispatches` 32→44) while far exceeding its 2-3 day appetite. Revive only via a fresh minimal shape (e.g. just remove the discovery helper's production reachability + stale docs), not this over-shaped line. Sharp entities `2-deterministic-manual-adopter-routing` / `2.1-manual-fail-closed-adopter-routing` stay dormant (not dispatchable); worktree evidence preserved under `.claude/worktrees/issue20-routing-*`. |
 <!-- /section:not-doing -->
 
 ## Shipped
@@ -61,4 +60,5 @@
 | 1-self-adoption-dogfood-bootstrap | Self-adoption dogfood bootstrap — canonical docs + doc-impact gate | 2026-07-12 (PR #14) |
 | fixture-pollution-discovery-helpers | Fixture-tree exclusion for discovery helpers | 2026-07-15 (landed via PR #39; runtime-reconciled) |
 | 3-root-readme-stale-claims | Refresh root README stale compatibility claims | 2026-07-15 (PR #40) |
+| c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | 2026-07-16 (PR #47) |
 <!-- /section:shipped -->

@@ -321,6 +321,8 @@ captain intent (vague / concept / issue)
      captain merge → pitch done, ROADMAP flip to shipped
 ```
 
+**Proportionality (skip-when-small):** reserve this full pipeline for multi-surface / dependent-stage work. A single-seam change (one surface, no dependent stages) does NOT need it — prefer lean TDD in an isolated worktree + one `code-reviewer` pass. The `ship-shape` preflight enforces this.
+
 **Captain-in-loop** only at: `/shape` confirm gate, `/verify` BLOCKING findings, PR merge, explicit captain interrupt. All other transitions are autonomous (FO Discipline in INVARIANTS.md).
 
 **Cross-review gate** at every stage transition (Principle 6 Rule C): counterpart teammate (or fresh sonnet fallback; fresh opus when `appetite: big-batch`) evaluates the stage's output on a 6-factor rubric:
