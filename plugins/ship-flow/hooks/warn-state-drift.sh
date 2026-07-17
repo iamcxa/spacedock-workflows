@@ -167,6 +167,19 @@ check_entity() {
       unsafe_pr_count=$((unsafe_pr_count + 1))
       return
     fi
+    # A pr-merge:{N} sentinel is the durable "merge already confirmed, closeout
+    # deferred" marker another trigger persisted. Resume it via the adapter
+    # WITHOUT re-probing gh -- the sentinel IS the confirmed-merge fact, so this
+    # SessionStart trigger can perform the promised convergence even offline.
+    case "$pr" in
+    pr-merge:[0-9]*)
+      local sentinel_num="${pr##pr-merge:}"
+      rule_a_lines+="  - #${id:-?} \`$slug\` — pr-merge:$sentinel_num sentinel present, entity still at \`status: ship\` (resuming deferred closeout)"$'\n'
+      rule_a_count=$((rule_a_count + 1))
+      rule_a_records+="$slug|$sentinel_num|$entity_file|$stage_dir"$'\n'
+      return
+      ;;
+    esac
     local pr_num="${pr##\#}"
     case "$pr_num" in
     ''|*[!0-9]*)

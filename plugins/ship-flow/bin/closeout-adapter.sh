@@ -160,6 +160,7 @@ read_provider_fixture() {
   head_ref="$(awk -F= '$1=="head_ref"{print $2; exit}' "$fixture")"
   base_ref="$(awk -F= '$1=="base_ref"{print $2; exit}' "$fixture")"
   pr_url="$(awk -F= '$1=="url"{print $2; exit}' "$fixture")"
+  merge_commit="$(awk -F= '$1=="merge_commit"{print $2; exit}' "$fixture")"
 
   if [ "$provider" != "fixture" ] || [ -z "$provider_number" ] || [ -z "$pr_state" ]; then
     reject_input "invalid-pr-fixture" "fixture missing required provider fields"
@@ -176,8 +177,8 @@ read_provider_gh() {
   # surface a structured, non-mutating provider-error state -- not abort under
   # set -e before emit_report, which would leave callers with no diagnostic.
   output="$(gh pr view "$pr_number" \
-    --json number,state,mergedAt,headRefName,baseRefName,url \
-    --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")"] | .[]' 2>/dev/null)" \
+    --json number,state,mergedAt,headRefName,baseRefName,url,mergeCommit \
+    --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")", "merge_commit=\(.mergeCommit.oid // "")"] | .[]' 2>/dev/null)" \
     || prompt_captain "provider-error" "gh pr view failed for PR #${pr_number} (auth/network/rate-limit/not-found?); no closeout attempted"
   provider="gh"
   provider_number="$(printf '%s\n' "$output" | awk -F= '$1=="number"{print $2; exit}')"
@@ -186,6 +187,7 @@ read_provider_gh() {
   head_ref="$(printf '%s\n' "$output" | awk -F= '$1=="head_ref"{print $2; exit}')"
   base_ref="$(printf '%s\n' "$output" | awk -F= '$1=="base_ref"{print $2; exit}')"
   pr_url="$(printf '%s\n' "$output" | awk -F= '$1=="url"{print $2; exit}')"
+  merge_commit="$(printf '%s\n' "$output" | awk -F= '$1=="merge_commit"{print $2; exit}')"
   if [ "$provider_number" != "$pr_number" ]; then
     reject_input "pr-number-mismatch" "gh PR number does not match entity"
   fi
@@ -321,6 +323,14 @@ write_sentinel_ahead() {
   git -C "$repo_root" add -- "$entity_path" >/dev/null 2>&1 || true
   git -C "$repo_root" commit -m "closeout: record pr-merge sentinel for $entity_slug (PR #$pr_number merged)" \
       -- "$entity_path" >/dev/null 2>&1 || true
+  # Verify the sentinel commit actually LANDED. A swallowed add/commit failure
+  # (pre-commit hook, git error) would otherwise leave the sentinel STAGED, and
+  # every later run would see the sentinel present, skip re-committing it, and
+  # trip repo_dirty forever -- a silent non-convergence. Returning non-zero here
+  # lets the caller report a distinct recoverable state instead. Idempotent: a
+  # no-op when the sentinel is already committed, a retry when it was left
+  # staged by a prior failed run.
+  [ -z "$(git -C "$repo_root" status --porcelain -- "$entity_path" 2>/dev/null || true)" ]
 }
 
 # current_branch_is_safe_for_commit - R2/P1-c: the wrong-branch safety gate.
@@ -473,6 +483,7 @@ cleanup_branch=""
 cleanup_worktree_abs=""
 head_ref=""
 debrief_due=""
+merge_commit=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -630,6 +641,25 @@ if ! current_branch_is_safe_for_commit; then
   exit 0
 fi
 
+# Stale-trunk containment gate (codex round-3 A): being ON the trunk is not
+# enough -- a LOCAL trunk that is behind the remote merged tip would land the
+# sentinel/archive commits on a pre-merge base and diverge from the merged
+# history. When the provider reports the PR's merge commit, require the local
+# trunk to already CONTAIN it. This is a LOCAL ancestry check (no fetch); a
+# merge commit that is absent locally (stale trunk not yet pulled) makes
+# --is-ancestor fail, so we defer -- fail closed -- until the trunk is synced.
+if [ -n "${merge_commit:-}" ]; then
+  if ! git -C "$repo_root" merge-base --is-ancestor "$merge_commit" HEAD 2>/dev/null; then
+    verdict="PROCEED"
+    terminal_action="deferred"
+    state_name="closeout-deferred-stale-trunk"
+    reason="stale-trunk"
+    detail="the local trunk does not yet contain the PR merge commit ${merge_commit}; closeout deferred until the trunk is synced (git pull) so commits do not diverge from the merged history"
+    emit_report
+    exit 0
+  fi
+fi
+
 # Entity's OWN feature worktree/branch readiness (pre-existing mechanic,
 # unrelated to the repo-root wrong-branch/dirty-tree gates below -- this
 # checks the SEPARATE git worktree the entity itself was built in, if any).
@@ -656,8 +686,18 @@ if [ "$sentinel_already_present" = "no" ] && \
   exit 0
 fi
 
-if [ "$sentinel_already_present" = "no" ]; then
-  write_sentinel_ahead
+# Ensure the sentinel is written AND committed. Idempotent: a fresh write when
+# absent, a retry of the commit when a prior run left it staged (the perpetual-
+# dirty-tree trap codex found). A commit that still cannot land is reported as a
+# distinct recoverable state, not silently folded into the dirty-tree defer.
+if ! write_sentinel_ahead; then
+  verdict="PROCEED"
+  terminal_action="deferred"
+  state_name="closeout-sentinel-commit-failed-recoverable"
+  reason="sentinel-commit-failed"
+  detail="the pr-merge sentinel could not be committed (hook rejection / git error); staged sentinel left in place, re-run after clearing the blocker to converge"
+  emit_report
+  exit 1
 fi
 
 if repo_dirty; then
