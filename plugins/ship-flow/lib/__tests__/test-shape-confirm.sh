@@ -915,4 +915,325 @@ fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
+# ── DC-5.1: pitch.issue/pitch.tracker stamped into pitch frontmatter (entity 5 CD5(b)) ──
+# Bounded intake-stamping: when a shape proposal carries pitch.issue + pitch.tracker
+# (the shape composer detected a tracker-issue reference in the /shape directive),
+# shape-confirm.sh carries them forward into the entity frontmatter so future
+# entities are born anchored for plugins/ship-flow/_mods/issue-anchor-guard.md.
+proposal_with_issue_tracker() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing issue/tracker emission into pitch frontmatter",
+    "acceptance_outcome": "shape-confirm.sh emits issue: and tracker: fields when present in proposal JSON pitch object for both folder and flat layouts.",
+    "issue": "#49",
+    "tracker": "gh",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B",
+    "pm_skill_receipts": {
+      "stage": "ship-shape",
+      "mode": "mode-a",
+      "appetite": "small-batch",
+      "compose_guard": "passed",
+      "receipts": [
+        {"phase": "intake-problem", "delegate": "problem-framing-canvas", "required": true, "status": "invoked", "evidence": "Skill: problem-framing-canvas", "fallback": null, "rationale": "Feeds the Problem block."},
+        {"phase": "scope-decompose", "delegate": "opportunity-solution-tree", "required": true, "status": "unavailable", "evidence": null, "fallback": "inline", "rationale": "Skill unavailable; inline fallback recorded before compose."},
+        {"phase": "assumption-extract", "delegate": "pol-probe-advisor", "required": true, "status": "invoked", "evidence": "Skill: pol-probe-advisor", "fallback": null, "rationale": "Filters critical assumptions."},
+        {"phase": "acceptance-outcome", "delegate": "press-release", "required": true, "status": "skipped", "evidence": null, "fallback": null, "rationale": "Small-scope skip rule matched before compose."}
+      ]
+    }
+  },
+  "children": [
+    {"id": "090.1", "slug": "child-a", "title": "Child A", "depends_on": []}
+  ],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+echo
+echo "--- DC-5.1-1: pitch.issue/pitch.tracker emitted into folder-layout index.md ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-issue-tracker.json"
+proposal_with_issue_tracker > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1
+PITCH_INDEX="docs/ship-flow/090-test-pitch/index.md"
+if grep -qE '^issue:[[:space:]]*"#49"' "$PITCH_INDEX" 2>/dev/null; then
+  echo "OK DC-5.1-1a folder index.md has issue: \"#49\""
+else
+  echo "FAIL DC-5.1-1a folder index.md missing issue: \"#49\" (expected red before implementation)"
+  FAIL=1
+fi
+if grep -qE '^tracker:[[:space:]]*gh[[:space:]]*$' "$PITCH_INDEX" 2>/dev/null; then
+  echo "OK DC-5.1-1b folder index.md has tracker: gh"
+else
+  echo "FAIL DC-5.1-1b folder index.md missing tracker: gh (expected red before implementation)"
+  FAIL=1
+fi
+# Child (shaped-child) must NOT carry issue/tracker — bounded to the pitch entity only
+if ! grep -qE '^issue:|^tracker:' docs/ship-flow/090.1-child-a/index.md 2>/dev/null; then
+  echo "OK DC-5.1-1c shaped-child index.md does NOT carry issue/tracker (pitch-only scope)"
+else
+  echo "FAIL DC-5.1-1c shaped-child index.md wrongly stamped with issue/tracker"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-5.1-2: pitch.issue/pitch.tracker emitted into flat-layout .md ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-issue-tracker-flat.json"
+proposal_with_issue_tracker > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=flat >/dev/null 2>&1
+PITCH_FLAT="docs/ship-flow/090-test-pitch.md"
+if grep -qE '^issue:[[:space:]]*"#49"' "$PITCH_FLAT" 2>/dev/null && \
+   grep -qE '^tracker:[[:space:]]*gh[[:space:]]*$' "$PITCH_FLAT" 2>/dev/null; then
+  echo "OK DC-5.1-2 flat .md has issue: \"#49\" and tracker: gh"
+else
+  echo "FAIL DC-5.1-2 flat .md missing issue:/tracker: (expected red before implementation)"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-5.1-3: proposal without pitch.issue emits no issue/tracker stamp (unchanged behavior) ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-no-issue.json"
+sample_proposal > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1
+if ! grep -qE '^issue:|^tracker:' docs/ship-flow/090-test-pitch/index.md 2>/dev/null; then
+  echo "OK DC-5.1-3 proposal without pitch.issue emits no issue:/tracker: stamp"
+else
+  echo "FAIL DC-5.1-3 emitted issue:/tracker: when proposal had none"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+# ── DC-5.1-4..7 (P1-C, cycle 4): issue+tracker is an all-or-nothing typed
+# pair — half-anchored (one present, one absent), an unrecognized tracker
+# value, or a YAML-unsafe issue value must be REJECTED before the write
+# phase, never partially committed while shape-confirm still reports
+# success. tracker in {gh, linear} is a valid, complete pair. ──
+
+proposal_issue_only_no_tracker() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "091",
+    "slug": "half-anchored-pitch",
+    "title": "Half-anchored pitch",
+    "appetite": "2 days",
+    "problem": "Testing half-anchored issue/tracker rejection",
+    "acceptance_outcome": "shape-confirm.sh rejects a proposal carrying pitch.issue with no pitch.tracker before any file is written.",
+    "issue": "#49",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B",
+    "pm_skill_receipts": {
+      "stage": "ship-shape",
+      "mode": "mode-a",
+      "appetite": "small-batch",
+      "compose_guard": "passed",
+      "receipts": [
+        {"phase": "intake-problem", "delegate": "problem-framing-canvas", "required": true, "status": "invoked", "evidence": "Skill: problem-framing-canvas", "fallback": null, "rationale": "Feeds the Problem block."},
+        {"phase": "scope-decompose", "delegate": "opportunity-solution-tree", "required": true, "status": "unavailable", "evidence": null, "fallback": "inline", "rationale": "Skill unavailable; inline fallback recorded before compose."},
+        {"phase": "assumption-extract", "delegate": "pol-probe-advisor", "required": true, "status": "invoked", "evidence": "Skill: pol-probe-advisor", "fallback": null, "rationale": "Filters critical assumptions."},
+        {"phase": "acceptance-outcome", "delegate": "press-release", "required": true, "status": "skipped", "evidence": null, "fallback": null, "rationale": "Small-scope skip rule matched before compose."}
+      ]
+    }
+  },
+  "children": [],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+echo
+echo "--- DC-5.1-4: half-anchored pair (pitch.issue present, pitch.tracker absent) is REJECTED ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-half-anchored.json"
+proposal_issue_only_no_tracker > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+RC=0
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1 || RC=$?
+if [ "$RC" != "0" ]; then
+  echo "OK DC-5.1-4a shape-confirm.sh rejects a half-anchored issue-only pair (exit ${RC})"
+else
+  echo "FAIL DC-5.1-4a shape-confirm.sh accepted a half-anchored issue-only pair (expected red before implementation)"
+  FAIL=1
+fi
+if [ ! -f "docs/ship-flow/091-half-anchored-pitch/index.md" ]; then
+  echo "OK DC-5.1-4b no entity file written for a rejected half-anchored pair"
+else
+  echo "FAIL DC-5.1-4b entity file was written despite the half-anchored pair being rejected"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+proposal_bad_tracker_value() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "092",
+    "slug": "bad-tracker-pitch",
+    "title": "Bad tracker pitch",
+    "appetite": "2 days",
+    "problem": "Testing unrecognized tracker value rejection",
+    "acceptance_outcome": "shape-confirm.sh rejects a proposal whose pitch.tracker is not one of gh/linear before any file is written.",
+    "issue": "#49",
+    "tracker": "jira",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B",
+    "pm_skill_receipts": {
+      "stage": "ship-shape",
+      "mode": "mode-a",
+      "appetite": "small-batch",
+      "compose_guard": "passed",
+      "receipts": [
+        {"phase": "intake-problem", "delegate": "problem-framing-canvas", "required": true, "status": "invoked", "evidence": "Skill: problem-framing-canvas", "fallback": null, "rationale": "Feeds the Problem block."},
+        {"phase": "scope-decompose", "delegate": "opportunity-solution-tree", "required": true, "status": "unavailable", "evidence": null, "fallback": "inline", "rationale": "Skill unavailable; inline fallback recorded before compose."},
+        {"phase": "assumption-extract", "delegate": "pol-probe-advisor", "required": true, "status": "invoked", "evidence": "Skill: pol-probe-advisor", "fallback": null, "rationale": "Filters critical assumptions."},
+        {"phase": "acceptance-outcome", "delegate": "press-release", "required": true, "status": "skipped", "evidence": null, "fallback": null, "rationale": "Small-scope skip rule matched before compose."}
+      ]
+    }
+  },
+  "children": [],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+echo
+echo "--- DC-5.1-5: unrecognized tracker value (not gh/linear) is REJECTED ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-bad-tracker.json"
+proposal_bad_tracker_value > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+RC=0
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1 || RC=$?
+if [ "$RC" != "0" ]; then
+  echo "OK DC-5.1-5a shape-confirm.sh rejects pitch.tracker=jira (exit ${RC})"
+else
+  echo "FAIL DC-5.1-5a shape-confirm.sh accepted pitch.tracker=jira (expected red before implementation)"
+  FAIL=1
+fi
+if [ ! -f "docs/ship-flow/092-bad-tracker-pitch/index.md" ]; then
+  echo "OK DC-5.1-5b no entity file written for a rejected unrecognized tracker value"
+else
+  echo "FAIL DC-5.1-5b entity file was written despite the unrecognized tracker value being rejected"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+proposal_linear_tracker() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "093",
+    "slug": "linear-tracker-pitch",
+    "title": "Linear tracker pitch",
+    "appetite": "2 days",
+    "problem": "Testing a complete, valid pitch.issue/pitch.tracker=linear pair",
+    "acceptance_outcome": "shape-confirm.sh accepts and stamps a complete pitch.issue/pitch.tracker=linear pair into the entity frontmatter.",
+    "issue": "ENG-49",
+    "tracker": "linear",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B",
+    "pm_skill_receipts": {
+      "stage": "ship-shape",
+      "mode": "mode-a",
+      "appetite": "small-batch",
+      "compose_guard": "passed",
+      "receipts": [
+        {"phase": "intake-problem", "delegate": "problem-framing-canvas", "required": true, "status": "invoked", "evidence": "Skill: problem-framing-canvas", "fallback": null, "rationale": "Feeds the Problem block."},
+        {"phase": "scope-decompose", "delegate": "opportunity-solution-tree", "required": true, "status": "unavailable", "evidence": null, "fallback": "inline", "rationale": "Skill unavailable; inline fallback recorded before compose."},
+        {"phase": "assumption-extract", "delegate": "pol-probe-advisor", "required": true, "status": "invoked", "evidence": "Skill: pol-probe-advisor", "fallback": null, "rationale": "Filters critical assumptions."},
+        {"phase": "acceptance-outcome", "delegate": "press-release", "required": true, "status": "skipped", "evidence": null, "fallback": null, "rationale": "Small-scope skip rule matched before compose."}
+      ]
+    }
+  },
+  "children": [],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+echo
+echo "--- DC-5.1-6: complete pitch.issue/pitch.tracker=linear pair is ACCEPTED ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-linear-tracker.json"
+proposal_linear_tracker > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1
+PITCH_INDEX="docs/ship-flow/093-linear-tracker-pitch/index.md"
+if grep -qE '^issue:[[:space:]]*"ENG-49"' "$PITCH_INDEX" 2>/dev/null && \
+   grep -qE '^tracker:[[:space:]]*linear[[:space:]]*$' "$PITCH_INDEX" 2>/dev/null; then
+  echo "OK DC-5.1-6 folder index.md has issue: \"ENG-49\" and tracker: linear (valid complete pair, non-gh tracker)"
+else
+  echo "FAIL DC-5.1-6 folder index.md missing issue:/tracker: for a valid linear-tracker pair (expected red before implementation)"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-5.1-7: pitch.issue containing an embedded newline (YAML-unsafe) is REJECTED ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-newline-issue.json"
+python3 -c "
+import json
+print(json.dumps({
+    'pitch': {
+        'id': '094', 'slug': 'newline-issue-pitch', 'title': 'Newline issue pitch',
+        'appetite': '2 days',
+        'problem': 'Testing YAML-unsafe issue value rejection',
+        'acceptance_outcome': 'shape-confirm.sh rejects a pitch.issue value containing an embedded newline before any file is written.',
+        'issue': 'line1\nline2', 'tracker': 'gh',
+        'stated_assumptions': [], 'dag_mermaid': 'graph LR\n  A --> B',
+        'pm_skill_receipts': {
+            'stage': 'ship-shape', 'mode': 'mode-a', 'appetite': 'small-batch', 'compose_guard': 'passed',
+            'receipts': [
+                {'phase': 'intake-problem', 'delegate': 'problem-framing-canvas', 'required': True, 'status': 'invoked', 'evidence': 'Skill: problem-framing-canvas', 'fallback': None, 'rationale': 'Feeds the Problem block.'},
+                {'phase': 'scope-decompose', 'delegate': 'opportunity-solution-tree', 'required': True, 'status': 'unavailable', 'evidence': None, 'fallback': 'inline', 'rationale': 'Skill unavailable; inline fallback recorded before compose.'},
+                {'phase': 'assumption-extract', 'delegate': 'pol-probe-advisor', 'required': True, 'status': 'invoked', 'evidence': 'Skill: pol-probe-advisor', 'fallback': None, 'rationale': 'Filters critical assumptions.'},
+                {'phase': 'acceptance-outcome', 'delegate': 'press-release', 'required': True, 'status': 'skipped', 'evidence': None, 'fallback': None, 'rationale': 'Small-scope skip rule matched before compose.'}
+            ]
+        }
+    },
+    'children': [], 'rabbit_holes': [], 'deleted_from_shape': []
+}))
+" > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+RC=0
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1 || RC=$?
+if [ "$RC" != "0" ]; then
+  echo "OK DC-5.1-7a shape-confirm.sh rejects a pitch.issue value with an embedded newline (exit ${RC})"
+else
+  echo "FAIL DC-5.1-7a shape-confirm.sh accepted a pitch.issue value with an embedded newline (expected red before implementation)"
+  FAIL=1
+fi
+if [ ! -f "docs/ship-flow/094-newline-issue-pitch/index.md" ]; then
+  echo "OK DC-5.1-7b no entity file written for a rejected YAML-unsafe issue value"
+else
+  echo "FAIL DC-5.1-7b entity file was written despite the YAML-unsafe issue value being rejected"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
 exit "$FAIL"
