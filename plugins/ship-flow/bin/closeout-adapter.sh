@@ -315,36 +315,23 @@ write_sentinel_ahead() {
       -- "$entity_path" >/dev/null 2>&1 || true
 }
 
-# current_branch_is_safe_for_commit - R2: the wrong-branch safety gate.
-# Blocks committing the closeout ONLY when the repo's current checked-out
-# branch is neither (a) the primary worktree's branch (the common case:
-# main/master, where hook- and mod-driven closeout normally runs) nor (b)
-# this entity's OWN registered worktree branch (self-closeout from inside a
-# legitimate worktree-per-entity setup, where differing from main is expected
-# and safe). A third, unrelated branch left checked out in a shared working
-# copy is refused — this is deliberately NOT "block every non-main branch".
+# current_branch_is_safe_for_commit - R2/P1-c: the wrong-branch safety gate.
+# Committing the closeout is safe ONLY when the repo's current checked-out
+# branch IS the workflow's trunk (resolved via `spacedock dispatch trunk`,
+# e.g. main/master) -- the branch the PR actually merges into and where
+# hook- and mod-driven closeout normally runs. A self-closeout invoked from
+# the entity's OWN feature/worktree branch never reaches the trunk on its
+# own, so it is deliberately NOT treated as safe here (that would commit the
+# terminal state on a branch nobody else will ever see); it defers instead
+# and converges on a later trunk run. Trunk resolution failure (empty output)
+# also fails CLOSED (defer), matching repo_dirty's fail-closed contract.
 current_branch_is_safe_for_commit() {
-  local current primary_root primary_branch worktree_abs entity_branch
+  local current trunk
   current="$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   [ -n "$current" ] && [ "$current" != "HEAD" ] || return 1
-
-  primary_root="$(primary_worktree_root 2>/dev/null || true)"
-  if [ -n "$primary_root" ]; then
-    primary_branch="$(branch_for_worktree_path "$primary_root" 2>/dev/null || true)"
-    if [ -n "$primary_branch" ] && [ "$current" = "$primary_branch" ]; then
-      return 0
-    fi
-  fi
-
-  if [ -n "$worktree_value" ]; then
-    worktree_abs="$(absolute_worktree_path "$primary_root" "$worktree_value")"
-    entity_branch="$(branch_for_worktree_path "$worktree_abs" 2>/dev/null || true)"
-    if [ -n "$entity_branch" ] && [ "$current" = "$entity_branch" ]; then
-      return 0
-    fi
-  fi
-
-  return 1
+  trunk="$("$STATUS_BIN" dispatch trunk --workflow-dir "$workflow_dir" 2>/dev/null | head -1 | tr -d '[:space:]')"
+  [ -n "$trunk" ] || return 1   # fail CLOSED: unresolved trunk => defer
+  [ "$current" = "$trunk" ]
 }
 
 # repo_dirty - the repo-root-wide dirty gate (R2/DC-4): catches genuinely
@@ -357,12 +344,26 @@ current_branch_is_safe_for_commit() {
 # That subtree gets its own, purpose-built dirty check via
 # preflight_worktree_cleanup right after this gate.
 repo_dirty() {
-  local porcelain
+  local porcelain rc exclude_rel="" wt_abs primary
+  # Normalize the entity's worktree to a repo-RELATIVE exclude pathspec. An
+  # absolute or outside-repo worktree value would make `:(exclude)<abs>` an
+  # invalid pathspec, erroring `git status`; only exclude when the worktree
+  # actually lives under repo_root (where it can false-positive the scan).
   if [ -n "$worktree_value" ]; then
-    porcelain="$(git -C "$repo_root" status --porcelain -- . ":(exclude)${worktree_value}" 2>/dev/null || true)"
-  else
-    porcelain="$(git -C "$repo_root" status --porcelain 2>/dev/null || true)"
+    primary="$(primary_worktree_root 2>/dev/null || echo "$repo_root")"
+    wt_abs="$(absolute_worktree_path "$primary" "$worktree_value" 2>/dev/null || true)"
+    case "$wt_abs" in
+      "$repo_root"/*) exclude_rel="${wt_abs#"$repo_root"/}" ;;
+    esac
   fi
+  if [ -n "$exclude_rel" ]; then
+    porcelain="$(git -C "$repo_root" status --porcelain -- . ":(exclude)${exclude_rel}" 2>/dev/null)"; rc=$?
+  else
+    porcelain="$(git -C "$repo_root" status --porcelain 2>/dev/null)"; rc=$?
+  fi
+  # Fail CLOSED: a status-probe error is treated as dirty (defer), never
+  # silently as clean -- a masked error must not bypass the dirty gate.
+  [ "$rc" -eq 0 ] || return 0
   [ -n "$porcelain" ]
 }
 
@@ -395,17 +396,36 @@ archive_pathspec_for_entity() {
 # move is committed now. Either way, a later clean run converges without any
 # separate rollback mechanism.
 attempt_archive_commit_retry() {
-  local dst
-  case "$entity_path" in
-    */index.md) dst="$(dirname "$entity_path")" ;;
-    *) dst="$entity_path" ;;
-  esac
   [ "$dry_run" = "no" ] || return 0
-  git -C "$repo_root" add -- "$dst" >/dev/null 2>&1 || true
-  if [ -n "$(git -C "$repo_root" status --porcelain -- "$dst" 2>/dev/null || true)" ]; then
+  # Stage BOTH the active-source deletion AND the archive-destination addition
+  # (folder and flat layouts) so a partially-committed move can never leave a
+  # checkout carrying both an active and an archived copy of the entity.
+  # Propagate a genuine commit failure (return 1) rather than swallowing it and
+  # reporting success -- the caller must not claim reconciled while a pending
+  # split state remains.
+  local candidates=(
+    "${workflow_dir}/${entity_slug}"
+    "${workflow_dir}/${entity_slug}.md"
+    "${workflow_dir}/_archive/${entity_slug}"
+    "${workflow_dir}/_archive/${entity_slug}.md"
+  )
+  # Include a candidate only when it currently exists OR is a tracked path (so a
+  # pending deletion is staged) -- passing a never-created folder/flat variant
+  # as a pathspec makes `git add`/`commit` error ("pathspec did not match"),
+  # which would masquerade as a genuine commit failure.
+  local paths=() p
+  for p in "${candidates[@]}"; do
+    if [ -e "${repo_root}/${p}" ] || git -C "$repo_root" ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
+      paths+=("$p")
+    fi
+  done
+  [ "${#paths[@]}" -gt 0 ] || return 0
+  git -C "$repo_root" add -- "${paths[@]}" >/dev/null 2>&1 || true
+  if [ -n "$(git -C "$repo_root" status --porcelain -- "${paths[@]}" 2>/dev/null || true)" ]; then
     git -C "$repo_root" commit -m "done + archive: $entity_slug (recovered pending archive-move commit)" \
-        -- "$dst" >/dev/null 2>&1 || true
+        -- "${paths[@]}" >/dev/null 2>&1 || return 1
   fi
+  return 0
 }
 
 cleanup_branch_if_safe() {
@@ -506,21 +526,30 @@ if [ -z "$active_resolve" ]; then
   entity_slug="$(resolve_line_field slug "$archived_resolve")"
   entity_path="$(resolve_line_field path "$archived_resolve")"
   if coherent_terminal_file "$entity_path"; then
+    pr_state="MERGED"
+    pr_number="$(sentinel_pr_number "$(read_frontmatter_field "$entity_path" pr)" 2>/dev/null || \
+      normalize_pr_number "$(read_frontmatter_field "$entity_path" pr)" 2>/dev/null || true)"
     # R4 recovery: the archive-move may already be on disk without a
     # completed git commit (a prior run's archive-move commit step failed
     # after `spacedock merge guard` had already finalized it). Retry that
     # commit before reporting the no-op -- a clean tree is a true no-op,
-    # an uncommitted pending move is committed now.
-    attempt_archive_commit_retry
+    # an uncommitted pending move is committed now. A retry that still cannot
+    # commit reports the recoverable-pending state, never a false no-op.
+    if attempt_archive_commit_retry; then
+      verdict="PROCEED"
+      state_name="already_reconciled"
+      terminal_action="already_reconciled"
+      detail="archived entity is already terminal and coherent"
+      emit_report
+      exit 0
+    fi
     verdict="PROCEED"
-    state_name="already_reconciled"
-    terminal_action="already_reconciled"
-    pr_state="MERGED"
-    pr_number="$(sentinel_pr_number "$(read_frontmatter_field "$entity_path" pr)" 2>/dev/null || \
-      normalize_pr_number "$(read_frontmatter_field "$entity_path" pr)" 2>/dev/null || true)"
-    detail="archived entity is already terminal and coherent"
+    terminal_action="archive_commit_pending"
+    state_name="closeout-archive-commit-failed-recoverable"
+    reason="archive-commit-failed"
+    detail="archived entity has a pending archive-move commit that could not be completed; re-run to retry"
     emit_report
-    exit 0
+    exit 1
   fi
   prompt_captain "archived-terminal-incoherent" "archived entity is missing coherent terminal fields"
 fi
@@ -588,7 +617,7 @@ if ! current_branch_is_safe_for_commit; then
   terminal_action="deferred"
   state_name="closeout-deferred-wrong-branch"
   reason="wrong-branch"
-  detail="repo HEAD is on a branch that is neither the primary worktree's branch nor this entity's own registered worktree branch; closeout deferred until a correctly-branched run"
+  detail="repo HEAD is not on the workflow trunk (where the PR merges and closeout state must land); closeout deferred until a run on the trunk branch converges it"
   emit_report
   exit 0
 fi
@@ -675,15 +704,23 @@ case "$merge_guard_output" in
   *"read-only"*)
     archive_pathspec_for_entity
     entity_path="$archive_dst"
-    attempt_archive_commit_retry
-    verdict="PROCEED"
-    state_name="already_reconciled"
-    terminal_action="already_reconciled"
-    reason="merge-guard-archived-read-only"
-    detail="spacedock merge guard reports the entity is already archived; treated as idempotent no-op"
     pr_state="MERGED"
+    if attempt_archive_commit_retry; then
+      verdict="PROCEED"
+      state_name="already_reconciled"
+      terminal_action="already_reconciled"
+      reason="merge-guard-archived-read-only"
+      detail="spacedock merge guard reports the entity is already archived; treated as idempotent no-op"
+      emit_report
+      exit 0
+    fi
+    verdict="PROCEED"
+    terminal_action="archive_commit_pending"
+    state_name="closeout-archive-commit-failed-recoverable"
+    reason="archive-commit-failed"
+    detail="entity already archived by merge guard but a pending archive-move commit could not be completed; re-run to retry"
     emit_report
-    exit 0
+    exit 1
     ;;
   *)
     verdict="REJECT"

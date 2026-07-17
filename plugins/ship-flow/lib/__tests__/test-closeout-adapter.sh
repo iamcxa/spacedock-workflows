@@ -294,6 +294,14 @@ if [ "${1:-}" = merge ] && [ "${2:-}" = guard ]; then
   esac
 fi
 
+# `spacedock dispatch trunk --workflow-dir DIR` — trunk (integration base)
+# resolver the adapter's wrong-branch safety gate calls. Real 0.25.0 emits a
+# bare branch name (default `main`, no `trunk:` key); fixtures init on `main`.
+if [ "${1:-}" = dispatch ] && [ "${2:-}" = trunk ]; then
+  echo main
+  exit 0
+fi
+
 workflow_dir=""
 include_archived=no
 cmd=""
@@ -552,6 +560,14 @@ if [ "${1:-}" = merge ] && [ "${2:-}" = guard ]; then
       exit 0
       ;;
   esac
+fi
+
+# `spacedock dispatch trunk --workflow-dir DIR` — trunk (integration base)
+# resolver the adapter's wrong-branch safety gate calls. Real 0.25.0 emits a
+# bare branch name (default `main`, no `trunk:` key); fixtures init on `main`.
+if [ "${1:-}" = dispatch ] && [ "${2:-}" = trunk ]; then
+  echo main
+  exit 0
 fi
 
 workflow_dir=""
@@ -1384,10 +1400,11 @@ run_wrong_branch_fail_closed_case() {
   assert_exit "wrong-branch resume from the primary worktree converges" 0 "$rc"
   assert_contains "wrong-branch resume reconciles" '^state=reconciled$' "$TMP_DIR/wrong-branch-resume.out"
 
-  # Positive control: a legitimate worktree-per-entity self-closeout (running
-  # FROM the entity's own registered worktree, whose branch legitimately
-  # differs from the primary worktree's) must NOT false-positive as
-  # wrong-branch.
+  # P1-c (trunk-only): a self-closeout running FROM the entity's own registered
+  # worktree, whose branch differs from the workflow trunk, now DEFERS non-
+  # fatally (closeout state committed there would never reach the trunk where
+  # the PR merged). It converges on a later run from the trunk. The gate emits
+  # a stable deferred signal, never a mutation.
   local self_repo="$TMP_DIR/wrong-branch-self-repo"
   setup_repo "$self_repo"
   mkdir -p "${self_repo}/.worktrees"
@@ -1396,9 +1413,6 @@ run_wrong_branch_fail_closed_case() {
   git -C "$self_repo" commit -qm "add self-worktree entity"
   git -C "$self_repo" worktree add "${self_repo}/.worktrees/self-worktree-entity" -b ship-self-worktree-entity >/dev/null 2>&1
 
-  # head_ref must match the entity's own registered worktree branch here --
-  # preflight_worktree_cleanup cross-checks it against `worktree:` since this
-  # entity (unlike wrong-branch-entity above) carries a worktree value.
   local fixture182="$TMP_DIR/pr-merged-182.env"
   write_merged_pr_fixture "$fixture182" 182 "ship-self-worktree-entity"
 
@@ -1406,9 +1420,11 @@ run_wrong_branch_fail_closed_case() {
     --entity self-worktree-entity \
     --pr-provider fixture \
     --pr-fixture "$fixture182")"
-  assert_exit "self-closeout from entity's own worktree is not blocked" 0 "$rc"
-  assert_not_contains "self-closeout from entity's own worktree is not wrong-branch" \
-    'closeout-deferred-wrong-branch' "$TMP_DIR/wrong-branch-self.out"
+  assert_exit "self-closeout from a non-trunk worktree defers non-fatally" 0 "$rc"
+  assert_contains "self-closeout from a non-trunk worktree defers (trunk-only)" \
+    '^state=closeout-deferred-wrong-branch$' "$TMP_DIR/wrong-branch-self.out"
+  assert_file_exists "self-closeout defer leaves the entity active (not archived)" \
+    "${self_repo}/docs/ship-flow/self-worktree-entity/index.md"
 }
 
 run_state_driver_unavailable_case() {

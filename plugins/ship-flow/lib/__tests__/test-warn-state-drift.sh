@@ -412,6 +412,14 @@ if [ "${1:-}" = merge ] && [ "${2:-}" = guard ]; then
   esac
 fi
 
+# `spacedock dispatch trunk --workflow-dir DIR` — trunk resolver the adapter's
+# wrong-branch safety gate calls. Real 0.25.0 emits a bare branch name (default
+# `main`); these fixtures init on `main`.
+if [ "${1:-}" = dispatch ] && [ "${2:-}" = trunk ]; then
+  echo main
+  exit 0
+fi
+
 workflow_dir=""
 include_archived=no
 cmd=""
