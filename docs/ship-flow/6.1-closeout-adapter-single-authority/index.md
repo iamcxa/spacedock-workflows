@@ -5,7 +5,7 @@ pattern: shaped-child
 parent_pitch: "6"
 harvest_required: true
 layout: folder
-status: verify
+status: ship
 stage_outputs:
     plan: plan.md
 ---
