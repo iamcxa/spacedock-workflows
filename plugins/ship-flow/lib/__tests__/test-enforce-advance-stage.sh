@@ -1059,6 +1059,27 @@ assert_exit 1 "run_check_only '$TMP'" "Case-47 over-long cycle number cannot aut
 rm -rf "$TMP"
 
 echo
+echo "--- Case 48: FEEDBACK record inside a REAL \`\`\`-fence whose only 'closing' marker is TAB-indented → FAIL (codex round-2 P1 tab-fence bypass) ---"
+# The outer fence opens unindented, so from CommonMark's view the WHOLE block
+# up to the final unindented \`\`\` is one code fence — the tab-indented \`\`\`
+# mid-block is not a valid ≤3-space-indented closer, so it never actually
+# closes anything. A checker that treats [[:space:]] (which matches TAB) as
+# equivalent to CommonMark's 0-3-SPACE indent would wrongly let that
+# tab-indented line close the fence early, re-exposing the embedded
+# "### Feedback Cycles" record as if it were live, unfenced content.
+FB_TAB_FAKE_CLOSE_BACKTICK=$'\n```\n\t```\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n```\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_TAB_FAKE_CLOSE_BACKTICK")"
+assert_exit 1 "run_check_only '$TMP'" "Case-48 tab-indented fake closing backtick-fence marker cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 49: FEEDBACK record inside a REAL ~~~-fence whose only 'closing' marker is TAB-indented → FAIL (codex round-2 P1 tab-fence bypass, tilde variant) ---"
+FB_TAB_FAKE_CLOSE_TILDE=$'\n~~~\n\t~~~\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n~~~\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_TAB_FAKE_CLOSE_TILDE")"
+assert_exit 1 "run_check_only '$TMP'" "Case-49 tab-indented fake closing tilde-fence marker cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
 if [ "$FAIL" = "0" ]; then
   echo "All test-enforce-advance-stage cases passed."
   exit 0

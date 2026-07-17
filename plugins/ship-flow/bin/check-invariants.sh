@@ -1520,7 +1520,7 @@ PY
 _FEEDBACK_CYCLES_FENCE_AWK='
     function strip_lead3(s,   t) {
       t = s
-      sub(/^[[:space:]]{0,3}/, "", t)
+      sub(/^ {0,3}/, "", t)
       return t
     }
     !fence_open && (substr(strip_lead3($0), 1, 3) == "```" || substr(strip_lead3($0), 1, 3) == "~~~") {
