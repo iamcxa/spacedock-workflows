@@ -236,21 +236,71 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# DC-6 — ship-shape SKILL.md pinned wiring block, present before Intake
+# DC-6 — ship-shape SKILL.md pinned wiring block, GATED to run after Intake
+# (corrected P1-r3-1, cycle 5): the guard must fire only once Intake has
+# determined the directive matches an EXISTING entity (re-shape), never
+# before Intake has had a chance to detect a brand-new free-text/todo shape.
 # ---------------------------------------------------------------------------
 
 if [ -f "$SKILL" ]; then
   SECTION_LINE="$(grep -n '<!-- section:issue-anchor-guard -->' "$SKILL" | head -1 | cut -d: -f1)"
   INTAKE_LINE="$(grep -n '^### Intake$' "$SKILL" | head -1 | cut -d: -f1)"
-  if [ -n "$SECTION_LINE" ] && [ -n "$INTAKE_LINE" ] && [ "$SECTION_LINE" -lt "$INTAKE_LINE" ]; then
-    record_pass "DC-6: ship-shape SKILL.md has <!-- section:issue-anchor-guard --> before ### Intake"
+  if [ -n "$SECTION_LINE" ] && [ -n "$INTAKE_LINE" ] && [ "$SECTION_LINE" -gt "$INTAKE_LINE" ]; then
+    record_pass "DC-6: ship-shape SKILL.md has <!-- section:issue-anchor-guard --> after ### Intake (P1-r3-1: gated on Intake's new-vs-existing detection)"
   else
-    record_fail "DC-6: ship-shape SKILL.md has <!-- section:issue-anchor-guard --> before ### Intake (section_line=${SECTION_LINE:-absent}, intake_line=${INTAKE_LINE:-absent})"
+    record_fail "DC-6: ship-shape SKILL.md has <!-- section:issue-anchor-guard --> after ### Intake (P1-r3-1: gated on Intake's new-vs-existing detection) (section_line=${SECTION_LINE:-absent}, intake_line=${INTAKE_LINE:-absent})"
   fi
   assert_contains "DC-6: SKILL.md references the mod path" '_mods/issue-anchor-guard\.md' "$SKILL"
 else
-  record_fail "DC-6: ship-shape SKILL.md has <!-- section:issue-anchor-guard --> before ### Intake (SKILL.md not found)"
+  record_fail "DC-6: ship-shape SKILL.md has <!-- section:issue-anchor-guard --> after ### Intake (SKILL.md not found)"
   record_fail "DC-6: SKILL.md references the mod path"
+fi
+
+# ---------------------------------------------------------------------------
+# DC-17 (P1-r3-1) — the guard invocation is GATED so it fires ONLY when
+# Intake matched an EXISTING entity (the "Entity id" row — a re-shape of
+# `/shape <entity-id>`); a brand-new free-text or todo-based /shape must
+# never reach the resolver at all, so it can never hit "entity path not
+# found". ship-shape/SKILL.md is prose an LLM executes (no runtime harness
+# invokes it directly), so the end-to-end proof here is structural: the
+# pinned section's own text names the gating condition (Entity id) and both
+# excluded forms (Free text, Todo tid) plus the exact failure mode it
+# prevents, so a future refactor cannot silently drop the gate without this
+# test catching it. A companion resolver-level check confirms the
+# defensive "entity path not found" BLOCK itself was never weakened to a
+# silent no-op (that would mask a real caller bug; the SKILL.md gate above
+# is what actually protects a genuine new-shape directive).
+# ---------------------------------------------------------------------------
+
+SKILL_SECTION="${TMP_DIR}/skill-issue-anchor-guard-section.txt"
+if [ -f "$SKILL" ]; then
+  awk '
+    /<!-- section:issue-anchor-guard -->/ { found=1; next }
+    /<!-- \/section:issue-anchor-guard -->/ { exit }
+    found { print }
+  ' "$SKILL" > "$SKILL_SECTION"
+else
+  : > "$SKILL_SECTION"
+fi
+
+assert_contains "DC-17: guard section text gates on Intake's Entity id match" 'Entity id' "$SKILL_SECTION"
+assert_contains "DC-17: guard section text excludes the Free text intake form (never invoked for a brand-new free-text shape)" 'Free text' "$SKILL_SECTION"
+assert_contains "DC-17: guard section text excludes the Todo tid intake form" 'Todo tid' "$SKILL_SECTION"
+assert_contains "DC-17: guard section text names the 'entity path not found' failure mode this gate prevents" 'entity path not found' "$SKILL_SECTION"
+
+REPO17="${TMP_DIR}/repo-dc17"
+new_repo "$REPO17"
+OUT17="${TMP_DIR}/dc17.out"; RC17="${TMP_DIR}/dc17.rc"
+run_resolver_emit "$REPO17" "docs/ship-flow/99-brand-new-freetext-shape" "$OUT17" "$RC17"
+if [ "$(cat "$RC17")" != "0" ]; then
+  record_pass "DC-17: resolver's own defensive layer still fails closed on a genuinely nonexistent entity path (belt-and-braces; the SKILL.md gate is the primary protection for a real free-text/todo shape)"
+else
+  record_fail "DC-17: resolver's own defensive layer still fails closed on a genuinely nonexistent entity path"
+fi
+if grep -qi 'entity path not found' "$OUT17"; then
+  record_pass "DC-17: the defensive-layer error names 'entity path not found' explicitly, matching the SKILL.md gate's own prose"
+else
+  record_fail "DC-17: the defensive-layer error names 'entity path not found' explicitly (got: $(cat "$OUT17"))"
 fi
 
 # ---------------------------------------------------------------------------
