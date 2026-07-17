@@ -46,6 +46,12 @@ Main agent runs inline. Use TaskCreate to mark phases on main-agent path (skip i
 
 **Phases**: `intake` → `L0-research` → `L1-research` → `L2-research` → `scope-decompose` → `assumption-extract` → `appetite-fit-check` → `compose-proposal` → `cross-review` → `captain-gate`
 
+### Pre-Intake: Issue-Anchor Guard
+
+<!-- section:issue-anchor-guard -->
+Before Intake, resolve `plugins/ship-flow/_mods/issue-anchor-guard.md` for the target entity. If guard emits `verdict: narrow` or `verdict: return`, SendMessage(captain) with the source-diff summary before continuing to Intake. If `no_issue_anchor: true`, halt for captain confirmation. See mod for full contract; skip only via explicit `--skip-issue-anchor-guard`.
+<!-- /section:issue-anchor-guard -->
+
 ### Intake
 
 | Form | Detection | Action |
@@ -583,6 +589,7 @@ Use grep-friendly `key: value` lines:
 - Rabbit-hole capture: `plugins/ship-flow/skills/add-todos/SKILL.md`.
 - Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
 - Reverse-recovery audit mod (brownfield: assume the abstraction exists, classify with evidence, only greenfield confirmed MISSING): `docs/ship-flow/_mods/reverse-recovery-audit.md`; plugin-canonical copy at `plugins/ship-flow/_mods/reverse-recovery-audit.md`.
+- Issue-anchor guard mod: `plugins/ship-flow/_mods/issue-anchor-guard.md`.
 - Layer A: `superpowers:brainstorming` (Mode B), `superpowers:writing-skills` (Mode C).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
 - Hand-off schema: `plugins/ship-flow/references/entity-body-schema.yaml → stages.sharp.hand_off_to_design`.
