@@ -5,9 +5,9 @@ pattern: shaped-child
 parent_pitch: "6"
 harvest_required: true
 layout: folder
-status: plan
+status: execute
 stage_outputs:
-  plan: plan.md
+    plan: plan.md
 ---
 
 ### Problem
