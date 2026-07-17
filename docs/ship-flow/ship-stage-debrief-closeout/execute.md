@@ -238,14 +238,20 @@ and the test file; `git diff --check` exit 0. `check-invariants.sh` (C1-C15) exi
 (`status=pass records=5`) — consistent with prior feedback cycles, which record fixes under the
 originating task's ledger entry rather than adding new records per cycle.
 
-### Deferred / out-of-scope observations
+### Cycle 12 fold-in: R12-B1 send-pack refspec SRC completion
 
-- `bind_closeout_push_destination`'s `git send-pack ... "${deterministic_head}:${remote_ref}"`
-  (`plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh` `ensure_initial_closeout_head`, non-fixture
-  branch) also passes the bare `deterministic_head` as a refspec source, which is technically the
-  same DWIM class as R12-B1 but was not cited by Round 12 and touches push-destination code the
-  captain marked out-of-scope for this bounded round. Left as-is per the scope boundary; flagging
-  for FO triage as a possible future finding.
+FO triage folded in the two remaining R12-B1 DWIM sites in the send-pack refspec SRC paths (the ones NOT cited by Round 12 review, but discovered to be the same class):
+
+1. Line ~1453 in `ensure_initial_closeout_head` (seed-push): changed from `"${deterministic_head}:${remote_ref}"` to `"refs/heads/${deterministic_head}:${remote_ref}"`
+2. Line ~1697 in optional-terminal apply path (terminal force-with-lease push): changed from `"${deterministic_head}:refs/heads/${deterministic_head}"` to `"refs/heads/${deterministic_head}:refs/heads/${deterministic_head}"`
+
+Grep verification: no remaining bare `${deterministic_head}` refspec sources in send-pack/push calls (`plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh`). The R12-B1 class is now uniformly closed across all six deterministic-head-resolution sites (awaiting READ, OPEN READ, LANDED READ, fixture reuse READ, seed SRC, terminal SRC).
+
+New dual-shell regression `run_feedback_r12_b1_send_pack_src_case`: creates a same-name tag with a different OID before any branch exists, then verifies send-pack publishes the exact branch OID (never the tag OID) on both initial-head and terminal-apply paths. Pre-fix behavior: ambiguous-refspec error. Post-fix behavior: push succeeds with correct OID landing on remote.
+
+GREEN: R12-B1 send-pack-src regression 9/9 pass on Bash 5.3 (Bash 3.2 unavailable in fold-in session). Full R12 suite (all four feedback cases: B1-tag-dwim, B1-send-pack-src, B2-ancestry, W1-validator-root): 29/29 pass on Bash 5.3. Full local gate (R11 91/91, R10 120/120, default 198/198) unaffected. Static/hygiene checks pass.
+
+Commit: `0d8b05f` (wip: qualify send-pack refspec src to close R12-B1 DWIM class uniformly)
 
 </details>
 
