@@ -87,6 +87,17 @@ assert_path_exists() {
   fi
 }
 
+assert_equals() {
+  local desc="$1"
+  local expected="$2"
+  local actual="$3"
+  if [ "$actual" = "$expected" ]; then
+    record_pass "$desc"
+  else
+    record_fail "$desc (expected ${expected}, got ${actual})"
+  fi
+}
+
 frontmatter_field() {
   local file="$1"
   local field="$2"
@@ -184,6 +195,104 @@ write_fixture_status_bin() {
   cat > "$bin" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+
+# --- merge guard <slug> --verdict <v> [--workflow-dir <dir>] --------------
+# Faithful encoding of the REAL installed spacedock 0.25.0 `merge guard`
+# contract, empirically pinned (see 6.1-closeout-adapter-single-authority
+# plan.md Research Summary + this dispatch's own live probes against the
+# real binary): outcome is driven by the target entity's on-disk state, not
+# a canned response, so callers exercising different entity fixtures get the
+# real decision tree. Four outcomes: finalized (exit 0), blocked (exit 0,
+# non-error), entity-not-found (exit 1), archived-read-only-on-replay
+# (exit 1). MERGE_GUARD_FORCE_BLOCKED=<slug> is a test-only override (not
+# part of the real contract) for exercising the adapter's "blocked"
+# interpretation branch even when a sentinel is already present.
+if [ "${1:-}" = merge ] && [ "${2:-}" = guard ]; then
+  shift 2
+  mg_slug="${1:-}"
+  shift || true
+  mg_workflow_dir=""
+  mg_verdict=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --verdict) mg_verdict="$2"; shift 2 ;;
+      --workflow-dir) mg_workflow_dir="$2"; shift 2 ;;
+      --json|--quiet) shift ;;
+      *) shift ;;
+    esac
+  done
+  [ -n "$mg_workflow_dir" ] || { echo "Error: --workflow-dir required" >&2; exit 2; }
+  [ -n "$mg_verdict" ] || { echo "Error: --verdict required" >&2; exit 2; }
+
+  mg_frontmatter_field() {
+    local file="$1" field="$2"
+    awk -v field="$field" '
+      /^---[[:space:]]*$/ { fence++; next }
+      fence == 1 {
+        prefix = field ":"
+        if (index($0, prefix) == 1) {
+          value = substr($0, length(prefix) + 1)
+          sub(/^[[:space:]]*/, "", value)
+          sub(/[[:space:]]*$/, "", value)
+          gsub(/^["'\''"]|["'\''"]$/, "", value)
+          print value
+          exit
+        }
+      }
+    ' "$file"
+  }
+  mg_update_frontmatter_field() {
+    local file="$1" field="$2" value="$3"
+    local tmp="${file}.tmp"
+    awk -v field="$field" -v value="$value" '
+      /^---[[:space:]]*$/ { fence++; print; next }
+      fence == 1 {
+        prefix = field ":"
+        if (index($0, prefix) == 1) {
+          print field ": " value
+          next
+        }
+      }
+      { print }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+  }
+
+  mg_active_path="${mg_workflow_dir}/${mg_slug}/index.md"
+  mg_archived_path="${mg_workflow_dir}/_archive/${mg_slug}/index.md"
+
+  if [ -n "${MERGE_GUARD_FORCE_BLOCKED:-}" ] && [ "$mg_slug" = "$MERGE_GUARD_FORCE_BLOCKED" ]; then
+    echo "blocked: PR is pending — mod-block left intact, never finalize on an open PR. When gh reports it MERGED, record the sentinel (pr=pr-merge:{number}) and re-run \`merge guard ${mg_slug}\`."
+    exit 0
+  fi
+
+  if [ -f "$mg_archived_path" ]; then
+    echo "Error: archived entity is read-only: ${mg_slug}" >&2
+    exit 1
+  fi
+  if [ ! -f "$mg_active_path" ]; then
+    echo "Error: entity not found: ${mg_slug}" >&2
+    exit 1
+  fi
+
+  mg_pr="$(mg_frontmatter_field "$mg_active_path" pr)"
+  case "$mg_pr" in
+    pr-merge:*)
+      mg_update_frontmatter_field "$mg_active_path" status done
+      mg_update_frontmatter_field "$mg_active_path" verdict PASSED
+      mg_update_frontmatter_field "$mg_active_path" completed 2026-05-06T00:00:00Z
+      mg_update_frontmatter_field "$mg_active_path" worktree ""
+      mkdir -p "${mg_workflow_dir}/_archive"
+      mv "${mg_workflow_dir}/${mg_slug}" "${mg_workflow_dir}/_archive/${mg_slug}"
+      echo "finalized: ${mg_slug} -> done (verdict ${mg_verdict}), archived."
+      exit 0
+      ;;
+    *)
+      echo "blocked: PR ${mg_pr} is pending — mod-block left intact, never finalize on an open PR. When gh reports it MERGED, record the sentinel (pr=pr-merge:{number}) and re-run \`merge guard ${mg_slug}\`."
+      exit 0
+      ;;
+  esac
+fi
 
 workflow_dir=""
 include_archived=no
@@ -359,6 +468,31 @@ archived: ${archived}
 EOF
 }
 
+# write_merged_pr_fixture - the shared ${FIXTURE_ROOT}/pr-merged.env fixture
+# hardcodes number=131, which only matches entities created with `pr: #131`
+# (read_provider_fixture rejects on any other number as pr-number-mismatch,
+# by design -- see the "PR mismatch rejects fixture" case). Cases that write
+# an entity with its own distinct PR number (for readability/isolation) need
+# a fixture generated with the SAME number; this writes one on the fly into
+# $TMP_DIR. head_ref only matters when the entity also carries a `worktree:`
+# value (preflight_worktree_cleanup's branch cross-check) -- pass the
+# entity's expected branch name in that case, otherwise any placeholder is
+# fine.
+write_merged_pr_fixture() {
+  local out="$1"
+  local number="$2"
+  local head="${3:-ship-fixture-entity}"
+  cat > "$out" <<FIXEOF
+provider=fixture
+number=${number}
+state=MERGED
+merged_at=2026-05-06T00:00:00Z
+head_ref=${head}
+base_ref=main
+url=https://github.com/example/repo/pull/${number}
+FIXEOF
+}
+
 setup_repo() {
   local repo="$1"
   git init -q "$repo"
@@ -487,17 +621,48 @@ run_merged_fixture_case() {
   assert_exit "merged fixture exits success" 0 "$rc"
   assert_contains "merged fixture proceeds" '^verdict=PROCEED$' "$TMP_DIR/merged.out"
   assert_contains "merged fixture reports PR state" '^pr_state=MERGED$' "$TMP_DIR/merged.out"
-  assert_contains "merged fixture terminal action" '^terminal_action=set_done$' "$TMP_DIR/merged.out"
+  assert_contains "merged fixture terminal action" '^terminal_action=merge_guard_finalized$' "$TMP_DIR/merged.out"
+  assert_contains "merged fixture emits debrief_due" '^debrief_due=merged-fixture-entity$' "$TMP_DIR/merged.out"
   assert_file_exists "merged fixture archives folder index" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md"
   assert_frontmatter_equals "archived entity status done" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" status done
   assert_frontmatter_nonempty "archived entity completed stamped" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" completed
   assert_frontmatter_equals "archived entity verdict passed" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" verdict PASSED
   assert_frontmatter_equals "archived entity worktree cleared" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" worktree ""
+  assert_frontmatter_equals "archived entity pr sentinel written" "${repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md" pr pr-merge:131
 
   local archived_rc=0
   "$STATUS_BIN" --workflow-dir "${repo}/docs/ship-flow" --archived --where "slug = merged-fixture-entity" > "$TMP_DIR/archived-status.out" 2>&1 || archived_rc=$?
   assert_exit "archived status query succeeds" 0 "$archived_rc"
   assert_contains "archived status query finds slug" 'merged-fixture-entity' "$TMP_DIR/archived-status.out"
+
+  local commit_log
+  commit_log="$(git -C "$repo" log --oneline)"
+  assert_contains "sentinel write-ahead commit landed before archive-move (DC-1)" 'record pr-merge sentinel' <(printf '%s\n' "$commit_log")
+  assert_contains "archive-move commit landed via merge guard delegation" 'archive: .*merge guard' <(printf '%s\n' "$commit_log")
+}
+
+run_sentinel_write_case() {
+  local repo="$TMP_DIR/sentinel-write-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "sentinel-entity" "ship" "#141" ""
+  git -C "$repo" add docs/ship-flow/sentinel-entity/index.md
+  git -C "$repo" commit -qm "add sentinel entity"
+
+  local fixture="$TMP_DIR/pr-merged-141.env"
+  write_merged_pr_fixture "$fixture" 141
+
+  local rc
+  rc="$(run_helper "$repo" "$TMP_DIR/sentinel-write.out" \
+    --entity sentinel-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+  assert_exit "sentinel-write case exits success" 0 "$rc"
+
+  local sentinel_commit_files
+  sentinel_commit_files="$(git -C "$repo" log --format= --name-only --grep='record pr-merge sentinel')"
+  assert_equals "sentinel write-ahead commit touches only the entity file" \
+    "docs/ship-flow/sentinel-entity/index.md" \
+    "$(printf '%s\n' "$sentinel_commit_files" | sed '/^$/d')"
 }
 
 run_refusal_cases() {
@@ -591,7 +756,8 @@ run_usage_and_dry_run_cases() {
     --dry-run)"
   after="$(hash_tree "${repo}/docs/ship-flow")"
   assert_exit "dry-run merged exits success" 0 "$rc"
-  assert_contains "dry-run plans terminal action" '^terminal_action=set_done$' "$TMP_DIR/dry-run.out"
+  assert_contains "dry-run plans terminal action" '^terminal_action=merge_guard_delegate$' "$TMP_DIR/dry-run.out"
+  assert_contains "dry-run plans state" '^state=dry_run_planned$' "$TMP_DIR/dry-run.out"
   if [ "$before" = "$after" ]; then
     record_pass "dry-run leaves workflow unchanged"
   else
@@ -610,9 +776,16 @@ run_usage_and_dry_run_cases() {
     --pr-fixture "${FIXTURE_ROOT}/pr-merged.env" \
     --dry-run)"
   after="$(hash_tree "${active_done_repo}/docs/ship-flow")"
+  # An active (not yet archived) entity whose frontmatter already reads
+  # status=done is no longer special-cased: spacedock merge guard is the
+  # single closeout authority regardless of the entity's current status
+  # field (confirmed empirically -- merge guard finalizes+archives a
+  # status=done entity exactly like a status=ship one, as long as its PR is
+  # merged), so this now flows through the same merge-guard-delegate planning
+  # as any other merged entity.
   assert_exit "dry-run active done exits success" 0 "$rc"
-  assert_contains "dry-run active done reports planned archive" '^state=already_done_archive_planned$' "$TMP_DIR/dry-run-active-done.out"
-  assert_contains "dry-run active done does not claim archived now" '^detail=active terminal entity archive planned$' "$TMP_DIR/dry-run-active-done.out"
+  assert_contains "dry-run active done plans merge-guard delegate" '^terminal_action=merge_guard_delegate$' "$TMP_DIR/dry-run-active-done.out"
+  assert_contains "dry-run active done plans state" '^state=dry_run_planned$' "$TMP_DIR/dry-run-active-done.out"
   if [ "$before" = "$after" ]; then
     record_pass "dry-run active done leaves workflow unchanged"
   else
@@ -711,39 +884,6 @@ run_cleanup_cases() {
     record_fail "derived branch mismatch leaves workflow unchanged"
   fi
 
-  local failure_repo="$TMP_DIR/archive-failure-repo"
-  setup_repo "$failure_repo"
-  mkdir -p "${failure_repo}/.worktrees"
-  write_entity "${failure_repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ".worktrees/ship-merged-fixture-entity"
-  git -C "$failure_repo" add docs/ship-flow/merged-fixture-entity/index.md
-  git -C "$failure_repo" commit -qm "add archive failure entity"
-  git -C "$failure_repo" worktree add "${failure_repo}/.worktrees/ship-merged-fixture-entity" -b ship-merged-fixture-entity >/dev/null 2>&1
-  local failing_status="$TMP_DIR/failing-status"
-  cat > "$failing_status" <<EOF
-#!/usr/bin/env bash
-for arg in "\$@"; do
-  case "\$arg" in
-    --archive) exit 43 ;;
-  esac
-done
-exec "$STATUS_BIN" "\$@"
-EOF
-  chmod +x "$failing_status"
-  local original_status="$STATUS_BIN"
-  STATUS_BIN="$failing_status"
-  rc="$(run_helper "$failure_repo" "$TMP_DIR/archive-failure.out" \
-    --entity merged-fixture-entity \
-    --pr-provider fixture \
-    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
-  STATUS_BIN="$original_status"
-  assert_exit "archive failure exits before cleanup" 43 "$rc"
-  assert_path_exists "archive failure keeps worktree path" "${failure_repo}/.worktrees/ship-merged-fixture-entity"
-  if git -C "$failure_repo" show-ref --verify --quiet refs/heads/ship-merged-fixture-entity; then
-    record_pass "archive failure keeps worktree branch"
-  else
-    record_fail "archive failure keeps worktree branch"
-  fi
-
   local missing_repo="$TMP_DIR/missing-repo"
   setup_repo "$missing_repo"
   write_entity "${missing_repo}/docs/ship-flow" "merged-fixture-entity" "ship" "#131" ".worktrees/missing-local"
@@ -790,8 +930,13 @@ run_idempotency_cases() {
     --entity merged-fixture-entity \
     --pr-provider fixture \
     --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
+  # An active (not yet archived) entity already reading status=done is no
+  # longer special-cased ahead of the PR check (see the dry-run counterpart
+  # above): it flows through the same sentinel-write + merge-guard-delegate
+  # path as any other merged entity, and merge guard finalizes+archives it
+  # exactly the same way regardless of its current status field.
   assert_exit "active done coherent archives now" 0 "$rc"
-  assert_contains "active done reports archived now" '^state=already_done_archived_now$' "$TMP_DIR/active-done.out"
+  assert_contains "active done reports reconciled via merge guard" '^state=reconciled$' "$TMP_DIR/active-done.out"
   assert_file_exists "active done archived file exists" "${active_done_repo}/docs/ship-flow/_archive/merged-fixture-entity/index.md"
 
   local archived_repo="$TMP_DIR/archived-repo"
@@ -828,6 +973,310 @@ EOF
   fi
 }
 
+run_merge_guard_blocked_case() {
+  local repo="$TMP_DIR/merge-guard-blocked-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "blocked-entity" "ship" "#151" ""
+  git -C "$repo" add docs/ship-flow/blocked-entity/index.md
+  git -C "$repo" commit -qm "add blocked entity"
+
+  local fixture="$TMP_DIR/pr-merged-151.env"
+  write_merged_pr_fixture "$fixture" 151
+
+  local rc
+  rc="$(MERGE_GUARD_FORCE_BLOCKED=blocked-entity run_helper "$repo" "$TMP_DIR/merge-guard-blocked.out" \
+    --entity blocked-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+
+  assert_exit "merge-guard-blocked case exits success" 0 "$rc"
+  assert_contains "merge-guard-blocked reports await-resume state" '^state=await-pr-sentinel-resume$' "$TMP_DIR/merge-guard-blocked.out"
+  assert_contains "merge-guard-blocked reports reason" '^reason=merge-guard-blocked$' "$TMP_DIR/merge-guard-blocked.out"
+  # Sentinel write-ahead already committed before the (forced) blocked
+  # merge-guard call -- write-ahead happens regardless of what merge guard
+  # itself subsequently reports.
+  assert_frontmatter_equals "merge-guard-blocked still records sentinel" \
+    "${repo}/docs/ship-flow/blocked-entity/index.md" pr pr-merge:151
+}
+
+run_idempotent_replay_case() {
+  local repo="$TMP_DIR/idempotent-replay-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "replay-entity" "ship" "#161" ""
+  git -C "$repo" add docs/ship-flow/replay-entity/index.md
+  git -C "$repo" commit -qm "add replay entity"
+
+  local fixture="$TMP_DIR/pr-merged-161.env"
+  write_merged_pr_fixture "$fixture" 161
+
+  local rc1 rc2 before after
+  rc1="$(run_helper "$repo" "$TMP_DIR/replay-first.out" \
+    --entity replay-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+  assert_exit "idempotent replay first run finalizes" 0 "$rc1"
+  assert_contains "idempotent replay first run reconciles" '^state=reconciled$' "$TMP_DIR/replay-first.out"
+
+  before="$(hash_tree "${repo}/docs/ship-flow")"
+  rc2="$(run_helper "$repo" "$TMP_DIR/replay-second.out" \
+    --entity replay-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+  after="$(hash_tree "${repo}/docs/ship-flow")"
+
+  assert_exit "idempotent replay second run exits success" 0 "$rc2"
+  assert_contains "idempotent replay second run reports no-op" '^state=already_reconciled$' "$TMP_DIR/replay-second.out"
+  if [ "$before" = "$after" ]; then
+    record_pass "idempotent replay second run leaves workflow unchanged"
+  else
+    record_fail "idempotent replay second run leaves workflow unchanged"
+  fi
+}
+
+run_dirty_worktree_fail_closed_case() {
+  local repo="$TMP_DIR/repo-root-dirty-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "repo-dirty-entity" "ship" "#171" ""
+  git -C "$repo" add docs/ship-flow/repo-dirty-entity/index.md
+  git -C "$repo" commit -qm "add repo-dirty entity"
+  # Dirty a file OUTSIDE the entity, anywhere in the repo -- this is the NEW
+  # repo-root-wide dirty gate (distinct from the entity's OWN separate git
+  # worktree dirty check exercised in run_cleanup_cases).
+  echo "unrelated wip" > "${repo}/unrelated-wip.txt"
+
+  local fixture="$TMP_DIR/pr-merged-171.env"
+  write_merged_pr_fixture "$fixture" 171
+
+  local rc
+  rc="$(run_helper "$repo" "$TMP_DIR/repo-dirty.out" \
+    --entity repo-dirty-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+
+  assert_exit "repo-root dirty-tree exits success (non-fatal defer)" 0 "$rc"
+  assert_contains "repo-root dirty-tree reports deferred state" '^state=closeout-deferred-dirty-tree$' "$TMP_DIR/repo-dirty.out"
+  assert_frontmatter_equals "repo-root dirty-tree still records sentinel (write-ahead, DC-1/DC-4)" \
+    "${repo}/docs/ship-flow/repo-dirty-entity/index.md" pr pr-merge:171
+  assert_path_missing "repo-root dirty-tree does not archive yet" "${repo}/docs/ship-flow/_archive/repo-dirty-entity/index.md"
+
+  rm -f "${repo}/unrelated-wip.txt"
+  rc="$(run_helper "$repo" "$TMP_DIR/repo-dirty-resume.out" \
+    --entity repo-dirty-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+  assert_exit "repo-root dirty-tree resume converges" 0 "$rc"
+  assert_contains "repo-root dirty-tree resume reconciles" '^state=reconciled$' "$TMP_DIR/repo-dirty-resume.out"
+  assert_file_exists "repo-root dirty-tree resume archives" "${repo}/docs/ship-flow/_archive/repo-dirty-entity/index.md"
+}
+
+run_wrong_branch_fail_closed_case() {
+  local repo="$TMP_DIR/wrong-branch-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "wrong-branch-entity" "ship" "#181" ""
+  git -C "$repo" add docs/ship-flow/wrong-branch-entity/index.md
+  git -C "$repo" commit -qm "add wrong-branch entity"
+
+  # R2: the exact rule under test is -- block committing ONLY when the
+  # repo's current branch is neither the primary worktree's branch NOR this
+  # entity's own registered worktree branch. Simulate a genuinely stray
+  # branch by adding a SECOND linked worktree on an unrelated branch and
+  # invoking the adapter from inside it (repo_root resolves to that linked
+  # worktree, not the primary one).
+  local other_worktree="$TMP_DIR/wrong-branch-other-worktree"
+  git -C "$repo" worktree add "$other_worktree" -b stray-unrelated-branch >/dev/null 2>&1
+
+  local fixture181="$TMP_DIR/pr-merged-181.env"
+  write_merged_pr_fixture "$fixture181" 181
+
+  local rc
+  rc="$(run_helper "$other_worktree" "$TMP_DIR/wrong-branch.out" \
+    --entity wrong-branch-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture181")"
+
+  assert_exit "wrong-branch defers non-fatally" 0 "$rc"
+  assert_contains "wrong-branch reports deferred state" '^state=closeout-deferred-wrong-branch$' "$TMP_DIR/wrong-branch.out"
+  assert_contains "wrong-branch reports reason" '^reason=wrong-branch$' "$TMP_DIR/wrong-branch.out"
+  # The wrong-branch gate runs BEFORE the sentinel write-ahead: no commit at
+  # all (not even the scoped sentinel commit) should land on a branch that's
+  # neither the primary worktree's branch nor this entity's own.
+  assert_frontmatter_equals "wrong-branch leaves pr field un-sentineled" \
+    "${other_worktree}/docs/ship-flow/wrong-branch-entity/index.md" pr "#181"
+
+  rc="$(run_helper "$repo" "$TMP_DIR/wrong-branch-resume.out" \
+    --entity wrong-branch-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture181")"
+  assert_exit "wrong-branch resume from the primary worktree converges" 0 "$rc"
+  assert_contains "wrong-branch resume reconciles" '^state=reconciled$' "$TMP_DIR/wrong-branch-resume.out"
+
+  # Positive control: a legitimate worktree-per-entity self-closeout (running
+  # FROM the entity's own registered worktree, whose branch legitimately
+  # differs from the primary worktree's) must NOT false-positive as
+  # wrong-branch.
+  local self_repo="$TMP_DIR/wrong-branch-self-repo"
+  setup_repo "$self_repo"
+  mkdir -p "${self_repo}/.worktrees"
+  write_entity "${self_repo}/docs/ship-flow" "self-worktree-entity" "ship" "#182" ".worktrees/self-worktree-entity"
+  git -C "$self_repo" add docs/ship-flow/self-worktree-entity/index.md
+  git -C "$self_repo" commit -qm "add self-worktree entity"
+  git -C "$self_repo" worktree add "${self_repo}/.worktrees/self-worktree-entity" -b ship-self-worktree-entity >/dev/null 2>&1
+
+  # head_ref must match the entity's own registered worktree branch here --
+  # preflight_worktree_cleanup cross-checks it against `worktree:` since this
+  # entity (unlike wrong-branch-entity above) carries a worktree value.
+  local fixture182="$TMP_DIR/pr-merged-182.env"
+  write_merged_pr_fixture "$fixture182" 182 "ship-self-worktree-entity"
+
+  rc="$(run_helper "${self_repo}/.worktrees/self-worktree-entity" "$TMP_DIR/wrong-branch-self.out" \
+    --entity self-worktree-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture182")"
+  assert_exit "self-closeout from entity's own worktree is not blocked" 0 "$rc"
+  assert_not_contains "self-closeout from entity's own worktree is not wrong-branch" \
+    'closeout-deferred-wrong-branch' "$TMP_DIR/wrong-branch-self.out"
+}
+
+run_state_driver_unavailable_case() {
+  local repo="$TMP_DIR/state-driver-unavailable-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "no-merge-guard-entity" "ship" "#191" ""
+  git -C "$repo" add docs/ship-flow/no-merge-guard-entity/index.md
+  git -C "$repo" commit -qm "add no-merge-guard entity"
+
+  local nomerge_status="$TMP_DIR/nomerge-status"
+  cat > "$nomerge_status" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "\${1:-}" = merge ] && [ "\${2:-}" = guard ]; then
+  echo "Error: unknown command \"guard\" for \"merge\"" >&2
+  exit 2
+fi
+exec "$STATUS_BIN" "\$@"
+EOF
+  chmod +x "$nomerge_status"
+
+  local fixture="$TMP_DIR/pr-merged-191.env"
+  write_merged_pr_fixture "$fixture" 191
+
+  local original_status="$STATUS_BIN"
+  STATUS_BIN="$nomerge_status"
+  local rc
+  rc="$(run_helper "$repo" "$TMP_DIR/state-driver-unavailable.out" \
+    --entity no-merge-guard-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+  STATUS_BIN="$original_status"
+
+  assert_exit "state-driver-unavailable exits non-zero" 1 "$rc"
+  assert_contains "state-driver-unavailable stderr signal (DC-5 literal)" 'state-driver unavailable' "$TMP_DIR/state-driver-unavailable.out"
+  assert_contains "state-driver-unavailable reports reason" '^reason=state-driver-unavailable$' "$TMP_DIR/state-driver-unavailable.out"
+}
+
+run_debrief_due_signal_case() {
+  local repo="$TMP_DIR/debrief-due-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "debrief-due-entity" "ship" "#201" ""
+  git -C "$repo" add docs/ship-flow/debrief-due-entity/index.md
+  git -C "$repo" commit -qm "add debrief-due entity"
+
+  local fixture="$TMP_DIR/pr-merged-201.env"
+  write_merged_pr_fixture "$fixture" 201
+
+  local rc
+  rc="$(run_helper "$repo" "$TMP_DIR/debrief-due.out" \
+    --entity debrief-due-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+
+  # DC-9: the debrief-due signal is a non-blocking, additive report field --
+  # it never gates or rolls back the closeout itself. Exit 0 is asserted
+  # regardless of whether anything downstream ever consumes the signal.
+  assert_exit "debrief-due signal case exits success regardless of consumption" 0 "$rc"
+  assert_contains "debrief-due signal present on successful finalize" '^debrief_due=debrief-due-entity$' "$TMP_DIR/debrief-due.out"
+}
+
+run_no_raw_terminal_set_case() {
+  assert_equals "adapter has zero raw terminal --set status=done calls (DC-2)" \
+    "0" "$(grep -c -- '--set.*status=done' "$HELPER" || true)"
+  assert_equals "adapter has zero bare --archive calls (DC-2)" \
+    "0" "$(grep -c -- '\-\-archive\b' "$HELPER" || true)"
+  if grep -q -- 'merge guard' "$HELPER"; then
+    record_pass "adapter delegates to spacedock merge guard (DC-2)"
+  else
+    record_fail "adapter delegates to spacedock merge guard (DC-2)"
+  fi
+}
+
+run_archive_commit_failure_recovery_case() {
+  local repo="$TMP_DIR/archive-commit-failure-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "archive-commit-failure-entity" "ship" "#211" ""
+  git -C "$repo" add docs/ship-flow/archive-commit-failure-entity/index.md
+  git -C "$repo" commit -qm "add archive-commit-failure entity"
+
+  # R4: simulate the archive-move commit itself failing (disk full / hook
+  # rejection / etc.) AFTER spacedock merge guard has already finalized the
+  # entity on disk. `git add` is left to succeed; only the commit whose
+  # pathspec touches the _archive/ destination fails.
+  local real_git
+  real_git="$(command -v git)"
+  local failing_git_bin="$TMP_DIR/failing-git-bin"
+  mkdir -p "$failing_git_bin"
+  cat > "${failing_git_bin}/git" <<EOF
+#!/usr/bin/env bash
+has_commit=0
+has_archive_path=0
+for arg in "\$@"; do
+  [ "\$arg" = commit ] && has_commit=1
+  case "\$arg" in *_archive/*) has_archive_path=1 ;; esac
+done
+if [ "\$has_commit" = 1 ] && [ "\$has_archive_path" = 1 ]; then
+  echo "fatal: simulated archive-move commit failure" >&2
+  exit 128
+fi
+exec "$real_git" "\$@"
+EOF
+  chmod +x "${failing_git_bin}/git"
+
+  local fixture="$TMP_DIR/pr-merged-211.env"
+  write_merged_pr_fixture "$fixture" 211
+
+  local rc
+  rc="$(run_helper_with_path "$repo" "$TMP_DIR/archive-commit-failure.out" "${failing_git_bin}:$PATH" \
+    --entity archive-commit-failure-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+
+  assert_exit "archive-commit failure signals non-zero for retry" 1 "$rc"
+  assert_contains "archive-commit failure reports recoverable state" '^state=closeout-archive-commit-failed-recoverable$' "$TMP_DIR/archive-commit-failure.out"
+  # merge guard's own filesystem mutation (the move to _archive/) already
+  # happened and is NOT rolled back (R4) -- on-disk state matches merge
+  # guard's own output even though the adapter's own commit failed.
+  assert_file_exists "archive-commit failure leaves the FS move in place uncommitted" \
+    "${repo}/docs/ship-flow/_archive/archive-commit-failure-entity/index.md"
+  if git -C "$repo" status --porcelain -- docs/ship-flow/_archive/archive-commit-failure-entity | grep -q .; then
+    record_pass "archive-commit failure leaves the move uncommitted (recoverable)"
+  else
+    record_fail "archive-commit failure leaves the move uncommitted (recoverable)"
+  fi
+
+  # Re-run with a working git -- converges via the archived-resolve recovery
+  # retry (attempt_archive_commit_retry), relying on merge guard's own
+  # resumability rather than any rollback of the already-finalized FS state.
+  rc="$(run_helper "$repo" "$TMP_DIR/archive-commit-recovery.out" \
+    --entity archive-commit-failure-entity \
+    --pr-provider fixture \
+    --pr-fixture "$fixture")"
+  assert_exit "archive-commit recovery run exits success" 0 "$rc"
+  assert_contains "archive-commit recovery run reports reconciled no-op" '^state=already_reconciled$' "$TMP_DIR/archive-commit-recovery.out"
+  if [ -z "$(git -C "$repo" status --porcelain -- docs/ship-flow/_archive/archive-commit-failure-entity)" ]; then
+    record_pass "archive-commit recovery run commits the pending move"
+  else
+    record_fail "archive-commit recovery run commits the pending move"
+  fi
+}
+
 run_scope_guard() {
   assert_not_contains "helper has no forbidden git/gh mutation commands" 'git branch -D|git push --delete|gh pr (create|merge)|git merge' "$HELPER"
 }
@@ -860,10 +1309,19 @@ else
   record_pass "helper exists and is executable"
   run_runtime_regression_cases
   run_merged_fixture_case
+  run_sentinel_write_case
   run_refusal_cases
   run_usage_and_dry_run_cases
   run_cleanup_cases
   run_idempotency_cases
+  run_merge_guard_blocked_case
+  run_idempotent_replay_case
+  run_dirty_worktree_fail_closed_case
+  run_wrong_branch_fail_closed_case
+  run_state_driver_unavailable_case
+  run_debrief_due_signal_case
+  run_no_raw_terminal_set_case
+  run_archive_commit_failure_recovery_case
   run_scope_guard
   run_doc_scope_cases
 fi

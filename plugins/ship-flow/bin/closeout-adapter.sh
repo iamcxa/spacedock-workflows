@@ -14,10 +14,17 @@ resolve_status_bin() {
     printf '%s\n' "$SHIP_FLOW_STATUS_BIN"
     return 0
   fi
+  if [ -n "${SPACEDOCK_BIN:-}" ]; then
+    printf '%s\n' "$SPACEDOCK_BIN"
+    return 0
+  fi
 
-  # The status helper is the `spacedock` Go binary on PATH, invoked as
-  # `spacedock status <args>` (see run_status). Resolve the full path so the
-  # `-x "$STATUS_BIN"` executable check downstream passes.
+  # The status/merge-guard helper is the one `spacedock` Go binary on PATH,
+  # invoked as `spacedock status <args>` (see run_status) or
+  # `spacedock merge guard <args>` (see run_merge_guard). Resolve the full
+  # path so the `-x "$STATUS_BIN"` executable check downstream passes, and so
+  # both call sites share one validated binary (matches the ${SPACEDOCK_BIN:-
+  # spacedock} launcher convention).
   command -v spacedock 2>/dev/null || return 1
 }
 
@@ -36,6 +43,7 @@ emit_report() {
   printf 'reason=%s\n' "${reason:-}"
   printf 'state=%s\n' "${state_name:-}"
   printf 'detail=%s\n' "${detail:-}"
+  printf 'debrief_due=%s\n' "${debrief_due:-}"
 }
 
 reject_usage() {
@@ -230,7 +238,11 @@ preflight_worktree_cleanup() {
 
   branch="$(branch_for_worktree_path "$worktree_abs")"
   [ -n "$branch" ] || prompt_captain "worktree-not-registered" "local worktree path is not registered"
-  if [ "$branch" != "$head_ref" ]; then
+  # head_ref is only available when this run went through a provider lookup
+  # (fresh MERGED confirmation). On a sentinel-resume run (pr: already
+  # pr-merge:{N}, provider lookup skipped) head_ref is empty, so this
+  # cross-check is skipped rather than false-failing every resume.
+  if [ -n "$head_ref" ] && [ "$branch" != "$head_ref" ]; then
     prompt_captain "branch-mismatch" "registered worktree branch does not match PR head"
   fi
 
@@ -262,22 +274,133 @@ remove_worktree_if_safe() {
   fi
 }
 
-archive_active_entity() {
-  if [ "$dry_run" = "yes" ]; then
+# sentinel_pr_number - detect an already-persisted write-ahead sentinel
+# (pr: pr-merge:{N}). A resumed run (dirty-tree/wrong-branch deferred a prior
+# attempt after the sentinel was already committed) finds this instead of a
+# bare PR ref and must skip the provider re-check entirely (A3: the sentinel
+# IS the durable "confirmed MERGED" fact; re-probing gh/fixture again is
+# unnecessary and would reject the already-normalized pr value).
+sentinel_pr_number() {
+  local raw="$1"
+  if [[ "$raw" =~ ^pr-merge:([0-9]+)$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
     return 0
   fi
-  run_status --archive "$entity_slug" >/dev/null
+  return 1
 }
 
-verify_archived_entity() {
-  run_status --archived --resolve "archive:${entity_slug}" >/dev/null
+# run_merge_guard - delegate the terminal mutation to the single closeout
+# authority (DC-2: this adapter never sets the terminal status or archives an
+# entity via a raw status-tool call itself). Captures combined stdout+stderr
+# and exit code for interpretation by the caller against the 4
+# empirically-pinned outcomes.
+run_merge_guard() {
+  "$STATUS_BIN" merge guard "$entity_slug" --verdict passed --workflow-dir "$workflow_dir" 2>&1
 }
 
-set_terminal_fields() {
-  if [ "$dry_run" = "yes" ]; then
-    return 0
+# write_sentinel_ahead - write-ahead durability marker (A3). A plain
+# sentinel-only field write always succeeds regardless of merge-hook
+# registration; the path-scoped commit survives a dirty-tree-elsewhere or
+# wrong-branch bail-out immediately after, so a later clean run resumes from
+# the sentinel instead of re-probing the PR provider.
+write_sentinel_ahead() {
+  run_status --set "$entity_slug" "pr=pr-merge:${pr_number}" >/dev/null
+  git -C "$repo_root" add -- "$entity_path" >/dev/null 2>&1 || true
+  git -C "$repo_root" commit -m "closeout: record pr-merge sentinel for $entity_slug (PR #$pr_number merged)" \
+      -- "$entity_path" >/dev/null 2>&1 || true
+}
+
+# current_branch_is_safe_for_commit - R2: the wrong-branch safety gate.
+# Blocks committing the closeout ONLY when the repo's current checked-out
+# branch is neither (a) the primary worktree's branch (the common case:
+# main/master, where hook- and mod-driven closeout normally runs) nor (b)
+# this entity's OWN registered worktree branch (self-closeout from inside a
+# legitimate worktree-per-entity setup, where differing from main is expected
+# and safe). A third, unrelated branch left checked out in a shared working
+# copy is refused — this is deliberately NOT "block every non-main branch".
+current_branch_is_safe_for_commit() {
+  local current primary_root primary_branch worktree_abs entity_branch
+  current="$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  [ -n "$current" ] && [ "$current" != "HEAD" ] || return 1
+
+  primary_root="$(primary_worktree_root 2>/dev/null || true)"
+  if [ -n "$primary_root" ]; then
+    primary_branch="$(branch_for_worktree_path "$primary_root" 2>/dev/null || true)"
+    if [ -n "$primary_branch" ] && [ "$current" = "$primary_branch" ]; then
+      return 0
+    fi
   fi
-  run_status --set "$entity_slug" status=done completed verdict=PASSED worktree= >/dev/null
+
+  if [ -n "$worktree_value" ]; then
+    worktree_abs="$(absolute_worktree_path "$primary_root" "$worktree_value")"
+    entity_branch="$(branch_for_worktree_path "$worktree_abs" 2>/dev/null || true)"
+    if [ -n "$entity_branch" ] && [ "$current" = "$entity_branch" ]; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+# repo_dirty - the repo-root-wide dirty gate (R2/DC-4): catches genuinely
+# unrelated uncommitted work anywhere in the repo. The entity's OWN
+# registered worktree subtree is excluded from this scan -- a linked git
+# worktree living inside the main tree (the normal worktree-per-entity
+# layout) shows up as an untracked `??` path from the primary repo's own
+# `git status` whenever it isn't (or can't be) gitignored, which would
+# otherwise false-positive this gate on every legitimate in-flight entity.
+# That subtree gets its own, purpose-built dirty check via
+# preflight_worktree_cleanup right after this gate.
+repo_dirty() {
+  local porcelain
+  if [ -n "$worktree_value" ]; then
+    porcelain="$(git -C "$repo_root" status --porcelain -- . ":(exclude)${worktree_value}" 2>/dev/null || true)"
+  else
+    porcelain="$(git -C "$repo_root" status --porcelain 2>/dev/null || true)"
+  fi
+  [ -n "$porcelain" ]
+}
+
+# archive_pathspec_for_entity - compute the active->archive git pathspec for
+# the entity's on-disk layout (folder `<slug>/index.md` vs flat `<slug>.md`),
+# mirroring the archive-move convention `spacedock merge guard` itself uses.
+# Sets archive_src / archive_dst.
+archive_pathspec_for_entity() {
+  case "$entity_path" in
+    */index.md)
+      archive_src="$(dirname "$entity_path")"
+      archive_dst="${workflow_dir}/_archive/${entity_slug}"
+      ;;
+    *)
+      archive_src="$entity_path"
+      archive_dst="${workflow_dir}/_archive/$(basename "$entity_path")"
+      ;;
+  esac
+}
+
+# attempt_archive_commit_retry - R4 recovery. `spacedock merge guard`'s own
+# terminal mutation (the filesystem move to _archive/ + terminalized
+# frontmatter) is NOT rolled back if the caller's own archive-move commit
+# subsequently fails (e.g. disk full, hook rejection) — merge guard's own
+# contract already treats the archived state as idempotent-replay-safe ("archived
+# entity is read-only"), so rolling the FS move back here would fight that
+# contract and risk racing a concurrent writer. Instead, every path that finds
+# an already-archived, coherent entity retries the pending commit here: a
+# clean git state is a true no-op (nothing to commit); an uncommitted pending
+# move is committed now. Either way, a later clean run converges without any
+# separate rollback mechanism.
+attempt_archive_commit_retry() {
+  local dst
+  case "$entity_path" in
+    */index.md) dst="$(dirname "$entity_path")" ;;
+    *) dst="$entity_path" ;;
+  esac
+  [ "$dry_run" = "no" ] || return 0
+  git -C "$repo_root" add -- "$dst" >/dev/null 2>&1 || true
+  if [ -n "$(git -C "$repo_root" status --porcelain -- "$dst" 2>/dev/null || true)" ]; then
+    git -C "$repo_root" commit -m "done + archive: $entity_slug (recovered pending archive-move commit)" \
+        -- "$dst" >/dev/null 2>&1 || true
+  fi
 }
 
 cleanup_branch_if_safe() {
@@ -315,6 +438,8 @@ state_name=""
 detail=""
 cleanup_branch=""
 cleanup_worktree_abs=""
+head_ref=""
+debrief_due=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -376,11 +501,18 @@ if [ -z "$active_resolve" ]; then
   entity_slug="$(resolve_line_field slug "$archived_resolve")"
   entity_path="$(resolve_line_field path "$archived_resolve")"
   if coherent_terminal_file "$entity_path"; then
+    # R4 recovery: the archive-move may already be on disk without a
+    # completed git commit (a prior run's archive-move commit step failed
+    # after `spacedock merge guard` had already finalized it). Retry that
+    # commit before reporting the no-op -- a clean tree is a true no-op,
+    # an uncommitted pending move is committed now.
+    attempt_archive_commit_retry
     verdict="PROCEED"
     state_name="already_reconciled"
     terminal_action="already_reconciled"
     pr_state="MERGED"
-    pr_number="$(normalize_pr_number "$(read_frontmatter_field "$entity_path" pr)" || true)"
+    pr_number="$(sentinel_pr_number "$(read_frontmatter_field "$entity_path" pr)" 2>/dev/null || \
+      normalize_pr_number "$(read_frontmatter_field "$entity_path" pr)" 2>/dev/null || true)"
     detail="archived entity is already terminal and coherent"
     emit_report
     exit 0
@@ -392,67 +524,161 @@ entity_slug="$(resolve_line_field slug "$active_resolve")"
 entity_path="$(resolve_line_field path "$active_resolve")"
 pr_raw="$(read_frontmatter_field "$entity_path" pr)"
 [ -n "$pr_raw" ] || reject_input "missing-pr" "entity has no pr field"
-pr_number="$(normalize_pr_number "$pr_raw" || true)"
-[ -n "$pr_number" ] || reject_input "invalid-pr" "entity pr field is not a recognizable PR number"
 worktree_value="$(read_frontmatter_field "$entity_path" worktree)"
 
-if coherent_terminal_file "$entity_path"; then
-  terminal_action="archive"
-  if [ "$dry_run" = "no" ]; then
-    archive_active_entity
-    verify_archived_entity
-    state_name="already_done_archived_now"
-    detail="active terminal entity archived"
-  else
-    state_name="already_done_archive_planned"
-    detail="active terminal entity archive planned"
-  fi
-  verdict="PROCEED"
+sentinel_already_present="no"
+if pr_number="$(sentinel_pr_number "$pr_raw")"; then
+  # Resume: a prior run already wrote+committed the write-ahead sentinel (A3)
+  # and was deferred by the dirty-tree/wrong-branch gate below. The sentinel
+  # is itself the durable "confirmed MERGED" fact -- do not re-probe the PR
+  # provider.
+  sentinel_already_present="yes"
   pr_state="MERGED"
+else
+  pr_number="$(normalize_pr_number "$pr_raw" || true)"
+  [ -n "$pr_number" ] || reject_input "invalid-pr" "entity pr field is not a recognizable PR number"
+
+  case "$pr_provider" in
+    fixture) read_provider_fixture "$pr_fixture" ;;
+    gh) read_provider_gh ;;
+  esac
+
+  case "$pr_state" in
+    OPEN)
+      verdict="PROCEED"
+      state_name="pr_open_noop"
+      reason="pr-open"
+      detail="PR is still open"
+      emit_report
+      exit 0
+      ;;
+    MERGED)
+      [ -n "$merged_at" ] || reject_input "merged-at-missing" "merged PR state requires merged_at"
+      ;;
+    CLOSED|UNKNOWN|"")
+      prompt_captain "pr-not-merged" "PR is not merged"
+      ;;
+    *)
+      prompt_captain "pr-state-unsupported" "PR state is not supported"
+      ;;
+  esac
+fi
+
+# From here: pr_state=MERGED, pr_number validated -- either freshly confirmed
+# via the PR provider, or resumed from an already-persisted sentinel.
+
+if [ "$dry_run" = "yes" ]; then
+  preflight_worktree_cleanup "$worktree_value"
+  cleanup_branch_if_safe
+  verdict="PROCEED"
+  terminal_action="merge_guard_delegate"
+  state_name="dry_run_planned"
+  detail="dry-run: would record the pr-merge sentinel (if not already present) and delegate to spacedock merge guard"
   emit_report
   exit 0
 fi
 
-case "$pr_provider" in
-  fixture) read_provider_fixture "$pr_fixture" ;;
-  gh) read_provider_gh ;;
-esac
+if ! current_branch_is_safe_for_commit; then
+  verdict="PROCEED"
+  terminal_action="deferred"
+  state_name="closeout-deferred-wrong-branch"
+  reason="wrong-branch"
+  detail="repo HEAD is on a branch that is neither the primary worktree's branch nor this entity's own registered worktree branch; closeout deferred until a correctly-branched run"
+  emit_report
+  exit 0
+fi
 
-case "$pr_state" in
-  OPEN)
+# Entity's OWN feature worktree/branch readiness (pre-existing mechanic,
+# unrelated to the repo-root wrong-branch/dirty-tree gates below -- this
+# checks the SEPARATE git worktree the entity itself was built in, if any).
+# Deliberately ordered BEFORE the sentinel write-ahead: a prompt_captain here
+# (not registered / branch mismatch / dirty) is a full captain escalation
+# needing manual resolution, not an auto-resumable defer, so it must leave
+# the workflow completely untouched (no sentinel, no commit) -- unlike the
+# repo-root gates below, which write-ahead first because they auto-resume on
+# their own once the caller re-runs after clearing the blocker.
+preflight_worktree_cleanup "$worktree_value"
+
+if [ "$sentinel_already_present" = "no" ]; then
+  write_sentinel_ahead
+fi
+
+if repo_dirty; then
+  verdict="PROCEED"
+  terminal_action="deferred"
+  state_name="closeout-deferred-dirty-tree"
+  reason="dirty-worktree"
+  detail="repo has uncommitted changes outside the sentinel write; closeout deferred until a clean run"
+  emit_report
+  exit 0
+fi
+
+merge_guard_rc=0
+merge_guard_output="$(run_merge_guard)" || merge_guard_rc=$?
+
+case "$merge_guard_output" in
+  finalized:*)
+    archive_pathspec_for_entity
+    if git -C "$repo_root" add -- "$archive_src" "$archive_dst" >/dev/null 2>&1 && \
+       git -C "$repo_root" commit -m "done + archive: $entity_slug (PR #$pr_number merged via spacedock merge guard)" \
+           -- "$archive_src" "$archive_dst" >/dev/null 2>&1; then
+      remove_worktree_if_safe
+      cleanup_branch_if_safe
+      verdict="PROCEED"
+      terminal_action="merge_guard_finalized"
+      reason="merged-pr-reconciled"
+      state_name="reconciled"
+      detail="spacedock merge guard finalized $entity_slug (verdict passed) and archived it; archive-move committed"
+      debrief_due="$entity_slug"
+      pr_state="MERGED"
+      emit_report
+      exit 0
+    else
+      # R4: merge guard's own filesystem mutation already happened (archive
+      # move + terminalized frontmatter) -- do NOT roll it back. Rolling back
+      # would fight merge guard's own idempotent-replay contract ("archived
+      # entity is read-only") and risks racing a concurrent writer. Leaving
+      # the on-disk move uncommitted and retrying the commit on the next run
+      # (the `*read-only*` branch below, or the archived-resolve fast path at
+      # the top of this script) converges cleanly without a separate
+      # rollback mechanism.
+      verdict="PROCEED"
+      terminal_action="archive_commit_pending"
+      state_name="closeout-archive-commit-failed-recoverable"
+      reason="archive-commit-failed"
+      detail="spacedock merge guard finalized $entity_slug but the archive-move commit failed; on-disk state matches merge guard's output, re-run to retry the commit"
+      emit_report
+      exit 1
+    fi
+    ;;
+  blocked:*)
     verdict="PROCEED"
-    state_name="pr_open_noop"
-    reason="pr-open"
-    detail="PR is still open"
+    state_name="await-pr-sentinel-resume"
+    reason="merge-guard-blocked"
+    detail="spacedock merge guard reports the PR is still pending; no mutation attempted"
     emit_report
     exit 0
     ;;
-  MERGED)
-    [ -n "$merged_at" ] || reject_input "merged-at-missing" "merged PR state requires merged_at"
-    ;;
-  CLOSED|UNKNOWN|"")
-    prompt_captain "pr-not-merged" "PR is not merged"
+  *"read-only"*)
+    archive_pathspec_for_entity
+    entity_path="$archive_dst"
+    attempt_archive_commit_retry
+    verdict="PROCEED"
+    state_name="already_reconciled"
+    terminal_action="already_reconciled"
+    reason="merge-guard-archived-read-only"
+    detail="spacedock merge guard reports the entity is already archived; treated as idempotent no-op"
+    pr_state="MERGED"
+    emit_report
+    exit 0
     ;;
   *)
-    prompt_captain "pr-state-unsupported" "PR state is not supported"
+    verdict="REJECT"
+    reason="state-driver-unavailable"
+    state_name="state-driver-unavailable"
+    detail="spacedock merge guard did not return a recognized outcome (rc=${merge_guard_rc}): ${merge_guard_output}"
+    emit_report
+    echo "state-driver unavailable: ${detail}" >&2
+    exit 1
     ;;
 esac
-
-preflight_worktree_cleanup "$worktree_value"
-terminal_action="set_done"
-
-if [ "$dry_run" = "no" ]; then
-  set_terminal_fields
-  archive_active_entity
-  verify_archived_entity
-  remove_worktree_if_safe
-fi
-
-cleanup_branch_if_safe
-
-verdict="PROCEED"
-reason="merged-pr-reconciled"
-state_name="reconciled"
-detail="merged PR reconciled to terminal archived entity state"
-emit_report
-exit 0
