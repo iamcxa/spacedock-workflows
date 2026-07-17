@@ -615,7 +615,7 @@ Receipt schema requires **12 top-level keys** (validated at `write-fo-receipt.sh
 
 **Grep check** (Tier B — text presence, NOT behavior): `check-invariants.sh --check review-surface-shape-not-plan` asserts the two load-bearing rule sentences are present in this file. Per Principle 16 this pins the rule TEXT (discoverability + regression-proofing), not FO runtime behavior — the `manual: true`-only-on-`shape` workflow schema declares the autonomy intent but does not mechanically enforce it (it did not prevent this incident, nor entity #078's over-pausing). FO/captain discipline (Tier B) remains the actual enforcement.
 
-**Source**: entity #60 / issue #60 (2026-07-18). Surfaced during the #49 build — the FO briefly offered the captain a plan.md review and the captain corrected it (debrief `docs/ship-flow/_debriefs/2026-07-17-01.md`). Deliberately split from #49's route-back guard to avoid scope drift.
+**Source**: entity #60 / issue #60 (2026-07-18). Surfaced during the #49 build — the FO briefly offered the captain a plan.md review and the captain corrected it (recorded in the 2026-07-17 session debrief). Deliberately split from #49's route-back guard to avoid scope drift.
 
 ---
 
