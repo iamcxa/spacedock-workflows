@@ -1451,7 +1451,7 @@ ensure_initial_closeout_head() {
     state_name="closeout_pr_prepared"
     fail_once seed-push
     git -C "$repo_root" send-pack --force-with-lease="${remote_ref}:" "$closeout_push_destination" \
-      "${deterministic_head}:${remote_ref}" >/dev/null || push_rc=$?
+      "refs/heads/${deterministic_head}:${remote_ref}" >/dev/null || push_rc=$?
     if [ "$push_rc" -ne 0 ]; then
       prompt_captain closeout-checkpoint-conflict \
         "deterministic closeout seed could not be published atomically; prepared checkpoint and exact local seed are retained for retry"
@@ -1695,7 +1695,7 @@ PY
     fail_once terminal-push
     if [ "$pr_provider" = gh ]; then
       git -C "$repo_root" send-pack --force-with-lease="refs/heads/${deterministic_head}:${closeout_pr_remote_oid}" \
-        "$closeout_push_destination" "${deterministic_head}:refs/heads/${deterministic_head}" >/dev/null || push_rc=$?
+        "$closeout_push_destination" "refs/heads/${deterministic_head}:refs/heads/${deterministic_head}" >/dev/null || push_rc=$?
       if [ "$push_rc" -ne 0 ]; then
         state_name="closeout_pr_awaiting_merge"
         prompt_captain closeout-checkpoint-conflict \

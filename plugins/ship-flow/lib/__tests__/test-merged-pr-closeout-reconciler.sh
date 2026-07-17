@@ -3445,6 +3445,85 @@ run_feedback_r12_b1_tag_dwim_case() {
   assert_feedback_r5_count 'R12-B1 OPEN replay under tag collision performs no publication' '^(seed|terminal)-push ' "$git_log" 0
 }
 
+# R12-B1 was closed at the four bare-resolution READ sites (rev-parse/cat-file/
+# show/archive). FO triage folded in the two remaining SRC sites in the
+# `git send-pack` refspecs `<src>:<dst>` (ensure_initial_closeout_head's seed
+# push and build_optional_terminal_head's terminal force-with-lease push),
+# where `<src>` was still a bare `${deterministic_head}`. Unlike the READ
+# sites (which silently DWIM to a same-name tag), git's push/send-pack SRC
+# resolution fails the ambiguity closed ("src refspec ... matches more than
+# one") -- so the pre-fix defect is a spurious captain-prompt failure under a
+# colliding tag, not silent misdirection. This case proves the fully-qualified
+# fix removes that ambiguity at both send-pack call sites: the push succeeds
+# and the exact branch OID (never the tag OID) lands on the remote.
+run_feedback_r12_b1_send_pack_src_case() {
+  local setup origin repo provider deterministic_head gh_bin git_bin registry provider_log git_log bundle_log
+  local temp_root real_git real_mktemp tag_oid seed_oid remote_seed_oid terminal_oid remote_terminal_oid rc awaiting_out terminal_out
+
+  setup="$(prepare_feedback_r3_b1_main_only_clone feedback-r12-b1-send-pack-src)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  deterministic_head="$(feedback_r5_deterministic_head)"
+  gh_bin="$TMP_DIR/feedback-r12-b1-sp-gh-bin"; git_bin="$TMP_DIR/feedback-r12-b1-sp-git-bin"
+  registry="$TMP_DIR/feedback-r12-b1-sp.registry"; provider_log="$TMP_DIR/feedback-r12-b1-sp-provider.log"
+  git_log="$TMP_DIR/feedback-r12-b1-sp-git.log"; bundle_log="$TMP_DIR/feedback-r12-b1-sp-bundle.log"
+  temp_root="$TMP_DIR/feedback-r12-b1-sp-tmp"
+  awaiting_out="$TMP_DIR/feedback-r12-b1-sp-awaiting.out"; terminal_out="$TMP_DIR/feedback-r12-b1-sp-terminal.out"
+  mkdir -p "$gh_bin" "$git_bin"; : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  write_feedback_r5_b1_gh "$gh_bin/gh"; write_feedback_r6_git_wrapper "$git_bin/git"
+  write_feedback_r6_mktemp_wrapper "$git_bin/mktemp"; prepare_feedback_r6_temp_root "$temp_root"
+  real_git="$(command -v git)"; real_mktemp="$(command -v mktemp)"
+
+  # Same-name tag with a DIFFERENT OID than the (not-yet-created) deterministic
+  # closeout branch, present in $repo_root before the branch ever exists.
+  tag_oid="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" tag "$deterministic_head" "$tag_oid"
+
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" SHIP_FLOW_CLOSEOUT_FAILPOINT=after-awaiting \
+    run_helper_with_path "$repo" "$awaiting_out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  assert_exit 'R12-B1 send-pack SRC initial-head run reaches the injected awaiting checkpoint' 1 "$rc"
+  # A pre-fix ambiguous-refspec push failure surfaces as the *push* detail
+  # message, not this injected-stop detail -- so this line only holds once the
+  # send-pack SRC actually succeeded under the colliding tag.
+  assert_contains 'R12-B1 send-pack SRC initial-head push succeeded (reached the injected stop, not a push failure)' \
+    '^detail=injected failure after awaiting receipt checkpoint$' "$awaiting_out"
+  assert_feedback_r5_count 'R12-B1 send-pack SRC initial-head run invokes exactly one seed push' '^seed-push ' "$git_log" 1
+  seed_oid="$(git -C "$repo" rev-parse "refs/heads/${deterministic_head}")"
+  remote_seed_oid="$(git -C "$origin" rev-parse "refs/heads/${deterministic_head}" 2>/dev/null || true)"
+  if [ -n "$remote_seed_oid" ] && [ "$seed_oid" = "$remote_seed_oid" ] && [ "$seed_oid" != "$tag_oid" ]; then
+    record_pass 'R12-B1 initial-head send-pack publishes the exact branch OID, never the colliding tag OID'
+  else
+    record_fail 'R12-B1 initial-head send-pack publishes the exact branch OID, never the colliding tag OID'
+  fi
+
+  : >"$provider_log"; : >"$git_log"; : >"$bundle_log"
+  rc="$(TMPDIR="$temp_root" SHIP_FLOW_R5_PROVIDER_FILE="$provider" SHIP_FLOW_R5_REGISTRY="$registry" \
+    SHIP_FLOW_R5_LOG="$provider_log" SHIP_FLOW_R5_ORIGIN="$origin" SHIP_FLOW_R6_REAL_GIT="$real_git" \
+    SHIP_FLOW_R6_GIT_LOG="$git_log" SHIP_FLOW_R6_REAL_MKTEMP="$real_mktemp" SHIP_FLOW_R6_TEMP_ROOT="$temp_root" \
+    SHIP_FLOW_CLOSEOUT_BUNDLE_LOG="$bundle_log" run_helper_with_path "$repo" \
+      "$terminal_out" "$git_bin:$gh_bin:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --closeout-mode pull-request)"
+  if [ "$rc" != 0 ]; then sed 's/^/    r12-b1-send-pack-src-terminal: /' "$terminal_out"; fi
+  assert_exit 'R12-B1 send-pack SRC terminal-apply run completes to one bound closeout PR' 0 "$rc"
+  assert_feedback_r5_count 'R12-B1 send-pack SRC terminal-apply run invokes exactly one terminal push' '^terminal-push ' "$git_log" 1
+  terminal_oid="$(git -C "$repo" rev-parse "refs/heads/${deterministic_head}")"
+  remote_terminal_oid="$(git -C "$origin" rev-parse "refs/heads/${deterministic_head}" 2>/dev/null || true)"
+  if [ -n "$remote_terminal_oid" ] && [ "$terminal_oid" = "$remote_terminal_oid" ] && \
+     [ "$terminal_oid" != "$tag_oid" ] && [ "$terminal_oid" != "$seed_oid" ]; then
+    record_pass 'R12-B1 terminal-apply send-pack publishes the exact branch OID, never the colliding tag OID'
+  else
+    record_fail 'R12-B1 terminal-apply send-pack publishes the exact branch OID, never the colliding tag OID'
+  fi
+  if [ "$(git -C "$repo" rev-parse "refs/tags/${deterministic_head}")" = "$tag_oid" ]; then
+    record_pass 'R12-B1 send-pack SRC case leaves the colliding tag untouched throughout'
+  else
+    record_fail 'R12-B1 send-pack SRC case leaves the colliding tag untouched throughout'
+  fi
+}
+
 run_feedback_r12_b2_ancestry_case() {
   local setup origin repo provider deterministic_head gh_bin git_bin registry provider_log git_log bundle_log
   local temp_root real_git real_mktemp receipt relative awaiting_oid terminal_oid rc
@@ -4708,10 +4787,12 @@ else
   if [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r12-b1-b2-w1 ]; then
     case "${SHIP_FLOW_R12_ONLY:-all}" in
       tag-dwim) run_feedback_r12_b1_tag_dwim_case ;;
+      send-pack-src) run_feedback_r12_b1_send_pack_src_case ;;
       ancestry) run_feedback_r12_b2_ancestry_case ;;
       validator-root) run_feedback_r12_w1_validator_root_case ;;
       all)
         run_feedback_r12_b1_tag_dwim_case
+        run_feedback_r12_b1_send_pack_src_case
         run_feedback_r12_b2_ancestry_case
         run_feedback_r12_w1_validator_root_case
         ;;
