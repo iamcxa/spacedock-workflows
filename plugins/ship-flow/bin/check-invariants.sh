@@ -1336,53 +1336,143 @@ _frontmatter_status_at_rev_path() {
   '
 }
 
-# Returns 0 (true) when the entity at <rev>:<path> has a stage-artifact-links
-# BODY TABLE but NO stage_outputs frontmatter — the shape-confirm.sh format.
-# On such an entity advance-stage.sh / render-stage-links are DESTRUCTIVE (they
-# rebuild the body table FROM stage_outputs, nuking the populated table), so a
-# manual status edit is the SAFE path and is exempt from C14's signature
-# requirement. Once an entity carries stage_outputs, advance-stage.sh is safe
-# and the requirement applies. Principle 15 amendment — #117 dogfood finding.
-_entity_bodytable_no_stage_outputs() {
-  local rev="$1" path="$2" content
-  content="$( { git show "${rev}:${path}" 2>/dev/null || true; } )"
-  # NOTE: no `printf ... | grep -q` / `... | awk ... | grep -q` pipes here.
-  # Under `set -o pipefail`, a downstream reader (grep -q) that matches and
-  # exits early can SIGPIPE an upstream writer still blocked on a full pipe
-  # (content > the kernel pipe-buffer size, ~64KB) before the writer has
-  # flushed the rest of `content`. That non-zero writer exit propagates
-  # through pipefail and was silently misread as "no match" / "no
-  # stage_outputs" depending on direction — losing legitimate exemptions on
-  # large entities, or wrongly granting them. `case` does pure in-process
-  # string matching (no subprocess, no pipe) and the awk step is fed via a
-  # here-string (the shell writes to a temp fd fully before awk ever reads,
-  # and its output is captured by command substitution, not piped into
-  # another early-exiting reader) — neither path can SIGPIPE.
-  case "$content" in
-    *'<!-- section:stage-artifact-links -->'*) ;;
-    *) return 1 ;;
-  esac
-  local has_stage_outputs
-  has_stage_outputs="$(awk '
-      BEGIN{d=0}
-      /^---[[:space:]]*$/ {d++; next}
-      d==1 && /^stage_outputs:[[:space:]]*$/ {print "y"; exit}
-      d>=2 {exit}
-    ' <<<"$content")"
-  if [ "$has_stage_outputs" = "y" ]; then
-    return 1   # has stage_outputs → advance-stage.sh is safe → NOT exempt
-  fi
-  return 0     # table present, no stage_outputs → destructive case → exempt
+# Returns 0 when <before-rev>:<path> -> <after-status> is either the next stage
+# declared by the owning workflow README or that stage's declared feedback edge.
+_workflow_transition_allowed_at_rev() {
+  local before_rev="$1" path="$2" before_status="$3" after_status="$4"
+  local workflow_relative workflow_slug workflow_readme content
+  workflow_relative="${path#docs/}"
+  [ "$workflow_relative" != "$path" ] || return 1
+  workflow_slug="${workflow_relative%%/*}"
+  [ -n "$workflow_slug" ] || return 1
+  workflow_readme="docs/${workflow_slug}/README.md"
+  content="$( { git show "${before_rev}:${workflow_readme}" 2>/dev/null || true; } )"
+  [ -n "$content" ] || return 1
+
+  awk -v before="$before_status" -v after="$after_status" '
+    BEGIN { frontmatter = 0; in_stages = 0; in_states = 0; stage_count = 0; current_stage = "" }
+    /^---[[:space:]]*$/ {
+      frontmatter++
+      if (frontmatter >= 2) exit
+      next
+    }
+    frontmatter != 1 { next }
+    /^stages:[[:space:]]*$/ { in_stages = 1; in_states = 0; next }
+    in_stages && /^[^[:space:]#][^:]*:[[:space:]]*/ {
+      in_stages = 0
+      in_states = 0
+      current_stage = ""
+      next
+    }
+    !in_stages { next }
+    /^  states:[[:space:]]*$/ { in_states = 1; current_stage = ""; next }
+    in_states && /^  [^[:space:]#][^:]*:[[:space:]]*/ {
+      in_states = 0
+      current_stage = ""
+      next
+    }
+    !in_states { next }
+    /^    - name:[[:space:]]*/ {
+      stage = $0
+      sub(/^    - name:[[:space:]]*/, "", stage)
+      sub(/[[:space:]\r]+$/, "", stage)
+      gsub(/^["\047]|["\047]$/, "", stage)
+      stages[++stage_count] = stage
+      current_stage = stage
+      next
+    }
+    current_stage != "" && /^      feedback-to:[[:space:]]*/ {
+      target = $0
+      sub(/^      feedback-to:[[:space:]]*/, "", target)
+      sub(/[[:space:]\r]+$/, "", target)
+      gsub(/^["\047]|["\047]$/, "", target)
+      feedback[current_stage] = target
+    }
+    END {
+      for (i = 1; i < stage_count; i++) {
+        if (stages[i] == before && stages[i + 1] == after) exit 0
+      }
+      if (feedback[before] == after) exit 0
+      exit 1
+    }
+  ' <<<"$content"
 }
 
-# Returns 0 when <sha> carries the canonical First Officer stage-entry receipt
-# and every entity status mutated by that commit entered the receipt's stage.
+# Returns the declared feedback-to target for <stage>, read from
+# <before-rev>'s owning workflow README. Prints the target and exits 0 when
+# <stage> declares one; exits 1 (silent) otherwise.
+# Dependency of _commit_has_fo_feedback_stage_receipt. _workflow_transition_
+# allowed_at_rev's shared gate accepts EITHER a next-stage edge OR a
+# feedback-to edge — it cannot tell a feedback: receipt apart from a
+# dispatch/advance receipt riding the same forward edge. This helper
+# re-resolves the SPECIFIC feedback-to edge for the receipt's own
+# rejected_stage so a feedback: receipt can be bound to exactly that edge,
+# never a merely-legal forward edge (Principle 15 feedback-to-edge bind).
+_workflow_feedback_to_target_at_rev() {
+  local before_rev="$1" path="$2" stage="$3"
+  local workflow_relative workflow_slug workflow_readme content
+  workflow_relative="${path#docs/}"
+  [ "$workflow_relative" != "$path" ] || return 1
+  workflow_slug="${workflow_relative%%/*}"
+  [ -n "$workflow_slug" ] || return 1
+  workflow_readme="docs/${workflow_slug}/README.md"
+  content="$( { git show "${before_rev}:${workflow_readme}" 2>/dev/null || true; } )"
+  [ -n "$content" ] || return 1
+
+  awk -v stage="$stage" '
+    BEGIN { frontmatter = 0; in_stages = 0; in_states = 0; current_stage = "" }
+    /^---[[:space:]]*$/ {
+      frontmatter++
+      if (frontmatter >= 2) exit
+      next
+    }
+    frontmatter != 1 { next }
+    /^stages:[[:space:]]*$/ { in_stages = 1; in_states = 0; next }
+    in_stages && /^[^[:space:]#][^:]*:[[:space:]]*/ {
+      in_stages = 0
+      in_states = 0
+      current_stage = ""
+      next
+    }
+    !in_stages { next }
+    /^  states:[[:space:]]*$/ { in_states = 1; current_stage = ""; next }
+    in_states && /^  [^[:space:]#][^:]*:[[:space:]]*/ {
+      in_states = 0
+      current_stage = ""
+      next
+    }
+    !in_states { next }
+    /^    - name:[[:space:]]*/ {
+      name = $0
+      sub(/^    - name:[[:space:]]*/, "", name)
+      sub(/[[:space:]\r]+$/, "", name)
+      gsub(/^["\047]|["\047]$/, "", name)
+      current_stage = name
+      next
+    }
+    current_stage != "" && /^      feedback-to:[[:space:]]*/ {
+      target = $0
+      sub(/^      feedback-to:[[:space:]]*/, "", target)
+      sub(/[[:space:]\r]+$/, "", target)
+      gsub(/^["\047]|["\047]$/, "", target)
+      if (current_stage == stage) found_target = target
+      next
+    }
+    END {
+      if (length(found_target) > 0) { print found_target; exit 0 }
+      exit 1
+    }
+  ' <<<"$content"
+}
+
+# Returns 0 when <sha> carries the canonical First Officer stage-entry receipt,
+# every entity status mutated by that commit entered the receipt's stage.
+# The caller validates workflow edges for every receipt kind before this check.
 # Match the subject only: body text must not be able to manufacture the receipt.
 _commit_has_fo_stage_entry_receipt() {
-  local sha="$1"
-  shift
-  local subject entry_summary entry_stage path after_status
-  subject="$(git log -1 --format=%s "$sha")"
+  local subject="$1" sha="$2"
+  shift 2
+  local entry_summary entry_stage path after_status
   if [[ ! "$subject" =~ ^(dispatch|advance):[[:space:]]+(.+)[[:space:]]+entering[[:space:]]+([a-z][a-z0-9-]*)$ ]]; then
     return 1
   fi
@@ -1398,10 +1488,8 @@ _commit_has_fo_stage_entry_receipt() {
   return 0
 }
 
-# Returns 0 when one entity's after-state contains exactly one canonical
-# Feedback Cycles record matching the subject-bound rejected stage, cycle, and
-# feedback target. Additional fields bind the captain decision and verify
-# evidence that authorized the route back; prose elsewhere cannot substitute.
+# Returns 0 when <value> is a valid UTC RFC3339 timestamp (YYYY-MM-DDTHH:MM:SSZ,
+# zero-padded, exact round-trip). Dependency of _entity_has_fo_feedback_cycle_record.
 _valid_utc_rfc3339_timestamp() {
   python3 - "$1" <<'PY'
 from datetime import datetime
@@ -1416,13 +1504,59 @@ raise SystemExit(0 if parsed.strftime("%Y-%m-%dT%H:%M:%SZ") == value else 1)
 PY
 }
 
-_entity_has_fo_feedback_cycle_record() {
-  local rev="$1" path="$2" expected_cycle="$3" expected_rejected="$4" expected_target="$5" content matched_routed
+# Shared awk fragment: fence-state tracking for ``` and ~~~ code fences
+# (0-3 leading spaces tolerated, CommonMark-style — close requires the same
+# fence char and length >= the opening length). While fenced, a line is
+# inert to every rule that follows it in the same awk program: it can never
+# start, continue, or close a ### Feedback Cycles record. Indented (4-space/
+# tab) example blocks need no separate rule — every heading/field regex
+# below is column-anchored (`^### `, `^- cycle:`, `^  rejected_stage:`, …),
+# so a 4-space-shifted copy already fails to match on indentation alone.
+# Both _entity_has_fo_feedback_cycle_record and
+# _feedback_cycle_well_formed_records_at_rev embed this verbatim so a
+# fenced/example "### Feedback Cycles" block is ignored identically on the
+# commit under scrutiny and on its parent (Principle 15 fence-safety bind).
+# shellcheck disable=SC2016 # literal awk source held for reuse across two callers; intentionally unexpanded
+_FEEDBACK_CYCLES_FENCE_AWK='
+    function strip_lead3(s,   t) {
+      t = s
+      sub(/^ {0,3}/, "", t)
+      return t
+    }
+    !fence_open && (substr(strip_lead3($0), 1, 3) == "```" || substr(strip_lead3($0), 1, 3) == "~~~") {
+      fence_line = strip_lead3($0)
+      fence_char = substr(fence_line, 1, 1)
+      if (fence_char == "`") { match(fence_line, /^`+/) } else { match(fence_line, /^~+/) }
+      fence_open = 1
+      fence_len = RLENGTH
+      next
+    }
+    fence_open {
+      fence_line = strip_lead3($0)
+      if (substr(fence_line, 1, 1) == fence_char) {
+        if (fence_char == "`") { match(fence_line, /^`+/) } else { match(fence_line, /^~+/) }
+        fence_rest = substr(fence_line, RLENGTH + 1)
+        gsub(/[[:space:]]+$/, "", fence_rest)
+        if (RLENGTH >= fence_len && fence_rest == "") { fence_open = 0 }
+      }
+      next
+    }
+'
+
+# Returns every well-formed ### Feedback Cycles record found at <rev>:<path>,
+# one per line as cycle<TAB>rejected_stage<TAB>feedback_to<TAB>
+# captain_decision<TAB>routed_at<TAB>verify_artifact. Fence-aware (shares
+# _FEEDBACK_CYCLES_FENCE_AWK). Accumulates across every section found rather
+# than requiring exactly one — that single-section strictness applies only
+# to the commit under scrutiny (_entity_has_fo_feedback_cycle_record), not
+# to already-settled parent history being read for a freshness/monotonic
+# bound. Dependency of _entity_has_fo_feedback_cycle_record's P1-#2 fix
+# (stale cycle-record replay / monotonic cycle numbering).
+_feedback_cycle_well_formed_records_at_rev() {
+  local rev="$1" path="$2" content
   content="$( { git show "${rev}:${path}" 2>/dev/null || true; } )"
-  matched_routed="$(awk \
-    -v expected_cycle="$expected_cycle" \
-    -v expected_rejected="$expected_rejected" \
-    -v expected_target="$expected_target" '
+  [ -n "$content" ] || return 0
+  awk "$_FEEDBACK_CYCLES_FENCE_AWK"'
     function trim(value) {
       sub(/^[[:space:]]+/, "", value)
       sub(/[[:space:]]+$/, "", value)
@@ -1440,13 +1574,125 @@ _entity_has_fo_feedback_cycle_record() {
       artifact_sha = artifact_parts[2]
       if (cycle_count == 1 && rejected_count == 1 && target_count == 1 &&
           decision_count == 1 && routed_count == 1 && artifact_count == 1 &&
-          cycle == expected_cycle && rejected == expected_rejected &&
+          cycle ~ /^[1-9][0-9]{0,8}$/ &&
+          decision == "fix" &&
+          routed ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ &&
+          artifact_count_parts == 2 && artifact_parts[1] == rejected ".md" &&
+          artifact_sha ~ /^[0-9a-f]+$/ && length(artifact_sha) >= 7 && length(artifact_sha) <= 40) {
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n", cycle, rejected, target, decision, routed, artifact
+      }
+      reset_record()
+    }
+    $0 == "### Feedback Cycles" {
+      finish_record()
+      in_section = 1
+      next
+    }
+    in_section && substr($0, 1, 2) == "##" {
+      finish_record()
+      in_section = 0
+      next
+    }
+    in_section && /^- cycle:[[:space:]]*/ {
+      finish_record()
+      active = 1
+      cycle_count = 1
+      cycle = $0
+      sub(/^- cycle:[[:space:]]*/, "", cycle)
+      cycle = trim(cycle)
+      next
+    }
+    in_section && active && /^  rejected_stage:[[:space:]]*/ {
+      rejected_count++
+      rejected = $0
+      sub(/^  rejected_stage:[[:space:]]*/, "", rejected)
+      rejected = trim(rejected)
+      next
+    }
+    in_section && active && /^  feedback_to:[[:space:]]*/ {
+      target_count++
+      target = $0
+      sub(/^  feedback_to:[[:space:]]*/, "", target)
+      target = trim(target)
+      next
+    }
+    in_section && active && /^  captain_decision:[[:space:]]*/ {
+      decision_count++
+      decision = $0
+      sub(/^  captain_decision:[[:space:]]*/, "", decision)
+      decision = trim(decision)
+      next
+    }
+    in_section && active && /^  routed_at:[[:space:]]*/ {
+      routed_count++
+      routed = $0
+      sub(/^  routed_at:[[:space:]]*/, "", routed)
+      routed = trim(routed)
+      next
+    }
+    in_section && active && /^  verify_artifact:[[:space:]]*/ {
+      artifact_count++
+      artifact = $0
+      sub(/^  verify_artifact:[[:space:]]*/, "", artifact)
+      artifact = trim(artifact)
+      next
+    }
+    END { finish_record() }
+  ' <<<"$content"
+}
+
+# Returns 0 when one entity's after-state contains exactly one canonical
+# Feedback Cycles record matching the subject-bound rejected stage, cycle, and
+# feedback target. Additional fields bind the captain decision and verify
+# evidence that authorized the route back; prose elsewhere cannot substitute.
+# Fence-aware (shares _FEEDBACK_CYCLES_FENCE_AWK) — a fenced or indented
+# example block can never manufacture this bind (Principle 15 fence-safety).
+# Also binds freshness and monotonic cycle numbering against the PARENT
+# revision via _feedback_cycle_well_formed_records_at_rev: the matching
+# record must be newly introduced in THIS commit (absent from the parent —
+# closes stale cycle-record replay) and its cycle must exceed every prior
+# cycle already recorded for this entity (closes non-monotonic replay).
+# cycle is compared as a forced string ((cycle "") == (expected_cycle "")),
+# never a coerced number, and is bounded to <=9 canonical decimal digits —
+# safely inside both IEEE-754 double integer precision and the POSIX-
+# guaranteed minimum 32-bit bash arithmetic range used for the monotonic
+# `-gt` comparison below (Principle 15 bounded-cycle bind).
+_entity_has_fo_feedback_cycle_record() {
+  local rev="$1" path="$2" expected_cycle="$3" expected_rejected="$4" expected_target="$5"
+  local content matched_signature matched_routed
+  [[ "$expected_cycle" =~ ^[1-9][0-9]{0,8}$ ]] || return 1
+
+  content="$( { git show "${rev}:${path}" 2>/dev/null || true; } )"
+  matched_signature="$(awk \
+    -v expected_cycle="$expected_cycle" \
+    -v expected_rejected="$expected_rejected" \
+    -v expected_target="$expected_target" \
+    "$_FEEDBACK_CYCLES_FENCE_AWK"'
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function reset_record() {
+      active = 0
+      cycle = rejected = target = decision = routed = artifact = ""
+      cycle_count = rejected_count = target_count = 0
+      decision_count = routed_count = artifact_count = 0
+    }
+    function finish_record(artifact_parts, artifact_count_parts, artifact_sha) {
+      if (!active) return
+      artifact_count_parts = split(artifact, artifact_parts, "@")
+      artifact_sha = artifact_parts[2]
+      if (cycle_count == 1 && rejected_count == 1 && target_count == 1 &&
+          decision_count == 1 && routed_count == 1 && artifact_count == 1 &&
+          cycle ~ /^[1-9][0-9]{0,8}$/ &&
+          ((cycle "") == (expected_cycle "")) && rejected == expected_rejected &&
           target == expected_target && decision == "fix" &&
           routed ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ &&
           artifact_count_parts == 2 && artifact_parts[1] == rejected ".md" &&
           artifact_sha ~ /^[0-9a-f]+$/ && length(artifact_sha) >= 7 && length(artifact_sha) <= 40) {
         matches++
-        matching_routed = routed
+        matching_signature = cycle "\t" rejected "\t" target "\t" decision "\t" routed "\t" artifact
       }
       reset_record()
     }
@@ -1508,24 +1754,54 @@ _entity_has_fo_feedback_cycle_record() {
     END {
       finish_record()
       if (sections == 1 && matches == 1) {
-        print matching_routed
+        print matching_signature
         exit 0
       }
       exit 1
     }
   ' <<<"$content")" || return 1
-  _valid_utc_rfc3339_timestamp "$matched_routed"
+
+  IFS=$'\t' read -r _ _ _ _ matched_routed _ <<<"$matched_signature"
+  _valid_utc_rfc3339_timestamp "$matched_routed" || return 1
+
+  # P1-#2 fix: freshness (stale replay) + monotonic cycle numbering, bound
+  # against the PARENT revision's own well-formed Feedback Cycles records.
+  local parent_records line p_cycle max_parent_cycle=0
+  parent_records="$(_feedback_cycle_well_formed_records_at_rev "${rev}^" "$path")"
+  if [ -n "$parent_records" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      if [ "$line" = "$matched_signature" ]; then
+        return 1 # identical record already present in parent — stale replay
+      fi
+      p_cycle="${line%%$'\t'*}"
+      if [[ "$p_cycle" =~ ^[1-9][0-9]{0,8}$ ]] && [ "$p_cycle" -gt "$max_parent_cycle" ]; then
+        max_parent_cycle="$p_cycle"
+      fi
+    done <<<"$parent_records"
+  fi
+  [ "$expected_cycle" -gt "$max_parent_cycle" ] || return 1
+
+  return 0
 }
 
 # Returns 0 when <sha> carries a canonical subject-only feedback-stage receipt
 # and every mutated entity agrees on parent stage, resulting status, and body
-# Feedback Cycles evidence.
+# Feedback Cycles evidence. The caller validates workflow edges before this
+# check; this function additionally binds cycle, captain decision, and verify
+# evidence so a forged subject over a legal edge still cannot manufacture the
+# receipt (Principle 15 feedback-stage contract). It also re-resolves the
+# rejected_stage's OWN declared feedback-to target and requires target_stage
+# to match it exactly — the shared graph gate at the call site accepts
+# EITHER a next-stage edge or a feedback-to edge, so without this bind a
+# feedback: receipt could ride a merely-legal forward edge instead of the
+# specific feedback-to edge it claims (Principle 15 feedback-to-edge bind).
 _commit_has_fo_feedback_stage_receipt() {
   local sha="$1"
   shift
   local subject feedback_summary rejected_stage cycle target_stage path before_status after_status
   subject="$(git log -1 --format=%s "$sha")"
-  if [[ ! "$subject" =~ ^feedback:[[:space:]]+(.+)[[:space:]]+([a-z][a-z0-9-]*)[[:space:]]+cycle[[:space:]]+([1-9][0-9]*)[[:space:]]+to[[:space:]]+([a-z][a-z0-9-]*)$ ]]; then
+  if [[ ! "$subject" =~ ^feedback:[[:space:]]+(.+)[[:space:]]+([a-z][a-z0-9-]*)[[:space:]]+cycle[[:space:]]+([1-9][0-9]{0,8})[[:space:]]+to[[:space:]]+([a-z][a-z0-9-]*)$ ]]; then
     return 1
   fi
   feedback_summary="${BASH_REMATCH[1]}"
@@ -1535,11 +1811,14 @@ _commit_has_fo_feedback_stage_receipt() {
   [[ "$feedback_summary" =~ [^[:space:]] ]] || return 1
   [ "$#" -gt 0 ] || return 1
 
+  local declared_target
   for path in "$@"; do
     before_status="$(_frontmatter_status_at_rev_path "${sha}^" "$path")"
     after_status="$(_frontmatter_status_at_rev_path "$sha" "$path")"
     [ "$before_status" = "$rejected_stage" ] || return 1
     [ "$after_status" = "$target_stage" ] || return 1
+    declared_target="$(_workflow_feedback_to_target_at_rev "${sha}^" "$path" "$rejected_stage")" || return 1
+    [ "$declared_target" = "$target_stage" ] || return 1
     _entity_has_fo_feedback_cycle_record \
       "$sha" "$path" "$cycle" "$rejected_stage" "$target_stage" || return 1
   done
@@ -1550,10 +1829,13 @@ _commit_has_fo_feedback_stage_receipt() {
 # ----------------------------------------------------------------------
 # Scans commits on the current branch ahead of merge-base with origin/main.
 # For each commit modifying an entity index.md (folder layout) or flat
-# <id>-<slug>.md, a frontmatter status change must carry either the completion
-# receipt injected by advance-stage.sh or the canonical subject-line receipt
-# written by the First Officer when entering a stage. FO receipts are accepted
-# only when every mutated entity's resulting status matches the named stage.
+# <id>-<slug>.md, a frontmatter status change must carry the canonical
+# subject-line receipt written by the First Officer when entering a stage.
+# Completion receipts are status-idempotent and therefore never authorize a
+# status mutation. FO receipts are accepted only when every mutated entity's
+# resulting status matches the named stage and the before->after pair is a
+# declared next-stage or feedback edge. Historical body tables are diagnostic
+# only and never authorize a status mutation without a Contract 1 receipt.
 #
 # Source pitch: enforce-advance-stage-primitive-only (sharp 2026-05-15).
 # Source evidence: pitch-106 commit 898d006c — direct YAML edit bypassed
@@ -1562,8 +1844,9 @@ _commit_has_fo_feedback_stage_receipt() {
 # Sibling: plugins/ship-flow/INVARIANTS.md Principle 15.
 check_entity_status_via_advance_stage_only() {
   local entity_status_paths=(
-    ':(glob)docs/*/*/index.md'
-    ':(glob)docs/*/*-*.md'
+    ':(top,glob)docs/*/*/index.md'
+    ':(top,glob)docs/*/*.md'
+    ':(top,exclude,glob)docs/*/README.md'
   )
 
   # Bound scan to current-branch commits only (merge-base..HEAD).
@@ -1583,7 +1866,10 @@ check_entity_status_via_advance_stage_only() {
 
   local violations=0
   local commits
-  commits="$(git log --format=%H "${merge_base}..HEAD" -- "${entity_status_paths[@]}" 2>/dev/null)"
+  if ! commits="$(git log --format=%H "${merge_base}..HEAD" -- "${entity_status_paths[@]}" 2>/dev/null)"; then
+    echo "FAIL C14 entity-status-via-advance-stage-only: could not enumerate branch entity commits." >&2
+    return 1
+  fi
 
   local sha
   for sha in $commits; do
@@ -1591,8 +1877,13 @@ check_entity_status_via_advance_stage_only() {
     # Body-level `status:` examples are ignored; pure additions have no parent
     # frontmatter status and are exempt.
     local has_status_mutation=0
-    local path before_status after_status
+    local path before_status after_status changed_paths
     local mutated_paths=()
+    if ! changed_paths="$(git diff-tree --no-commit-id --name-only -r "$sha" -- "${entity_status_paths[@]}" 2>/dev/null)"; then
+      violations=$((violations + 1))
+      echo "FAIL C14 entity-status-via-advance-stage-only: could not enumerate entity paths for commit ${sha:0:8}." >&2
+      continue
+    fi
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       before_status="$(_frontmatter_status_at_rev_path "${sha}^" "$path")"
@@ -1601,60 +1892,64 @@ check_entity_status_via_advance_stage_only() {
         has_status_mutation=1
         mutated_paths+=("$path")
       fi
-    done < <(git diff-tree --no-commit-id --name-only -r "$sha" -- "${entity_status_paths[@]}" 2>/dev/null || true)
+    done <<<"$changed_paths"
 
     if [ "$has_status_mutation" = "0" ]; then
       continue
     fi
 
-    # Body-table exemption (Principle 15 amendment, #117 dogfood finding):
-    # shape-confirm.sh creates entities with a stage-artifact-links body table
-    # and no stage_outputs frontmatter; advance-stage.sh is destructive on them,
-    # so a manual status edit is the SAFE path and is exempt. The signature
-    # requirement still applies once the entity carries stage_outputs.
-    #
-    # FIX 1 (per-path): check ALL mutated paths — only skip the commit when
-    # EVERY mutated path is exempt.  A single non-exempt path falls through to
-    # the signature check, preventing the break-and-single-representative bypass.
-    #
-    # FIX 2 (parent-state): pass ${sha}^ (parent) so the helper sees the entity
-    # BEFORE the commit.  A commit that BOTH strips stage_outputs AND bumps
-    # status must NOT be read as exempt just because the after-state lacks
-    # stage_outputs.
-    local all_exempt=1 mp
-    for mp in "${mutated_paths[@]}"; do
-      if ! _entity_bodytable_no_stage_outputs "${sha}^" "$mp"; then
-        all_exempt=0
-        break
+    # Transition legality is independent of receipt kind. Validate every path
+    # before diagnostics or FO subjects so a legal sibling path
+    # cannot hide an illegal one and no receipt can bless
+    # a skipped or undeclared backward transition.
+    local transition_path transition_before_status transition_after_status
+    local transition_graph_valid=1
+    for transition_path in "${mutated_paths[@]}"; do
+      transition_before_status="$(_frontmatter_status_at_rev_path "${sha}^" "$transition_path")"
+      transition_after_status="$(_frontmatter_status_at_rev_path "$sha" "$transition_path")"
+      if ! _workflow_transition_allowed_at_rev "${sha}^" "$transition_path" "$transition_before_status" "$transition_after_status"; then
+        transition_graph_valid=0
+        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} used undeclared transition ${transition_before_status}->${transition_after_status} for ${transition_path}." >&2
       fi
     done
-    [ "$all_exempt" = "1" ] && continue
-
-    # First Officer stage-entry receipt. Fresh dispatch and same-worker reuse
-    # use different canonical verbs, but both end in `entering <stage>`. Keep
-    # this path subject-only and bind the named stage to every after-state.
-    if _commit_has_fo_stage_entry_receipt "$sha" "${mutated_paths[@]}"; then
+    if [ "$transition_graph_valid" = "0" ]; then
+      violations=$((violations + 1))
       continue
     fi
 
-    # First Officer feedback-stage receipt. This path is subject-only and also
-    # requires parent stage, after-status target, and one matching Feedback
-    # Cycles body record on every mutated entity path.
-    if _commit_has_fo_feedback_stage_receipt "$sha" "${mutated_paths[@]}"; then
+    # Fetch and classify the subject after graph validation. Git lookup failure
+    # cannot manufacture authority, and FO grammar must satisfy the complete
+    # canonical receipt.
+    local subject
+    if ! subject="$(git log -1 --format=%s "$sha" 2>/dev/null)"; then
+      violations=$((violations + 1))
+      echo "FAIL C14 entity-status-via-advance-stage-only: could not read receipt subject for commit ${sha:0:8}." >&2
       continue
     fi
-
-    # Check commit message for advance-stage.sh signature.
-    local msg
-    msg="$(git log -1 --format=%B "$sha")"
-    case "$msg" in
-      *": advance status to "*) continue ;;
-      *)
+    case "$subject" in
+      dispatch:*|advance:*)
+        if _commit_has_fo_stage_entry_receipt "$subject" "$sha" "${mutated_paths[@]}"; then
+          continue
+        fi
         violations=$((violations + 1))
-        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} mutated entity status without a sanctioned stage-entry, feedback-stage, or advance-stage.sh receipt. See plugins/ship-flow/INVARIANTS.md#principle-15." >&2
-        echo "       commit msg head: $(echo "$msg" | head -1)" >&2
+        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} used malformed First Officer stage-entry grammar." >&2
+        echo "       commit msg head: $subject" >&2
+        continue
+        ;;
+      feedback:*)
+        if _commit_has_fo_feedback_stage_receipt "$sha" "${mutated_paths[@]}"; then
+          continue
+        fi
+        violations=$((violations + 1))
+        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} used malformed First Officer feedback-stage grammar." >&2
+        echo "       commit msg head: $subject" >&2
+        continue
         ;;
     esac
+
+    violations=$((violations + 1))
+    echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} mutated entity status without a canonical First Officer stage-entry receipt. See plugins/ship-flow/INVARIANTS.md#principle-15." >&2
+    echo "       commit msg head: $subject" >&2
   done
 
   if [ "$violations" -gt 0 ]; then
@@ -1662,6 +1957,47 @@ check_entity_status_via_advance_stage_only() {
   fi
   echo "OK C14 entity-status-via-advance-stage-only"
   return 0
+}
+
+check_frontmatter_stage_output_authority() {
+  local schema="$ROOT/plugins/ship-flow/references/entity-body-schema.yaml"
+  local renderer="$ROOT/plugins/ship-flow/lib/render-stage-links.sh"
+  local tmp entity before out err bin marker before_hash after_hash rc=0 fail=0
+  grep -q '^historical_stage_artifact_links:$' "$schema" || fail=1
+  ! grep -q '^stage_artifact_links:$' "$schema" || fail=1
+  grep -q '^    parsing: forbidden$' "$schema" || fail=1
+  grep -q '^    preservation: byte-for-byte$' "$schema" || fail=1
+  grep -q 'Sole machine authority for produced stage artifacts' "$schema" || fail=1
+  if [ "$fail" = 1 ]; then
+    echo "FAIL C14 frontmatter-stage-output-authority: schema/renderer owner drift." >&2
+    return 1
+  fi
+
+  tmp="$(mktemp -d)"; entity="$tmp/entity.md"; before="$tmp/before.md"
+  out="$tmp/out"; err="$tmp/err"; bin="$tmp/bin"; marker="$tmp/spacedock-called"
+  mkdir -p "$bin"
+  printf '%s\n' '---' 'status: shape' 'stage_outputs: {}' '---' 'body' > "$entity"
+  cp "$entity" "$before"
+  before_hash="$(cksum < "$entity")"
+  # shellcheck disable=SC2016 # literal script body
+  printf '%s\n' '#!/usr/bin/env bash' 'printf invoked > "$SPACEDOCK_MARKER"' > "$bin/spacedock"
+  chmod +x "$bin/spacedock"
+  ENTITY="$entity" SPACEDOCK_MARKER="$marker" PATH="$bin:$PATH" bash "$renderer" --entity="$entity" >"$out" 2>"$err" || rc=$?
+  after_hash="$(cksum < "$entity")"
+  if ! cmp -s "$before" "$entity" || [ "$before_hash" != "$after_hash" ]; then
+    echo "FAIL C14 frontmatter-stage-output-authority: renderer mutated entity." >&2
+    rm -rf "$tmp"; return 1
+  fi
+  if [ -e "$marker" ]; then
+    echo "FAIL C14 frontmatter-stage-output-authority: renderer invoked external spacedock." >&2
+    rm -rf "$tmp"; return 1
+  fi
+  if [ "$rc" != 0 ] || [ -s "$err" ] || ! cmp -s "$out" <(printf '| Stage | File |\n|-------|------|\n'); then
+    echo "FAIL C14 frontmatter-stage-output-authority: renderer stdout/stderr contract drift." >&2
+    rm -rf "$tmp"; return 1
+  fi
+  rm -rf "$tmp"
+  echo "OK C14 frontmatter-stage-output-authority"
 }
 
 check_stage_metrics_contract() {
@@ -2056,6 +2392,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     deferred-to-todo-footer) check_deferred_to_todo_footer; exit $? ;;
     fo-receipt-on-proceed) check_fo_receipt_on_proceed; exit $? ;;
     entity-status-via-advance-stage-only) check_entity_status_via_advance_stage_only; exit $? ;;
+    frontmatter-stage-output-authority) check_frontmatter_stage_output_authority; exit $? ;;
     stage-metrics-contract) check_stage_metrics_contract; exit $? ;;
     visible-surface-map-contract) check_visible_surface_map_contract; exit $? ;;
     artifact-verbosity) check_artifact_verbosity; exit $? ;;
@@ -2120,6 +2457,7 @@ check_fo_receipt_on_proceed || FAIL=1
 # C14: entity-status mutation must go through lib/advance-stage.sh
 # Source: pitch enforce-advance-stage-primitive-only (sharp 2026-05-15)
 check_entity_status_via_advance_stage_only || FAIL=1
+check_frontmatter_stage_output_authority || FAIL=1
 check_stage_metrics_contract || FAIL=1
 check_visible_surface_map_contract || FAIL=1
 # C15: Principle 8 stage-report verbosity caps (branch-scope grandfather)

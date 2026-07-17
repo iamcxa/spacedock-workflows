@@ -29,8 +29,9 @@ setup_fixture() {
 ---
 id: "test-fm"
 title: "Test entity"
-status: draft
 priority: P2
+status: draft
+stage_outputs: {}
 ---
 
 ### Problem
@@ -53,8 +54,18 @@ if grep -q '^status: plan$' test.md; then echo "OK DC-22b status updated to plan
 else echo "FAIL DC-22b status not updated"; FAIL=1; fi
 if grep -q '^priority: P2$' test.md; then echo "OK DC-22c other fields preserved"
 else echo "FAIL DC-22c priority lost"; FAIL=1; fi
+if awk '/^status: plan$/{getline a; getline b; exit !(a=="stage_outputs: {}" && b=="---")} END{if(!a)exit 1}' test.md; then
+  echo "OK DC-22d status writer preserves exact authority tail"
+else echo "FAIL DC-22d status writer malformed authority tail"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
+
+echo; echo "--- DC-22e: status update preserves an absent final LF and all other bytes ---"; TMP="$(mktemp -d)"
+printf '%s' $'---\nid: "no-lf"\nstatus: draft\nstage_outputs: {}\n---\nbody without final LF' > "$TMP/test.md"
+printf '%s' $'---\nid: "no-lf"\nstatus: plan\nstage_outputs: {}\n---\nbody without final LF' > "$TMP/expected.md"
+H="$(sha256_of "$TMP/test.md")"
+assert_exit 0 "bash '${LIB_DIR}/update-entity-status.sh' --entity='$TMP/test.md' --new-status=plan --if-hash='$H' --no-commit" "DC-22e no-final-LF update succeeds"
+if cmp -s "$TMP/expected.md" "$TMP/test.md"; then echo "OK DC-22f EOF convention and every non-status byte preserved"; else echo "FAIL DC-22f writer changed non-status or EOF bytes"; FAIL=1; fi; rm -rf "$TMP"
 
 echo
 echo "--- DC-23: update-entity-status stale hash → exit 6 ---"
@@ -102,15 +113,41 @@ echo
 echo "--- DC-26: register-stage-output appends stage_outputs.<stage> ---"
 TMP="$(setup_fixture)"
 pushd "$TMP" >/dev/null || exit 1
-mkdir -p stages && echo "spec content" > stages/shape.md
 H="$(sha256_of test.md)"
 assert_exit 0 \
-  "bash '${LIB_DIR}/register-stage-output.sh' --entity=test.md --stage=sharp --file=stages/shape.md --if-hash='$H' --no-commit" \
+  "bash '${LIB_DIR}/register-stage-output.sh' --entity=test.md --stage=shape --file=shape.md --if-hash='$H' --no-commit" \
   "DC-26a register-stage-output success"
-if grep -qE '^[[:space:]]*sharp:[[:space:]]*stages/shape\.md' test.md; then
-  echo "OK DC-26b stage_outputs.sharp entry present"
-else echo "FAIL DC-26b stage_outputs.sharp entry missing"; FAIL=1
+if awk '/^status: draft$/{getline a; getline b; getline c; exit !(a=="stage_outputs:" && b=="  shape: shape.md" && c=="---")} END{if(!a)exit 1}' test.md; then
+  echo "OK DC-26b exact empty map expands to canonical shape row"
+else echo "FAIL DC-26b canonical stage_outputs.shape missing"; FAIL=1
 fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-26c: both writers reject Contract-1/body-only input unchanged ---"
+TMP="$(mktemp -d)"
+cat > "$TMP/legacy.md" <<'EOF'
+---
+id: "legacy"
+status: draft
+---
+<!-- section:stage-artifact-links -->
+| Stage | File |
+| shape | [shape.md](shape.md) |
+EOF
+cp "$TMP/legacy.md" "$TMP/legacy-status.md"
+pushd "$TMP" >/dev/null || exit 1
+H="$(sha256_of legacy.md)"; BEFORE="$(sha256_of legacy.md)"
+assert_exit 10 \
+  "bash '${LIB_DIR}/register-stage-output.sh' --entity=legacy.md --stage=shape --file=shape.md --if-hash='$H' --no-commit" \
+  "DC-26c register rejects body-only entity"
+if [ "$(sha256_of legacy.md)" = "$BEFORE" ]; then echo "OK DC-26d register rejection preserves bytes"; else echo "FAIL DC-26d register changed body-only entity"; FAIL=1; fi
+H_STATUS="$(sha256_of legacy-status.md)"; BEFORE_STATUS="$H_STATUS"
+assert_exit 10 \
+  "bash '${LIB_DIR}/update-entity-status.sh' --entity=legacy-status.md --new-status=plan --if-hash='$H_STATUS' --no-commit" \
+  "DC-26e status update rejects body-only entity"
+if [ "$(sha256_of legacy-status.md)" = "$BEFORE_STATUS" ]; then echo "OK DC-26f status rejection preserves bytes"; else echo "FAIL DC-26f status changed body-only entity"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 

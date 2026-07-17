@@ -22,6 +22,7 @@ Run before any review work. Stop and SendMessage(FO) if any check fails.
 5. **Planner teammate**: verify `planner` teammate is reachable (SendMessage test). If unresponsive → use Rule A Fallback for canonical docs dispatch.
 6. **Density-aware skill load** (T3.4): read `answers_density` from entity frontmatter. `high` → auto-load framework skills per ship-runtime-detect Step R6; skip FO ask. `low|vacuum` → SendMessage(FO) with proposed skill list; wait for confirmation.
 7. **Canonical doc sync mod**: read `docs/ship-flow/_mods/canonical-doc-sync.md` when present. This mod defines doc timing for `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md`, and umbrella closeout.
+8. **Contribution contract**: read adopter `docs/ship-flow/_mods/contribution-contract.md` when present, otherwise the plugin copy. Resolve the pull request's base ref/SHA from the active PR and pass it explicitly as `BASE_REF` (or `PR_BASE_SHA`); never assume a branch name. Before any review or reviewer spend, execute that mod's checker-resolution block and, when `gate_required=true`, run the resolved checker on the merge-base-to-HEAD changed paths with `execute.md` as declaration input. An adopter map requires its adjacent adopted checker; only a source repository with no adopter map may use the plugin checker and default map. A repository with no adopted bundle and no plugin contribution-path change records the resolver's no-op skip, matching generic CI. Exit 1 returns incomplete paired work to execute. Exit 2 is BLOCKED because the bundle, base, map, or invocation is invalid. Record the exact command/result; worker self-attestation is not evidence.
 
 ## Entity body contract (schema-as-prose)
 
@@ -60,6 +61,8 @@ Note: ship-verify invokes atomic reviewers (`pr-review-toolkit:code-reviewer` / 
 Record stage-start ISO. Extract via `bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/extract-section.sh" <entity-file> <tag>`. From verify.md: `verdict.status` = `passed` or `PASS`. From execute.md: execution log (for PR body Changes section). From the resolved shape artifact (canonical `shape.md`, legacy `spec.md` fallback alias; aggregated across children): Problem, User Journey, Done Criteria, Shape Output, Size Assessment, `architecture-impact`, `product-impact`, `readme-impact`. From parent entity (if `parent:` set): `roadmap-phase`.
 
 **Pre-check**: verdict != PASS → write `## Review Report status: blocked, reason: verify verdict <actual>, expected passed` and return. Never proceed without PASS.
+
+**Contribution pre-review gate**: follow `_mods/contribution-contract.md` before dispatching canonical patches or reviewers. If a scoped waiver is accepted locally, preserve the exact standalone line for ship-final's PR body so generic CI evaluates the same declaration. A contract-doc-only change on an explicit inverse edge is not "docs only"; it is an incomplete coupled change unless the named row/direction waiver passes.
 
 ### Step 2 — Dispatch canonical doc patches to `planner`
 
@@ -384,19 +387,24 @@ Return to /ship; advance to ship-final stage (PR creation + captain merge gate).
 
 **Frontmatter write scope — ONLY `token_actual`.** Do NOT write `status`, `completed`, `verdict`, `pr`, `worktree` — these are FO-owned at terminal transition or pr-merge mod's concern.
 
-### Step 8.1 — Advance entity status (frontmatter wiring)
+### Step 8.1 — Register review completion
 
 After stage artifact lands, advance sibling `index.md` frontmatter atomically:
 
     INDEX_MD="<entity-folder>/index.md"
-    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    H="$(if command -v sha256sum >/dev/null 2>&1; then sha256sum "$INDEX_MD" | awk '{print $1}'; else shasum -a 256 "$INDEX_MD" | awk '{print $1}'; fi)"
     bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
       --entity="$INDEX_MD" \
       --new-status=ship \
       --stage-name=review \
       --stage-file=review.md \
       --if-hash="$H" \
+      --lease-file="$SHIP_FLOW_COMPLETION_LEASE_FILE" --lease-token="$SHIP_FLOW_COMPLETION_LEASE_TOKEN" --worker-id="$SHIP_FLOW_COMPLETION_WORKER_ID" \
       --commit-as="review(<id>): advance status to ship"
+
+This registers review completion as the reviewed terminal status ship; it is not a First Officer stage-entry receipt.
+Return the receipt verbatim. FO reclaims the lease: `published` runs path reconcile;
+`already-registered` runs clean/no-lag. Only `reconciled|ready` may precede Contract 1.
 
 Note: `--stage-name=review` (artifact filename) but `--new-status=ship` — no `review` enum value in status field; review stage's terminal output is PR creation, so status advances to `ship`.
 

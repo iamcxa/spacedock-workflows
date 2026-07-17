@@ -19,6 +19,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./map-helpers.sh
 source "${SCRIPT_DIR}/map-helpers.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/completion-v1.sh"
 
 ENTITY=""
 STAGE=""
@@ -53,95 +55,8 @@ CURRENT_HASH="$(sha256_of "$ENTITY")"
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT INT TERM
 
-# awk state machine handles 3 cases:
-#   Case A: stage_outputs block exists, our stage key present → replace value
-#   Case B: stage_outputs block exists, our stage key absent  → append before block-exit
-#   Case C: stage_outputs block absent entirely               → inject block before closing ---
-#
-# State variables:
-#   dash_count : 0=before fm, 1=in fm, 2+=after fm
-#   in_fm      : 1 while between first and second ---
-#   in_so      : 1 while inside stage_outputs: indented block
-#   so_seen    : 1 if stage_outputs: header was encountered
-#   replaced   : 1 if our stage entry has been written out
-awk -v stage="$STAGE" -v path="$FILE_PATH" '
-  BEGIN {
-    dash_count = 0
-    in_fm = 0
-    in_so = 0
-    so_seen = 0
-    replaced = 0
-  }
-
-  /^---$/ {
-    dash_count++
-    if (dash_count == 1) {
-      in_fm = 1
-      print
-      next
-    }
-    if (dash_count == 2) {
-      # Closing --- of frontmatter
-      # Case B: inside so block but stage key not yet emitted
-      if (in_so && !replaced) {
-        print "  " stage ": " path
-        replaced = 1
-      }
-      # Case C: stage_outputs block never seen at all
-      if (!so_seen) {
-        print "stage_outputs:"
-        print "  " stage ": " path
-        so_seen = 1
-        replaced = 1
-      }
-      in_fm = 0
-      in_so = 0
-      print
-      next
-    }
-  }
-
-  # Detect stage_outputs: block start (only inside frontmatter)
-  in_fm && /^stage_outputs:[[:space:]]*$/ {
-    so_seen = 1
-    in_so = 1
-    print
-    next
-  }
-
-  # Inside stage_outputs: block — handle child key lines
-  in_fm && in_so && /^[[:space:]]/ {
-    # Extract the key name: trim leading whitespace, split on ':'
-    line = $0
-    sub(/^[[:space:]]+/, "", line)
-    n = split(line, parts, ":")
-    key = parts[1]
-    if (key == stage && !replaced) {
-      print "  " stage ": " path
-      replaced = 1
-    } else {
-      print
-    }
-    next
-  }
-
-  # Leaving stage_outputs: block — hit a new top-level key (non-whitespace-prefixed)
-  in_fm && in_so && /^[^[:space:]]/ {
-    if (!replaced) {
-      print "  " stage ": " path
-      replaced = 1
-    }
-    in_so = 0
-    print
-    next
-  }
-
-  { print }
-' "$ENTITY" > "$TMP"
-AWK_RC=$?
-
-if [ "$AWK_RC" != "0" ]; then
-  echo "Error: awk processing failed (exit $AWK_RC)" >&2
+if ! completion_render "$ENTITY" "$STAGE" "$FILE_PATH" "$TMP"; then
+  echo "Error: malformed canonical frontmatter authority" >&2
   exit 10
 fi
 

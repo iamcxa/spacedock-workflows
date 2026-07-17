@@ -29,6 +29,10 @@ Ship-flow assumes a commissioned workflow directory, a Spacedock orchestration l
 
 Maintainers: see `scripts/plugin-release.sh` for the transactional version bump (gate + triple-site update across `plugins/ship-flow/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `plugins/ship-flow/README.md`).
 
+## Contributing
+
+See [`plugins/ship-flow/CONTRIBUTING.md`](plugins/ship-flow/CONTRIBUTING.md) for the bidirectional code/schema and contract-document coupling contract, scoped exemptions, and local review gate.
+
 ## License
 
 See the [machine-readable plugin metadata](plugins/ship-flow/.claude-plugin/plugin.json) for licensing terms.

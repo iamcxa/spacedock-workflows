@@ -285,7 +285,6 @@ mkdir -p "$EPIC_DIR"; CREATED_DIRS+=("$EPIC_DIR")
   echo "---"
   echo "id: \"${EPIC_ID}\""
   echo "title: \"$(yaml_dq "${PROJECT_TITLE}")\""
-  echo "status: epic"
   echo "entity_type: epic"
   echo "pattern: epic"
   echo "external_project: \"$(yaml_dq "${EXTERNAL_PROJECT}")\""
@@ -294,12 +293,9 @@ mkdir -p "$EPIC_DIR"; CREATED_DIRS+=("$EPIC_DIR")
   for j in "${!DOTTED[@]}"; do
     echo "  - ${DOTTED[$j]}-${CSLUGS[$j]}"
   done
+  echo "status: epic"
+  echo "stage_outputs: {}"
   echo "---"
-  echo
-  echo "<!-- section:stage-artifact-links -->"
-  echo "| Stage | File |"
-  echo "|-------|------|"
-  echo "<!-- /section:stage-artifact-links -->"
   echo
   echo "<!-- section:dependency-graph -->"
   echo "## Dependency Graph"
@@ -324,7 +320,6 @@ while [ "$i" -lt "$CHILD_N" ]; do
     echo "---"
     echo "id: \"${DOTTED[$i]}\""
     echo "title: \"$(yaml_dq "${CTITLES[$i]}")\""
-    echo "status: ${CSTATUS[$i]}"
     echo "pattern: shaped-child"
     echo "parent_pitch: \"${EPIC_ID}\""
     echo "external_id: \"$(yaml_dq "${EIDS[$i]}")\""
@@ -333,6 +328,8 @@ while [ "$i" -lt "$CHILD_N" ]; do
     [ -n "${CDOMAIN[$i]}" ] && echo "domain: ${CDOMAIN[$i]}"
     [ "${CCDR[$i]}" = "true" ] && echo "contract_decision_required: true"
     echo "layout: folder"
+    echo "status: ${CSTATUS[$i]}"
+    echo "stage_outputs: {}"
     echo "---"
     echo
     # Issue body as plain intro-zone content (no ship-flow section tags → the

@@ -1178,19 +1178,24 @@ prompt the captain with the helper diagnostic. Missing `verify.md`, missing
 required `NOT VERIFIED`, invalid required `INCONCLUSIVE`, `VETO`, and
 `PROMPT_CAPTAIN` are captain/block routes, not self-approved receipt routes.
 
-### Step 6.1 — Advance entity status (frontmatter wiring)
+### Step 6.1 — Register verify completion
 
 After stage artifact lands, advance sibling `index.md` frontmatter atomically:
 
     INDEX_MD="<entity-folder>/index.md"
-    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    H="$(if command -v sha256sum >/dev/null 2>&1; then sha256sum "$INDEX_MD" | awk '{print $1}'; else shasum -a 256 "$INDEX_MD" | awk '{print $1}'; fi)"
     bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
       --entity="$INDEX_MD" \
       --new-status=verify \
       --stage-name=verify \
       --stage-file=verify.md \
       --if-hash="$H" \
+      --lease-file="$SHIP_FLOW_COMPLETION_LEASE_FILE" --lease-token="$SHIP_FLOW_COMPLETION_LEASE_TOKEN" --worker-id="$SHIP_FLOW_COMPLETION_WORKER_ID" \
       --commit-as="verify(<id>): advance status to verify"
+
+This registers verify completion; it does not dispatch review. Return to the First Officer for the separate review-stage dispatch.
+Return the receipt verbatim. FO reclaims the lease: `published` runs path reconcile;
+`already-registered` runs clean/no-lag. Only `reconciled|ready` may precede Contract 1.
 
 On exit 6 (stale hash): write `## Verify Verdict status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 

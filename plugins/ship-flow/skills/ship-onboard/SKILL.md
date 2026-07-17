@@ -132,6 +132,28 @@ Keep `.claude/ship-flow/domains.yaml` separate. Domain registry
 `required_skills` stay there; file-signal skills live in
 `.claude/ship-flow/skill-routing.yaml`.
 
+### 1.7: Contribution Contract Bundle
+
+When the adopter uses `.claude/ship-flow/doc-coupling.yaml`, install the canonical self-contained checker beside it:
+
+```bash
+mkdir -p .claude/ship-flow
+cp "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/bin/doc-impact-gate.sh" \
+  .claude/ship-flow/doc-impact-gate.sh
+chmod +x .claude/ship-flow/doc-impact-gate.sh
+mkdir -p .github/workflows
+cp "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/references/ship-flow-doc-impact-workflow.yml" \
+  .github/workflows/ship-flow-doc-impact.yml
+```
+
+Record the map, checker, and workflow in version control. Verify the adopted checker without relying on a vendored plugin tree:
+
+```bash
+bash .claude/ship-flow/doc-impact-gate.sh --help
+```
+
+On every Ship Flow upgrade, compare and re-copy both the canonical checker and workflow before accepting a map-schema change. A map without its adopted checker or workflow caller is a blocking incomplete adoption; CI must not fetch or inline a second implementation.
+
 ---
 
 ## Step 2: Generate PRODUCT.md Draft

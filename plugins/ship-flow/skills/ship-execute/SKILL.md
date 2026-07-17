@@ -332,19 +332,24 @@ Use grep-friendly `key: value` lines:
 
 Return to /ship; advance to verify.
 
-### Step 7.1 — Advance entity status (frontmatter wiring)
+### Step 7.1 — Register execute completion
 
 After stage artifact lands, advance sibling `index.md` frontmatter atomically:
 
     INDEX_MD="<entity-folder>/index.md"
-    H="$(sha256sum "$INDEX_MD" | awk '{print $1}')"
+    H="$(if command -v sha256sum >/dev/null 2>&1; then sha256sum "$INDEX_MD" | awk '{print $1}'; else shasum -a 256 "$INDEX_MD" | awk '{print $1}'; fi)"
     bash "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/advance-stage.sh" \
       --entity="$INDEX_MD" \
       --new-status=execute \
       --stage-name=execute \
       --stage-file=execute.md \
       --if-hash="$H" \
+      --lease-file="$SHIP_FLOW_COMPLETION_LEASE_FILE" --lease-token="$SHIP_FLOW_COMPLETION_LEASE_TOKEN" --worker-id="$SHIP_FLOW_COMPLETION_WORKER_ID" \
       --commit-as="execute(<id>): advance status to execute"
+
+This registers execute completion; it does not enter verify. Return to the First Officer for a separate verify stage-entry transition.
+Return the receipt verbatim. FO reclaims the lease: `published` runs path reconcile;
+`already-registered` runs clean/no-lag. Only `reconciled|ready` may precede Contract 1.
 
 On exit 6 (stale hash): write `## Execute Report status: blocked, reason: index.md stale hash; parallel session contaminated` and return.
 

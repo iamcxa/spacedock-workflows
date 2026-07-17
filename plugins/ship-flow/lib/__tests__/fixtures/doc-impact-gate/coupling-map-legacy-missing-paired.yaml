@@ -1,0 +1,6 @@
+schema_version: "1.0"
+couplings:
+  - name: legacy-paired-delete
+    srcGlobs: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/src/ledger/contracts/legacy-renamed-away.schema.json"]
+    docPaths: ["plugins/ship-flow/lib/__tests__/fixtures/doc-impact-gate/helm-adopter/docs/ledger/legacy-renamed-away.md"]
+    rationale: "Legacy source-to-doc rows must fail closed when both protected paths disappear."

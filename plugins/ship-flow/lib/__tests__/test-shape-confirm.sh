@@ -304,6 +304,12 @@ else echo "FAIL DC-27e ROADMAP incomplete"; FAIL=1; fi
 COMMITS=$({ git log --oneline || true; } | wc -l | tr -d ' ')
 if [ "$COMMITS" = "2" ]; then echo "OK DC-27f single commit (init + shape-confirm)"
 else echo "FAIL DC-27f expected 2 commits, got $COMMITS"; FAIL=1; fi
+if grep -q '^status: sharp$' docs/ship-flow/090-test-pitch.md && \
+   ! grep -q '^stage_outputs:' docs/ship-flow/090-test-pitch.md; then
+  echo "OK DC-27g legacy flat layout keeps sharp status without folder stage registry"
+else
+  echo "FAIL DC-27g flat-layout compatibility changed"; FAIL=1
+fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
@@ -401,6 +407,27 @@ else
   echo "FAIL DC-33f rendered PM-skill receipt did not validate"
   FAIL=1
 fi
+FOLDER_INDEX="docs/ship-flow/090-test-pitch/index.md"
+if grep -q '^status: shape$' "$FOLDER_INDEX"; then
+  echo "OK DC-33g folder pitch starts at canonical shape status"
+else
+  echo "FAIL DC-33g folder pitch must start at canonical shape status"
+  FAIL=1
+fi
+if awk '
+  BEGIN { frontmatter=0; in_outputs=0 }
+  /^---[[:space:]]*$/ { frontmatter++; if (frontmatter >= 2) exit; next }
+  frontmatter != 1 { next }
+  /^stage_outputs:[[:space:]]*$/ { in_outputs=1; next }
+  in_outputs && /^[^[:space:]]/ { in_outputs=0 }
+  in_outputs && /^[[:space:]]+shape:[[:space:]]*shape\.md[[:space:]]*$/ { found=1 }
+  END { exit(found ? 0 : 1) }
+' "$FOLDER_INDEX"; then
+  echo "OK DC-33h folder pitch declares stage_outputs.shape"
+else
+  echo "FAIL DC-33h folder pitch must declare stage_outputs.shape: shape.md"
+  FAIL=1
+fi
 legacy_spec_output="docs/ship-flow/090-test-pitch/spec.md"
 if [ ! -f "$legacy_spec_output" ]; then
   echo "OK DC-33d canonical writer does not create legacy spec.md"
@@ -432,6 +459,25 @@ else
   echo "FAIL DC-34c folder layout still wrote flat child files"
   FAIL=1
 fi
+if awk '
+  /^status: shape$/ { getline a; getline b; getline c; exit !(a=="stage_outputs:" && b=="  shape: shape.md" && c=="---") }
+  END { if (!a) exit 1 }
+' docs/ship-flow/090-test-pitch/index.md && \
+   ! grep -q '^<!-- section:stage-artifact-links -->$' docs/ship-flow/090-test-pitch/index.md; then
+  echo "OK DC-34d pitch has exact terminal shape authority tail and no body table"
+else
+  echo "FAIL DC-34d pitch authority tail/body-table disposition"; FAIL=1
+fi
+for child in docs/ship-flow/090.1-child-a/index.md docs/ship-flow/090.2-child-b/index.md; do
+  if awk '
+    /^status: sharp$/ { getline a; getline b; exit !(a=="stage_outputs: {}" && b=="---") }
+    END { if (!a) exit 1 }
+  ' "$child" && ! grep -q '^<!-- section:stage-artifact-links -->$' "$child"; then
+    echo "OK DC-34e $(basename "$(dirname "$child")") has empty terminal authority tail"
+  else
+    echo "FAIL DC-34e $(basename "$(dirname "$child")") authority tail/body-table disposition"; FAIL=1
+  fi
+done
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 

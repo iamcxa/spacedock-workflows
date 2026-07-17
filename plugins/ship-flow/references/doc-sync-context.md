@@ -1,7 +1,7 @@
 ---
 plugin: ship-flow
-version: 0.6.0
-last_sync: 2026-05-20 (0.6.0 release metadata sync)
+version: 0.9.0
+last_sync: 2026-07-15 (bidirectional contribution contract)
 ---
 
 # Ship Flow Doc-Sync Context
@@ -39,7 +39,7 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 |--------|--------------------|----------------------|
 | `bin/check-invariants.sh` | `INVARIANTS.md` (enforcement list) | `README.md` (release checks) |
 | `bin/canonical-doc-sync-checker.sh` | `README.md` (canonical sync checks) | `references/flow-map-schema.yaml` |
-| `bin/doc-impact-gate.sh` | `README.md` (doc-impact-gate CI check) | `references/doc-coupling-map.yaml` |
+| `bin/doc-impact-gate.sh` | `CONTRIBUTING.md` (direction, exemption, delete/rename contract) | `references/doc-coupling-map.yaml` |
 | `bin/workflow-doctor.sh` | `README.md` (diagnostics) | `workflow-template.yaml` (workflow expectations) |
 | `bin/ship-capture.sh` | `README.md` (artifact capture helper) | `references/doc-format.md` |
 | `bin/debrief-boundary-resolver.sh` | `README.md` (debrief flow) | `references/debrief-schema.yaml` |
@@ -99,12 +99,18 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `registry/defaults.yaml` | `README.md` (default workflow settings) | `workflow-template.yaml` |
 | `workflow-template.yaml` | `README.md` (adopter scaffold defaults) | `skills/ship-onboard/SKILL.md` |
 | `.claude-plugin/plugin.json` | `README.md` (plugin metadata/version) | Release workflow notes |
+| `references/doc-coupling-map.yaml` | `CONTRIBUTING.md` (map schema and examples) | `_mods/contribution-contract.md` (FO enforcement) |
+| `references/ship-flow-doc-impact-workflow.yml` | `CONTRIBUTING.md` (adopter installation and base/head semantics) | `skills/ship-onboard/SKILL.md` (copy/update procedure) |
+| `.github/workflows/ship-flow-doc-impact.yml` | `CONTRIBUTING.md` (source-repo CI behavior) | `references/ship-flow-doc-impact-workflow.yml` (adopter caller) |
+| `_mods/contribution-contract.md` | `skills/ship-review/SKILL.md` (pre-review gate) | `CONTRIBUTING.md` (contributor workflow) |
 
 ## Doc Structure
 
 | Doc File | Purpose | Auto-Sync Level | Notes |
 |----------|---------|-----------------|-------|
 | `README.md` | Plugin rationale, pipeline overview, skill triggers, adoption lifecycle, release checks | partial | Preserve design rationale; sync factual skill/source behavior. |
+| `CONTRIBUTING.md` | Generic code/schema and contract-doc coupling contract | partial | Keep adopter domain content out; document map grammar and recovery. |
+| `_mods/contribution-contract.md` | FO pre-review enforcement contract | partial | Must match CI gate semantics and declaration source. |
 | `INVARIANTS.md` | Enforced principles, grep checks, hooks, captain-gate checklist | partial | Treat as canonical for rules; update only when source changed. |
 | `references/doc-format.md` | Artifact and section format reference | partial | Sync stage artifact section names and helper usage. |
 | `references/entity-body-schema.yaml` | Entity body schema | yes | Regenerable from schema changes. |
@@ -143,6 +149,9 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `bin/workflow-doctor.sh --help` | cli | Read-only help if supported. |
 | `lib/__tests__/test-skill-commit-lint.sh` | cli | Fixture-style shell test; no adopter writes expected. |
 | `lib/__tests__/test-canonical-doc-sync-checker.sh` | cli | Fixture-style shell test for doc sync checker. |
+| `lib/__tests__/test-doc-impact-gate.sh` | cli | Fixture-style bidirectional coupling and fail-closed parser test. |
+| `lib/__tests__/test-contribution-contract.sh` | cli | Static contract check for contributor, mod, doc-sync, and review surfaces. |
+| `lib/__tests__/test-adopter-doc-impact-ci.sh` | cli | Executable no-plugin-tree adopter workflow and base/head CI boundary test. |
 | `lib/__tests__/test-workflow-sot-sync.sh` | cli | Fixture-style shell test; confirm temp-only behavior before running. |
 | `ship-flow:ship` | skip | Orchestrates workflow state and implementation stages. |
 | `ship-flow:ship-shape` | skip | Creates or updates workflow entities. |

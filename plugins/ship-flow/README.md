@@ -327,6 +327,8 @@ captain intent (vague / concept / issue)
      debrief + ship.md + archive + closeout receipt + ROADMAP Shipped
 ```
 
+**Proportionality (skip-when-small):** reserve this full pipeline for multi-surface / dependent-stage work. A single-seam change (one surface, no dependent stages) does NOT need it — prefer lean TDD in an isolated worktree + one `code-reviewer` pass. The `ship-shape` preflight enforces this.
+
 ### Post-merge closeout
 
 After the implementation PR reports `MERGED`, the First Officer runs `merged-pr-closeout-reconciler.sh` with the workflow directory and entity reference. The reconciler proves the authoritative landing topology and patch before it writes closeout state. `--closeout-mode direct` is the default; `--closeout-mode pull-request` is the optional reviewable path.
@@ -532,6 +534,8 @@ SendMessage(to: "verifier", message: "...verify brief with execute.md...")
 
 **Commissioning to a new repo (0.7.0 adoption note):** Adopting ship-flow is **not self-contained in 0.7.0**. The intended bridge is `spacebridge:workflow-adopt`, which discovers `workflow-template.yaml` and delegates to `spacedock:commission` to scaffold `docs/<wf>/README.md` with `entry-point:` frontmatter + initial `ARCHITECTURE.md`, `PRODUCT.md`, `ROADMAP.md` with section tags for `patch-map.sh`. This requires the `spacebridge` plugin. Without spacebridge: scaffold `docs/<wf>/` manually from `plugins/ship-flow/workflow-template.yaml`, or run `/spacedock:commission` with ship-flow directly. Self-contained adoption is a planned later milestone.
 
+**Contribution contract:** adopters may declare source/code/schema and contract-doc edges in `.claude/ship-flow/doc-coupling.yaml`. The durable adopter bundle also carries an exact self-contained checker at `.claude/ship-flow/doc-impact-gate.sh` and the installed `.github/workflows/ship-flow-doc-impact.yml`, so CI does not require a vendored plugin tree or runtime fetch. The checker preserves legacy source-to-doc rows, supports explicit `doc-to-source` inverse edges and narrow row-scoped exemptions, fails closed on delete/rename, and compares the merge-base map with HEAD before accepting a narrowed contract. Generic CI and ship-review's FO pre-review gate use the same base/head semantics. See `CONTRIBUTING.md` and `_mods/contribution-contract.md`; adopter-specific paths and domain docs remain adopter-owned.
+
 **Debrief convention**: native post-merge closeout writes the entity's required debrief under `docs/<wf>/_debriefs/<date>-<seq>.md` as part of the terminal bundle; do not run `spacedock:debrief` to supply that closeout artifact. Use `spacedock:debrief` only when an additional session-level learning record is useful. Both follow `references/debrief-schema.yaml` (required sections: `## Shipped`, `## Filed (backlog)`, `## Issues — Workflow`, `## Issues — Spacedock`, `## Non-PR commits (workflow-only)`, `## Observations`, `## Decisions`, `## What's Next`). When a session had review-loop churn, CI reruns, stale-head problems, or workflow surprise, apply `_mods/debrief-guardrail-harvest.md` to the additional learning record and include `## Guardrail Harvest`. The `spacebridge:debrief-promote` skill aggregates cross-project debrief patterns and promotes STRONG signals back into plugin canonical docs.
 
 **Canonical docs section-tagging contract** (required for Layer C primitive compatibility):
@@ -553,9 +557,9 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 | `lib/extract-map.sh` | canonical doc section reader (ARCHITECTURE/PRODUCT/ROADMAP) |
 | `lib/patch-map.sh` | canonical doc section writer — atomic + `--if-hash` CAS + mermaid whitelist |
 | `lib/map-helpers.sh` | shared utilities for map-layer primitives (cross-platform sha256, awk body-from-FILE pattern) |
-| `lib/register-stage-output.sh` | appends stage output reference to entity body `stage_outputs[]` (required for render-stage-links compatibility) |
-| `lib/render-stage-links.sh` | rebuilds entity body from `stage_outputs[]` — used by advance-stage; destructive on legacy entities without backfilled stage_outputs |
-| `lib/advance-stage.sh` | advances entity status field atomically; triggers render-stage-links rebuild |
+| `lib/register-stage-output.sh` | atomically updates the canonical frontmatter stage_outputs authority tail |
+| `lib/render-stage-links.sh` | read-only stdout renderer derived solely from canonical frontmatter; never writes the entity |
+| `lib/advance-stage.sh` | atomically registers current-stage completion while leaving current status unchanged; does not enter the next stage or render |
 | `lib/update-entity-status.sh` | raw status field updater (lower-level; prefer advance-stage for pipeline transitions) |
 | `lib/verify-assumption.sh` | asserts a critical assumption by running a shell command and logging result to entity |
 | `lib/density-classify.sh` | classifies entity density (4-tier: low/medium/high/critical) — used by cross-review verdict-flip whitelist (Principle 6 Rule C) |
@@ -581,6 +585,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 - **`INVARIANTS.md`** — Principles 1-8 (hard grep-enforced + captain-gate checklist). Start here to understand WHY each rule exists.
 - **`references/entity-body-schema.yaml`** — structured section schema per stage. Source of truth for what sections each `{stage}.md` must contain.
 - **`references/flow-map-schema.yaml`** — canonical doc section-tag declarations.
+- **`CONTRIBUTING.md`** — bidirectional contribution coupling, scoped exemptions, and local verification.
 - **`references/pr-merge-paths.md`** — decision record: the plugin-native auto-merge stack (`bin/semantic-review-*` + `auto-merge-*`, ACTIVE) vs the adopter-native manual-merge path, and why adopter-side deprecation must never sweep plugin `bin/`.
 - **`references/harvest-vocabulary.md`** — decision record: pins the correspondence between `debrief-guardrail-harvest`'s six buckets, `harvest-decide`'s four outcomes, and kc-plugin-forge's D1/D2 layers, so the three harvest-lifecycle vocabularies read as one system.
 - **`docs/ship-flow/ship-shape-v2-implementation.md`** — #085 entity: full 6-wave redesign journal with rationale, decisions, and evidence. The case study for this flow's design.

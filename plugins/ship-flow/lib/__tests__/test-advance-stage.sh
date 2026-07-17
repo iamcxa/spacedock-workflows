@@ -20,17 +20,48 @@ sha256_of() {
   fi
 }
 
+run_advance() {
+  local script="$1" entity="" stage="" arg repo before gitdir token worker=test-worker
+  shift
+  for arg in "$@"; do
+    case "$arg" in --entity=*) entity="${arg#--entity=}" ;; --stage-name=*) stage="${arg#--stage-name=}" ;; esac
+  done
+  repo="$(git rev-parse --show-toplevel 2>/dev/null)" || { command bash "$script" "$@"; return; }
+  before="$(git -C "$repo" rev-parse HEAD)"; gitdir="$(git -C "$repo" rev-parse --absolute-git-dir)"; token="test-${before}"
+  if [ ! -e "$gitdir/completion-v1.lease" ]; then
+    (cd "$repo" && command bash "$LIB_DIR/fo-completion-lease.sh" acquire --entity="$entity" --stage="$stage" \
+      --worker="$worker" --token="$token" --ref="$(git symbolic-ref -q HEAD)" --before="$before") >/dev/null || return
+  fi
+  command bash "$script" "$@" --lease-file="$gitdir/completion-v1.lease/record" --lease-token="$token" --worker-id="$worker"
+}
+
 cd "$REPO_ROOT" || exit 1
 
 setup_fixture() {
-  local status="${1:-sharp}"
-  local dir
+  local status="${1:-plan}"
+  local dir entity_dir
   dir="$(mktemp -d)"
-  cat > "$dir/index.md" <<EOF
+  entity_dir="$dir/docs/test-wf/item"
+  mkdir -p "$entity_dir"
+  cat > "$dir/docs/test-wf/README.md" <<'EOF'
+---
+stages:
+  states:
+    - name: shape
+    - name: design
+    - name: plan
+    - name: execute
+    - name: verify
+    - name: ship
+---
+EOF
+  cat > "$entity_dir/index.md" <<EOF
 ---
 id: "test-wiring"
 title: "Test entity"
 status: ${status}
+stage_outputs:
+  shape: shape.md
 ---
 
 <!-- section:stage-artifact-links -->
@@ -40,90 +71,51 @@ status: ${status}
 <!-- /section:stage-artifact-links -->
 EOF
   # Create a dummy plan.md artifact
-  echo "# Plan" > "$dir/plan.md"
-  (cd "$dir" && git init -q && git add -- index.md plan.md && \
-    git -c user.email=test@test -c user.name=test commit -qm "init")
-  echo "$dir"
+  echo "# Shape" > "$entity_dir/shape.md"
+  echo "# Plan" > "$entity_dir/plan.md"
+  (cd "$dir" && git init -q -b main && \
+    git config user.email test@test && git config user.name test && \
+    git add -- docs && git commit -qm "init")
+  echo "$entity_dir"
 }
 
 setup_registered_fixture() {
   local status="${1:-plan}"
   local stage_file="${2:-plan.md}"
-  local dir
-  dir="$(mktemp -d)"
-  cat > "$dir/index.md" <<EOF
----
-id: "test-wiring"
-title: "Test entity"
-status: ${status}
-stage_outputs:
-  plan: ${stage_file}
----
-
-<!-- section:stage-artifact-links -->
-| Stage | File |
-|-------|------|
-| plan | [${stage_file}](${stage_file}) |
-<!-- /section:stage-artifact-links -->
-EOF
-  echo "# Plan" > "$dir/plan.md"
-  echo "# Old Plan" > "$dir/old-plan.md"
-  (cd "$dir" && git init -q && git add -- index.md plan.md old-plan.md && \
-    git -c user.email=test@test -c user.name=test commit -qm "init")
-  echo "$dir"
+  local entity_dir
+  entity_dir="$(setup_fixture "$status")"
+  sed -i.bak -e "s/  shape: shape.md/  plan: ${stage_file}/" \
+    -e "s#| shape | \[shape.md\](shape.md) |#| plan | [${stage_file}](${stage_file}) |#" "$entity_dir/index.md"
+  rm -f "$entity_dir/index.md.bak"
+  echo "# Old Plan" > "$entity_dir/old-plan.md"
+  (cd "$entity_dir/../../.." && git add -- docs && git commit --amend -qm "init")
+  echo "$entity_dir"
 }
 
 setup_body_drift_fixture() {
-  local dir
-  dir="$(mktemp -d)"
-  cat > "$dir/index.md" <<'EOF'
----
-id: "test-wiring"
-title: "Test entity"
-status: plan
-stage_outputs:
-  plan: plan.md
----
-
-<!-- section:stage-artifact-links -->
-| Stage | File |
-|-------|------|
-| plan | [old-plan.md](old-plan.md) |
-<!-- /section:stage-artifact-links -->
-EOF
-  echo "# Plan" > "$dir/plan.md"
-  echo "# Old Plan" > "$dir/old-plan.md"
-  (cd "$dir" && git init -q && git add -- index.md plan.md old-plan.md && \
-    git -c user.email=test@test -c user.name=test commit -qm "init")
-  echo "$dir"
+  local entity_dir
+  entity_dir="$(setup_registered_fixture)"
+  sed -i.bak 's#| plan | \[plan.md\](plan.md) |#| plan | [old-plan.md](old-plan.md) |#' "$entity_dir/index.md"
+  rm -f "$entity_dir/index.md.bak"
+  (cd "$entity_dir/../../.." && git add -- docs && git commit --amend -qm "init")
+  echo "$entity_dir"
 }
 
 setup_render_failure_fixture() {
-  local dir
-  dir="$(mktemp -d)"
-  cat > "$dir/index.md" <<'EOF'
----
-id: "test-wiring"
-title: "Test entity"
-status: sharp
----
-
-No stage artifact links section exists here.
-EOF
-  echo "# Plan" > "$dir/plan.md"
-  (cd "$dir" && git init -q && git add -- index.md plan.md && \
-    git -c user.email=test@test -c user.name=test commit -qm "init")
-  echo "$dir"
+  local entity_dir
+  entity_dir="$(setup_fixture)"
+  perl -0pi -e 's/(  shape: shape.md\n)(---)/$1priority: invalid-tail\n$2/' "$entity_dir/index.md"
+  (cd "$entity_dir/../../.." && git add -- docs && git commit --amend -qm "init")
+  echo "$entity_dir"
 }
 
-echo "--- Case 1: success path — advances status + writes stage_outputs + re-renders body ---"
+echo "--- Case 1: success path — writes frontmatter authority and preserves opaque body ---"
 TMP="$(setup_fixture)"
 pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
-printf 'do not stage me\n' > unrelated.md
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
 assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
   "Case-1a exit 0"
 COMMITS_AFTER="$(git rev-list --count HEAD)"
 COMMIT_DELTA=$(( COMMITS_AFTER - COMMITS_BEFORE ))
@@ -131,14 +123,15 @@ if [ "$COMMIT_DELTA" = "1" ]; then echo "OK Case-1b exactly one commit created"
 else echo "FAIL Case-1b expected one commit, got $COMMIT_DELTA"; FAIL=1; fi
 if grep -q '^status: plan$' index.md; then echo "OK Case-1c status advanced to plan"
 else echo "FAIL Case-1c status not advanced"; FAIL=1; fi
-if grep -qE '^\s+plan:[[:space:]]*plan\.md' index.md; then echo "OK Case-1d stage_outputs.plan written"
+if git show HEAD:docs/test-wf/item/index.md | grep -qE '^\s+plan:[[:space:]]*plan\.md'; then echo "OK Case-1d published stage_outputs.plan written"
 else echo "FAIL Case-1d stage_outputs.plan missing"; FAIL=1; fi
-if grep -q "| plan | \[plan.md\](plan.md) |" index.md; then echo "OK Case-1e body table updated"
-else echo "FAIL Case-1e body table not updated"; FAIL=1; fi
-if [ "$(git status --porcelain -- unrelated.md)" = "?? unrelated.md" ]; then echo "OK Case-1f unrelated file remains unstaged"
-else echo "FAIL Case-1f unrelated file was staged or committed"; FAIL=1; fi
+if git show HEAD:docs/test-wf/item/index.md | grep -q "| shape | \[shape.md\](shape.md) |" && \
+   ! git show HEAD:docs/test-wf/item/index.md | grep -q "| plan |"; then echo "OK Case-1e historical body table preserved"
+else echo "FAIL Case-1e historical body table changed"; FAIL=1; fi
+if [ -z "$(git ls-files --others --exclude-standard)" ]; then echo "OK Case-1f no unrelated untracked residue"
+else echo "FAIL Case-1f unexpected worktree residue"; FAIL=1; fi
 COMMIT_FILES="$(git show --name-only --format= HEAD)"
-if [ "$COMMIT_FILES" = "index.md" ]; then echo "OK Case-1g commit pathspec contains only index.md"
+if [ "$COMMIT_FILES" = "docs/test-wf/item/index.md" ]; then echo "OK Case-1g commit pathspec contains only canonical entity"
 else echo "FAIL Case-1g unexpected commit files: $COMMIT_FILES"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
@@ -149,7 +142,7 @@ TMP="$(setup_fixture)"
 pushd "$TMP" >/dev/null || exit 1
 WRONG_HASH="0000000000000000000000000000000000000000000000000000000000000000"
 assert_exit 6 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$WRONG_HASH' --commit-as='plan(test): advance status to plan'" \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$WRONG_HASH' --commit-as='plan(test): advance status to plan'" \
   "Case-2 stale hash returns exit 6"
 popd >/dev/null || exit 1
 rm -rf "$TMP"
@@ -161,9 +154,9 @@ pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
 BEFORE_CONTENT="$(cat index.md)"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 10 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-3a render failure exits 10"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-3a malformed authority exits 5 before lease/CAS"
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-3b entity content unchanged"
 else echo "FAIL Case-3b entity content changed"; FAIL=1; fi
@@ -181,13 +174,22 @@ echo "--- Case 4: idempotent on already-advanced entity (no diff) ---"
 TMP="$(setup_fixture)"
 pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
+BEFORE="$(git rev-parse HEAD)"
+BEFORE_TREE="$(git rev-parse 'HEAD^{tree}')"
 # First advance
-bash "${LIB_DIR}/advance-stage.sh" --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" >/dev/null 2>&1
+run_advance "${LIB_DIR}/advance-stage.sh" --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" >/dev/null 2>&1
+COMPLETION="$(git rev-parse refs/heads/main)"
+TOKEN="test-${BEFORE}"; WORKER=test-worker
+bash "${LIB_DIR}/fo-completion-lease.sh" reclaim --entity=docs/test-wf/item/index.md --stage=plan --worker="$WORKER" \
+  --token="$TOKEN" --ref=refs/heads/main --before="$BEFORE" >/dev/null
+LEASE="$(git rev-parse --absolute-git-dir)/completion-v1.lease/returned"
+bash "${LIB_DIR}/fo-reconcile-completion.sh" --disposition=published --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md \
+  --ref=refs/heads/main --before="$BEFORE" --completion="$COMPLETION" --before-tree="$BEFORE_TREE" --lease-file="$LEASE" --lease-token="$TOKEN" --worker-id="$WORKER" >/dev/null
 H2="$(sha256_of index.md)"
 # Second advance with same args — should be no-op (exit 0, no new diff)
 BEFORE_COMMITS="$(git rev-list --count HEAD)"
 assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H2' --commit-as='plan(test): advance status to plan'" \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H2' --commit-as='plan(test): advance status to plan'" \
   "Case-4a second advance exits 0"
 AFTER_COMMITS="$(git rev-list --count HEAD)"
 if [ "$BEFORE_COMMITS" = "$AFTER_COMMITS" ]; then echo "OK Case-4b no new commit (idempotent)"
@@ -202,39 +204,39 @@ pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
 assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
   "Case-5a partial idempotency exits 0"
 COMMITS_AFTER="$(git rev-list --count HEAD)"
 COMMIT_DELTA=$(( COMMITS_AFTER - COMMITS_BEFORE ))
 if [ "$COMMIT_DELTA" = "1" ]; then echo "OK Case-5b partial idempotency creates one commit"
 else echo "FAIL Case-5b expected one commit, got $COMMIT_DELTA"; FAIL=1; fi
-if grep -qE '^\s+plan:[[:space:]]*plan\.md' index.md; then echo "OK Case-5c stage_outputs.plan written"
+if git show HEAD:docs/test-wf/item/index.md | grep -qE '^\s+plan:[[:space:]]*plan\.md'; then echo "OK Case-5c stage_outputs.plan written"
 else echo "FAIL Case-5c stage_outputs.plan missing"; FAIL=1; fi
-if grep -q "| plan | \[plan.md\](plan.md) |" index.md; then echo "OK Case-5d body table updated"
-else echo "FAIL Case-5d body table not updated"; FAIL=1; fi
+if git show HEAD:docs/test-wf/item/index.md | grep -q "| shape | \[shape.md\](shape.md) |" && \
+   ! git show HEAD:docs/test-wf/item/index.md | grep -q "| plan |"; then echo "OK Case-5d historical body table preserved"
+else echo "FAIL Case-5d historical body table changed"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
 echo
-echo "--- Case 6: absolute entity path from outside repo commits in entity repo ---"
+echo "--- Case 6: absolute entity path is outside the canonical input grammar ---"
 TMP="$(setup_fixture)"
 OUTSIDE="$(mktemp -d)"
 pushd "$OUTSIDE" >/dev/null || exit 1
 H="$(sha256_of "$TMP/index.md")"
 COMMITS_BEFORE="$(cd "$TMP" && git rev-list --count HEAD)"
-assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity='$TMP/index.md' --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-6a absolute entity exits 0"
+assert_exit 1 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity='$TMP/index.md' --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-6a absolute entity is rejected"
 COMMITS_AFTER="$(cd "$TMP" && git rev-list --count HEAD)"
 COMMIT_DELTA=$(( COMMITS_AFTER - COMMITS_BEFORE ))
-if [ "$COMMIT_DELTA" = "1" ]; then echo "OK Case-6b absolute entity creates one commit"
-else echo "FAIL Case-6b expected one commit, got $COMMIT_DELTA"; FAIL=1; fi
+if [ "$COMMIT_DELTA" = "0" ]; then echo "OK Case-6b absolute entity creates no commit"
+else echo "FAIL Case-6b unexpected commit delta $COMMIT_DELTA"; FAIL=1; fi
 PORCELAIN="$(cd "$TMP" && git status --porcelain -- index.md)"
 if [ -z "$PORCELAIN" ]; then echo "OK Case-6c absolute entity not left dirty"
 else echo "FAIL Case-6c absolute entity left dirty: $PORCELAIN"; FAIL=1; fi
-COMMIT_FILES="$(cd "$TMP" && git show --name-only --format= HEAD)"
-if [ "$COMMIT_FILES" = "index.md" ]; then echo "OK Case-6d absolute entity commit pathspec contains only index.md"
-else echo "FAIL Case-6d unexpected commit files: $COMMIT_FILES"; FAIL=1; fi
+if [ "$(cd "$TMP" && git rev-parse HEAD)" = "$(cd "$TMP" && git rev-parse refs/heads/main)" ]; then echo "OK Case-6d branch ref unchanged"
+else echo "FAIL Case-6d branch ref changed"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP" "$OUTSIDE"
 
@@ -245,7 +247,7 @@ pushd "$TMP" >/dev/null || exit 1
 WRONG_HASH="0000000000000000000000000000000000000000000000000000000000000000"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
 assert_exit 6 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$WRONG_HASH' --commit-as='plan(test): advance status to plan'" \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$WRONG_HASH' --commit-as='plan(test): advance status to plan'" \
   "Case-7a stale full-idempotency exits 6"
 COMMITS_AFTER="$(git rev-list --count HEAD)"
 if [ "$COMMITS_AFTER" = "$COMMITS_BEFORE" ]; then echo "OK Case-7b stale full-idempotency creates no commit"
@@ -257,47 +259,47 @@ popd >/dev/null || exit 1
 rm -rf "$TMP"
 
 echo
-echo "--- Case 8: matching status with wrong stage file is corrected in one commit ---"
+echo "--- Case 8: matching status with wrong stage file is stale and rejected ---"
 TMP="$(setup_registered_fixture plan old-plan.md)"
 pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-8a wrong stage file exits 0"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-8a wrong stage file exits 10"
 COMMITS_AFTER="$(git rev-list --count HEAD)"
 COMMIT_DELTA=$(( COMMITS_AFTER - COMMITS_BEFORE ))
-if [ "$COMMIT_DELTA" = "1" ]; then echo "OK Case-8b wrong stage file creates one commit"
-else echo "FAIL Case-8b expected one commit, got $COMMIT_DELTA"; FAIL=1; fi
-if grep -qE '^\s+plan:[[:space:]]*plan\.md' index.md && ! grep -qE '^\s+plan:[[:space:]]*old-plan\.md' index.md; then echo "OK Case-8c stage_outputs.plan corrected"
-else echo "FAIL Case-8c stage_outputs.plan not corrected"; FAIL=1; fi
-if grep -q "| plan | \[plan.md\](plan.md) |" index.md && ! grep -q "old-plan.md" index.md; then echo "OK Case-8d body table corrected"
-else echo "FAIL Case-8d body table not corrected"; FAIL=1; fi
+if [ "$COMMIT_DELTA" = "0" ]; then echo "OK Case-8b wrong stage file creates no commit"
+else echo "FAIL Case-8b unexpected commit delta $COMMIT_DELTA"; FAIL=1; fi
+if grep -qE '^\s+plan:[[:space:]]*old-plan\.md' index.md; then echo "OK Case-8c stale map preserved"
+else echo "FAIL Case-8c stale map changed"; FAIL=1; fi
+if grep -q "| plan | \[old-plan.md\](old-plan.md) |" index.md; then echo "OK Case-8d stale table preserved"
+else echo "FAIL Case-8d stale table changed"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
 echo
-echo "--- Case 9: matching status and stage file with stale body table is corrected in one commit ---"
+echo "--- Case 9: historical body-table drift is ignored and preserved ---"
 TMP="$(setup_body_drift_fixture)"
 pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
 assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-9a stale body table exits 0"
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-9a historical body table does not affect authority"
 COMMITS_AFTER="$(git rev-list --count HEAD)"
 COMMIT_DELTA=$(( COMMITS_AFTER - COMMITS_BEFORE ))
-if [ "$COMMIT_DELTA" = "1" ]; then echo "OK Case-9b stale body table creates one commit"
-else echo "FAIL Case-9b expected one commit, got $COMMIT_DELTA"; FAIL=1; fi
-if grep -q "| plan | \[plan.md\](plan.md) |" index.md && ! grep -q "old-plan.md" index.md; then echo "OK Case-9c body table corrected"
-else echo "FAIL Case-9c body table not corrected"; FAIL=1; fi
+if [ "$COMMIT_DELTA" = "0" ]; then echo "OK Case-9b stale body table creates no commit"
+else echo "FAIL Case-9b unexpected commit delta $COMMIT_DELTA"; FAIL=1; fi
+if grep -q "| plan | \[old-plan.md\](old-plan.md) |" index.md; then echo "OK Case-9c historical body table preserved"
+else echo "FAIL Case-9c historical body table changed"; FAIL=1; fi
 if grep -qE '^\s+plan:[[:space:]]*plan\.md' index.md; then echo "OK Case-9d stage_outputs.plan preserved"
 else echo "FAIL Case-9d stage_outputs.plan missing"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
 echo
-echo "--- Case 10: not-a-git-repo emits warning + exits 0 ---"
+echo "--- Case 10: not-a-git-repo fails closed ---"
 TMP_NONGIT="$(mktemp -d)"
 cat > "$TMP_NONGIT/index.md" <<'EOF'
 ---
@@ -314,12 +316,12 @@ EOF
 echo "# Plan" > "$TMP_NONGIT/plan.md"
 pushd "$TMP_NONGIT" >/dev/null || exit 1
 H="$(sha256_of index.md)"
-WARNING_OUT="$(bash "${LIB_DIR}/advance-stage.sh" --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
+WARNING_OUT="$(run_advance "${LIB_DIR}/advance-stage.sh" --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
 GOT_RC=$?
-if [ "$GOT_RC" = "0" ]; then echo "OK Case-10a exits 0 outside git repo"
+if [ "$GOT_RC" = "1" ]; then echo "OK Case-10a missing lease fails before non-Git work"
 else echo "FAIL Case-10a unexpected exit $GOT_RC"; FAIL=1; fi
-if echo "$WARNING_OUT" | grep -qi "warn\|skip"; then echo "OK Case-10b warning emitted"
-else echo "FAIL Case-10b no warning in output"; FAIL=1; fi
+if echo "$WARNING_OUT" | grep -qi "usage"; then echo "OK Case-10b typed usage error emitted"
+else echo "FAIL Case-10b no typed error in output"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP_NONGIT"
 
@@ -345,52 +347,50 @@ echo "# Plan" > "$TMP_NONGIT/plan.md"
 chmod +x "$TMP_NONGIT/index.md"
 pushd "$TMP_NONGIT" >/dev/null || exit 1
 H="$(sha256_of index.md)"
-WARNING_OUT="$(bash "${LIB_DIR}/advance-stage.sh" --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
+WARNING_OUT="$(run_advance "${LIB_DIR}/advance-stage.sh" --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
 GOT_RC=$?
-if [ "$GOT_RC" = "0" ]; then echo "OK Case-10c-a exits 0 outside git repo"
+if [ "$GOT_RC" = "1" ]; then echo "OK Case-10c-a missing lease fails before non-Git work"
 else echo "FAIL Case-10c-a unexpected exit $GOT_RC"; FAIL=1; fi
-if echo "$WARNING_OUT" | grep -qi "warn\|skip"; then echo "OK Case-10c-b warning emitted"
-else echo "FAIL Case-10c-b no warning in output"; FAIL=1; fi
+if echo "$WARNING_OUT" | grep -qi "usage"; then echo "OK Case-10c-b typed usage error emitted"
+else echo "FAIL Case-10c-b no typed error in output"; FAIL=1; fi
 if [ -x index.md ]; then echo "OK Case-10c-c executable mode preserved"
 else echo "FAIL Case-10c-c executable mode lost"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP_NONGIT"
 
 echo
-echo "--- Case 11: status mutation with C14-invalid commit message is refused before mutation ---"
+echo "--- Case 11: commit-as is audit text, never stage-entry authority ---"
 TMP="$(setup_fixture)"
 pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
 BEFORE_CONTENT="$(cat index.md)"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 1 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): generic advance'" \
-  "Case-11a invalid commit message exits 1"
+assert_exit 0 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): generic advance'" \
+  "Case-11a generic audit message may register current-stage completion"
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-11b entity content unchanged"
 else echo "FAIL Case-11b entity content changed"; FAIL=1; fi
 COMMITS_AFTER="$(git rev-list --count HEAD)"
-if [ "$COMMITS_AFTER" = "$COMMITS_BEFORE" ]; then echo "OK Case-11c no commit created"
-else echo "FAIL Case-11c unexpected commit created"; FAIL=1; fi
-PORCELAIN="$(git status --porcelain -- index.md)"
-if [ -z "$PORCELAIN" ]; then echo "OK Case-11d entity not left dirty"
-else echo "FAIL Case-11d entity left dirty: $PORCELAIN"; FAIL=1; fi
+if [ $((COMMITS_AFTER - COMMITS_BEFORE)) = 1 ]; then echo "OK Case-11c one completion commit published"
+else echo "FAIL Case-11c expected one completion commit"; FAIL=1; fi
+if git show HEAD:docs/test-wf/item/index.md | grep -q '^status: plan$'; then echo "OK Case-11d published status remains current"
+else echo "FAIL Case-11d completion changed status"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
 echo
-echo "--- Case 12: git add failure restores entity and returns nonzero ---"
+echo "--- Case 12: competing ref update wins and receives no receipt ---"
 TMP="$(setup_fixture)"
 GIT_WRAPPER_DIR="$(mktemp -d)"
 REAL_GIT="$(command -v git)"
+COMPETING_OID="$(cd "$TMP" && printf 'competitor\n' | git commit-tree 'HEAD^{tree}' -p HEAD)"
 cat > "$GIT_WRAPPER_DIR/git" <<EOF
 #!/usr/bin/env bash
-for arg in "\$@"; do
-  if [ "\$arg" = "add" ]; then
-    echo "simulated git add failure" >&2
-    exit 99
-  fi
-done
+if [ "\${1:-}" = "update-ref" ]; then
+  "$REAL_GIT" update-ref "\$2" "$COMPETING_OID" "\$4"
+  exit 99
+fi
 exec "$REAL_GIT" "\$@"
 EOF
 chmod +x "$GIT_WRAPPER_DIR/git"
@@ -398,18 +398,18 @@ pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
 BEFORE_CONTENT="$(cat index.md)"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-ADD_FAIL_OUT="$(PATH="$GIT_WRAPPER_DIR:$PATH" bash "${LIB_DIR}/advance-stage.sh" --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
+ADD_FAIL_OUT="$(PATH="$GIT_WRAPPER_DIR:$PATH" run_advance "${LIB_DIR}/advance-stage.sh" --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
 GOT_RC=$?
-if [ "$GOT_RC" = "8" ]; then echo "OK Case-12a git add failure exits 8"
-else echo "FAIL Case-12a expected exit 8, got $GOT_RC"; FAIL=1; fi
-if echo "$ADD_FAIL_OUT" | grep -qi "git add failed"; then echo "OK Case-12b git add failure error is readable"
-else echo "FAIL Case-12b missing readable git add error: $ADD_FAIL_OUT"; FAIL=1; fi
+if [ "$GOT_RC" = "9" ]; then echo "OK Case-12a competing CAS exits 9"
+else echo "FAIL Case-12a expected exit 9, got $GOT_RC"; FAIL=1; fi
+if ! echo "$ADD_FAIL_OUT" | grep -q '^completion-v1 disposition='; then echo "OK Case-12b competing CAS emits no receipt"
+else echo "FAIL Case-12b competing CAS emitted receipt: $ADD_FAIL_OUT"; FAIL=1; fi
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-12c entity content unchanged"
 else echo "FAIL Case-12c entity content changed"; FAIL=1; fi
 COMMITS_AFTER="$(git rev-list --count HEAD)"
-if [ "$COMMITS_AFTER" = "$COMMITS_BEFORE" ]; then echo "OK Case-12d no commit created"
-else echo "FAIL Case-12d unexpected commit created"; FAIL=1; fi
+if [ "$(git rev-parse refs/heads/main)" = "$COMPETING_OID" ]; then echo "OK Case-12d competing ref preserved"
+else echo "FAIL Case-12d competing ref changed"; FAIL=1; fi
 PORCELAIN="$(git status --porcelain -- index.md)"
 if [ -z "$PORCELAIN" ]; then echo "OK Case-12e entity not left dirty"
 else echo "FAIL Case-12e entity left dirty: $PORCELAIN"; FAIL=1; fi
@@ -417,18 +417,16 @@ popd >/dev/null || exit 1
 rm -rf "$TMP" "$GIT_WRAPPER_DIR"
 
 echo
-echo "--- Case 13: git commit failure restores entity and clears staged entry ---"
+echo "--- Case 13: update-ref nonzero with ours still yields verified receipt ---"
 TMP="$(setup_fixture)"
 GIT_WRAPPER_DIR="$(mktemp -d)"
 REAL_GIT="$(command -v git)"
 cat > "$GIT_WRAPPER_DIR/git" <<EOF
 #!/usr/bin/env bash
-for arg in "\$@"; do
-  if [ "\$arg" = "commit" ]; then
-    echo "simulated git commit failure" >&2
-    exit 98
-  fi
-done
+if [ "\${1:-}" = "update-ref" ]; then
+  "$REAL_GIT" "\$@"
+  exit 98
+fi
 exec "$REAL_GIT" "\$@"
 EOF
 chmod +x "$GIT_WRAPPER_DIR/git"
@@ -436,21 +434,21 @@ pushd "$TMP" >/dev/null || exit 1
 H="$(sha256_of index.md)"
 BEFORE_CONTENT="$(cat index.md)"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-COMMIT_FAIL_OUT="$(PATH="$GIT_WRAPPER_DIR:$PATH" bash "${LIB_DIR}/advance-stage.sh" --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
+COMMIT_FAIL_OUT="$(PATH="$GIT_WRAPPER_DIR:$PATH" run_advance "${LIB_DIR}/advance-stage.sh" --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
 GOT_RC=$?
-if [ "$GOT_RC" = "8" ]; then echo "OK Case-13a git commit failure exits 8"
-else echo "FAIL Case-13a expected exit 8, got $GOT_RC"; FAIL=1; fi
-if echo "$COMMIT_FAIL_OUT" | grep -qi "commit failed"; then echo "OK Case-13b git commit failure error is readable"
-else echo "FAIL Case-13b missing readable commit error: $COMMIT_FAIL_OUT"; FAIL=1; fi
+if [ "$GOT_RC" = "0" ]; then echo "OK Case-13a verified published disposition exits 0"
+else echo "FAIL Case-13a expected exit 0, got $GOT_RC"; FAIL=1; fi
+if echo "$COMMIT_FAIL_OUT" | grep -q '^completion-v1 disposition=published '; then echo "OK Case-13b exactly typed receipt emitted"
+else echo "FAIL Case-13b missing receipt: $COMMIT_FAIL_OUT"; FAIL=1; fi
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-13c entity content unchanged"
 else echo "FAIL Case-13c entity content changed"; FAIL=1; fi
 COMMITS_AFTER="$(git rev-list --count HEAD)"
-if [ "$COMMITS_AFTER" = "$COMMITS_BEFORE" ]; then echo "OK Case-13d no commit created"
-else echo "FAIL Case-13d unexpected commit created"; FAIL=1; fi
+if [ $((COMMITS_AFTER - COMMITS_BEFORE)) = 1 ]; then echo "OK Case-13d one completion commit published"
+else echo "FAIL Case-13d expected one completion commit"; FAIL=1; fi
 PORCELAIN="$(git status --porcelain -- index.md)"
-if [ -z "$PORCELAIN" ]; then echo "OK Case-13e entity not left dirty or staged"
-else echo "FAIL Case-13e entity left dirty or staged: $PORCELAIN"; FAIL=1; fi
+if [ -n "$PORCELAIN" ]; then echo "OK Case-13e live entity intentionally remains at parent"
+else echo "FAIL Case-13e expected parent-lag state"; FAIL=1; fi
 popd >/dev/null || exit 1
 rm -rf "$TMP" "$GIT_WRAPPER_DIR"
 
@@ -479,12 +477,12 @@ BEFORE_INDEX_PATCH="$TMP/before-index.patch"
 AFTER_INDEX_PATCH="$TMP/after-index.patch"
 git diff --cached --binary -- index.md > "$BEFORE_INDEX_PATCH"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-ADD_FAIL_OUT="$(PATH="$GIT_WRAPPER_DIR:$PATH" bash "${LIB_DIR}/advance-stage.sh" --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
+ADD_FAIL_OUT="$(PATH="$GIT_WRAPPER_DIR:$PATH" run_advance "${LIB_DIR}/advance-stage.sh" --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
 GOT_RC=$?
-if [ "$GOT_RC" = "8" ]; then echo "OK Case-14a git add failure exits 8"
-else echo "FAIL Case-14a expected exit 8, got $GOT_RC"; FAIL=1; fi
-if echo "$ADD_FAIL_OUT" | grep -qi "git add failed"; then echo "OK Case-14b git add failure error is readable"
-else echo "FAIL Case-14b missing readable git add error: $ADD_FAIL_OUT"; FAIL=1; fi
+if [ "$GOT_RC" = "5" ]; then echo "OK Case-14a pre-staged entity exits 5 before publication"
+else echo "FAIL Case-14a expected exit 5, got $GOT_RC"; FAIL=1; fi
+if echo "$ADD_FAIL_OUT" | grep -qi "globally clean"; then echo "OK Case-14b eligibility error is readable"
+else echo "FAIL Case-14b missing eligibility error: $ADD_FAIL_OUT"; FAIL=1; fi
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-14c entity worktree content restored"
 else echo "FAIL Case-14c entity worktree content changed"; FAIL=1; fi
@@ -524,12 +522,12 @@ BEFORE_INDEX_PATCH="$TMP/before-index.patch"
 AFTER_INDEX_PATCH="$TMP/after-index.patch"
 git diff --cached --binary -- index.md > "$BEFORE_INDEX_PATCH"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-COMMIT_FAIL_OUT="$(PATH="$GIT_WRAPPER_DIR:$PATH" bash "${LIB_DIR}/advance-stage.sh" --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
+COMMIT_FAIL_OUT="$(PATH="$GIT_WRAPPER_DIR:$PATH" run_advance "${LIB_DIR}/advance-stage.sh" --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash="$H" --commit-as="plan(test): advance status to plan" 2>&1)"
 GOT_RC=$?
-if [ "$GOT_RC" = "8" ]; then echo "OK Case-15a git commit failure exits 8"
-else echo "FAIL Case-15a expected exit 8, got $GOT_RC"; FAIL=1; fi
-if echo "$COMMIT_FAIL_OUT" | grep -qi "commit failed"; then echo "OK Case-15b git commit failure error is readable"
-else echo "FAIL Case-15b missing readable commit error: $COMMIT_FAIL_OUT"; FAIL=1; fi
+if [ "$GOT_RC" = "5" ]; then echo "OK Case-15a pre-staged entity exits 5 before publication"
+else echo "FAIL Case-15a expected exit 5, got $GOT_RC"; FAIL=1; fi
+if echo "$COMMIT_FAIL_OUT" | grep -qi "globally clean"; then echo "OK Case-15b eligibility error is readable"
+else echo "FAIL Case-15b missing eligibility error: $COMMIT_FAIL_OUT"; FAIL=1; fi
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-15c entity worktree content restored"
 else echo "FAIL Case-15c entity worktree content changed"; FAIL=1; fi
@@ -556,9 +554,9 @@ BEFORE_INDEX_PATCH="$TMP/before-index.patch"
 AFTER_INDEX_PATCH="$TMP/after-index.patch"
 git diff --cached --binary -- index.md > "$BEFORE_INDEX_PATCH"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-16a idempotent advance exits 0"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-16a staged no-op candidate fails closed"
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-16b entity worktree content preserved"
 else echo "FAIL Case-16b entity worktree content changed"; FAIL=1; fi
@@ -584,9 +582,9 @@ BEFORE_WORKTREE_PATCH="$TMP/before-worktree.patch"
 AFTER_WORKTREE_PATCH="$TMP/after-worktree.patch"
 git diff --binary -- index.md > "$BEFORE_WORKTREE_PATCH"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-17a idempotent advance exits 0"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-17a unstaged no-op candidate fails closed"
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-17b entity worktree content preserved"
 else echo "FAIL Case-17b entity worktree content changed"; FAIL=1; fi
@@ -613,9 +611,9 @@ BEFORE_INDEX_PATCH="$TMP/before-index.patch"
 AFTER_INDEX_PATCH="$TMP/after-index.patch"
 git diff --cached --binary -- index.md > "$BEFORE_INDEX_PATCH"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-18a idempotent advance exits 0"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-18a staged table drift fails closed"
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-18b entity worktree content preserved"
 else echo "FAIL Case-18b entity worktree content changed"; FAIL=1; fi
@@ -640,9 +638,9 @@ BEFORE_SUMMARY="$TMP/before-summary.txt"
 AFTER_SUMMARY="$TMP/after-summary.txt"
 git diff --summary -- index.md > "$BEFORE_SUMMARY"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-19a idempotent advance exits 0"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-19a unstaged mode drift fails closed"
 if [ -x index.md ]; then echo "OK Case-19b executable mode preserved"
 else echo "FAIL Case-19b executable mode lost"; FAIL=1; fi
 COMMITS_AFTER="$(git rev-list --count HEAD)"
@@ -667,9 +665,9 @@ BEFORE_INDEX_PATCH="$TMP/before-index.patch"
 AFTER_INDEX_PATCH="$TMP/after-index.patch"
 git diff --cached --binary -- index.md > "$BEFORE_INDEX_PATCH"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-20a idempotent advance exits 0"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-20a staged mode drift fails closed"
 if [ -x index.md ]; then echo "OK Case-20b executable mode preserved"
 else echo "FAIL Case-20b executable mode lost"; FAIL=1; fi
 COMMITS_AFTER="$(git rev-list --count HEAD)"
@@ -694,9 +692,9 @@ BEFORE_WORKTREE_PATCH="$TMP/before-worktree.patch"
 AFTER_WORKTREE_PATCH="$TMP/after-worktree.patch"
 git diff --binary -- index.md > "$BEFORE_WORKTREE_PATCH"
 COMMITS_BEFORE="$(git rev-list --count HEAD)"
-assert_exit 0 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
-  "Case-21a post-add no-diff advance exits 0"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='$H' --commit-as='plan(test): advance status to plan'" \
+  "Case-21a unstaged table drift fails closed"
 AFTER_CONTENT="$(cat index.md)"
 if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-21b entity worktree content preserved"
 else echo "FAIL Case-21b entity worktree content changed"; FAIL=1; fi
@@ -712,9 +710,69 @@ popd >/dev/null || exit 1
 rm -rf "$TMP"
 
 echo
-echo "--- Case 22: missing entity exits 3 ---"
-assert_exit 3 \
-  "bash '${LIB_DIR}/advance-stage.sh' --entity=/nonexistent/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='abc123' --commit-as='x'" \
-  "Case-22 missing entity exits 3"
+echo "--- Case 22: missing canonical entity fails closed ---"
+TMP="$(setup_fixture)"
+pushd "$TMP" >/dev/null || exit 1
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/missing/index.md --new-status=plan --stage-name=plan --stage-file=plan.md --if-hash='abc123' --commit-as='x'" \
+  "Case-22 missing canonical entity exits 5"
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- Case 23: design is a documented, idempotent completion target ---"
+if grep -Fq -- 'design/design/design.md' "${LIB_DIR}/completion-v1.sh" && \
+   grep -Fq -- 'ship/review/review.md' "${LIB_DIR}/completion-v1.sh"; then
+  echo "OK Case-23a shared contract documents exhaustive design/review triples"
+else
+  echo "FAIL Case-23a helper usage does not document design"; FAIL=1
+fi
+TMP="$(setup_fixture design)"
+pushd "$TMP" >/dev/null || exit 1
+echo "# Design" > design.md
+git add -- design.md
+git commit -qm "fixture: add design artifact"
+H="$(sha256_of index.md)"
+COMMITS_BEFORE="$(git rev-list --count HEAD)"
+assert_exit 0 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=design --stage-name=design --stage-file=design.md --if-hash='$H' --commit-as='design(test): register completion'" \
+  "Case-23b design completion exits 0"
+COMMITS_AFTER="$(git rev-list --count HEAD)"
+if [ $(( COMMITS_AFTER - COMMITS_BEFORE )) = "1" ]; then echo "OK Case-23c design completion creates one artifact commit"
+else echo "FAIL Case-23c design completion expected one artifact commit"; FAIL=1; fi
+if git show HEAD:docs/test-wf/item/index.md | grep -q '^status: design$' && \
+   git show HEAD:docs/test-wf/item/index.md | grep -qE '^\s+design:[[:space:]]*design\.md' && \
+   ! git show HEAD:docs/test-wf/item/index.md | grep -Fq '| design | [design.md](design.md) |'; then
+  echo "OK Case-23d design completion is status-idempotent and records design.md"
+else
+  echo "FAIL Case-23d design completion wiring is incomplete"; FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- Case 24: design completion keeps exit-10 rollback safe on flat/legacy layout ---"
+TMP="$(setup_render_failure_fixture)"
+pushd "$TMP" >/dev/null || exit 1
+echo "# Design" > design.md
+git add -- design.md
+git commit -qm "fixture: add design artifact"
+H="$(sha256_of index.md)"
+BEFORE_CONTENT="$(cat index.md)"
+COMMITS_BEFORE="$(git rev-list --count HEAD)"
+assert_exit 5 \
+  "run_advance '${LIB_DIR}/advance-stage.sh' --entity=docs/test-wf/item/index.md --new-status=design --stage-name=design --stage-file=design.md --if-hash='$H' --commit-as='design(test): advance status to design'" \
+  "Case-24a malformed design authority exits 5"
+AFTER_CONTENT="$(cat index.md)"
+if [ "$AFTER_CONTENT" = "$BEFORE_CONTENT" ]; then echo "OK Case-24b legacy entity content rolled back"
+else echo "FAIL Case-24b legacy entity content changed"; FAIL=1; fi
+COMMITS_AFTER="$(git rev-list --count HEAD)"
+if [ "$COMMITS_AFTER" = "$COMMITS_BEFORE" ]; then echo "OK Case-24c no completion commit created"
+else echo "FAIL Case-24c unexpected completion commit created"; FAIL=1; fi
+PORCELAIN="$(git status --porcelain -- index.md)"
+if [ -z "$PORCELAIN" ]; then echo "OK Case-24d legacy entity not left dirty"
+else echo "FAIL Case-24d legacy entity left dirty: $PORCELAIN"; FAIL=1; fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
 
 exit $FAIL

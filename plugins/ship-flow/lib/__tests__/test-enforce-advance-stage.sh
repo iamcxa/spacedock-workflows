@@ -34,10 +34,11 @@ assert_exit() {
 #            | "stageartifact" (modify a folder entity stage artifact, not index.md)
 #            | "flatbody" (modify a flat entity body status: line, not frontmatter)
 #       $3 = "new" (NEW entity index.md — only +status:) | "edit" (mutate existing — both +status: and -status:)
+#       $4 = target status for mutations (default: plan)
 #
 # Returns: prints the path of the repo dir.
 setup_fixture() {
-  local mutation_msg="$1" kind="$2" entity_age="$3"
+  local mutation_msg="$1" kind="$2" entity_age="$3" target_status="${4:-plan}"
   local dir
   dir="$(mktemp -d)"
   (
@@ -46,8 +47,20 @@ setup_fixture() {
     git config user.email test@test
     git config user.name test
 
-    # Always: create baseline entity on `main`
+    # Always: declare the workflow graph and create a baseline entity on `main`.
     mkdir -p docs/test-wf/baseline-entity
+    cat > docs/test-wf/README.md <<'EOF'
+---
+stages:
+  states:
+    - name: sharp
+    - name: plan
+    - name: execute
+    - name: verify
+    - name: ship
+    - name: done
+---
+EOF
     cat > docs/test-wf/baseline-entity/index.md <<'EOF'
 ---
 id: "baseline-entity"
@@ -55,7 +68,7 @@ title: "Baseline"
 status: sharp
 ---
 EOF
-    git add docs/test-wf/baseline-entity/index.md
+    git add docs/test-wf/README.md docs/test-wf/baseline-entity/index.md
     git commit -qm "baseline: pre-existing entity"
 
     # Flat entity baseline for body-only status: false-positive coverage.
@@ -79,7 +92,7 @@ EOF
       mutate)
         if [ "$entity_age" = "edit" ]; then
           # Mutation: edit existing entity's status: line
-          sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/baseline-entity/index.md
+          sed -i.bak "s/^status: sharp$/status: ${target_status}/" docs/test-wf/baseline-entity/index.md
           rm -f docs/test-wf/baseline-entity/index.md.bak
           git add docs/test-wf/baseline-entity/index.md
           git commit -qm "$mutation_msg"
@@ -156,7 +169,7 @@ status: sharp
 EOF
         git add docs/test-wf/bodytable-entity/index.md
         git commit -qm "baseline: add body-table entity"
-        sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/bodytable-entity/index.md
+        sed -i.bak "s/^status: sharp$/status: ${target_status}/" docs/test-wf/bodytable-entity/index.md
         rm -f docs/test-wf/bodytable-entity/index.md.bak
         git add docs/test-wf/bodytable-entity/index.md
         git commit -qm "$mutation_msg"
@@ -282,11 +295,11 @@ EOF
   echo "$dir"
 }
 
-# Build the exact First Officer stage-entry history: an existing flat entity is
-# moved from draft to shape on a feature branch, and the supplied commit subject
-# is the only receipt C14 can inspect.
+# Build an exact First Officer stage-entry history for a workflow whose legal
+# forward edges come from README stage order and whose verify stage may route
+# feedback back to execute.
 setup_fo_dispatch_fixture() {
-  local mutation_msg="$1"
+  local mutation_msg="$1" before_status="${2:-draft}" after_status="${3:-shape}" readme_style="${4:-lf}" entity_slug="${5:-example-feature}"
   local dir
   dir="$(mktemp -d)"
   (
@@ -296,34 +309,112 @@ setup_fo_dispatch_fixture() {
     git config user.name test
 
     mkdir -p docs/test-wf
-    cat > docs/test-wf/example-feature.md <<'EOF'
+    cat > docs/test-wf/README.md <<'EOF'
+---
+stages:
+  states:
+    - name: draft
+    - name: shape
+    - name: design
+    - name: plan
+    - name: execute
+    - name: verify
+      feedback-to: execute
+    - name: ship
+    - name: done
+---
+EOF
+    case "$readme_style" in
+      crlf-trailing)
+        awk '{
+          if ($0 ~ /name:|feedback-to:/) printf "%s  \r\n", $0
+          else printf "%s\r\n", $0
+        }' docs/test-wf/README.md > docs/test-wf/README.md.tmp
+        mv docs/test-wf/README.md.tmp docs/test-wf/README.md
+        ;;
+      unrelated-list)
+        cat > docs/test-wf/README.md <<'EOF'
+---
+stages:
+  states:
+    - name: draft
+    - name: shape
+reviewers:
+  - name: plan
+---
+EOF
+        ;;
+      nested-stages)
+        cat > docs/test-wf/README.md <<'EOF'
+---
+metadata:
+  stages:
+    states:
+      - name: draft
+      - name: plan
+---
+EOF
+        ;;
+      nested-stage-name)
+        cat > docs/test-wf/README.md <<'EOF'
+---
+stages:
+  states:
+    - name: draft
+      reviewers:
+        - name: plan
+    - name: shape
+---
+EOF
+        ;;
+      nested-feedback)
+        cat > docs/test-wf/README.md <<'EOF'
+---
+stages:
+  states:
+    - name: draft
+    - name: shape
+      metadata:
+        feedback-to: draft
+---
+EOF
+        ;;
+    esac
+    cat > "docs/test-wf/${entity_slug}.md" <<'EOF'
 ---
 title: "Example Feature"
-status: draft
+status: STATUS_PLACEHOLDER
 started:
 ---
 EOF
-    git add docs/test-wf/example-feature.md
+    sed -i.bak "s/^status: STATUS_PLACEHOLDER$/status: ${before_status}/" "docs/test-wf/${entity_slug}.md"
+    rm -f "docs/test-wf/${entity_slug}.md.bak"
+    git add docs/test-wf/README.md "docs/test-wf/${entity_slug}.md"
     git commit -qm "draft: add example feature"
 
     git checkout -q -b feature
-    sed -i.bak 's/^status: draft$/status: shape/' docs/test-wf/example-feature.md
-    rm -f docs/test-wf/example-feature.md.bak
-    sed -i.bak 's/^started:$/started: 2026-07-12T13:48:06Z/' docs/test-wf/example-feature.md
-    rm -f docs/test-wf/example-feature.md.bak
-    git add docs/test-wf/example-feature.md
+    sed -i.bak "s/^status: ${before_status}$/status: ${after_status}/" "docs/test-wf/${entity_slug}.md"
+    rm -f "docs/test-wf/${entity_slug}.md.bak"
+    sed -i.bak 's/^started:$/started: 2026-07-12T13:48:06Z/' "docs/test-wf/${entity_slug}.md"
+    rm -f "docs/test-wf/${entity_slug}.md.bak"
+    git add "docs/test-wf/${entity_slug}.md"
     git commit -qm "$mutation_msg"
   )
   echo "$dir"
 }
 
-# Build a feedback-stage transition with independently configurable subject,
-# resulting status, and body receipt. The entity carries stage_outputs so C14's
-# legacy body-table exemption cannot mask an invalid feedback receipt.
+# Build an exact First Officer feedback-stage-receipt history on the same
+# workflow graph as setup_fo_dispatch_fixture (verify's declared feedback-to
+# is execute). $5 is raw body text appended verbatim to the entity file on
+# the mutation (feature-branch) commit — a canonical ### Feedback Cycles
+# record, an empty string (no record at all), or a forged/broken record, per
+# case. $6 (optional) is raw body text appended on the BASELINE (main/parent)
+# commit instead — used to construct a PARENT revision that already carries
+# Feedback Cycles history, for freshness/monotonic-cycle cases.
+# shellcheck disable=SC2329 # invoked indirectly through assert_exit/eval cases below
 setup_fo_feedback_fixture() {
-  local subject="$1" after_status="$2" receipt_cycle="$3" receipt_rejected="$4"
-  local receipt_target="$5" captain_decision="$6" routed_at="$7" verify_artifact="$8"
-  local commit_body="${9:-}" dir
+  local mutation_msg="$1" before_status="${2:-verify}" after_status="${3:-execute}" entity_slug="${4:-example-feature}" feedback_body="${5:-}" parent_feedback_body="${6:-}"
+  local dir
   dir="$(mktemp -d)"
   (
     cd "$dir" || exit 1
@@ -331,87 +422,104 @@ setup_fo_feedback_fixture() {
     git config user.email test@test
     git config user.name test
 
-    mkdir -p docs/test-wf/feedback-entity
-    cat > docs/test-wf/feedback-entity/index.md <<'EOF'
+    mkdir -p docs/test-wf
+    cat > docs/test-wf/README.md <<'EOF'
 ---
-id: "feedback-entity"
-title: "Feedback Entity"
-status: verify
-stage_outputs:
-  verify: verify.md
+stages:
+  states:
+    - name: draft
+    - name: shape
+    - name: design
+    - name: plan
+    - name: execute
+    - name: verify
+      feedback-to: execute
+    - name: ship
+    - name: done
 ---
 EOF
-    git add docs/test-wf/feedback-entity/index.md
-    git commit -qm "baseline: add verify entity"
+    cat > "docs/test-wf/${entity_slug}.md" <<EOF
+---
+title: "Example Feature"
+status: ${before_status}
+---
+EOF
+    if [ -n "$parent_feedback_body" ]; then
+      printf '%s\n' "$parent_feedback_body" >> "docs/test-wf/${entity_slug}.md"
+    fi
+    git add docs/test-wf/README.md "docs/test-wf/${entity_slug}.md"
+    git commit -qm "draft: add example feature"
 
     git checkout -q -b feature
-    sed -i.bak "s/^status: verify$/status: ${after_status}/" docs/test-wf/feedback-entity/index.md
-    rm -f docs/test-wf/feedback-entity/index.md.bak
-    cat >> docs/test-wf/feedback-entity/index.md <<EOF
-
-### Feedback Cycles
-
-- cycle: ${receipt_cycle}
-  rejected_stage: ${receipt_rejected}
-  feedback_to: ${receipt_target}
-  captain_decision: ${captain_decision}
-  routed_at: ${routed_at}
-  verify_artifact: ${verify_artifact}
-EOF
-    git add docs/test-wf/feedback-entity/index.md
-    if [ -n "$commit_body" ]; then
-      git commit -q -m "$subject" -m "$commit_body"
-    else
-      git commit -qm "$subject"
+    sed -i.bak "s/^status: ${before_status}$/status: ${after_status}/" "docs/test-wf/${entity_slug}.md"
+    rm -f "docs/test-wf/${entity_slug}.md.bak"
+    if [ -n "$feedback_body" ]; then
+      printf '%s\n' "$feedback_body" >> "docs/test-wf/${entity_slug}.md"
     fi
+    git add "docs/test-wf/${entity_slug}.md"
+    git commit -qm "$mutation_msg"
   )
   echo "$dir"
 }
 
-setup_fo_feedback_multi_fixture() {
-  local subject="$1" second_target="$2" dir
+# Build one commit with a skipped transition on an exempt body-table entity and
+# a legal transition on a non-exempt entity. A completion-looking signature must
+# not let the legal path hide the illegal one.
+setup_mixed_transition_fixture() {
+  local dir
   dir="$(mktemp -d)"
   (
     cd "$dir" || exit 1
     git init -q -b main
     git config user.email test@test
     git config user.name test
-    local entity target
-    for entity in feedback-one feedback-two; do
-      mkdir -p "docs/test-wf/$entity"
-      cat >"docs/test-wf/$entity/index.md" <<EOF
+
+    mkdir -p docs/test-wf/aaa-bodytable docs/test-wf/zzz-stageoutputs
+    cat > docs/test-wf/README.md <<'EOF'
 ---
-id: "$entity"
-title: "$entity"
-status: verify
-stage_outputs:
-  verify: verify.md
+stages:
+  states:
+    - name: sharp
+    - name: plan
+    - name: execute
 ---
 EOF
-    done
-    git add docs/test-wf/feedback-one/index.md docs/test-wf/feedback-two/index.md
-    git commit -qm "baseline: add two verify entities"
+    cat > docs/test-wf/aaa-bodytable/index.md <<'EOF'
+---
+id: "aaa-bodytable"
+status: sharp
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+    cat > docs/test-wf/zzz-stageoutputs/index.md <<'EOF'
+---
+id: "zzz-stageoutputs"
+status: sharp
+stage_outputs:
+  shape: shape.md
+---
+
+<!-- section:stage-artifact-links -->
+| Stage | File |
+|-------|------|
+| shape | [shape.md](shape.md) |
+<!-- /section:stage-artifact-links -->
+EOF
+    git add docs/test-wf
+    git commit -qm "baseline: add mixed transition entities"
 
     git checkout -q -b feature
-    for entity in feedback-one feedback-two; do
-      target=execute
-      [ "$entity" = feedback-one ] || target="$second_target"
-      sed -i.bak 's/^status: verify$/status: execute/' "docs/test-wf/$entity/index.md"
-      rm -f "docs/test-wf/$entity/index.md.bak"
-      cat >>"docs/test-wf/$entity/index.md" <<EOF
-
-### Feedback Cycles
-
-- cycle: 1
-  rejected_stage: verify
-  feedback_to: ${target}
-  captain_decision: fix
-  routed_at: 2026-07-15T11:03:07Z
-  verify_artifact: verify.md@ae56c20
-EOF
-    done
-    git add docs/test-wf/feedback-one/index.md docs/test-wf/feedback-two/index.md
-    git commit -qm "$subject"
+    sed -i.bak 's/^status: sharp$/status: execute/' docs/test-wf/aaa-bodytable/index.md
+    rm -f docs/test-wf/aaa-bodytable/index.md.bak
+    sed -i.bak 's/^status: sharp$/status: plan/' docs/test-wf/zzz-stageoutputs/index.md
+    rm -f docs/test-wf/zzz-stageoutputs/index.md.bak
+    git add docs/test-wf/aaa-bodytable/index.md docs/test-wf/zzz-stageoutputs/index.md
+    git commit -qm "plan(mixed): advance status to plan"
   )
   echo "$dir"
 }
@@ -429,15 +537,74 @@ run_check_only() {
   )
 }
 
+# shellcheck disable=SC2329 # invoked indirectly through assert_exit/eval below
+run_check_only_from_subdir() {
+  local repo_dir="$1"
+  (
+    cd "$repo_dir/docs/test-wf" || exit 1
+    # Exercise C14 from below the repository root. Its pathspecs must remain
+    # rooted at the worktree rather than inheriting this command prefix.
+    git update-ref refs/remotes/origin/main "$(git rev-parse main)"
+    bash "${BIN_DIR}/check-invariants.sh" --check entity-status-via-advance-stage-only
+  )
+}
+
+# Run C14 with a Git wrapper that fails one enumeration/receipt lookup. The
+# fixture setup and origin/main update still use the real Git binary so each
+# assertion isolates checker plumbing rather than fixture construction.
+# shellcheck disable=SC2329 # invoked indirectly through assert_exit/eval below
+run_check_only_with_git_fault() {
+  local repo_dir="$1" wrapper_dir="$2" fault_mode="$3"
+  (
+    cd "$repo_dir" || exit 1
+    git update-ref refs/remotes/origin/main "$(git rev-parse main)"
+    PATH="${wrapper_dir}:${PATH}" GIT_FAULT_MODE="$fault_mode" \
+      bash "${BIN_DIR}/check-invariants.sh" --check entity-status-via-advance-stage-only
+  )
+}
+
+setup_git_fault_wrapper() {
+  local wrapper_dir real_git
+  wrapper_dir="$(mktemp -d)"
+  real_git="$(command -v git)"
+  cat > "${wrapper_dir}/git" <<EOF
+#!/usr/bin/env bash
+set -u
+mode="\${GIT_FAULT_MODE:-}"
+case "\$mode" in
+  range-log)
+    if [ "\${1:-}" = "log" ]; then
+      for arg in "\$@"; do
+        [ "\$arg" = "--format=%H" ] && exit 77
+      done
+    fi
+    ;;
+  diff-tree)
+    [ "\${1:-}" = "diff-tree" ] && exit 77
+    ;;
+  subject-log)
+    if [ "\${1:-}" = "log" ]; then
+      for arg in "\$@"; do
+        [ "\$arg" = "--format=%s" ] && exit 77
+      done
+    fi
+    ;;
+esac
+exec "${real_git}" "\$@"
+EOF
+  chmod +x "${wrapper_dir}/git"
+  echo "$wrapper_dir"
+}
+
 echo "--- Case 1: BYPASS commit (mutate status:, no advance-stage signature) → FAIL ---"
 TMP="$(setup_fixture "manual hand-edit status to plan" "mutate" "edit")"
 assert_exit 1 "run_check_only '$TMP'" "Case-1 bypass detected (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 2: LEGITIMATE commit (mutate status:, msg contains signature) → PASS ---"
+echo "--- Case 2: COMPLETION receipt on a legal edge cannot impersonate FO stage entry → FAIL ---"
 TMP="$(setup_fixture "plan(baseline-entity): advance status to plan" "mutate" "edit")"
-assert_exit 0 "run_check_only '$TMP'" "Case-2 legitimate advance-stage passes (exit 0)"
+assert_exit 1 "run_check_only '$TMP'" "Case-2 completion receipt cannot authorize next-stage entry (exit 1)"
 rm -rf "$TMP"
 
 echo
@@ -471,9 +638,17 @@ assert_exit 0 "run_check_only '$TMP'" "Case-7 body status no false positive (exi
 rm -rf "$TMP"
 
 echo
-echo "--- Case 8: BODY-TABLE entity (stage-artifact-links table, no stage_outputs) manual status edit → PASS (exempt; advance-stage destructive here) [#117] ---"
+echo "--- Case 8: BODY-TABLE-only entity manual status edit → FAIL (historical body is non-authoritative) ---"
 TMP="$(setup_fixture "execute(bodytable-entity): correct status to plan" "bodytable" "edit")"
-assert_exit 0 "run_check_only '$TMP'" "Case-8 body-table manual edit exempt (exit 0)"
+assert_exit 1 "run_check_only '$TMP'" "Case-8 body-table-only manual edit requires Contract 1 (exit 1)"
+rm -rf "$TMP"
+
+TMP="$(setup_fixture "dispatch: bodytable-entity enters plan" "bodytable" "edit")"
+assert_exit 1 "run_check_only '$TMP'" "Case-8 malformed FO-shaped dispatch cannot use ownerless exemption (exit 1)"
+rm -rf "$TMP"
+
+TMP="$(setup_fixture "advance: bodytable-entity entering execute" "bodytable" "edit")"
+assert_exit 1 "run_check_only '$TMP'" "Case-8 FO-shaped receipt must bind actual resulting stage before exemption (exit 1)"
 rm -rf "$TMP"
 
 echo
@@ -603,20 +778,20 @@ assert_exit 1 "run_check_only '$TMP'" "Case-11 strip-stage_outputs after-state b
 rm -rf "$TMP"
 
 echo
-echo "--- Case 12 (SIGPIPE repro): LARGE (>100KB) body-table entity, marker near top, manual status edit → PASS (exempt; #C14-pipefail) ---"
+echo "--- Case 12 (SIGPIPE repro): LARGE (>100KB) body-table-only manual status edit → FAIL Contract 1 ---"
 # Regresses PR #14 CI-red root cause: _entity_bodytable_no_stage_outputs's
 # marker check used `printf | grep -q`. On an entity whose parent-rev
 # index.md exceeds the kernel pipe-buffer size, grep -q can match and exit
 # before printf finishes writing, SIGPIPEing printf; under `set -o
 # pipefail` that non-zero exit was misread as "no marker" and this
-# legitimate body-table entity LOST its exemption. Deterministic on this
+# obsolete exemption once depended on pipe timing. Deterministic on this
 # fixture size (verified via direct repro before wiring this case in).
 TMP="$(setup_fixture "execute(large-bodytable-entity): correct status to plan" "bodytable-large" "edit")"
-assert_exit 0 "run_check_only '$TMP'" "Case-12 large body-table manual edit exempt (exit 0)"
+assert_exit 1 "run_check_only '$TMP'" "Case-12 large body-table-only manual edit requires Contract 1 (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 13 (SIGPIPE repro, reverse direction): LARGE (~380KB) stage_outputs entity, marker near the end, manual status edit → FAIL (advance-stage safe; exemption is narrow) ---"
+echo "--- Case 13 (SIGPIPE repro, reverse direction): LARGE (~380KB) stage_outputs entity, manual status edit → FAIL Contract 1 ---"
 # Sibling of Case 12: the stage_outputs check used
 # `printf | awk ... | grep -q y` inside `if PIPELINE; then return 1; fi`.
 # grep -q y matching and exiting early can SIGPIPE the still-writing
@@ -661,81 +836,247 @@ assert_exit 1 "run_check_only '$TMP'" "Case-18 FO dispatch receipt requires a no
 rm -rf "$TMP"
 
 echo
-echo "--- Case 19: FO FEEDBACK receipt (verify cycle 1 → execute, canonical subject/body/status) → PASS ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
-assert_exit 0 "run_check_only '$TMP'" "Case-19 canonical FO feedback receipt passes (exit 0)"
+echo "--- Case 19: FO SKIPPED transition (draft→plan, canonical-looking subject) → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: example-feature entering plan" draft plan)"
+assert_exit 1 "run_check_only '$TMP'" "Case-19 FO receipt cannot skip declared workflow stages (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 20: FO FEEDBACK wrong resulting status → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" plan 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
-assert_exit 1 "run_check_only '$TMP'" "Case-20 feedback target must equal resulting status (exit 1)"
+echo "--- Case 20: FO BACKWARD transition without feedback edge (shape→draft) → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "advance: example-feature entering draft" shape draft)"
+assert_exit 1 "run_check_only '$TMP'" "Case-20 FO receipt cannot move backward without a declared feedback edge (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 21: FO FEEDBACK rejected-stage mismatch between subject and body → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity review cycle 1 to execute" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
-assert_exit 1 "run_check_only '$TMP'" "Case-21 feedback rejected stage must match body (exit 1)"
+echo "--- Case 21: FO DECLARED FEEDBACK transition (verify→execute) → PASS ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: example-feature entering execute" verify execute)"
+assert_exit 0 "run_check_only '$TMP'" "Case-21 FO receipt accepts a declared workflow feedback edge (exit 0)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 22: FO FEEDBACK cycle mismatch between subject and body → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 2 to execute" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
-assert_exit 1 "run_check_only '$TMP'" "Case-22 feedback cycle must match body (exit 1)"
+echo "--- Case 22: BODY-TABLE exemption cannot skip workflow stages (sharp→execute) → FAIL ---"
+TMP="$(setup_fixture "manual body-table correction to execute" bodytable edit execute)"
+assert_exit 1 "run_check_only '$TMP'" "Case-22 body-table exemption preserves transition-graph enforcement (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 23: FO FEEDBACK target mismatch between subject and body → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify plan fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
-assert_exit 1 "run_check_only '$TMP'" "Case-23 feedback target must match body (exit 1)"
+echo "--- Case 23: COMPLETION signature cannot authorize body-table skipped stage → FAIL ---"
+TMP="$(setup_fixture "execute(bodytable): advance status to execute" bodytable edit execute)"
+assert_exit 1 "run_check_only '$TMP'" "Case-23 completion signature cannot bypass body-table transition graph (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 24: FO FEEDBACK non-canonical subject grammar → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 into execute" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20)"
-assert_exit 1 "run_check_only '$TMP'" "Case-24 feedback subject requires canonical grammar (exit 1)"
+echo "--- Case 24: CRLF + trailing-space workflow stages still match legal edge → PASS ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: example-feature entering shape" draft shape crlf-trailing)"
+assert_exit 0 "run_check_only '$TMP'" "Case-24 workflow graph parser normalizes CRLF and trailing whitespace (exit 0)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 25: FO FEEDBACK canonical text in commit body only → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "manual: route feedback" execute 1 verify execute fix 2026-07-15T11:03:07Z verify.md@ae56c20 "feedback: feedback-entity verify cycle 1 to execute")"
-assert_exit 1 "run_check_only '$TMP'" "Case-25 feedback receipt is subject-only (exit 1)"
+echo "--- Case 25: MIXED commit validates every transition before completion receipt → FAIL ---"
+TMP="$(setup_mixed_transition_fixture)"
+assert_exit 1 "run_check_only '$TMP'" "Case-25 legal non-exempt path cannot hide illegal exempt transition (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 26: FO FEEDBACK non-fix captain decision → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute defer 2026-07-15T11:03:07Z verify.md@ae56c20)"
-assert_exit 1 "run_check_only '$TMP'" "Case-26 feedback body requires captain fix decision (exit 1)"
+echo "--- Case 26: ROOT sibling list names are not workflow stages → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "advance: example-feature entering plan" shape plan unrelated-list)"
+assert_exit 1 "run_check_only '$TMP'" "Case-26 parser stops at the next root-level frontmatter key (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 27: FO FEEDBACK malformed routed timestamp → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute fix not-a-time verify.md@ae56c20)"
-assert_exit 1 "run_check_only '$TMP'" "Case-27 feedback body requires canonical routed time (exit 1)"
+echo "--- Case 27: CRLF commit subject still matches canonical receipt → PASS ---"
+TMP="$(setup_fo_dispatch_fixture $'dispatch: example-feature entering shape\r')"
+assert_exit 0 "run_check_only '$TMP'" "Case-27 FO subject normalization accepts CRLF-formatted commit text (exit 0)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 28: FO FEEDBACK mismatched verify artifact provenance → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute fix 2026-07-15T11:03:07Z review.md@deadbee)"
-assert_exit 1 "run_check_only '$TMP'" "Case-28 feedback artifact must match rejected stage (exit 1)"
+echo "--- Case 28: SINGLE-WORD flat slug remains inside C14 scope → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: task entering plan" draft plan lf task)"
+assert_exit 1 "run_check_only '$TMP'" "Case-28 single-word flat entity cannot bypass transition validation (exit 1)"
+assert_exit 1 "run_check_only_from_subdir '$TMP'" "Case-28 subdirectory invocation cannot bypass single-word flat entity validation (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 29: FO FEEDBACK multi-entity commit requires matching receipt on every path → FAIL ---"
-TMP="$(setup_fo_feedback_multi_fixture "feedback: feedback entities verify cycle 1 to execute" plan)"
-assert_exit 1 "run_check_only '$TMP'" "Case-29 feedback receipt binds every mutated entity path (exit 1)"
+echo "--- Case 29: NESTED decoy stages list is not a workflow graph → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: example-feature entering plan" draft plan nested-stages)"
+assert_exit 1 "run_check_only '$TMP'" "Case-29 parser ignores nested stages keys outside the root workflow graph (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 30: FO FEEDBACK rejected stage must equal parent status → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity review cycle 1 to execute" execute 1 review execute fix 2026-07-15T11:03:07Z review.md@deadbee)"
-assert_exit 1 "run_check_only '$TMP'" "Case-30 feedback rejected stage binds parent status (exit 1)"
+echo "--- Case 30: NESTED named list inside a state is not another stage → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "dispatch: example-feature entering plan" draft plan nested-stage-name)"
+assert_exit 1 "run_check_only '$TMP'" "Case-30 parser requires canonical stage-item indentation (exit 1)"
 rm -rf "$TMP"
 
 echo
-echo "--- Case 31: FO FEEDBACK impossible routed calendar timestamp → FAIL ---"
-TMP="$(setup_fo_feedback_fixture "feedback: feedback-entity verify cycle 1 to execute" execute 1 verify execute fix 2026-99-99T99:99:99Z verify.md@ae56c20)"
-assert_exit 1 "run_check_only '$TMP'" "Case-31 feedback routed time must be a real UTC instant (exit 1)"
+echo "--- Case 31: NESTED feedback metadata is not a workflow feedback edge → FAIL ---"
+TMP="$(setup_fo_dispatch_fixture "advance: example-feature entering draft" shape draft nested-feedback)"
+assert_exit 1 "run_check_only '$TMP'" "Case-31 parser requires canonical feedback-to indentation (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 31: Git enumeration and receipt lookups fail closed ---"
+GIT_FAULT_WRAPPER="$(setup_git_fault_wrapper)"
+
+TMP="$(setup_fixture "manual hand-edit status to plan" "mutate" "edit")"
+assert_exit 1 "run_check_only_with_git_fault '$TMP' '$GIT_FAULT_WRAPPER' range-log" "Case-31 range-log failure is not an empty successful scan (exit 1)"
+assert_exit 1 "run_check_only_with_git_fault '$TMP' '$GIT_FAULT_WRAPPER' diff-tree" "Case-31 diff-tree failure is not an unchanged entity (exit 1)"
+rm -rf "$TMP"
+
+TMP="$(setup_fixture "manual body-table correction to plan" "bodytable" "edit")"
+assert_exit 1 "run_check_only_with_git_fault '$TMP' '$GIT_FAULT_WRAPPER' subject-log" "Case-31 subject lookup failure cannot select ownerless compatibility (exit 1)"
+rm -rf "$TMP" "$GIT_FAULT_WRAPPER"
+
+# ---- FO feedback-stage receipt cases (Principle 15 third receipt kind) ----
+# Canonical/forged ### Feedback Cycles body records shared by Cases 32-38.
+FB_VALID=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+FB_MISMATCH_CYCLE=$'\n### Feedback Cycles\n\n- cycle: 2\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+FB_WRONG_DECISION=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: hold\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+FB_BAD_TIMESTAMP=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12 13:48:06\n  verify_artifact: verify.md@abc1234\n'
+FB_BAD_ARTIFACT=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: execute.md@abc1234\n'
+FB_DUPLICATE_SECTION=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+
+echo
+echo "--- Case 32: FEEDBACK canonical receipt (verify->execute, matching body record) → PASS ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_VALID")"
+assert_exit 0 "run_check_only '$TMP'" "Case-32 canonical FO feedback-stage receipt passes (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 33: FEEDBACK FORGED — subject with no Feedback Cycles record at all → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "")"
+assert_exit 1 "run_check_only '$TMP'" "Case-33 forged feedback subject without a body record is rejected (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 34: FEEDBACK FORGED — body record cycle mismatches subject cycle → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_MISMATCH_CYCLE")"
+assert_exit 1 "run_check_only '$TMP'" "Case-34 mismatched cycle number cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 35: FEEDBACK FORGED — captain_decision is not fix → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_WRONG_DECISION")"
+assert_exit 1 "run_check_only '$TMP'" "Case-35 non-fix captain_decision cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 36: FEEDBACK FORGED — routed_at is not valid UTC RFC3339 → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_BAD_TIMESTAMP")"
+assert_exit 1 "run_check_only '$TMP'" "Case-36 malformed routed_at cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 37: FEEDBACK FORGED — verify_artifact names the wrong stage → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_BAD_ARTIFACT")"
+assert_exit 1 "run_check_only '$TMP'" "Case-37 verify_artifact stage mismatch cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 38: FEEDBACK FORGED — duplicate Feedback Cycles sections → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_DUPLICATE_SECTION")"
+assert_exit 1 "run_check_only '$TMP'" "Case-38 duplicate Feedback Cycles sections cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 39: FEEDBACK over a NON-feedback edge (graph gate blocks before receipt case) → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature shape cycle 1 to execute" shape execute example-feature "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-39 feedback subject cannot bless an undeclared graph edge (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 40: FEEDBACK malformed subject grammar — missing 'cycle N' → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify to execute" verify execute example-feature "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-40 feedback receipt requires the cycle keyword and number (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 41: FEEDBACK malformed subject grammar — missing 'to <target>' → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 execute" verify execute example-feature "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-41 feedback receipt requires the 'to <target>' clause (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 42: FEEDBACK malformed subject grammar — uppercase target stage → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to EXECUTE" verify execute example-feature "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-42 feedback receipt requires lowercase canonical stage grammar (exit 1)"
+rm -rf "$TMP"
+
+# ---- Codex-found authority-gap regressions (feedback-to-edge bind,
+# stale-record replay + monotonic cycle, fence-safety, bounded cycle) ----
+
+echo
+echo "--- Case 43: FEEDBACK subject over a NEXT-STAGE edge that is NOT the rejected stage's declared feedback-to → FAIL (P1-#1) ---"
+# execute->verify IS a legal graph edge (the declared NEXT stage per README
+# order), but it is NOT execute's feedback-to (only verify declares
+# feedback-to: execute). A forged feedback: receipt + matching body record
+# over this forward edge must still be rejected — the shared graph gate
+# alone (legal edge, forward or feedback) is not sufficient authority.
+FB_EXECUTE_TO_VERIFY=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: execute\n  feedback_to: verify\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: execute.md@abc1234\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature execute cycle 1 to verify" execute verify example-feature "$FB_EXECUTE_TO_VERIFY")"
+assert_exit 1 "run_check_only '$TMP'" "Case-43 feedback receipt cannot bless a merely-legal forward edge as if it were the feedback-to edge (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 44: FEEDBACK reusing an UNCHANGED parent cycle record (no newly-added record) → FAIL (P1-#2 freshness) ---"
+# Parent already carries the exact cycle-1 record (FB_VALID). The mutation
+# commit changes status: verify->execute but appends NOTHING new — the
+# "evidence" is stale, byte-identical, pre-existing parent content, not
+# fresh routing evidence produced by THIS commit.
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "" "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-44 stale unchanged parent cycle record cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 45: FEEDBACK non-monotonic — new record's cycle is LOWER than an already-recorded parent cycle → FAIL (P1-#2 monotonic) ---"
+# Parent already has cycle 2 on record. The mutation commit appends a
+# genuinely NEW, distinct record (different routed_at/verify_artifact, so it
+# passes the freshness check) but claims cycle 1 — lower than the entity's
+# already-recorded maximum. Cycle numbering must be monotonic per entity.
+FB_PARENT_CYCLE2=$'\n### Feedback Cycles\n\n- cycle: 2\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-10T10:00:00Z\n  verify_artifact: verify.md@aaaa111\n'
+FB_CHILD_NEW_CYCLE1=$'- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@bbbb222\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_CHILD_NEW_CYCLE1" "$FB_PARENT_CYCLE2")"
+assert_exit 1 "run_check_only '$TMP'" "Case-45 non-monotonic (lower) cycle number cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 46: FEEDBACK record's ONLY appearance is inside a fenced code block → FAIL (P1-#3 fence-safety) ---"
+# The entity carries no real top-level ### Feedback Cycles section — only a
+# fenced ``` block containing what looks like a canonical record. Fenced
+# example content must never manufacture authority.
+FB_FENCED_ONLY=$'\n```\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n```\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_FENCED_ONLY")"
+assert_exit 1 "run_check_only '$TMP'" "Case-46 fenced-code-block record cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 47: FEEDBACK over-long/huge cycle number in the subject → FAIL (P2 bounded cycle) ---"
+# Cycle digit run exceeds the 9-digit canonical cap. Must be rejected as
+# malformed grammar before any body-record comparison is attempted.
+FB_HUGE_CYCLE=$'\n### Feedback Cycles\n\n- cycle: 123456789012\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 123456789012 to execute" verify execute example-feature "$FB_HUGE_CYCLE")"
+assert_exit 1 "run_check_only '$TMP'" "Case-47 over-long cycle number cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 48: FEEDBACK record inside a REAL \`\`\`-fence whose only 'closing' marker is TAB-indented → FAIL (codex round-2 P1 tab-fence bypass) ---"
+# The outer fence opens unindented, so from CommonMark's view the WHOLE block
+# up to the final unindented \`\`\` is one code fence — the tab-indented \`\`\`
+# mid-block is not a valid ≤3-space-indented closer, so it never actually
+# closes anything. A checker that treats [[:space:]] (which matches TAB) as
+# equivalent to CommonMark's 0-3-SPACE indent would wrongly let that
+# tab-indented line close the fence early, re-exposing the embedded
+# "### Feedback Cycles" record as if it were live, unfenced content.
+FB_TAB_FAKE_CLOSE_BACKTICK=$'\n```\n\t```\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n```\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_TAB_FAKE_CLOSE_BACKTICK")"
+assert_exit 1 "run_check_only '$TMP'" "Case-48 tab-indented fake closing backtick-fence marker cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 49: FEEDBACK record inside a REAL ~~~-fence whose only 'closing' marker is TAB-indented → FAIL (codex round-2 P1 tab-fence bypass, tilde variant) ---"
+FB_TAB_FAKE_CLOSE_TILDE=$'\n~~~\n\t~~~\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n~~~\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_TAB_FAKE_CLOSE_TILDE")"
+assert_exit 1 "run_check_only '$TMP'" "Case-49 tab-indented fake closing tilde-fence marker cannot authorize the receipt (exit 1)"
 rm -rf "$TMP"
 
 echo
