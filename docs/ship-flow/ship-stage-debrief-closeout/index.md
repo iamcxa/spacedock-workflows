@@ -50,6 +50,7 @@ worktree: .worktrees/spacedock-ensign-ship-stage-debrief-closeout
 status: ship
 stage_outputs:
   shape: shape.md
+  design: design.md
   verify: verify.md
 ---
 
