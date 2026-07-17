@@ -12,9 +12,10 @@ contract_decision_required: false
 pre_mortem:
   category: wrong-dcs
   one_liner: 'The C16 string-test pins that the rule text exists but not that the FO obeys it, so verify passes while FO behavior stays unchanged (accepted: the value is discoverability + regression-proofing, not behavioral enforcement).'
-status: shape
+status: design
 stage_outputs:
   shape: shape.md
+  design: design.md
 captain_bet: "以後 FO 不會再叫我看 plan，反而會用白話方式多跟我確認 spec (shape) 的內容"
 issue: "#60"
 tracker: gh
