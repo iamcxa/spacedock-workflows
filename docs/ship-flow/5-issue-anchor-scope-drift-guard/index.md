@@ -17,6 +17,7 @@ design_required: true
 issue: "#49"
 tracker: gh
 worktree: /Users/kent/conductor/workspaces/spacedock-workflows/muscat
+pr: "#59"
 ---
 
 ## Shape Report
