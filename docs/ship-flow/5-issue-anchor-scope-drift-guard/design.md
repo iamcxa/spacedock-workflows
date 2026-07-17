@@ -215,3 +215,65 @@ No blocking unknowns. All CDs have a chosen option with a testable enforcement p
 - **CD4** = A (five-field YAML source-diff artifact, non-hollow rule test-enforced)
 
 The pre-mortem risk (hollow prose passing verify) is mitigated by CD2 and CD4 in combination: an end-to-end fixture invokes the resolver and asserts the concrete YAML fields, so a model that only writes prose cannot pass the test. The appetite (small-batch, 2-3 days) holds — all changes are in a single plugin subdirectory with an existing test harness pattern to copy.
+
+## Design Report
+
+status: passed
+stage_cost: captain-directed reconciliation session (SO/EM fable cross-review + opus FO adjudication against primary-source code, captain confirmation); no per-dispatch agent cost tracked
+iterations: 1 reconciliation pass (SO/EM cross-review -> FO adjudication -> captain confirmation)
+contradictions_resolved: 5
+captain_decisions: 5
+reviewer_verdict: PROCEED
+
+Design Readiness Review: skipped - no risk trigger (`affects_ui: false`, no data-schema change, no cross-service-contract change, no event-sourcing-domain change, and no whole-page visual target in this entity; internal ship-flow methodology plus one wired mod only).
+
+This backfills the schema-required `## Design Report` / `### Captain Decisions` / `### Hand-off to Plan` envelope onto the CD1-CD5 Reconciliation above (the substantive decision content), so `check-invariants.sh` C4 and ship-plan Step 1.6 can import it mechanically. No new decisions are introduced here — each Dn below cites the corresponding CDn already adjudicated in Reconciliation.
+
+### Metrics
+
+status: passed
+duration_minutes: 0
+iteration_count: 1
+captain_decisions_count: 5
+open_decisions_count: 0
+reviewer_verdict: PROCEED
+
+### Captain Decisions
+
+- **D1|Captain decision**: CD1 route-vocabulary reconciliation — reuse the existing `proceed`/`narrow`/`return` triad; the guard's `return` is narrowly defined as "the original goal is already met by existing capability — close or defer this entity"; `re-anchor` maps to `return`, `split` is a deferred rabbit hole (ref: design.md Reconciliation CD1, Trade-off Table CD1).
+- **D2|Captain decision**: CD2 enforcement style confirmed as designed — wired mod `plugins/ship-flow/_mods/issue-anchor-guard.md` with `## Hook: pre-shape` + extractable resolver block + end-to-end shell fixture; the Hook is a convention label invoked by the ship-shape SKILL (same pattern as contribution-contract's `pre-review-spend`), NOT an FO-auto-run lifecycle hook; an optional shape-confirm-side belt-and-braces check is deferred (gated on the `shape-confirm-instance-awareness` ROADMAP Later item), not blocking this round (ref: design.md Reconciliation CD2, Trade-off Table CD2).
+- **D3|Captain decision**: CD3 re-entry detection confirmed as designed — automatic detection via entity folder artifacts (`design.md`/`plan.md`/`execute.md`/`verify.md`/`review.md`) OR `status:` frontmatter; `status ∉ {draft, sharp}` is the PRIMARY signal (covers flat-file-layout entities with no folder to grep), folder artifacts are secondary; default-on with an explicit `--skip-issue-anchor-guard` escape hatch (ref: design.md Reconciliation CD3, Trade-off Table CD3).
+- **D4|Captain decision**: CD4 per-AC refinement — `original_issue_acs[]` becomes per-AC rows, each carrying its own `met_by_existing_capability: <true|false>` (not a single aggregate `goal_still_unmet` boolean), so the case-study blind spot (one AC already achievable by existing capability hiding inside an aggregate answer) cannot hide; `verdict` derives from the rows; the non-hollow rule (verdict:proceed requires scope_subset_of_issue:true AND goal_still_unmet:true) still holds, with `goal_still_unmet` now derived as true when ANY AC row has `met_by_existing_capability: false`. Honest residual (shell test cannot close it): a model can still fill every field with a false ⊆-judgment (ref: design.md Reconciliation CD4, Trade-off Table CD4).
+- **D5|Captain decision**: CD5 anchor availability — an empty-string `issue:` is treated as absent (archived entity 1 carries a literal empty `issue:`); bounded intake-stamping carries `issue:`/`tracker:` into entity frontmatter at shape-confirm when a shape directive references a tracker issue, so future entities are born anchored (reference only, no full tracker integration) (ref: design.md Reconciliation CD5).
+
+### Hand-off to Plan
+
+<!-- section:hand-off-to-plan -->
+```yaml
+design-skipped: false
+design_constraints:
+  - type: contract
+    assertion: "Guard emits verdict as exactly one of proceed/narrow/return (CD1 vocabulary lock, no new SO/EM route values); re-anchor maps to return, narrowly defined as 'the original goal is already met by existing capability — close or defer this entity'; split stays out of scope this round."
+    rationale_decision: D1
+    source_artifact: docs/ship-flow/5-issue-anchor-scope-drift-guard/design.md
+  - type: contract
+    assertion: "Ship plugins/ship-flow/_mods/issue-anchor-guard.md as a wired mod: '## Hook: pre-shape' heading + an extractable resolver block bounded by '# issue-anchor-guard-resolver:start'/':end' (valid shell, bash -n), invoked from a pinned <!-- section:issue-anchor-guard --> block in plugins/ship-flow/skills/ship-shape/SKILL.md before Intake — not an inline prose-only SKILL section with a string-assertion test."
+    rationale_decision: D2
+    source_artifact: docs/ship-flow/5-issue-anchor-scope-drift-guard/design.md
+  - type: contract
+    assertion: "Resolver auto-detects re-shape: any of design.md/plan.md/execute.md/verify.md/review.md present in the entity folder, OR entity `status:` in {design,plan,execute,verify,ship,done} (status is the PRIMARY signal so flat-file-layout entities with no folder are covered; folder artifacts are secondary). Default-on; escape hatch is an explicit --skip-issue-anchor-guard flag, never the inverse."
+    rationale_decision: D3
+    source_artifact: docs/ship-flow/5-issue-anchor-scope-drift-guard/design.md
+  - type: schema-contract
+    assertion: "Source-diff YAML at .context/ship-flow/source-diff-<id>.yaml carries schema_version, entity_id, issue_ref, issue_fetched_at, original_issue_acs[] (verbatim gh-quoted rows, each an object with the quoted AC text plus its own met_by_existing_capability:<bool>; non-empty when issue: is present), current_scope_delta[], scope_subset_of_issue:<bool>, goal_still_unmet:<bool> (derived: true when ANY AC row has met_by_existing_capability:false), verdict, and rationale (cites >=1 AC by number). Non-hollow rule: if verdict:proceed then BOTH scope_subset_of_issue:true AND goal_still_unmet:true MUST hold; otherwise verdict MUST be narrow or return."
+    rationale_decision: D4
+    source_artifact: docs/ship-flow/5-issue-anchor-scope-drift-guard/design.md
+  - type: contract
+    assertion: "Resolver treats an empty-string issue: as absent — writes no_issue_anchor:true + a captain_prompt marker (never a fake diff) and halts for captain resolution (edit the entity or pass --skip-issue-anchor-guard); a gh issue view failure (rate-limit/offline) exits non-zero with a captain-visible error string, never a fake-empty AC list; shape-confirm carries a shape directive's tracker reference (URL / #N) into the entity's issue:/tracker: frontmatter, reference only, no full tracker integration."
+    rationale_decision: D5
+    source_artifact: docs/ship-flow/5-issue-anchor-scope-drift-guard/design.md
+open_decisions: []
+artifact_paths:
+  - path: docs/ship-flow/5-issue-anchor-scope-drift-guard/design.md
+```
+<!-- /section:hand-off-to-plan -->
