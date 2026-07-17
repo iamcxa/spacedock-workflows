@@ -421,3 +421,67 @@ ancestor-of-terminal-first predecessor scan with a legacy fallback that preserve
 bounded-failure behavior, and an unconditional fail-closed validator-root guard. All three RED
 before fix (verified against the pre-fix code via git stash) and GREEN after, with the full
 existing regression suite (R10/R11/default) unaffected on both shells.
+
+## Stage Report: ship
+
+- DONE: PR #56 created (base `main`, head `spacedock-ensign/ship-stage-debrief-closeout`) —
+  https://github.com/iamcxa/spacedock-workflows/pull/56. Body describes the closeout feature
+  (landing envelope, `--closeout-mode direct|pull-request`, recursion sentinel, AC-1..AC-7), cites
+  verify Round 13 PROCEED evidence, and references the merged C14 prerequisite #54 (`79df977`,
+  adopted via merge commit `5767488`). Branch confirmed 0 behind / 97 ahead of `origin/main`,
+  `mergeable: MERGEABLE`.
+- DONE: Doc-impact gate satisfied. Ran `bin/doc-impact-gate.sh` locally against
+  `merge-base(origin/main, HEAD)...HEAD`: `PASS reference-schema-readme` and
+  `PASS checker-source-map` — both mechanically-triggered couplings already have their coupled doc
+  (`references/doc-sync-context.md`, `plugins/ship-flow/README.md`) touched in-diff (from T5). No
+  new `bin/` checker was added (the reconciler is an existing, heavily-extended file with an
+  existing Source-Map row), so no new row was required. Declared in the PR body.
+- DONE: Canonical docs synced per `plan.md`'s Canonical Doc Actions, via `lib/patch-map.sh` CAS
+  (read-first `--if-hash`, no freehand edits):
+  `ROADMAP.md` — removed the stale `Now` row (still said stage `shape`) and appended exactly one
+  `Shipped` row (`ship-stage-debrief-closeout | ... | 2026-07-17 (PR #56)`).
+  `PRODUCT.md` — appended one `capabilities` row for the native post-merge closeout.
+  `ARCHITECTURE.md` — replaced `components` (prose + mermaid: new `closeoutlib` component and
+  relations, extended references list), appended one `constraints` bullet citing D1-D5, and
+  appended one `decisions` row summarizing D1-D5. All three `patch-map.sh` calls exited 0; local
+  `check-invariants.sh` (exit 0, all C1-C15 OK), `check-no-dangling.sh` (PASS), and
+  `check-version-triple.sh` (PASS, version unchanged at 0.9.0) all re-verified after the edits.
+- DONE: Release consideration recorded. This PR does not bump the plugin version (stays 0.9.0,
+  `check-version-triple.sh` PASS) — matches this repo's established convention of a separate later
+  `chore(ship-flow): release X.Y.Z` PR (precedent: #19, #17) rather than bundling a version bump
+  into the feature PR. Given the size of this slice (native post-merge closeout is a new pipeline
+  capability, not a patch), a minor bump (0.9.0 → 0.10.0) is a reasonable candidate for that
+  follow-up release PR; left for the captain to schedule.
+- FINDING: PR #56 CI shows `doc_impact` PASS and `GitGuardian Security Checks` PASS, but
+  `invariants` FAILS. Root-caused (not a regression from this stage's changes — this stage touched
+  only `ROADMAP.md`/`PRODUCT.md`/`ARCHITECTURE.md`): `lib/__tests__/test-merged-pr-closeout-reconciler.sh`'s
+  `setup_repo()` runs `git init -q "$repo"` without pinning the initial branch name, unlike sibling
+  fixtures in the same suite (`test-apply-closeout-bundle.sh` / `test-closeout-receipt.sh` use
+  `git init -q -b main`; `test-landing-envelope-resolver.sh` follows with `git branch -M main`).
+  The local dev sandbox where all 13 verify rounds ran has `init.defaultbranch=main` set
+  system-wide (macOS Xcode git); `ubuntu-latest` (GitHub-hosted CI) does not, so the first
+  `git checkout -q main` reached in the default run (`prepare_full_d1_repo`, via
+  `run_missing_landing_field_matrix`) fails with `pathspec 'main' did not match any file(s)`, and
+  `set -euo pipefail` aborts the rest of that one file — silently skipping most of its ~30
+  remaining test-case functions on real CI, though every other `test-*.sh` in the same run passed.
+  This means large parts of this feature's claimed local-GREEN coverage have never been proven on
+  a portable CI runner. Posted as a detailed PR comment
+  (https://github.com/iamcxa/spacedock-workflows/pull/56#issuecomment-5001700139); NOT fixed here —
+  out of this stage's scope (PR + canonical docs only). Recommend the FO route a narrowly-scoped
+  fix (pin the branch name in `setup_repo()`) before merge.
+- BOUNDARY (HARD STOP honored): PR #56 was NOT merged (no `gh pr merge` run). Entity status was NOT
+  advanced to `done`. `merged-pr-closeout-reconciler.sh` / the closeout / the `done` merge hook was
+  NOT run. No rebase, no force-push. PR #54 and no other entity were touched. Entity remains at
+  `status: ship` with PR #56 open.
+
+### Summary
+
+Opened PR #56 (base `main`) describing the native post-merge closeout feature, satisfied the
+doc-impact gate mechanically (both triggered couplings already covered in-diff), and synced
+ROADMAP/PRODUCT/ARCHITECTURE per `plan.md`'s Canonical Doc Actions via the CAS-mediated
+`patch-map.sh` (no freehand edits). Discovered and root-caused a pre-existing, CI-only test-fixture
+bug in `test-merged-pr-closeout-reconciler.sh` (unpinned `git init` default branch) that silently
+skips most of that file's cases on GitHub Actions despite 13 rounds of local GREEN — documented on
+the PR and here, left unfixed as out of ship-stage scope. Did not merge, did not advance to `done`,
+did not run the closeout reconciler; entity stays at `status: ship` with PR #56 open for captain
+review.
