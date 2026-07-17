@@ -6,7 +6,8 @@ parent_pitch: "6"
 harvest_required: true
 layout: folder
 status: plan
-stage_outputs: {}
+stage_outputs:
+  plan: plan.md
 ---
 
 ### Problem
