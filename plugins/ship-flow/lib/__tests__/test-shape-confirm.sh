@@ -915,4 +915,109 @@ fi
 popd >/dev/null || exit 1
 rm -rf "$TMP"
 
+# ── DC-5.1: pitch.issue/pitch.tracker stamped into pitch frontmatter (entity 5 CD5(b)) ──
+# Bounded intake-stamping: when a shape proposal carries pitch.issue + pitch.tracker
+# (the shape composer detected a tracker-issue reference in the /shape directive),
+# shape-confirm.sh carries them forward into the entity frontmatter so future
+# entities are born anchored for plugins/ship-flow/_mods/issue-anchor-guard.md.
+proposal_with_issue_tracker() {
+  cat <<'EOF'
+{
+  "pitch": {
+    "id": "090",
+    "slug": "test-pitch",
+    "title": "Test pitch",
+    "appetite": "2 days",
+    "problem": "Testing issue/tracker emission into pitch frontmatter",
+    "acceptance_outcome": "shape-confirm.sh emits issue: and tracker: fields when present in proposal JSON pitch object for both folder and flat layouts.",
+    "issue": "#49",
+    "tracker": "gh",
+    "stated_assumptions": [],
+    "dag_mermaid": "graph LR\n  A --> B",
+    "pm_skill_receipts": {
+      "stage": "ship-shape",
+      "mode": "mode-a",
+      "appetite": "small-batch",
+      "compose_guard": "passed",
+      "receipts": [
+        {"phase": "intake-problem", "delegate": "problem-framing-canvas", "required": true, "status": "invoked", "evidence": "Skill: problem-framing-canvas", "fallback": null, "rationale": "Feeds the Problem block."},
+        {"phase": "scope-decompose", "delegate": "opportunity-solution-tree", "required": true, "status": "unavailable", "evidence": null, "fallback": "inline", "rationale": "Skill unavailable; inline fallback recorded before compose."},
+        {"phase": "assumption-extract", "delegate": "pol-probe-advisor", "required": true, "status": "invoked", "evidence": "Skill: pol-probe-advisor", "fallback": null, "rationale": "Filters critical assumptions."},
+        {"phase": "acceptance-outcome", "delegate": "press-release", "required": true, "status": "skipped", "evidence": null, "fallback": null, "rationale": "Small-scope skip rule matched before compose."}
+      ]
+    }
+  },
+  "children": [
+    {"id": "090.1", "slug": "child-a", "title": "Child A", "depends_on": []}
+  ],
+  "rabbit_holes": [],
+  "deleted_from_shape": []
+}
+EOF
+}
+
+echo
+echo "--- DC-5.1-1: pitch.issue/pitch.tracker emitted into folder-layout index.md ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-issue-tracker.json"
+proposal_with_issue_tracker > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1
+PITCH_INDEX="docs/ship-flow/090-test-pitch/index.md"
+if grep -qE '^issue:[[:space:]]*"#49"' "$PITCH_INDEX" 2>/dev/null; then
+  echo "OK DC-5.1-1a folder index.md has issue: \"#49\""
+else
+  echo "FAIL DC-5.1-1a folder index.md missing issue: \"#49\" (expected red before implementation)"
+  FAIL=1
+fi
+if grep -qE '^tracker:[[:space:]]*gh[[:space:]]*$' "$PITCH_INDEX" 2>/dev/null; then
+  echo "OK DC-5.1-1b folder index.md has tracker: gh"
+else
+  echo "FAIL DC-5.1-1b folder index.md missing tracker: gh (expected red before implementation)"
+  FAIL=1
+fi
+# Child (shaped-child) must NOT carry issue/tracker — bounded to the pitch entity only
+if ! grep -qE '^issue:|^tracker:' docs/ship-flow/090.1-child-a/index.md 2>/dev/null; then
+  echo "OK DC-5.1-1c shaped-child index.md does NOT carry issue/tracker (pitch-only scope)"
+else
+  echo "FAIL DC-5.1-1c shaped-child index.md wrongly stamped with issue/tracker"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-5.1-2: pitch.issue/pitch.tracker emitted into flat-layout .md ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-issue-tracker-flat.json"
+proposal_with_issue_tracker > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=flat >/dev/null 2>&1
+PITCH_FLAT="docs/ship-flow/090-test-pitch.md"
+if grep -qE '^issue:[[:space:]]*"#49"' "$PITCH_FLAT" 2>/dev/null && \
+   grep -qE '^tracker:[[:space:]]*gh[[:space:]]*$' "$PITCH_FLAT" 2>/dev/null; then
+  echo "OK DC-5.1-2 flat .md has issue: \"#49\" and tracker: gh"
+else
+  echo "FAIL DC-5.1-2 flat .md missing issue:/tracker: (expected red before implementation)"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
+echo
+echo "--- DC-5.1-3: proposal without pitch.issue emits no issue/tracker stamp (unchanged behavior) ---"
+TMP="$(setup_fixture)"
+PROP="$TMP/proposal-no-issue.json"
+sample_proposal > "$PROP"
+pushd "$TMP" >/dev/null || exit 1
+bash "${LIB_DIR}/shape-confirm.sh" --proposal="$PROP" --layout=folder >/dev/null 2>&1
+if ! grep -qE '^issue:|^tracker:' docs/ship-flow/090-test-pitch/index.md 2>/dev/null; then
+  echo "OK DC-5.1-3 proposal without pitch.issue emits no issue:/tracker: stamp"
+else
+  echo "FAIL DC-5.1-3 emitted issue:/tracker: when proposal had none"
+  FAIL=1
+fi
+popd >/dev/null || exit 1
+rm -rf "$TMP"
+
 exit "$FAIL"
