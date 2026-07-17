@@ -656,6 +656,207 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# DC-14 (P1-A, cycle 4) — validate STRUCTURALLY parses original_issue_acs[]
+# via yq (not a fragile text scan): every row must have non-empty criterion
+# text AND a real boolean met_by_existing_capability. Missing/empty/malformed
+# rows must BLOCK; a text value that merely contains a substring resembling
+# a "met_by_existing_capability:" key must never be miscounted as a phantom
+# row (a fragile line-oriented text scan is fooled by this; a structural
+# parse is not).
+# ---------------------------------------------------------------------------
+
+EMPTY_TEXT_FIXTURE="${TMP_DIR}/empty-text-source-diff.yaml"
+cat > "$EMPTY_TEXT_FIXTURE" <<'EOF'
+schema_version: "1.0"
+entity_id: "fx"
+issue_ref: "gh#49"
+issue_fetched_at: "2026-07-17T00:00:00Z"
+original_issue_acs:
+  - text: ""
+    met_by_existing_capability: false
+current_scope_delta: []
+scope_subset_of_issue: true
+goal_still_unmet: true
+verdict: proceed
+rationale: "claims proceed backed by a row with empty criterion text"
+EOF
+OUT14A="${TMP_DIR}/dc14a.out"; RC14A=0
+bash "$RESOLVER" validate "--file=${EMPTY_TEXT_FIXTURE}" > "$OUT14A" 2>&1 || RC14A=$?
+if [ "$RC14A" != "0" ]; then
+  record_pass "DC-14: validate BLOCKs a row with empty/missing criterion text (structural yq check, not just the boolean)"
+else
+  record_fail "DC-14: validate BLOCKs a row with empty/missing criterion text (structural yq check, not just the boolean) (exited 0: $(cat "$OUT14A"))"
+fi
+
+MALFORMED_BOOL_FIXTURE="${TMP_DIR}/malformed-bool-source-diff.yaml"
+cat > "$MALFORMED_BOOL_FIXTURE" <<'EOF'
+schema_version: "1.0"
+entity_id: "fx"
+issue_ref: "gh#49"
+issue_fetched_at: "2026-07-17T00:00:00Z"
+original_issue_acs:
+  - text: "AC-1: some criterion"
+    met_by_existing_capability: maybe
+current_scope_delta: []
+scope_subset_of_issue: true
+goal_still_unmet: true
+verdict: proceed
+rationale: "claims proceed backed by a non-boolean met_by_existing_capability value"
+EOF
+OUT14B="${TMP_DIR}/dc14b.out"; RC14B=0
+bash "$RESOLVER" validate "--file=${MALFORMED_BOOL_FIXTURE}" > "$OUT14B" 2>&1 || RC14B=$?
+if [ "$RC14B" != "0" ]; then
+  record_pass "DC-14: validate BLOCKs a row whose met_by_existing_capability is not a real boolean (e.g. 'maybe'), never silently coercing it to false"
+else
+  record_fail "DC-14: validate BLOCKs a row whose met_by_existing_capability is not a real boolean (exited 0: $(cat "$OUT14B"))"
+fi
+
+# A single real, well-formed row (met_by_existing_capability: true) whose text
+# happens to contain a substring shaped like a YAML "met_by_existing_capability:"
+# key. A line-oriented text scan over the whole original_issue_acs: block would
+# match this substring as a SECOND (phantom) row and mis-derive goal_still_unmet
+# as true; a structural yq parse addresses exactly one row (index 0) and must
+# derive goal_still_unmet: false (verdict: return), matching the fixture.
+DUPLICATE_COUNT_FIXTURE="${TMP_DIR}/duplicate-count-source-diff.yaml"
+cat > "$DUPLICATE_COUNT_FIXTURE" <<'EOF'
+schema_version: "1.0"
+entity_id: "fx"
+issue_ref: "gh#49"
+issue_fetched_at: "2026-07-17T00:00:00Z"
+original_issue_acs:
+  - text: "AC-1: legit criterion mentions met_by_existing_capability: false as trivia"
+    met_by_existing_capability: true
+current_scope_delta: []
+scope_subset_of_issue: true
+goal_still_unmet: false
+verdict: return
+rationale: "AC-1 is fully met by existing capability; issue can be closed/deferred"
+EOF
+OUT14C="${TMP_DIR}/dc14c.out"; RC14C=0
+bash "$RESOLVER" validate "--file=${DUPLICATE_COUNT_FIXTURE}" > "$OUT14C" 2>&1 || RC14C=$?
+if [ "$RC14C" = "0" ]; then
+  record_pass "DC-14: validate ACCEPTS a consistent single-row verdict=return even when the row's own text contains a met_by_existing_capability-shaped substring (structural parse, no phantom-row miscount)"
+else
+  record_fail "DC-14: validate ACCEPTS a consistent single-row verdict=return even when the row's own text contains a met_by_existing_capability-shaped substring (exited ${RC14C}: $(cat "$OUT14C"))"
+fi
+
+# ---------------------------------------------------------------------------
+# DC-15 (P1-B, cycle 4) — a full GitHub issue URL whose owner/repo VERIFIES
+# against the local git remote (origin) is canonicalized to a bare #N and
+# ACCEPTED (so ship-shape/SKILL.md's advertised full-URL intake works
+# end-to-end); an unverifiable/mismatched owner-repo still fails VISIBLE
+# BLOCK exactly as before.
+# ---------------------------------------------------------------------------
+
+REPO15A="${TMP_DIR}/repo-dc15a"
+new_repo "$REPO15A"
+(cd "$REPO15A" && git init -q && git remote add origin https://github.com/acme/widgets.git)
+write_entity_index "${REPO15A}/docs/ship-flow/fx-verified-same-repo-url/index.md" "design" 'issue: "https://github.com/acme/widgets/issues/49"' "gh"
+: > "${REPO15A}/docs/ship-flow/fx-verified-same-repo-url/design.md"
+FAKEBIN15A="${TMP_DIR}/fakebin-dc15a"
+write_fake_gh_ok "$FAKEBIN15A" "$CANNED_BODY"
+OUT15A="${TMP_DIR}/dc15a.out"; RC15A="${TMP_DIR}/dc15a.rc"
+run_resolver_emit "$REPO15A" "docs/ship-flow/fx-verified-same-repo-url" "$OUT15A" "$RC15A" "$FAKEBIN15A"
+DIFF15A="${REPO15A}/.context/ship-flow/source-diff-fx.yaml"
+
+assert_exit "DC-15: resolver ACCEPTS a full GitHub issue URL verified against the local git remote (same owner/repo)" 0 "$(cat "$RC15A")"
+if [ -f "$DIFF15A" ]; then
+  assert_contains "DC-15: verified same-repo URL is canonicalized to issue_ref: \"gh#49\"" '^issue_ref: "gh#49"$' "$DIFF15A"
+else
+  record_fail "DC-15: verified same-repo URL is canonicalized to issue_ref: \"gh#49\" (missing: $DIFF15A)"
+fi
+
+REPO15B="${TMP_DIR}/repo-dc15b"
+new_repo "$REPO15B"
+(cd "$REPO15B" && git init -q && git remote add origin https://github.com/acme/widgets.git)
+write_entity_index "${REPO15B}/docs/ship-flow/fx-unverified-cross-repo-url/index.md" "design" 'issue: "https://github.com/other-org/other-repo/issues/49"' "gh"
+: > "${REPO15B}/docs/ship-flow/fx-unverified-cross-repo-url/design.md"
+FAKEBIN15B="${TMP_DIR}/fakebin-dc15b"
+write_fake_gh_ok "$FAKEBIN15B" "$CANNED_BODY"
+OUT15B="${TMP_DIR}/dc15b.out"; RC15B="${TMP_DIR}/dc15b.rc"
+run_resolver_emit "$REPO15B" "docs/ship-flow/fx-unverified-cross-repo-url" "$OUT15B" "$RC15B" "$FAKEBIN15B"
+DIFF15B="${REPO15B}/.context/ship-flow/source-diff-fx.yaml"
+
+if [ "$(cat "$RC15B")" != "0" ]; then
+  record_pass "DC-15: resolver still BLOCKs a full GitHub URL whose owner/repo does NOT match the local git remote (genuinely cross-repo)"
+else
+  record_fail "DC-15: resolver still BLOCKs a full GitHub URL whose owner/repo does NOT match the local git remote (genuinely cross-repo)"
+fi
+if [ ! -f "$DIFF15B" ]; then
+  record_pass "DC-15: no YAML written for an unverified cross-repo full-URL reference"
+else
+  record_fail "DC-15: no YAML written for an unverified cross-repo full-URL reference (found: $DIFF15B)"
+fi
+
+# ---------------------------------------------------------------------------
+# DC-16 (P2-D, cycle 4) — the AC-block parser accepts ONLY properly-indented
+# continuation lines and flushes (never silently absorbs) when unindented
+# content begins, so a following section's prose can never masquerade as an
+# AC's criterion text.
+# ---------------------------------------------------------------------------
+
+UNINDENTED_SECTION_BODY='## Acceptance
+
+AC-1:
+  Guard writes a five-field source-diff YAML for a re-shaped entity.
+## Unrelated Section
+This text must never be absorbed into AC-1.
+
+AC-2: Guard no-ops on a fresh shape with no later-stage artifacts.
+AC-3: Guard never fakes an AC list when the tracker call fails.'
+
+REPO16A="${TMP_DIR}/repo-dc16a"
+new_repo "$REPO16A"
+write_entity_index "${REPO16A}/docs/ship-flow/fx-unindented-boundary/index.md" "design" 'issue: "#49"' "gh"
+: > "${REPO16A}/docs/ship-flow/fx-unindented-boundary/design.md"
+FAKEBIN16A="${TMP_DIR}/fakebin-dc16a"
+write_fake_gh_ok "$FAKEBIN16A" "$UNINDENTED_SECTION_BODY"
+OUT16A="${TMP_DIR}/dc16a.out"; RC16A="${TMP_DIR}/dc16a.rc"
+run_resolver_emit "$REPO16A" "docs/ship-flow/fx-unindented-boundary" "$OUT16A" "$RC16A" "$FAKEBIN16A"
+DIFF16A="${REPO16A}/.context/ship-flow/source-diff-fx.yaml"
+
+assert_exit "DC-16: resolver exits 0 when AC-1's indented continuation is followed by an unindented section" 0 "$(cat "$RC16A")"
+if [ -f "$DIFF16A" ]; then
+  assert_contains "DC-16: AC-1 text captures only its own indented continuation" 'Guard writes a five-field source-diff YAML for a re-shaped entity\.' "$DIFF16A"
+  assert_not_contains "DC-16: AC-1 text does NOT absorb the following unindented section heading" 'Unrelated Section' "$DIFF16A"
+  assert_not_contains "DC-16: AC-1 text does NOT absorb the following unindented section's prose" 'never be absorbed' "$DIFF16A"
+else
+  record_fail "DC-16: AC-1 text captures only its own indented continuation (missing: $DIFF16A)"
+  record_fail "DC-16: AC-1 text does NOT absorb the following unindented section heading"
+  record_fail "DC-16: AC-1 text does NOT absorb the following unindented section's prose"
+fi
+
+EMPTY_VIA_UNINDENTED_BODY='## Acceptance
+
+AC-1: Guard writes a five-field source-diff YAML for a re-shaped entity.
+AC-2:
+## Another Section
+Some unrelated text that must never become AC-2 criterion text.
+
+AC-3: Guard never fakes an AC list when the tracker call fails.'
+
+REPO16B="${TMP_DIR}/repo-dc16b"
+new_repo "$REPO16B"
+write_entity_index "${REPO16B}/docs/ship-flow/fx-empty-then-unindented/index.md" "design" 'issue: "#49"' "gh"
+: > "${REPO16B}/docs/ship-flow/fx-empty-then-unindented/design.md"
+FAKEBIN16B="${TMP_DIR}/fakebin-dc16b"
+write_fake_gh_ok "$FAKEBIN16B" "$EMPTY_VIA_UNINDENTED_BODY"
+OUT16B="${TMP_DIR}/dc16b.out"; RC16B="${TMP_DIR}/dc16b.rc"
+run_resolver_emit "$REPO16B" "docs/ship-flow/fx-empty-then-unindented" "$OUT16B" "$RC16B" "$FAKEBIN16B"
+DIFF16B="${REPO16B}/.context/ship-flow/source-diff-fx.yaml"
+
+if [ "$(cat "$RC16B")" != "0" ]; then
+  record_pass "DC-16: resolver fails closed when a no-inline-text AC heading is immediately followed by an unindented section (never fabricates AC-2's criterion text from unrelated prose)"
+else
+  record_fail "DC-16: resolver fails closed when a no-inline-text AC heading is immediately followed by an unindented section (never fabricates AC-2's criterion text from unrelated prose)"
+fi
+if [ ! -f "$DIFF16B" ]; then
+  record_pass "DC-16: no YAML written when the unindented-section boundary leaves AC-2 with no real criterion text"
+else
+  record_fail "DC-16: no YAML written when the unindented-section boundary leaves AC-2 with no real criterion text (found: $DIFF16B)"
+fi
+
+# ---------------------------------------------------------------------------
 # Doc-coupling row (T3) — bidirectional coupling for mod <-> SKILL.md
 # ---------------------------------------------------------------------------
 
