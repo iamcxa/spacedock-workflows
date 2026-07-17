@@ -17,6 +17,7 @@
 <!-- section:next -->
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
+| 7-review-surface-shape-not-plan | Ship-flow core: the human review surface is the shape/spec, not plan.md | (pitch) | small-batch |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
@@ -30,6 +31,7 @@
 | reverse-recovery-audit-dangling-path | S | ship-shape/SKILL.md:585 and ship-plan/SKILL.md:502 reference a nonexistent docs/ship-flow/_mods/reverse-recovery-audit.md; check-no-dangling.sh does not catch it. Pre-existing dangling reference, separate from this pitch. | pitch 5 |
 | issue-anchor-guard-remaining-triggers | S | Extend the guard to the other two trigger points: feedback-rejection-flow cycle-3 escalation (lives in the spacedock core plugin repo, needs a companion change there) and child/prerequisite creation (necessity proof against a named parent AC). | pitch 5 |
 | issue-anchor-guard-resolver-shell-parser-robustness | S | Three named shell-parser-robustness residuals in the issue-anchor-guard resolver: emit's tombstone rm -f does not check its own exit status before fetch; validate's top-level scalar reads are a line-oriented awk scan, not structural yq (unlike the per-AC rows); the AC-block parser is not Markdown-aware (fenced code / quoted examples could be mis-parsed as ACs). | pitch 5 |
+| codex-gate-mandatory-cross-vendor-verify-pilot | S | Pilot promoting codex-gate from opt-in to a mandatory auto-fired cross-vendor verify gate with science-officer-em as the standing EM owner, IF a measurement pilot later justifies the behavioral wiring. | pitch 7 |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
@@ -50,6 +52,8 @@
 | Introduce new SO/EM route values re-anchor and split (per issue #49 text) | The real existing vocabulary is proceed/narrow/return/block/costly_no; adding values would change the science-officer-em.md contract + its tests. Reconcile onto existing vocab (re-anchor maps to return) instead. |
 | Implement all three trigger points (route-back, cycle-3, child-creation) this round | small-batch proves the wedge first; cycle-3 lives in a different repo (spacedock core) and child-creation has no single chokepoint. Deferred to rabbit-holes. |
 | Full-replacement deterministic manual adopter routing (pitch 2 → child 2.1) | Parked 2026-07-16. The original driver #20 (discovery scanning test fixtures) is already fixed and closed, so the acute problem is gone. The ambitious tree-scan→manual-manifest replacement never converged (391 commits, 21 Plan EM re-review/repair cycles, shape cycle 25, `max_dispatches` 32→44) while far exceeding its 2-3 day appetite. Revive only via a fresh minimal shape (e.g. just remove the discovery helper's production reachability + stale docs), not this over-shaped line. Sharp entities `2-deterministic-manual-adopter-routing` / `2.1-manual-fail-closed-adopter-routing` stay dormant (not dispatchable); worktree evidence preserved under `.claude/worktrees/issue20-routing-*`. |
+| Re-wire science-officer-em as the standing/mandatory verify-gate owner and promote the opt-in codex-gate skill to a mandatory auto-fired gate. | Real behavioral wiring that conflicts with codex-gate's documented opt-in-until-pilot status and exceeds small-batch + the ACs; the exact scope-drift #60 was split from #49 to avoid. Captured as a rabbit-hole for a future measurement-gated pilot. |
+| Introduce a new 'cross-vendor' term plus a mechanical check enforcing that a codex second opinion actually ran at verify. | Reuse the existing 'cross-model' concept and the already-auto-fired ship-verify Codex adversarial (Tier A, ship-verify Phase C); enforcing tool-invocation at verify is new machinery beyond the ACs. |
 <!-- /section:not-doing -->
 
 ## Shipped
