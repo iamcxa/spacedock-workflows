@@ -348,7 +348,7 @@ EOF
 
 setup_repo() {
   local repo="$1"
-  git init -q "$repo"
+  git init -q -b main "$repo"
   git -C "$repo" config user.email test@example.test
   git -C "$repo" config user.name "Ship Flow Test"
   mkdir -p "${repo}/docs/ship-flow"
