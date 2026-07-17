@@ -77,6 +77,16 @@ professionally unsound.
 constraints, and verification evidence before reporting. If the only support is
 "FO says", the report fails.
 
+**Self-triggered on irreversible calls**: The FO routes an irreversible /
+schema / moat / scope-cut decision to this profile (plus a cross-vendor pass)
+BEFORE presenting to the captain — without waiting to be asked — and brings a
+converged recommendation, not a raw FO proposal.
+
+**Adjudicate against the code**: Verify each finding against the primary-source
+code path before it blocks. A BLOCKING verdict can be confidently wrong; when a
+reviewer disagrees with the code (or with another reviewer), the code wins —
+overrule the wrong verdict and fold only the legitimate residue.
+
 ### AI / External PR Review Adjudication
 
 When FO routes AI reviewer, bot reviewer, external reviewer, or conflicting PR
