@@ -8,7 +8,7 @@ harvest_required: true
 pre_mortem:
     category: wrong-dcs
     one_liner: Guard ships as a pinned SKILL section but the re-anchor is prose the model performs hollowly, rubber-stamping on-goal without a real diff, passing verify yet catching no drift.
-status: verify
+status: execute
 stage_outputs:
     shape: shape.md
 captain_bet: 當一個帶 design/plan 的 entity 被 re-shape 時,ship-shape 先攤出原始 GitHub 票的 source-diff、擋下一次真實 scope-drift;若擋不下,'route-back 多讀一次源頭票' 這個 wedge 就是錯的。
