@@ -523,6 +523,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 | `bin/auto-merge-readiness-collect.mjs` | collects GitHub PR evidence, runs semantic/thread gates, and writes readiness artifacts |
 | `bin/auto-merge-run.mjs` | executes the readiness result by enabling native auto-merge or policy-approved direct merge with `expectedHeadOid` |
 | `bin/sync-drift-check.mjs` | adopter drift gate: 3-bucket manifest check of adopter `_mods/` + `scripts/` copies against plugin `_mods/` + `bin/`, plus a workflow-version stamp staleness WARN (see `_mods/sync-drift-check.md`) |
+| `bin/closeout-adapter.sh` | the single post-merge closeout authority — normalizes `gh` MERGED to a `pr=pr-merge:{N}` sentinel, delegates terminal `done`+archive to `spacedock merge guard`, fails closed without a state driver, defers on dirty/wrong-branch, emits a non-blocking `debrief_due` signal (see `references/pr-merge-paths.md` § Post-merge closeout) |
 
 **Skill count policy** (Principle 2 split): stage skills ≤ 7 cap, utility skills uncapped. Current inventory: 7 stage (`ship-shape`, `ship`, `ship-design`, `ship-plan`, `ship-execute`, `ship-verify`, `ship-review`) + utility skills (`add-todos`, `ship-onboard`, `ship-runtime-detect`, `domain-registry`, `ui-verify`, `test-driven-development`, `verify-reviewer-panel`) plus non-skill utility scripts/mods such as `ship-flow-lint`. Stage skills remain at cap (7/7). Enforced by `check-invariants.sh --check skill-count`.
 
@@ -536,7 +537,7 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 - **`references/entity-body-schema.yaml`** — structured section schema per stage. Source of truth for what sections each `{stage}.md` must contain.
 - **`references/flow-map-schema.yaml`** — canonical doc section-tag declarations.
 - **`CONTRIBUTING.md`** — bidirectional contribution coupling, scoped exemptions, and local verification.
-- **`references/pr-merge-paths.md`** — decision record: the plugin-native auto-merge stack (`bin/semantic-review-*` + `auto-merge-*`, ACTIVE) vs the adopter-native manual-merge path, and why adopter-side deprecation must never sweep plugin `bin/`.
+- **`references/pr-merge-paths.md`** — decision record: the plugin-native auto-merge stack (`bin/semantic-review-*` + `auto-merge-*`, ACTIVE) vs the adopter-native manual-merge path, and why adopter-side deprecation must never sweep plugin `bin/`; plus post-merge closeout convergence — all triggers delegate terminal `done`+archive to `spacedock merge guard` via `bin/closeout-adapter.sh`.
 - **`references/harvest-vocabulary.md`** — decision record: pins the correspondence between `debrief-guardrail-harvest`'s six buckets, `harvest-decide`'s four outcomes, and kc-plugin-forge's D1/D2 layers, so the three harvest-lifecycle vocabularies read as one system.
 - **`docs/ship-flow/ship-shape-v2-implementation.md`** — #085 entity: full 6-wave redesign journal with rationale, decisions, and evidence. The case study for this flow's design.
 - **Individual SKILL.md files** under `skills/*/` — procedural detail per skill. Written concisely (opus-naturally-does applies).
@@ -544,6 +545,14 @@ Tags declared in `references/flow-map-schema.yaml`. `lib/extract-map.sh` + `lib/
 ---
 
 ## Release Notes
+
+### Unreleased
+
+**Theme**: Single post-merge closeout authority (issue #46).
+
+- `bin/closeout-adapter.sh` (renamed from `bin/merged-pr-closeout-reconciler.sh`) is now the one authority that turns a merged PR into terminal `done`+archive state. It normalizes `gh` MERGED → a durable `pr=pr-merge:{N}` sentinel (write-ahead), delegates the terminal mutation to `spacedock merge guard <slug> --verdict passed`, fails closed with `state-driver unavailable` when no compatible driver is present, defers non-fatally on a dirty tree / wrong branch (a later clean run converges), and emits a non-blocking `debrief_due=<slug>` signal so the ship-stage debrief convention is not orphaned.
+- All closeout triggers — `hooks/warn-state-drift.sh` (SessionStart), `_mods/pr-merge.md` `## Hook: startup` / `## Hook: idle` (live FO agent), and the `closeout-adapter.sh` CLI — now delegate to that single authority instead of each running a raw `status=done`+`--archive` mutation. The guarantee is convergence, not hook timing.
+- See `references/pr-merge-paths.md` § Post-merge closeout for the full record.
 
 ### 0.6.0 — 2026-05-20
 

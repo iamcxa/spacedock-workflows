@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
 HELPER="${PLUGIN_ROOT}/bin/closeout-adapter.sh"
 STATUS_BIN="${STATUS_BIN:-}"
-FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/merged-pr-closeout-reconciler"
+FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/closeout-adapter"
 
 PASS=0
 FAIL=0

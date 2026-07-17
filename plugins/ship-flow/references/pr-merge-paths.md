@@ -80,6 +80,53 @@ from plugin `bin/`". The SO/EM pass refuted it with primary evidence: (a) the
 are adopter-side mods. Executing the sweep as phrased would have deleted live
 machinery. The absence of this document was the root cause.
 
+## Post-merge closeout: `merge guard` is the single authority (2026-07-17)
+
+The paths above cover how a PR gets *merged*. This section covers what happens
+*after* a merge — turning a merged PR into terminal (`done` + archive) state.
+
+Historically three code paths each did their own raw `status=done` + `--archive`
+mutation, diverging in guards, cleanup, and rollback:
+
+- `hooks/warn-state-drift.sh` (Claude-Code `SessionStart` auto-fix);
+- `bin/merged-pr-closeout-reconciler.sh` (a manual CLI);
+- `_mods/pr-merge.md` `## Hook: startup` / `## Hook: idle` (prose the live FO
+  agent runs at every engage-cycle boundary).
+
+Because closeout depended on which path fired, a direct `gh pr merge` that
+bypassed the FO flow could leave a merged PR non-terminal (motivating incident:
+C14 / PR #47 → manual reconcile PR #51 → latent regression #29).
+
+**Contract (issue #46):** `spacedock merge guard <slug> --verdict passed` is the
+single MERGED→done mutation authority. All triggers now delegate to one
+`bin/closeout-adapter.sh` (renamed from `merged-pr-closeout-reconciler.sh`), which:
+
+1. normalizes the provider (`gh` MERGED → durable `pr=pr-merge:{N}` sentinel,
+   written and committed *before* the guard call, so a dirty worktree cannot
+   lose the merge fact);
+2. invokes `merge guard` — the sole primitive that clears the mod-block,
+   terminalizes, and archives; it never calls `gh` or `git commit` itself;
+3. fails closed with `state-driver unavailable` when no compatible state driver
+   is present (never a direct-YAML fallback);
+4. defers non-fatally on a dirty tree or the wrong branch, so a later clean run
+   converges and closeout is never committed on the wrong branch;
+5. emits a non-blocking `debrief_due=<slug>` signal on a successful finalize, so
+   the ship-stage debrief convention is surfaced, not orphaned.
+
+Replay is idempotent: `merge guard` returns `archived entity is read-only` on an
+already-archived entity, which the adapter reports as `state=already_reconciled`
+(a no-op); a failed post-finalize commit converges on retry via merge guard's own
+resumability (the authority's archive is never rolled back).
+
+**The guarantee is convergence, not hook timing** — whichever trigger notices the
+merge first, every path routes through the same authority, so repeated runs
+across harnesses all settle on the same terminal state. This is why Claude-only
+SessionStart hook metadata is not required as a cross-harness delivery guarantee.
+
+**Intentional non-member:** `skills/ship-execute/SKILL.md`'s "inline-on-main"
+no-PR ship pattern deliberately uses `--force` and never creates a PR; it is not
+a closeout trigger and is out of scope for this convergence.
+
 ## References
 
 - `README.md` § Release Notes 0.6.0 (auto-merge readiness layer)
