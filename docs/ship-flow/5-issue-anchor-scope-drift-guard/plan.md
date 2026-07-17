@@ -56,6 +56,7 @@ Appetite (small-batch, 2-3 days) holds — design's Artifacts Changed table list
 | DC-7 | fixture with crafted `verdict: proceed` + `scope_subset_of_issue: false` → run resolver's own validation step | Resolver/test rejects the combination (non-hollow rule); `verdict` value is always one of proceed/narrow/return. |
 | DC-8a | fixture `fx-empty-issue` (`issue: ""`) → run resolver | Treated identically to DC-5 (absent), not as a truthy anchor. |
 | DC-8b | fixture with PATH-stubbed failing `gh` (exit 1) → run resolver | Resolver exits non-zero, stderr carries a captain-visible message; no YAML written (never a fake-empty AC list). |
+| DC-9 | `test-shape-confirm.sh` DC-5.1-1..3: proposal with `pitch.issue`+`pitch.tracker` → `shape-confirm.sh --layout=folder\|flat` | Pitch entity frontmatter carries `issue: "<ref>"` and `tracker: <gh\|linear>`; shaped-child entities do NOT (pitch-only scope); proposal without `pitch.issue` emits neither (unchanged behavior). |
 
 ### Canonical Doc Actions
 
@@ -77,6 +78,7 @@ Appetite (small-batch, 2-3 days) holds — design's Artifacts Changed table list
 | T2 | Acceptance Outcome; DC-1/DC-2/DC-3/DC-4/DC-5/DC-7/DC-8a/DC-8b; D1/D3/D4/D5 |
 | T3 | Acceptance Outcome (guard runs at re-shape, not just documented); DC-6; D2 |
 | T4 | Canonical Doc Actions; no shape DC (meta) |
+| T5 | CD5(b) bounded intake-stamping (added post-T4 to close the silent-drop doctrine gap — see Addendum below); DC-9; D5 |
 
 </details>
 
@@ -147,6 +149,33 @@ parallel_group: serial; depends_on: [T2, T3]; owned_paths: [ROADMAP.md, ARCHITEC
 steps: 1. Via `lib/patch-map.sh`, move `5-issue-anchor-scope-drift-guard` from ROADMAP.md `## Next` to `## Now`. 2. Add an ARCHITECTURE.md `<!-- section:decisions -->` row summarizing the CD1-CD5 resolution (enum-reuse boundary; wired mod; status-primary detection; per-AC schema; anchor-availability cases). 3. Run `CI=true bash plugins/ship-flow/bin/check-invariants.sh` full suite + `git diff --check`.
 done: ROADMAP/ARCHITECTURE updated via section-tag CAS; check-invariants.sh clean except the pre-existing, out-of-scope C14 finding on commit `cef479ff` (predates this plan; a design-stage commit-message format issue, not this entity's code).
 model: sonnet; canonical_doc_actions: shared table.
+
+#### Addendum (post-T4 route-back): T5 — shape-confirm.sh bounded intake-stamping
+
+The original T1-T4 plan (above) shipped the issue-anchor-guard mod itself but never
+implemented CD5(b) — the "future entities are born anchored" half of D5. A verify-stage
+review surfaced this as a silent-drop doctrine violation: CD5(b) was a named, captain-adjudicated
+decision with no task, no DC, and no test backing it. This addendum adds T5 to close that gap;
+T1-T4's own Plan Report/Metrics/Hand-off-to-Execute below are left as the historical record of
+that round and are not rewritten.
+
+#### T5 — shape-confirm.sh bounded intake-stamping (CD5(b))
+task_id: T5
+layer: L5
+wave: W4 (post-T4, route-back addition)
+files: `plugins/ship-flow/lib/shape-confirm.sh`, `plugins/ship-flow/lib/__tests__/test-shape-confirm.sh`, `plugins/ship-flow/skills/ship-shape/SKILL.md`
+read_first: design.md Reconciliation CD5(b) + D5 Captain Decision; `plugins/ship-flow/lib/instantiate-cut-project.sh` external_id/external_project stamping pattern (the mirrored precedent); `test-shape-confirm.sh` DC-129.4 pre_mortem-emission block (the closest existing conditional-optional-field precedent, incl. its pitch-only-scope assertion)
+skills_needed: [test, best-practices, test-driven-development]
+reviewer_questions: [{lens: contract, question: "Does shape-confirm.sh stamp issue:/tracker: only when both are present in the proposal (absent pitch.issue -> no stamping, unchanged behavior), only onto the pitch entity (never a shaped-child), for both folder and flat layouts, without touching the guard mod, AC-N parsing, or Linear/external_id handling?", affected_path_family: "plugins/ship-flow/lib/shape-confirm.sh, plugins/ship-flow/lib/__tests__/test-shape-confirm.sh", evidence_required: "RED run showing the new DC-5.1 assertions fail on the pre-change binary (real absence, not a shell error); GREEN after the two-line stamping addition; test-issue-anchor-guard.sh + shape-confirm's own full suite unaffected"}]
+tdd_contract:
+  red_command: "bash plugins/ship-flow/lib/__tests__/test-shape-confirm.sh"
+  expected_red_failure: "DC-5.1-1a/1b (folder index.md issue:/tracker:) and DC-5.1-2 (flat .md issue:/tracker:) fail — shape-confirm.sh has zero issue/tracker handling; DC-5.1-1c/DC-5.1-3 (negative cases) pass trivially since nothing is stamped."
+  green_command: "bash plugins/ship-flow/lib/__tests__/test-shape-confirm.sh"
+  refactor_check: "bash -n plugins/ship-flow/lib/shape-confirm.sh && bash -n plugins/ship-flow/lib/__tests__/test-shape-confirm.sh"
+parallel_group: serial; depends_on: [T2] (reads the CD5(b) decision T2 did not implement); owned_paths: [plugins/ship-flow/lib/shape-confirm.sh, plugins/ship-flow/lib/__tests__/test-shape-confirm.sh, plugins/ship-flow/skills/ship-shape/SKILL.md]; integration_owner: executer@5-issue-anchor-scope-drift-guard
+steps: 1. Add DC-5.1 fixture + assertions to `test-shape-confirm.sh` (proposal with `pitch.issue`+`pitch.tracker` → folder+flat stamping; pitch-only scope; absent-field no-op); confirm RED. 2. Extract `PITCH_ISSUE`/`PITCH_TRACKER` from `.pitch.issue // ""` / `.pitch.tracker // ""` (mirrors the existing `PITCH_ANSWERS_DENSITY` extraction one line above); emit `issue: "<ref>"` / `tracker: <val>` conditionally into the pitch-only heredoc for both folder (`index.md`) and flat (`.md`) layouts, mirroring `instantiate-cut-project.sh`'s `external_id`/`external_project` stamping. 3. Add an Intake-section note to `ship-shape/SKILL.md` instructing the composer to populate `pitch.issue`/`pitch.tracker` when the `/shape` directive references a tracker issue (`#N` or URL). 4. Confirm GREEN; run `test-issue-anchor-guard.sh`, `test-doc-impact-gate.sh`, `test-contribution-contract.sh` unaffected; run full `check-invariants.sh`.
+done: DC-5.1-1..3 GREEN; `test-shape-confirm.sh` full suite green; `test-issue-anchor-guard.sh` 32/32 unaffected; `git diff --check` clean; no change to `plugins/ship-flow/_mods/issue-anchor-guard.md`, no AC-N parsing added, no Linear/`external_id` handling touched.
+model: sonnet; canonical_doc_actions: none (docs-only prose addition to ship-shape/SKILL.md is covered by this task's own DC, not a separate ROADMAP/ARCHITECTURE row — those already carry the CD1-CD5 decision summary from T4 and are out of this addendum's bounded scope).
 
 <details>
 <summary>Context routing manifest and receipt</summary>

@@ -39,11 +39,19 @@ tables below stand; these deltas are AUTHORITATIVE where they differ:
 - **CD5 — anchor availability.** In addition to the no-issue fallback +
   fail-visible gh-failure + gh-only-this-round already designed: (a) treat an
   empty-string `issue:` as absent (archived entity 1 carries a literal empty
-  `issue:`); (b) bounded intake-stamping — when a shape directive references a
+  `issue:`) — **IMPLEMENTED** in T2's resolver (`test-issue-anchor-guard.sh`
+  DC-8a); (b) bounded intake-stamping — when a shape directive references a
   tracker issue (URL / `#N`), carry `issue:`/`tracker:` into the entity
   frontmatter at shape-confirm so future entities are born anchored (the
   dry-fuel-line fix; entity 5 was hand-stamped this session). Keep minimal: carry
-  the reference only, NOT a full tracker integration.
+  the reference only, NOT a full tracker integration. — **IMPLEMENTED** in
+  plan.md T5 (`shape-confirm.sh` `.pitch.issue`/`.pitch.tracker` → entity
+  frontmatter, pitch-only scope, mirrors `instantiate-cut-project.sh`'s
+  `external_id`/`external_project` stamping); pinned by
+  `test-shape-confirm.sh` DC-5.1-1..3 (RED-before-GREEN) and documented for
+  the composer in `ship-shape/SKILL.md`'s Intake section. This closes the
+  silent-drop doctrine gap: CD5(b) was previously a named decision with no
+  task, no DC, and no test.
 
 ## Trade-off Table
 
@@ -244,7 +252,7 @@ reviewer_verdict: PROCEED
 - **D2|Captain decision**: CD2 enforcement style confirmed as designed — wired mod `plugins/ship-flow/_mods/issue-anchor-guard.md` with `## Hook: pre-shape` + extractable resolver block + end-to-end shell fixture; the Hook is a convention label invoked by the ship-shape SKILL (same pattern as contribution-contract's `pre-review-spend`), NOT an FO-auto-run lifecycle hook; an optional shape-confirm-side belt-and-braces check is deferred (gated on the `shape-confirm-instance-awareness` ROADMAP Later item), not blocking this round (ref: design.md Reconciliation CD2, Trade-off Table CD2).
 - **D3|Captain decision**: CD3 re-entry detection confirmed as designed — automatic detection via entity folder artifacts (`design.md`/`plan.md`/`execute.md`/`verify.md`/`review.md`) OR `status:` frontmatter; `status ∉ {draft, sharp}` is the PRIMARY signal (covers flat-file-layout entities with no folder to grep), folder artifacts are secondary; default-on with an explicit `--skip-issue-anchor-guard` escape hatch (ref: design.md Reconciliation CD3, Trade-off Table CD3).
 - **D4|Captain decision**: CD4 per-AC refinement — `original_issue_acs[]` becomes per-AC rows, each carrying its own `met_by_existing_capability: <true|false>` (not a single aggregate `goal_still_unmet` boolean), so the case-study blind spot (one AC already achievable by existing capability hiding inside an aggregate answer) cannot hide; `verdict` derives from the rows; the non-hollow rule (verdict:proceed requires scope_subset_of_issue:true AND goal_still_unmet:true) still holds, with `goal_still_unmet` now derived as true when ANY AC row has `met_by_existing_capability: false`. Honest residual (shell test cannot close it): a model can still fill every field with a false ⊆-judgment (ref: design.md Reconciliation CD4, Trade-off Table CD4).
-- **D5|Captain decision**: CD5 anchor availability — an empty-string `issue:` is treated as absent (archived entity 1 carries a literal empty `issue:`); bounded intake-stamping carries `issue:`/`tracker:` into entity frontmatter at shape-confirm when a shape directive references a tracker issue, so future entities are born anchored (reference only, no full tracker integration) (ref: design.md Reconciliation CD5).
+- **D5|Captain decision**: CD5 anchor availability — an empty-string `issue:` is treated as absent (archived entity 1 carries a literal empty `issue:`), **IMPLEMENTED** (T2/DC-8a); bounded intake-stamping carries `issue:`/`tracker:` into entity frontmatter at shape-confirm when a shape directive references a tracker issue, so future entities are born anchored (reference only, no full tracker integration), **IMPLEMENTED** (T5/DC-5.1-1..3, ref: design.md Reconciliation CD5).
 
 ### Hand-off to Plan
 
