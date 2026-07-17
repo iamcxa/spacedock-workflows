@@ -1085,6 +1085,26 @@ check_principle_numbering() {
   return 0
 }
 
+check_review_surface_shape_not_plan() {
+  # C16 — INVARIANTS.md Principle 17: pin the load-bearing review-surface rule
+  # text so it stays discoverable and cannot silently regress. Tier B per
+  # Principle 16 (text presence, NOT FO runtime behavior). Fixture override:
+  # FIXTURE_INVARIANTS=path.
+  local invariants_file="${FIXTURE_INVARIANTS:-${ROOT}/plugins/ship-flow/INVARIANTS.md}"
+  [ -f "$invariants_file" ] || return 0
+  local s1="The human review surface is the shape/spec (and design.md when its conditional gate fires) -- never plan.md or execute.md."
+  local s2="The FO MUST NOT offer plan.md or execute.md as a human-review artifact."
+  local missing=0
+  grep -qF "$s1" "$invariants_file" || missing=1
+  grep -qF "$s2" "$invariants_file" || missing=1
+  if [ "$missing" = 1 ]; then
+    echo "ERROR [Principle 17/review-surface]: INVARIANTS.md is missing a load-bearing Principle 17 rule sentence (the human review surface is the shape/spec, never plan.md; the FO MUST NOT offer plan.md/execute.md for human review). See plugins/ship-flow/INVARIANTS.md '### Principle 17'." >&2
+    return 1
+  fi
+  echo "OK C16 review-surface-shape-not-plan"
+  return 0
+}
+
 # ---- C10-C13: 2026-05-13 Phase 1/2B/3A merge enforcement ----
 # Elevates Hermetic Dependency Policy + Multi-Specialist Panel + FO Receipt
 # contracts from stage-SKILL-internal invariants to plugin-level CI checks.
@@ -2396,6 +2416,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     stage-metrics-contract) check_stage_metrics_contract; exit $? ;;
     visible-surface-map-contract) check_visible_surface_map_contract; exit $? ;;
     artifact-verbosity) check_artifact_verbosity; exit $? ;;
+    review-surface-shape-not-plan) check_review_surface_shape_not_plan; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -2463,5 +2484,8 @@ check_visible_surface_map_contract || FAIL=1
 # C15: Principle 8 stage-report verbosity caps (branch-scope grandfather)
 # Source: 129.2-wire-artifact-verbosity-blocker (2026-06-04)
 check_artifact_verbosity || FAIL=1
+# C16: Principle 17 — review-surface rule text pin (2026-07-18)
+# Source: 7-review-surface-shape-not-plan / issue #60
+check_review_surface_shape_not_plan || FAIL=1
 
 exit $FAIL
