@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# merged-pr-closeout-reconciler.sh - reconcile one merged PR into terminal ship-flow state
+# closeout-adapter.sh - reconcile one merged PR into terminal ship-flow state
 
 set -euo pipefail
 
@@ -22,7 +22,7 @@ resolve_status_bin() {
 }
 
 usage() {
-  echo "Usage: merged-pr-closeout-reconciler.sh --workflow-dir <dir> --entity <ref> [--pr-provider gh|fixture] [--pr-fixture <path>] [--dry-run]" >&2
+  echo "Usage: closeout-adapter.sh --workflow-dir <dir> --entity <ref> [--pr-provider gh|fixture] [--pr-fixture <path>] [--dry-run]" >&2
 }
 
 emit_report() {

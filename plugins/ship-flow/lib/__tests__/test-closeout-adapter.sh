@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# test-merged-pr-closeout-reconciler.sh - merged PR closeout reconciler contract
+# test-closeout-adapter.sh - merged PR closeout reconciler contract
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
-HELPER="${PLUGIN_ROOT}/bin/merged-pr-closeout-reconciler.sh"
+HELPER="${PLUGIN_ROOT}/bin/closeout-adapter.sh"
 STATUS_BIN="${STATUS_BIN:-}"
 FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/merged-pr-closeout-reconciler"
 
@@ -851,7 +851,7 @@ if [ ! -x "$STATUS_BIN" ]; then
   STATUS_BIN="${TMP_DIR}/status-fixture"
 fi
 
-echo "=== test-merged-pr-closeout-reconciler.sh ==="
+echo "=== test-closeout-adapter.sh ==="
 echo ""
 
 if [ ! -x "$HELPER" ]; then
