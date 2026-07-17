@@ -12,7 +12,7 @@ contract_decision_required: false
 pre_mortem:
   category: wrong-dcs
   one_liner: 'The C16 string-test pins that the rule text exists but not that the FO obeys it, so verify passes while FO behavior stays unchanged (accepted: the value is discoverability + regression-proofing, not behavioral enforcement).'
-status: execute
+status: verify
 stage_outputs:
   shape: shape.md
   design: design.md
