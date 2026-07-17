@@ -10,6 +10,7 @@
 | Entity | Title | Stage |
 | --- | --- | --- |
 | c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | ship |
+| 5-issue-anchor-scope-drift-guard | Issue-anchor scope-drift guard (route-back re-anchor) | execute |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
@@ -18,7 +19,6 @@
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
 | 2-deterministic-manual-adopter-routing | Deterministic manual adopter skill routing | (pitch) | small-batch (2-3 days) |
-| 5-issue-anchor-scope-drift-guard | Issue-anchor scope-drift guard (route-back re-anchor) | (pitch) | small-batch (2-3 days) |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
