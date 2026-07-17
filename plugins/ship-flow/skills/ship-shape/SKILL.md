@@ -46,12 +46,6 @@ Main agent runs inline. Use TaskCreate to mark phases on main-agent path (skip i
 
 **Phases**: `intake` → `L0-research` → `L1-research` → `L2-research` → `scope-decompose` → `assumption-extract` → `appetite-fit-check` → `compose-proposal` → `cross-review` → `captain-gate`
 
-### Pre-Intake: Issue-Anchor Guard
-
-<!-- section:issue-anchor-guard -->
-Before Intake, resolve `plugins/ship-flow/_mods/issue-anchor-guard.md` for the target entity. If guard emits `verdict: narrow` or `verdict: return`, SendMessage(captain) with the source-diff summary before continuing to Intake. If `no_issue_anchor: true`, halt for captain confirmation. See mod for full contract; skip only via explicit `--skip-issue-anchor-guard`.
-<!-- /section:issue-anchor-guard -->
-
 ### Intake
 
 | Form | Detection | Action |
@@ -63,6 +57,14 @@ Before Intake, resolve `plugins/ship-flow/_mods/issue-anchor-guard.md` for the t
 Record stage-start ISO timestamp. Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Run escape-hatch check now.
 
 **Tracker-issue anchoring (CD5(b) bounded intake-stamping)**: if the directive references a tracker issue — a GitHub-style `#N` reference or a full issue URL (GitHub `.../issues/N`, Linear issue URL) — record it in the proposal as `pitch.issue` (the human-readable ref, e.g. `"#49"`) and `pitch.tracker` (`gh` for GitHub, `linear` for Linear). `pitch.issue`/`pitch.tracker` are an all-or-nothing pair: `shape-confirm.sh` rejects a proposal carrying one without the other, or a `pitch.tracker` outside `gh`/`linear`, before writing anything. `shape-confirm.sh` then carries both fields forward into the entity frontmatter so the entity is born anchored for `plugins/ship-flow/_mods/issue-anchor-guard.md`'s re-shape detection — at that later re-shape point, a full GitHub issue URL is accepted end-to-end only when its owner/repo verifies against the local git remote (origin); an unverifiable or genuinely cross-repo URL, or an ambiguous reference, fails visible BLOCK instead. Reference only — no full tracker integration. Absent a tracker reference, omit both fields; `shape-confirm.sh` stamps nothing (unchanged behavior).
+
+### Post-Intake: Issue-Anchor Guard (existing-entity re-shape only)
+
+<!-- section:issue-anchor-guard -->
+Run this step immediately after Intake above, and ONLY when Intake matched the **Entity id** row (an existing `docs/<wf>/<id>-<slug>` — i.e. a re-shape via `/shape <entity-id>` or `/shape --discuss <entity-id>`). When Intake instead matched **Free text** or **Todo tid** — a brand-new shape with no existing entity yet — SKIP this section entirely: there is no entity path to resolve, and invoking the resolver here would incorrectly hit its "entity path not found" BLOCK. Gating on Intake's own detection keeps this honest to design premise A1 (issue-anchor-guard is for route-back re-entry on an already-shaped entity, never for new-shape intake).
+
+For a matched Entity id, resolve `plugins/ship-flow/_mods/issue-anchor-guard.md` for that target entity. If guard emits `verdict: narrow` or `verdict: return`, SendMessage(captain) with the source-diff summary before continuing. If `no_issue_anchor: true`, halt for captain confirmation. See mod for full contract; skip only via explicit `--skip-issue-anchor-guard`.
+<!-- /section:issue-anchor-guard -->
 
 ### Captain Articulation (mandatory in Mode A default; escape hatch for small scope)
 

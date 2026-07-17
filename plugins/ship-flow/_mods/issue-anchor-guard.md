@@ -15,10 +15,16 @@ rubber-stamp "still on-goal" from its own drifted summary.
 
 ## Hook: pre-shape
 
-Ship-shape invokes this mod before Intake, for every `/shape <entity-id>` or
-`/shape --discuss <entity-id>` re-entry. Skip only when the entity is a
-fresh shape (no later-stage artifacts) — the resolver detects this itself
-and no-ops — or when the captain passes the explicit escape hatch
+Ship-shape invokes this mod immediately after Intake has resolved the
+directive — and ONLY when Intake matched the **Entity id** form (an
+existing `docs/<wf>/<id>-<slug>`), i.e. every `/shape <entity-id>` or
+`/shape --discuss <entity-id>` re-entry. A brand-new **Free text** or
+**Todo tid** Intake form never reaches this hook — there is no existing
+entity path to resolve yet, so the resolver is never invoked (never a
+"target entity" to resolve, and never the "entity path not found" BLOCK
+below). Among Entity-id re-entries, skip only when the entity is a fresh
+shape (no later-stage artifacts) — the resolver detects this itself and
+no-ops — or when the captain passes the explicit escape hatch
 `--skip-issue-anchor-guard` (never the inverse: the default is on, so a
 forgotten flag fails safe).
 
@@ -49,14 +55,14 @@ or a flat-file entity's own `.md` path. Output lands at
 **Outcomes ship-shape must act on:**
 
 - `guard_required: false` — fresh shape, no later-stage artifacts. Continue
-  to Intake normally.
+  the shape flow normally.
 - `no_issue_anchor: true` — entity has no `issue:` (or an empty-string
   `issue:`, treated identically to absent). Halt and SendMessage(captain)
   with the `captain_prompt` text; do not fabricate a diff.
 - A populated source-diff with `verdict: narrow` or `verdict: return` —
   SendMessage(captain) with the source-diff summary before continuing.
-- A populated source-diff with `verdict: proceed` — continue to Intake, but
-  only after the model has itself reviewed `original_issue_acs[]` against
+- A populated source-diff with `verdict: proceed` — continue the shape flow,
+  but only after the model has itself reviewed `original_issue_acs[]` against
   the current shape/plan and confirmed (or corrected) the mechanical
   scaffold's `scope_subset_of_issue` / `goal_still_unmet` / `verdict` /
   `rationale` fields, then re-run `validate` to confirm the edit is still
@@ -619,3 +625,29 @@ schema, and the non-hollow consistency check. It does not own — and cannot
 mechanically verify — whether the model's own `scope_subset_of_issue` /
 `goal_still_unmet` judgment is truthful; that residual is named above, not
 hidden.
+
+**Accepted shell-parser-robustness residuals** (named, not hidden this
+round — no code fix; deferred to rabbit hole
+`issue-anchor-guard-resolver-shell-parser-robustness`):
+
+- `emit`'s tombstone step (`rm -f "$IAG_OUT_FILE"`) does not check its own
+  exit status before continuing to the fetch. A removal failure (e.g. a
+  read-only `.context/ship-flow/` or an unusual permission denial) is not
+  distinguished from the normal "nothing to remove" no-op, so a
+  subsequently-failing fetch could in principle leave a stale prior-run
+  file behind if the `rm -f` itself silently failed to remove an existing
+  one. Should check success and abort before fetch when removal fails.
+- `validate`'s top-level scalar reads (`iag_field_from_file` for `verdict`,
+  `scope_subset_of_issue`, `goal_still_unmet`) are a line-oriented `awk`
+  text scan, not a structural `yq` parse — unlike the per-AC row reads
+  (`iag_ac_rows_count`/`iag_ac_row_met_value`), which are yq-based per the
+  P1-A fix. A duplicate top-level key, or a single-quoted boolean-looking
+  scalar (only double-quotes are stripped today), could be misread. Should
+  move these scalar reads onto the same structural-yq footing as the
+  per-AC rows.
+- The AC-block parser (`iag_parse_ac_blocks`) matches any `AC-N:`/`AC-N.`
+  line regardless of Markdown context — a fenced code block or a
+  blockquoted example inside the issue body illustrating sample
+  `AC-1: ...` text would be parsed as a real acceptance criterion. Should
+  become Markdown-aware (skip fenced/quoted spans) rather than a flat line
+  scan.
