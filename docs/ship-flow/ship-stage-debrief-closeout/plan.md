@@ -24,17 +24,17 @@
 
 Medium-batch remains correct: four code-bearing serial waves plus one docs/compatibility wave, all inside the shaped 1–2 week appetite. GitHub-only scope, seven stage skills, C14/C15 semantics, todo accounting, and tracker neutrality remain unchanged.
 
-## Canonical Doc Actions
+### Canonical Doc Actions
 
 <details>
 <summary>Canonical synchronization contract</summary>
 
-| Doc | Action | Owner / timing | Rationale |
+| Doc | Action | Source | Rationale |
 |---|---|---|---|
-| `PRODUCT.md` | update `capabilities` | ship-review | Add native post-merge closeout only after verified behavior exists. |
-| `ARCHITECTURE.md` | update `components`, `constraints`, `decisions` | ship-review | Record landing proof, receipt boundary, sentinel-first routing, and atomic projection. |
-| `ROADMAP.md` | keep Now during execute; move one identity to Shipped | ship-review/ship closeout | Avoid claiming terminal value before authoritative bundle lands. |
-| `plugins/ship-flow/README.md` | update closeout lifecycle | T5 | Replace the stale claim that ship-flow ends at PR creation. |
+| `PRODUCT.md` | update | plan | Add native post-merge closeout to `capabilities` only after verified behavior exists. |
+| `ARCHITECTURE.md` | update | plan | Record landing proof, receipt boundary, sentinel-first routing, and atomic projection in `components`, `constraints`, and `decisions`. |
+| `ROADMAP.md` | update | plan | Keep Now during execute, then move one identity to Shipped during ship closeout to avoid claiming terminal value early. |
+| `plugins/ship-flow/README.md` | update | touched-files | T5 replaces the stale claim that ship-flow ends at PR creation with the native closeout lifecycle. |
 
 </details>
 
