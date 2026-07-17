@@ -4173,6 +4173,8 @@ EOF
 
   local incomplete_repo="$TMP_DIR/archived-incomplete-marker-repo" incomplete_head
   git clone -q "$archived_repo" "$incomplete_repo"
+  git -C "$incomplete_repo" config user.email test@example.test
+  git -C "$incomplete_repo" config user.name 'Ship Flow Test'
   printf '%s\n' '' '### Closeout' 'closeout_id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >>"$incomplete_repo/docs/ship-flow/_archive/merged-fixture-entity/ship.md"
   git -C "$incomplete_repo" add -- docs/ship-flow/_archive/merged-fixture-entity/ship.md
   git -C "$incomplete_repo" commit -qm 'fixture: incomplete closeout marker'
