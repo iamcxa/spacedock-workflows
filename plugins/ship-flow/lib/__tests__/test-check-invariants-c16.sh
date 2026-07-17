@@ -55,7 +55,14 @@ fixD="$(mktemp)"
 printf '### Principle 17: The human review surface is the shape/spec, never plan.md\n\n**Rule**: The review surface is the spec, not the plan. Do not show the captain the plan.\n' > "$fixD"
 assert_exit 1 "FIXTURE_INVARIANTS='$fixD' bash '$CHECK_SCRIPT' --check review-surface-shape-not-plan" "D-heading-only-reworded-fail"
 
-rm -f "$fixB" "$fixC" "$fixD"
+# Case E (AND-semantics) — exactly ONE pinned sentence present -> FAIL.
+# Guards against an AND->OR regression of the check that cases A-D would ALL
+# still pass (both-present, neither, heading-only never isolate one sentence).
+fixE="$(mktemp)"
+printf '### Principle 17\n\n**Rule**: %s\n' "$S1" > "$fixE"
+assert_exit 1 "FIXTURE_INVARIANTS='$fixE' bash '$CHECK_SCRIPT' --check review-surface-shape-not-plan" "E-one-sentence-only-fail"
+
+rm -f "$fixB" "$fixC" "$fixD" "$fixE"
 echo "---"
 if [ "$FAIL" = 0 ]; then echo "ALL C16 TESTS PASS"; else echo "SOME C16 TESTS FAILED"; fi
 exit $FAIL

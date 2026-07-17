@@ -364,7 +364,7 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 
 **Captain is in the loop at**:
 - **Shape stage** — the ONE captain-interactive gate (defines problem + scope)
-- **Genuine change of direction or scope** — a mid-flight "direction-confirm" when the spec's problem/scope itself turns out wrong; NOT a proceed-to-next-stage confirmation (those stay autonomous — see Violation patterns) (Principle 17)
+- **Genuine change of direction or scope** — a mid-flight "direction-confirm" ONLY when continuing would build the wrong thing (the spec's problem/scope is now known to be wrong). NOT routine stage uncertainty, an "am I on track?" check, or a proceed-to-next-stage confirmation (those stay autonomous — see Violation patterns) (Principle 17)
 - **Verify findings with BLOCKING severity** or feedback-to-execute (NOT for PASSED)
 - **PR merge** — captain's web-side action, post-ship
 - **Explicit captain interrupt** ("stop", "wait", "not yet", etc.)
