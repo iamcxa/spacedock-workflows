@@ -62,6 +62,8 @@ Before Intake, resolve `plugins/ship-flow/_mods/issue-anchor-guard.md` for the t
 
 Record stage-start ISO timestamp. Resolve `WORKFLOW_DIR` from `docs/*/README.md` frontmatter `entry-point:`. Run escape-hatch check now.
 
+**Tracker-issue anchoring (CD5(b) bounded intake-stamping)**: if the directive references a tracker issue — a GitHub-style `#N` reference or a full issue URL (GitHub `.../issues/N`, Linear issue URL) — record it in the proposal as `pitch.issue` (the human-readable ref, e.g. `"#49"`) and `pitch.tracker` (`gh` for GitHub, `linear` for Linear). `shape-confirm.sh` carries both fields forward into the entity frontmatter so the entity is born anchored for `plugins/ship-flow/_mods/issue-anchor-guard.md`'s re-shape detection. Reference only — no full tracker integration. Absent a tracker reference, omit both fields; `shape-confirm.sh` stamps nothing (unchanged behavior).
+
 ### Captain Articulation (mandatory in Mode A default; escape hatch for small scope)
 
 **Why mandatory**: when shape-worker composes shape.md straight from a directive, captain becomes a reviewer who rubber-stamps agent framing — loses sense of direction, accepts artifacts without owning the problem. Forcing questions reverse the flow: captain articulates verbally first, worker organizes captain's words second. Captain's brain models the answer before speaking; shape.md becomes audit trail of captain's own thinking, not agent inference. AI-augmentation cargo-cult prevention — do NOT substitute agent thinking for captain thinking.

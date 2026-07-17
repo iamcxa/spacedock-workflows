@@ -63,6 +63,12 @@ PITCH_APPETITE=$(yq --input-format=json '.pitch.appetite' "$PROPOSAL" | tr -d '"
 PITCH_PROBLEM=$(yq --input-format=json '.pitch.problem' "$PROPOSAL" | tr -d '"')
 PITCH_ACCEPTANCE_OUTCOME=$(yq --input-format=json '.pitch.acceptance_outcome' "$PROPOSAL" | tr -d '"')
 PITCH_ANSWERS_DENSITY=$(yq --input-format=json '.pitch.answers_density // ""' "$PROPOSAL" | tr -d '"')
+# entity 5 CD5(b): bounded intake-stamping — carry a shape directive's tracker-issue
+# reference forward so future entities are born anchored for issue-anchor-guard.md.
+# Reference only (issue:/tracker: fields), no full tracker integration; pitch-only
+# scope (never stamped onto shaped-child entities), mirroring pre_mortem's C1 scope.
+PITCH_ISSUE=$(yq --input-format=json '.pitch.issue // ""' "$PROPOSAL" | tr -d '"')
+PITCH_TRACKER=$(yq --input-format=json '.pitch.tracker // ""' "$PROPOSAL" | tr -d '"')
 if yq --input-format=json -e '.pitch | has("shape_mode")' "$PROPOSAL" >/dev/null 2>&1; then
   PITCH_SHAPE_MODE_TYPE=$(yq --input-format=json -r '.pitch.shape_mode | type' "$PROPOSAL")
   if [ "$PITCH_SHAPE_MODE_TYPE" != "!!str" ]; then
@@ -231,6 +237,8 @@ appetite: "${PITCH_APPETITE}"
 layout: folder
 harvest_required: true
 $([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
+$([ -n "${PITCH_ISSUE}" ] && [ "${PITCH_ISSUE}" != "null" ] && echo "issue: \"${PITCH_ISSUE}\"" || true)
+$([ -n "${PITCH_TRACKER}" ] && [ "${PITCH_TRACKER}" != "null" ] && echo "tracker: ${PITCH_TRACKER}" || true)
 $([ -n "${PITCH_PRE_MORTEM_YAML}" ] && printf '%s' "${PITCH_PRE_MORTEM_YAML}" || true)
 status: shape
 stage_outputs:
@@ -300,6 +308,8 @@ pattern: pitch
 appetite: "${PITCH_APPETITE}"
 harvest_required: true
 $([ -n "${PITCH_ANSWERS_DENSITY}" ] && [ "${PITCH_ANSWERS_DENSITY}" != "null" ] && echo "answers_density: \"${PITCH_ANSWERS_DENSITY}\"" || true)
+$([ -n "${PITCH_ISSUE}" ] && [ "${PITCH_ISSUE}" != "null" ] && echo "issue: \"${PITCH_ISSUE}\"" || true)
+$([ -n "${PITCH_TRACKER}" ] && [ "${PITCH_TRACKER}" != "null" ] && echo "tracker: ${PITCH_TRACKER}" || true)
 $([ -n "${PITCH_PRE_MORTEM_YAML}" ] && printf '%s' "${PITCH_PRE_MORTEM_YAML}" || true)
 ---
 
