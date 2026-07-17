@@ -348,8 +348,38 @@ current_branch_is_safe_for_commit() {
   current="$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   [ -n "$current" ] && [ "$current" != "HEAD" ] || return 1
   trunk="$("$STATUS_BIN" dispatch trunk --workflow-dir "$workflow_dir" 2>/dev/null | head -1 | tr -d '[:space:]')"
-  [ -n "$trunk" ] || return 1   # fail CLOSED: unresolved trunk => defer
+  # Distinguish an unresolvable trunk (absent/incompatible state driver -- a
+  # #46 fail-closed `state-driver unavailable` case, return 2) from being on a
+  # genuine non-trunk branch (a resumable wrong-branch defer, return 1).
+  [ -n "$trunk" ] || return 2
   [ "$current" = "$trunk" ]
+}
+
+# trunk_gate_or_report - the SHARED trunk gate for every path that commits
+# closeout state (fresh closeout AND archived recovery). On a non-safe result it
+# emits the correct terminal report and exits; it returns 0 (doing nothing) when
+# safe so the caller proceeds. This keeps recovery/replay commits from bypassing
+# the branch/driver gates (codex round-4 #2/#3).
+trunk_gate_or_report() {
+  local rc=0
+  current_branch_is_safe_for_commit || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  if [ "$rc" -eq 2 ]; then
+    verdict="REJECT"
+    reason="state-driver-unavailable"
+    state_name="state-driver-unavailable"
+    detail="spacedock dispatch trunk could not resolve the workflow trunk (absent or incompatible state driver); no closeout attempted"
+    emit_report
+    echo "state-driver unavailable: ${detail}" >&2
+    exit 1
+  fi
+  verdict="PROCEED"
+  terminal_action="deferred"
+  state_name="closeout-deferred-wrong-branch"
+  reason="wrong-branch"
+  detail="repo HEAD is not on the workflow trunk (where the PR merges and closeout state must land); closeout deferred until a run on the trunk branch converges it"
+  emit_report
+  exit 0
 }
 
 # repo_dirty - the repo-root-wide dirty gate (R2/DC-4): catches genuinely
@@ -548,6 +578,14 @@ if [ -z "$active_resolve" ]; then
     pr_state="MERGED"
     pr_number="$(sentinel_pr_number "$(read_frontmatter_field "$entity_path" pr)" 2>/dev/null || \
       normalize_pr_number "$(read_frontmatter_field "$entity_path" pr)" 2>/dev/null || true)"
+    # A recovery COMMIT (a pending archive move) must obey the same trunk/driver
+    # gate as a fresh closeout -- never land recovery state on a non-trunk branch
+    # or under an unavailable driver (codex round-4 #2). A clean already-archived
+    # entity has nothing to commit, so it converges (no-op) from any branch.
+    recovery_pending="$(git -C "$repo_root" status --porcelain -- \
+      "${workflow_dir}/${entity_slug}" "${workflow_dir}/${entity_slug}.md" \
+      "${workflow_dir}/_archive/${entity_slug}" "${workflow_dir}/_archive/${entity_slug}.md" 2>/dev/null || true)"
+    [ -z "$recovery_pending" ] || trunk_gate_or_report
     # R4 recovery: the archive-move may already be on disk without a
     # completed git commit (a prior run's archive-move commit step failed
     # after `spacedock merge guard` had already finalized it). Retry that
@@ -631,15 +669,7 @@ if [ "$dry_run" = "yes" ]; then
   exit 0
 fi
 
-if ! current_branch_is_safe_for_commit; then
-  verdict="PROCEED"
-  terminal_action="deferred"
-  state_name="closeout-deferred-wrong-branch"
-  reason="wrong-branch"
-  detail="repo HEAD is not on the workflow trunk (where the PR merges and closeout state must land); closeout deferred until a run on the trunk branch converges it"
-  emit_report
-  exit 0
-fi
+trunk_gate_or_report
 
 # Stale-trunk containment gate (codex round-3 A): being ON the trunk is not
 # enough -- a LOCAL trunk that is behind the remote merged tip would land the
