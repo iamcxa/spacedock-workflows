@@ -119,8 +119,13 @@ normalize_pr_number() {
 
 coherent_terminal_file() {
   local file="$1"
+  # verdict is compared case-insensitively: the real `spacedock merge guard`
+  # 0.25.0 writes the verdict verbatim as passed to `--verdict passed` (i.e.
+  # lowercase `passed`), while some historical/stub writers used `PASSED`.
+  local verdict_lc
+  verdict_lc="$(read_frontmatter_field "$file" verdict | tr '[:upper:]' '[:lower:]')"
   [ "$(read_frontmatter_field "$file" status)" = "done" ] || return 1
-  [ "$(read_frontmatter_field "$file" verdict)" = "PASSED" ] || return 1
+  [ "$verdict_lc" = "passed" ] || return 1
   [ -n "$(read_frontmatter_field "$file" completed)" ] || return 1
   [ -z "$(read_frontmatter_field "$file" worktree)" ] || return 1
 }
@@ -619,34 +624,42 @@ merge_guard_output="$(run_merge_guard)" || merge_guard_rc=$?
 case "$merge_guard_output" in
   finalized:*)
     archive_pathspec_for_entity
-    if git -C "$repo_root" add -- "$archive_src" "$archive_dst" >/dev/null 2>&1 && \
-       git -C "$repo_root" commit -m "done + archive: $entity_slug (PR #$pr_number merged via spacedock merge guard)" \
-           -- "$archive_src" "$archive_dst" >/dev/null 2>&1; then
+    # spacedock merge guard (real binary, inside a git repo) performs the
+    # archive move AND commits it itself ("archive <slug> (merge guard)"). A
+    # move-without-commit variant (or a test stub) can instead leave the move
+    # pending. Success is therefore defined by the resulting STATE -- the
+    # archive-move is committed (nothing pending for the archive paths) -- NOT
+    # by whether OUR own commit added anything. Defensively stage+commit any
+    # pending move; a no-op commit when merge guard already committed is
+    # expected and ignored.
+    git -C "$repo_root" add -- "$archive_src" "$archive_dst" >/dev/null 2>&1 || true
+    git -C "$repo_root" commit -m "done + archive: $entity_slug (PR #$pr_number merged via spacedock merge guard)" \
+        -- "$archive_src" "$archive_dst" >/dev/null 2>&1 || true
+    if [ -z "$(git -C "$repo_root" status --porcelain -- "$archive_src" "$archive_dst" 2>/dev/null || true)" ]; then
       remove_worktree_if_safe
       cleanup_branch_if_safe
       verdict="PROCEED"
       terminal_action="merge_guard_finalized"
       reason="merged-pr-reconciled"
       state_name="reconciled"
-      detail="spacedock merge guard finalized $entity_slug (verdict passed) and archived it; archive-move committed"
+      detail="spacedock merge guard finalized $entity_slug (verdict passed) and archived it"
       debrief_due="$entity_slug"
       pr_state="MERGED"
       emit_report
       exit 0
     else
-      # R4: merge guard's own filesystem mutation already happened (archive
-      # move + terminalized frontmatter) -- do NOT roll it back. Rolling back
-      # would fight merge guard's own idempotent-replay contract ("archived
-      # entity is read-only") and risks racing a concurrent writer. Leaving
-      # the on-disk move uncommitted and retrying the commit on the next run
-      # (the `*read-only*` branch below, or the archived-resolve fast path at
-      # the top of this script) converges cleanly without a separate
-      # rollback mechanism.
+      # R4: the archive move is genuinely still pending (our commit was
+      # rejected, e.g. a pre-commit hook). merge guard's own filesystem
+      # mutation is NOT rolled back -- rolling back would fight its idempotent
+      # read-only-replay contract ("archived entity is read-only") and risk
+      # racing a concurrent writer. Re-run retries the commit (the
+      # `*read-only*` branch below, or the archived-resolve fast path at the
+      # top of this script) and converges cleanly without a separate rollback.
       verdict="PROCEED"
       terminal_action="archive_commit_pending"
       state_name="closeout-archive-commit-failed-recoverable"
       reason="archive-commit-failed"
-      detail="spacedock merge guard finalized $entity_slug but the archive-move commit failed; on-disk state matches merge guard's output, re-run to retry the commit"
+      detail="spacedock merge guard finalized $entity_slug but the archive-move commit is still pending; on-disk state matches merge guard's output, re-run to retry the commit"
       emit_report
       exit 1
     fi
