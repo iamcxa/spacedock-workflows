@@ -261,6 +261,7 @@ set -euo pipefail
 
 [ "${1:-}" = "pr" ] && [ "${2:-}" = "view" ] || exit 2
 pr="${3:-}"
+shift 3 || true
 state_file="${GH_STATE_DIR}/${pr}.state"
 [ -f "$state_file" ] || exit 1
 count_file="${GH_STATE_DIR}/${pr}.count"
@@ -270,7 +271,32 @@ count=$((count + 1))
 printf '%s' "$count" > "$count_file"
 states="$(cat "$state_file")"
 state="$(printf '%s\n' "$states" | awk -v n="$count" -F, '{ if (n <= NF) print $n; else print $NF }')"
-printf '%s\n' "$state"
+
+# Mirror the REAL gh CLI's own output-shape split between the two flag forms
+# this fixture is exercised with: the hook's own lighter Rule-A/re-probe scan
+# passes `--json state -q .state` (bare state string, unchanged shape); the
+# closeout-adapter.sh delegate this hook now calls passes `--json
+# number,state,mergedAt,headRefName,baseRefName,url --jq '[...]'`
+# (multi-field, one `key=value` per line — see read_provider_gh in
+# bin/closeout-adapter.sh).
+has_jq=0
+for arg in "$@"; do
+  [ "$arg" = "--jq" ] && has_jq=1
+done
+
+if [ "$has_jq" = "1" ]; then
+  merged_at=""
+  [ "$state" = "MERGED" ] && merged_at="2026-05-06T00:00:00Z"
+  printf 'provider=gh\n'
+  printf 'number=%s\n' "$pr"
+  printf 'state=%s\n' "$state"
+  printf 'merged_at=%s\n' "$merged_at"
+  printf 'head_ref=fixture-head-%s\n' "$pr"
+  printf 'base_ref=main\n'
+  printf 'url=https://github.com/example/repo/pull/%s\n' "$pr"
+else
+  printf '%s\n' "$state"
+fi
 EOF
   chmod +x "${bin_dir}/gh"
 }
@@ -281,9 +307,116 @@ write_fixture_status_bin() {
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- merge guard <slug> --verdict <v> --workflow-dir <dir> ----------------
+# Faithful encoding of the REAL installed spacedock `merge guard` contract
+# (same fixture logic as test-closeout-adapter.sh's write_fixture_status_bin
+# -- see 6.1-closeout-adapter-single-authority plan.md), extended to resolve
+# EITHER a flat `<slug>.md` OR a folder `<slug>/index.md` entity since this
+# hook's own fixtures write both shapes (write_flat_entity / write_folder_entity).
+if [ "${1:-}" = merge ] && [ "${2:-}" = guard ]; then
+  shift 2
+  mg_slug="${1:-}"
+  shift || true
+  mg_workflow_dir=""
+  mg_verdict=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --verdict) mg_verdict="$2"; shift 2 ;;
+      --workflow-dir) mg_workflow_dir="$2"; shift 2 ;;
+      --json|--quiet) shift ;;
+      *) shift ;;
+    esac
+  done
+  [ -n "$mg_workflow_dir" ] || { echo "Error: --workflow-dir required" >&2; exit 2; }
+  [ -n "$mg_verdict" ] || { echo "Error: --verdict required" >&2; exit 2; }
+
+  mg_frontmatter_field() {
+    local file="$1" field="$2"
+    awk -v field="$field" '
+      /^---[[:space:]]*$/ { fence++; next }
+      fence == 1 {
+        prefix = field ":"
+        if (index($0, prefix) == 1) {
+          value = substr($0, length(prefix) + 1)
+          sub(/^[[:space:]]*/, "", value)
+          sub(/[[:space:]]*$/, "", value)
+          gsub(/^["'\''"]|["'\''"]$/, "", value)
+          print value
+          exit
+        }
+      }
+    ' "$file"
+  }
+  mg_update_frontmatter_field() {
+    local file="$1" field="$2" value="$3"
+    local tmp="${file}.tmp"
+    awk -v field="$field" -v value="$value" '
+      /^---[[:space:]]*$/ { fence++; print; next }
+      fence == 1 {
+        prefix = field ":"
+        if (index($0, prefix) == 1) {
+          print field ": " value
+          next
+        }
+      }
+      { print }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+  }
+
+  mg_active_path=""
+  if [ -f "${mg_workflow_dir}/${mg_slug}.md" ]; then
+    mg_active_path="${mg_workflow_dir}/${mg_slug}.md"
+  elif [ -f "${mg_workflow_dir}/${mg_slug}/index.md" ]; then
+    mg_active_path="${mg_workflow_dir}/${mg_slug}/index.md"
+  fi
+  mg_archived_path=""
+  if [ -f "${mg_workflow_dir}/_archive/${mg_slug}.md" ]; then
+    mg_archived_path="${mg_workflow_dir}/_archive/${mg_slug}.md"
+  elif [ -f "${mg_workflow_dir}/_archive/${mg_slug}/index.md" ]; then
+    mg_archived_path="${mg_workflow_dir}/_archive/${mg_slug}/index.md"
+  fi
+
+  if [ -n "$mg_archived_path" ]; then
+    echo "Error: archived entity is read-only: ${mg_slug}" >&2
+    exit 1
+  fi
+  if [ -z "$mg_active_path" ]; then
+    echo "Error: entity not found: ${mg_slug}" >&2
+    exit 1
+  fi
+
+  mg_pr="$(mg_frontmatter_field "$mg_active_path" pr)"
+  case "$mg_pr" in
+    pr-merge:*)
+      mg_update_frontmatter_field "$mg_active_path" status done
+      mg_update_frontmatter_field "$mg_active_path" verdict PASSED
+      mg_update_frontmatter_field "$mg_active_path" completed 2026-05-06T00:00:00Z
+      mg_update_frontmatter_field "$mg_active_path" worktree ""
+      mkdir -p "${mg_workflow_dir}/_archive"
+      case "$mg_active_path" in
+        */index.md)
+          mv "$(dirname "$mg_active_path")" "${mg_workflow_dir}/_archive/${mg_slug}"
+          ;;
+        *)
+          mv "$mg_active_path" "${mg_workflow_dir}/_archive/${mg_slug}.md"
+          ;;
+      esac
+      echo "finalized: ${mg_slug} -> done (verdict ${mg_verdict}), archived."
+      exit 0
+      ;;
+    *)
+      echo "blocked: PR ${mg_pr} is pending — mod-block left intact, never finalize on an open PR. When gh reports it MERGED, record the sentinel (pr=pr-merge:{number}) and re-run \`merge guard ${mg_slug}\`."
+      exit 0
+      ;;
+  esac
+fi
+
 workflow_dir=""
+include_archived=no
 cmd=""
 slug=""
+ref=""
 
 # Repoint: invoked as `spacedock status <args>` — skip leading subcommand.
 [ "${1:-}" = status ] && shift
@@ -292,6 +425,15 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --workflow-dir)
       workflow_dir="$2"
+      shift 2
+      ;;
+    --archived)
+      include_archived=yes
+      shift
+      ;;
+    --resolve)
+      cmd=resolve
+      ref="$2"
       shift 2
       ;;
     --set)
@@ -314,7 +456,6 @@ done
 
 [ -n "$workflow_dir" ] || exit 2
 [ -n "$cmd" ] || exit 2
-[ -n "$slug" ] || exit 2
 
 entity_path_for_slug() {
   local slug_value="$1"
@@ -324,6 +465,19 @@ entity_path_for_slug() {
   fi
   if [ -f "${workflow_dir}/${slug_value}/index.md" ]; then
     printf '%s\n' "${workflow_dir}/${slug_value}/index.md"
+    return
+  fi
+  return 1
+}
+
+archived_entity_path_for_slug() {
+  local slug_value="$1"
+  if [ -f "${workflow_dir}/_archive/${slug_value}.md" ]; then
+    printf '%s\n' "${workflow_dir}/_archive/${slug_value}.md"
+    return
+  fi
+  if [ -f "${workflow_dir}/_archive/${slug_value}/index.md" ]; then
+    printf '%s\n' "${workflow_dir}/_archive/${slug_value}/index.md"
     return
   fi
   return 1
@@ -349,7 +503,17 @@ update_frontmatter_field() {
 }
 
 case "$cmd" in
+  resolve)
+    slug_value="${ref#archive:}"
+    if [ "$include_archived" = yes ]; then
+      path="$(archived_entity_path_for_slug "$slug_value")" || exit 1
+    else
+      path="$(entity_path_for_slug "$slug_value")" || exit 1
+    fi
+    printf 'slug=%s path=%s\n' "$slug_value" "$path"
+    ;;
   set)
+    [ -n "$slug" ] || exit 2
     path="$(entity_path_for_slug "$slug")"
     for pair in "$@"; do
       key="${pair%%=*}"
@@ -358,6 +522,7 @@ case "$cmd" in
     done
     ;;
   archive)
+    [ -n "$slug" ] || exit 2
     path="$(entity_path_for_slug "$slug")"
     mkdir -p "${workflow_dir}/_archive"
     case "$path" in
@@ -389,6 +554,7 @@ run_hook() {
       HOME="${TEST_HOME:-$TMP_DIR/home}" \
       GH_STATE_DIR="${GH_STATE_DIR:-$TMP_DIR/gh-state}" \
       SHIP_FLOW_STATUS_BIN="${SHIP_FLOW_STATUS_BIN:-}" \
+      SHIP_FLOW_CLOSEOUT_ADAPTER_BIN="${SHIP_FLOW_CLOSEOUT_ADAPTER_BIN:-}" \
       "$HOOK" "$@" > "$output" 2>&1
   ) || rc=$?
   echo "$rc"
@@ -442,6 +608,62 @@ run_auto_fix_off_case() {
   else
     record_fail "auto_fix off leaves workflow unchanged"
   fi
+}
+
+run_delegates_to_adapter_case() {
+  local repo="$TMP_DIR/delegates-to-adapter-repo"
+  setup_repo "$repo" execute
+  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#501"
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#502"
+  git -C "$repo" add -- docs/ship-flow/flat-merged.md docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add two rule-a entities" \
+    -- docs/ship-flow/flat-merged.md docs/ship-flow/folder-merged
+  set_pr_states 501 "MERGED"
+  set_pr_states 502 "MERGED"
+
+  # Spy/stub closeout-adapter.sh: records its invocation argv, then emits a
+  # canned finalized-shaped emit_report so the hook classifies it as
+  # auto-fixed without exercising the real adapter's own git/merge-guard
+  # side effects (those are covered by run_execute_merged_case et al, which
+  # exercise the REAL adapter). This case only asserts the CALL SHAPE.
+  local spy_log="$TMP_DIR/adapter-spy.log"
+  local spy_bin="$TMP_DIR/adapter-spy.sh"
+  cat > "$spy_bin" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$spy_log"
+slug=""
+prev=""
+for arg in "\$@"; do
+  [ "\$prev" = "--entity" ] && slug="\$arg"
+  prev="\$arg"
+done
+printf 'verdict=PROCEED\n'
+printf 'entity=%s\n' "\$slug"
+printf 'terminal_action=merge_guard_finalized\n'
+printf 'state=reconciled\n'
+printf 'debrief_due=%s\n' "\$slug"
+exit 0
+EOF
+  chmod +x "$spy_bin"
+
+  local rc
+  SHIP_FLOW_STATUS_BIN="$TMP_DIR/status-fixture"
+  SHIP_FLOW_CLOSEOUT_ADAPTER_BIN="$spy_bin"
+  rc="$(run_hook "$repo" "$TMP_DIR/delegates-to-adapter.out")"
+  SHIP_FLOW_CLOSEOUT_ADAPTER_BIN=""
+  SHIP_FLOW_STATUS_BIN=""
+
+  assert_exit "delegates-to-adapter exits success" 0 "$rc"
+
+  local spy_calls
+  spy_calls="$(wc -l < "$spy_log" 2>/dev/null | tr -d ' ')"
+  assert_equals "closeout-adapter invoked once per Rule-A record" "2" "${spy_calls:-0}"
+  assert_contains "adapter invocation carries --workflow-dir" '\-\-workflow-dir' "$spy_log"
+  assert_contains "adapter invocation carries --entity flat-merged" '\-\-entity flat-merged' "$spy_log"
+  assert_contains "adapter invocation carries --entity folder-merged" '\-\-entity folder-merged' "$spy_log"
+  assert_contains "adapter invocation carries --pr-provider gh" '\-\-pr-provider gh' "$spy_log"
+  assert_contains "delegates-to-adapter reports auto-fixed" 'Auto-fixed' "$TMP_DIR/delegates-to-adapter.out"
+  assert_contains "delegates-to-adapter reports debrief due" 'Debrief due' "$TMP_DIR/delegates-to-adapter.out"
 }
 
 run_execute_merged_case() {
@@ -530,7 +752,11 @@ run_reprobe_not_merged_case() {
   after="$(hash_tree "${repo}/docs/ship-flow")"
 
   assert_exit "re-probe not merged exits success" 0 "$rc"
-  assert_contains "re-probe not merged reports blocked reason" 're-probe says state=OPEN, not MERGED' "$TMP_DIR/reprobe-not-merged.out"
+  # The re-probe now lives inside closeout-adapter.sh's own read_provider_gh
+  # (2nd `gh pr view` call, same fixture PR-state sequence "MERGED,OPEN" as
+  # before): the adapter itself reports the still-open PR as a non-fatal
+  # `pr_open_noop` no-op, which this hook surfaces as auto-fix-blocked.
+  assert_contains "re-probe not merged reports blocked reason" 'pr_open_noop.*PR is still open' "$TMP_DIR/reprobe-not-merged.out"
   assert_path_missing "re-probe not merged does not archive entity" "${repo}/docs/ship-flow/_archive/flat-merged.md"
   assert_equals "re-probe not merged leaves workflow unchanged" "$before" "$after"
 }
@@ -698,6 +924,7 @@ else
   record_pass "hook exists and is executable"
   should_run_case harness-smoke && run_harness_smoke_case
   should_run_case auto-fix-off && run_auto_fix_off_case
+  should_run_case delegates-to-adapter && run_delegates_to_adapter_case
   should_run_case execute-merged && run_execute_merged_case
   should_run_case dirty-tree && run_dirty_tree_case
   should_run_case missing-helper && run_missing_helper_case

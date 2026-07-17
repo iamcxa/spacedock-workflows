@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ship-flow-hook-version: 1.2.0
+# ship-flow-hook-version: 1.3.0
 # Ship-flow FO state-drift — SessionStart hook
 #
 # Two drift detectors, both advisory-by-default (never blocks session start):
@@ -15,21 +15,31 @@
 #           don't invoke the frontmatter helpers (see entity 099-ship-flow-
 #           stage-wiring). Rule B is the detection safety-net.
 #
-# Auto-fix (v1.2.0, D1 from strengthening-roadmap-2026-05.md):
+# Auto-fix (v1.3.0, D1 from strengthening-roadmap-2026-05.md; delegated to
+# closeout-adapter.sh in 6.1-closeout-adapter-single-authority):
 #
 #   Workflow README frontmatter MAY declare `auto_fix: off | execute`
-#   (default: `off`). When `execute`, this hook auto-runs the `done + archive`
-#   sequence for each Rule A entity that passes a safety re-probe (working
-#   tree clean + PR.state == MERGED still holds at exec time). Rule B is
-#   NEVER auto-fixed (status-update semantics nuanced; surfaces as WARN).
+#   (default: `off`). When `execute`, this hook delegates each Rule A entity
+#   to `bin/closeout-adapter.sh --workflow-dir <dir> --entity <slug>
+#   --pr-provider gh` — the single closeout authority shared with the
+#   `_mods/pr-merge.md` FO hook and the manual CLI. The adapter owns its own
+#   MERGED re-probe (detect→exec race), the write-ahead `pr-merge:{N}`
+#   sentinel commit, and delegates the terminal status/archive mutation to
+#   `spacedock merge guard` — this hook no longer calls `status --set` /
+#   `--archive` / `git commit` directly. Rule B is NEVER auto-fixed
+#   (status-update semantics nuanced; surfaces as WARN).
 #
-#   Safety guards (any fail → skip auto-fix, fall back to WARN):
+#   Safety guards (any fail → skip auto-fix for ALL Rule A entities this run,
+#   fall back to WARN; the per-entity MERGED re-probe now lives inside the
+#   adapter itself, not here):
 #     - working tree clean (uncommitted changes block all auto-fixes)
+#     - closeout-adapter.sh resolvable next to this hook (or via
+#       SHIP_FLOW_CLOSEOUT_ADAPTER_BIN override)
 #     - spacedock status binary discoverable in expected paths
-#     - per-entity PR state re-probe matches MERGED
 #
 #   Output reformats: ✅ Auto-fixed (N) / ⚠️ Auto-fix blocked (M reason) /
-#   🔴 Rule A pending (K, auto_fix off or blocked) / 🔴 Rule B (P).
+#   🔴 Rule A pending (K, auto_fix off or blocked) / 🔴 Rule B (P) /
+#   📋 Debrief due (D, entities the adapter finalized this run).
 #
 # Also extended to scan folder entities (<slug>/index.md at depth 2), which
 # v1.0 missed entirely (maxdepth 1 -type f only caught flat .md files).
@@ -39,8 +49,9 @@
 # Exit:        Always 0
 # Timeout:     10s set by hooks.json; Rule A per-PR check capped at 2s;
 #              Rule B is local-fs-only (no network) so cheap regardless of
-#              entity count. Auto-fix loop adds 2s per entity (re-probe) +
-#              ~100ms per entity (status binary + git commit).
+#              entity count. Auto-fix loop adds one closeout-adapter.sh call
+#              per entity (its own MERGED re-probe + sentinel commit + merge
+#              guard delegation + archive-move commit).
 
 set -uo pipefail
 
@@ -80,6 +91,29 @@ if [ "$auto_fix" = "execute" ]; then
     status_bin="$(command -v spacedock 2>/dev/null || true)"
   fi
 fi
+
+# --- 1e. Locate closeout-adapter.sh (the single closeout authority) -------
+# Sibling `bin/closeout-adapter.sh` in this same plugin checkout.
+# SHIP_FLOW_CLOSEOUT_ADAPTER_BIN overrides for tests (spy/stub substitution).
+closeout_adapter="${SHIP_FLOW_CLOSEOUT_ADAPTER_BIN:-}"
+if [ -z "$closeout_adapter" ]; then
+  hook_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+  closeout_adapter="${hook_dir}/../bin/closeout-adapter.sh"
+fi
+
+# adapter_field <output> <key> - extract one `key=value` line from
+# closeout-adapter.sh's emit_report stdout (see bin/closeout-adapter.sh).
+# Prints nothing (and returns 1) when the key is absent, so callers can
+# safely use the result with a default via `${var:-fallback}`.
+adapter_field() {
+  local output="$1" key="$2" line
+  while IFS= read -r line; do
+    case "$line" in
+      "${key}="*) printf '%s\n' "${line#*=}"; return 0 ;;
+    esac
+  done <<< "$output"
+  return 1
+}
 
 # Stage order (for Rule B later-stage detection)
 # sharp → plan → execute → verify → review → ship → done
@@ -191,71 +225,55 @@ done < <(find "$workflow_dir" -mindepth 2 -maxdepth 2 -type f -name 'index.md' -
 # Pre-conditions for execute path:
 #   - workflow declares `auto_fix: execute` in README frontmatter
 #   - working tree clean (atomic commits, no parallel-session contamination)
-#   - status binary discoverable
+#   - closeout-adapter.sh resolvable and executable
+#   - spacedock status binary discoverable
 #   - at least one Rule A entity detected
-# Any pre-condition fails → all Rule A entities flow into "pending" path.
-# Per-entity re-probe (PR.state == MERGED) catches detect-time → exec-time race.
+# Any pre-condition fails → all Rule A entities flow into "pending" path
+# with NO adapter call attempted (systemic failure, not per-entity).
+# Once pre-conditions pass, each Rule A entity gets exactly one
+# closeout-adapter.sh call — the adapter owns its own MERGED re-probe
+# (detect→exec race), sentinel write-ahead, and merge-guard delegation.
 auto_fixed_lines=""
 auto_fixed_count=0
 auto_fix_blocked_lines=""
 auto_fix_blocked_count=0
 auto_fix_reason=""
+debrief_due_lines=""
+debrief_due_count=0
 
 if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
   if [ "$git_clean" = "0" ]; then
     auto_fix_reason="working tree has uncommitted changes"
+  elif [ ! -x "$closeout_adapter" ]; then
+    auto_fix_reason="closeout-adapter.sh helper not found or not executable"
   elif [ -z "$status_bin" ]; then
     auto_fix_reason="spacedock status binary not found on PATH"
   fi
 
   if [ -z "$auto_fix_reason" ]; then
-    # All pre-conditions met. Iterate Rule A entities.
+    # All pre-conditions met. One closeout-adapter.sh call per Rule A entity.
     while IFS='|' read -r slug pr_num entity_file stage_dir; do
       [ -z "$slug" ] && continue
 
-      # Per-entity re-probe (paranoia: detect → exec gap; PR may have unmerged)
-      state=$(timeout 2 gh pr view "$pr_num" --json state -q .state 2>/dev/null || true)
-      if [ "$state" != "MERGED" ]; then
-        auto_fix_blocked_lines+="  - \`$slug\` — re-probe says state=${state:-unknown}, not MERGED (race?); manual fix required"$'\n'
-        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
-        continue
-      fi
+      adapter_rc=0
+      adapter_output="$("$closeout_adapter" --workflow-dir "$workflow_dir" \
+        --entity "$slug" --pr-provider gh 2>&1)" || adapter_rc=$?
 
-      ts=$(date -u +%FT%TZ)
+      adapter_terminal="$(adapter_field "$adapter_output" terminal_action)"
+      adapter_state="$(adapter_field "$adapter_output" state)"
+      adapter_reason="$(adapter_field "$adapter_output" reason)"
+      adapter_detail="$(adapter_field "$adapter_output" detail)"
+      adapter_debrief="$(adapter_field "$adapter_output" debrief_due)"
 
-      # status --set (advance to done + verdict + completed)
-      if ! "$status_bin" status --workflow-dir "$workflow_dir" \
-           --set "$slug" status=done verdict=PASSED completed="$ts" \
-           >/dev/null 2>&1; then
-        auto_fix_blocked_lines+="  - \`$slug\` — status --set failed"$'\n'
-        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
-        continue
-      fi
-
-      # status --archive (move to _archive/)
-      if ! "$status_bin" status --workflow-dir "$workflow_dir" \
-           --archive "$slug" >/dev/null 2>&1; then
-        auto_fix_blocked_lines+="  - \`$slug\` — status --archive failed after set"$'\n'
-        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
-        continue
-      fi
-
-      # Determine src + dst pathspec for explicit-pathspec commit
-      if [ -n "$stage_dir" ]; then
-        src="$stage_dir"
-        dst="$workflow_dir/_archive/$slug"
-      else
-        src="$entity_file"
-        dst="$workflow_dir/_archive/$(basename "$entity_file")"
-      fi
-
-      if git add -- "$src" "$dst" 2>/dev/null && \
-         git commit -m "done + archive: $slug (PR #$pr_num merged, auto-fix from SessionStart hook)" \
-             -- "$src" "$dst" >/dev/null 2>&1; then
+      if [ "$adapter_rc" -eq 0 ] && [ "$adapter_terminal" = "merge_guard_finalized" ]; then
         auto_fixed_lines+="  - \`$slug\` — PR #$pr_num → status=done verdict=PASSED + archived + committed"$'\n'
         auto_fixed_count=$((auto_fixed_count + 1))
+        if [ -n "$adapter_debrief" ]; then
+          debrief_due_lines+="  - \`$slug\` — closeout finalized (PR #$pr_num) via \`closeout-adapter.sh\`"$'\n'
+          debrief_due_count=$((debrief_due_count + 1))
+        fi
       else
-        auto_fix_blocked_lines+="  - \`$slug\` — commit failed (status updated, archive moved, but \`git commit\` errored)"$'\n'
+        auto_fix_blocked_lines+="  - \`$slug\` — closeout-adapter: ${adapter_state:-${adapter_reason:-unrecognized-outcome}} (${adapter_detail:-no detail; exit ${adapter_rc}})"$'\n'
         auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
       fi
     done <<< "$rule_a_records"
@@ -291,7 +309,17 @@ if [ "$auto_fixed_count" -gt 0 ]; then
 
 ✅ **Auto-fixed** ($auto_fixed_count $plural, via \`auto_fix: execute\` workflow config):
 $auto_fixed_lines
-No action needed — entities are now at \`status: done\` and moved to \`_archive/\`. Each had its own atomic commit on this branch."
+No action needed — entities are now at \`status: done\` and moved to \`_archive/\`. Each had its own atomic commit on this branch, delegated through \`bin/closeout-adapter.sh\`."
+fi
+
+# Debrief-due section — entities the adapter finalized this run (DC-9);
+# non-blocking, additive, never gates auto-fix success/failure above.
+if [ "$debrief_due_count" -gt 0 ]; then
+  plural=$([ "$debrief_due_count" -eq 1 ] && echo "entity" || echo "entities")
+  msg+="
+
+📋 **Debrief due** ($debrief_due_count $plural — closeout finalized, run \`spacedock:debrief\` when convenient):
+$debrief_due_lines"
 fi
 
 # Auto-fix blocked section (D1) — Rule A entities where execute path tripped a guard
@@ -299,9 +327,9 @@ if [ "$auto_fix_blocked_count" -gt 0 ]; then
   plural=$([ "$auto_fix_blocked_count" -eq 1 ] && echo "entity" || echo "entities")
   msg+="
 
-⚠️ **Auto-fix blocked** ($auto_fix_blocked_count $plural — execute mode set but pre-condition or re-probe failed):
+⚠️ **Auto-fix blocked** ($auto_fix_blocked_count $plural — execute mode set but pre-condition or adapter re-probe failed):
 $auto_fix_blocked_lines
-Resolve the blocking reason (commit/stash uncommitted work; verify status binary; re-check PR state) and re-trigger SessionStart, or run the manual \`done + archive\` sequence from \`plugins/ship-flow/skills/ship-execute/SKILL.md\` for each entity."
+Resolve the blocking reason (commit/stash uncommitted work; verify \`spacedock\`/\`closeout-adapter.sh\` are resolvable; re-check PR state) and re-trigger SessionStart, or run \`bash plugins/ship-flow/bin/closeout-adapter.sh --workflow-dir $workflow_dir --entity <slug> --pr-provider gh --dry-run\` to see the plan, then without \`--dry-run\` for each entity."
 fi
 
 # Rule A pending section — auto_fix off OR all entities blocked above
@@ -311,7 +339,7 @@ if [ "$rule_a_count" -gt 0 ]; then
 
 🔴 **Rule A** — $rule_a_count $plural with merged PR still at \`status: ship\`:
 $rule_a_lines
-Before new execute work, run the \`done + archive\` sequence from \`plugins/ship-flow/skills/ship-execute/SKILL.md\` for each. To enable autonomous fix in future sessions, set \`auto_fix: execute\` in workflow README frontmatter (D1, see \`plugins/ship-flow/_plans/strengthening-roadmap-2026-05.md\`)."
+Before new execute work, run \`bash plugins/ship-flow/bin/closeout-adapter.sh --workflow-dir $workflow_dir --entity <slug> --pr-provider gh --dry-run\` to see the plan, then without \`--dry-run\` for each. To enable autonomous fix in future sessions, set \`auto_fix: execute\` in workflow README frontmatter (D1, see \`plugins/ship-flow/_plans/strengthening-roadmap-2026-05.md\`)."
 fi
 if [ "$unsafe_pr_count" -gt 0 ]; then
   plural=$([ "$unsafe_pr_count" -eq 1 ] && echo "entity" || echo "entities")
