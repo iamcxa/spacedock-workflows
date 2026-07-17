@@ -42,7 +42,6 @@ Status: captured
    Destination: draft-memory
 
 ## Evidence Boundary
-
 <details>
 <summary>Frozen provenance and contribution-contract evidence</summary>
 
