@@ -10,6 +10,7 @@
 | Entity | Title | Stage |
 | --- | --- | --- |
 | 5-issue-anchor-scope-drift-guard | Issue-anchor scope-drift guard (route-back re-anchor) | ship |
+| 7-review-surface-shape-not-plan | Ship-flow core: the human review surface is the shape/spec, not plan.md | execute |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
@@ -17,7 +18,6 @@
 <!-- section:next -->
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
-| 7-review-surface-shape-not-plan | Ship-flow core: the human review surface is the shape/spec, not plan.md | (pitch) | small-batch |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
