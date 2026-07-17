@@ -1421,6 +1421,159 @@ _commit_has_fo_stage_entry_receipt() {
   return 0
 }
 
+# Returns 0 when <value> is a valid UTC RFC3339 timestamp (YYYY-MM-DDTHH:MM:SSZ,
+# zero-padded, exact round-trip). Dependency of _entity_has_fo_feedback_cycle_record.
+_valid_utc_rfc3339_timestamp() {
+  python3 - "$1" <<'PY'
+from datetime import datetime
+import sys
+
+value = sys.argv[1]
+try:
+    parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+except ValueError:
+    raise SystemExit(1)
+raise SystemExit(0 if parsed.strftime("%Y-%m-%dT%H:%M:%SZ") == value else 1)
+PY
+}
+
+# Returns 0 when one entity's after-state contains exactly one canonical
+# Feedback Cycles record matching the subject-bound rejected stage, cycle, and
+# feedback target. Additional fields bind the captain decision and verify
+# evidence that authorized the route back; prose elsewhere cannot substitute.
+_entity_has_fo_feedback_cycle_record() {
+  local rev="$1" path="$2" expected_cycle="$3" expected_rejected="$4" expected_target="$5" content matched_routed
+  content="$( { git show "${rev}:${path}" 2>/dev/null || true; } )"
+  matched_routed="$(awk \
+    -v expected_cycle="$expected_cycle" \
+    -v expected_rejected="$expected_rejected" \
+    -v expected_target="$expected_target" '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function reset_record() {
+      active = 0
+      cycle = rejected = target = decision = routed = artifact = ""
+      cycle_count = rejected_count = target_count = 0
+      decision_count = routed_count = artifact_count = 0
+    }
+    function finish_record(artifact_parts, artifact_count_parts, artifact_sha) {
+      if (!active) return
+      artifact_count_parts = split(artifact, artifact_parts, "@")
+      artifact_sha = artifact_parts[2]
+      if (cycle_count == 1 && rejected_count == 1 && target_count == 1 &&
+          decision_count == 1 && routed_count == 1 && artifact_count == 1 &&
+          cycle == expected_cycle && rejected == expected_rejected &&
+          target == expected_target && decision == "fix" &&
+          routed ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/ &&
+          artifact_count_parts == 2 && artifact_parts[1] == rejected ".md" &&
+          artifact_sha ~ /^[0-9a-f]+$/ && length(artifact_sha) >= 7 && length(artifact_sha) <= 40) {
+        matches++
+        matching_routed = routed
+      }
+      reset_record()
+    }
+    $0 == "### Feedback Cycles" {
+      finish_record()
+      sections++
+      in_section = 1
+      next
+    }
+    in_section && substr($0, 1, 2) == "##" {
+      finish_record()
+      in_section = 0
+      next
+    }
+    in_section && /^- cycle:[[:space:]]*/ {
+      finish_record()
+      active = 1
+      cycle_count = 1
+      cycle = $0
+      sub(/^- cycle:[[:space:]]*/, "", cycle)
+      cycle = trim(cycle)
+      next
+    }
+    in_section && active && /^  rejected_stage:[[:space:]]*/ {
+      rejected_count++
+      rejected = $0
+      sub(/^  rejected_stage:[[:space:]]*/, "", rejected)
+      rejected = trim(rejected)
+      next
+    }
+    in_section && active && /^  feedback_to:[[:space:]]*/ {
+      target_count++
+      target = $0
+      sub(/^  feedback_to:[[:space:]]*/, "", target)
+      target = trim(target)
+      next
+    }
+    in_section && active && /^  captain_decision:[[:space:]]*/ {
+      decision_count++
+      decision = $0
+      sub(/^  captain_decision:[[:space:]]*/, "", decision)
+      decision = trim(decision)
+      next
+    }
+    in_section && active && /^  routed_at:[[:space:]]*/ {
+      routed_count++
+      routed = $0
+      sub(/^  routed_at:[[:space:]]*/, "", routed)
+      routed = trim(routed)
+      next
+    }
+    in_section && active && /^  verify_artifact:[[:space:]]*/ {
+      artifact_count++
+      artifact = $0
+      sub(/^  verify_artifact:[[:space:]]*/, "", artifact)
+      artifact = trim(artifact)
+      next
+    }
+    END {
+      finish_record()
+      if (sections == 1 && matches == 1) {
+        print matching_routed
+        exit 0
+      }
+      exit 1
+    }
+  ' <<<"$content")" || return 1
+  _valid_utc_rfc3339_timestamp "$matched_routed"
+}
+
+# Returns 0 when <sha> carries a canonical subject-only feedback-stage receipt
+# and every mutated entity agrees on parent stage, resulting status, and body
+# Feedback Cycles evidence. The caller validates workflow edges before this
+# check; this function additionally binds cycle, captain decision, and verify
+# evidence so a forged subject over a legal edge still cannot manufacture the
+# receipt (Principle 15 feedback-stage contract).
+_commit_has_fo_feedback_stage_receipt() {
+  local sha="$1"
+  shift
+  local subject feedback_summary rejected_stage cycle target_stage path before_status after_status
+  subject="$(git log -1 --format=%s "$sha")"
+  if [[ ! "$subject" =~ ^feedback:[[:space:]]+(.+)[[:space:]]+([a-z][a-z0-9-]*)[[:space:]]+cycle[[:space:]]+([1-9][0-9]*)[[:space:]]+to[[:space:]]+([a-z][a-z0-9-]*)$ ]]; then
+    return 1
+  fi
+  feedback_summary="${BASH_REMATCH[1]}"
+  rejected_stage="${BASH_REMATCH[2]}"
+  cycle="${BASH_REMATCH[3]}"
+  target_stage="${BASH_REMATCH[4]}"
+  [[ "$feedback_summary" =~ [^[:space:]] ]] || return 1
+  [ "$#" -gt 0 ] || return 1
+
+  for path in "$@"; do
+    before_status="$(_frontmatter_status_at_rev_path "${sha}^" "$path")"
+    after_status="$(_frontmatter_status_at_rev_path "$sha" "$path")"
+    [ "$before_status" = "$rejected_stage" ] || return 1
+    [ "$after_status" = "$target_stage" ] || return 1
+    _entity_has_fo_feedback_cycle_record \
+      "$sha" "$path" "$cycle" "$rejected_stage" "$target_stage" || return 1
+  done
+  return 0
+}
+
 # C14: Entity status mutation must carry a sanctioned transition receipt
 # ----------------------------------------------------------------------
 # Scans commits on the current branch ahead of merge-base with origin/main.
@@ -1529,6 +1682,15 @@ check_entity_status_via_advance_stage_only() {
         fi
         violations=$((violations + 1))
         echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} used malformed First Officer stage-entry grammar." >&2
+        echo "       commit msg head: $subject" >&2
+        continue
+        ;;
+      feedback:*)
+        if _commit_has_fo_feedback_stage_receipt "$sha" "${mutated_paths[@]}"; then
+          continue
+        fi
+        violations=$((violations + 1))
+        echo "FAIL C14 entity-status-via-advance-stage-only: commit ${sha:0:8} used malformed First Officer feedback-stage grammar." >&2
         echo "       commit msg head: $subject" >&2
         continue
         ;;
