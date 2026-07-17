@@ -28,6 +28,7 @@
 | plugin-readme-model-era-refactor | S | Plugin README still model-era-anchored (4.7 voice) + stale | (todo) |
 | helm-canonical-adapter-registration-dogfood | S | Helm adopts the canonical closeout-adapter registration and dogfoods closeout from a clean isolated checkout (no Helm-specific terminalization code). | pitch 6 |
 | shaped-child-created-off-graph-sharp | S | shaped-child born off-graph (sharp); C14 blocks its first advance | pitch 6 (related: shape-confirm-instance-awareness) |
+| closeout-adapter-edge-path-hardening | M | closeout-adapter error/crash/replay-path robustness (debrief durability, output parsing, replay WIP) — codex r4 deferred from #46 | pitch 6 |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
