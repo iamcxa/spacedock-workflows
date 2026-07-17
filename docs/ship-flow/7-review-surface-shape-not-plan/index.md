@@ -33,10 +33,12 @@ Captain-authored at the shape gate. Retro at ship + 2 weeks: did the Bet match o
 - domain: none
 - result: proceed
 
-**False-positive determination (FO override, evidence-backed — not a silent skip):**
-`--classify` returned `matched=schema` from a single lexical token — one mention of "the existing workflow **schema** (`manual:` field)" in assumption A1 (shape.md:38), which is methodology prose about a workflow-config field, NOT a data/DB schema change. `required_skills` and `skill_hints` came back empty. `--validate --domain=schema` returns `status=ok` only because a schema specialist exists in the plugin-default registry — it does not imply this pitch needs one. #60's entire scope is `INVARIANTS.md` prose + a `check-invariants.sh` string-assertion (C16) + its test + doc-sync — **zero** schema / migration / storage / data-model surfaces. `domain:` is deliberately left unset; routing a prose + shell-check change to the design stage on a keyword hit would be disproportionate ceremony with no contract to decide. The enforcement style (string-assertion check) is fixed by the issue AC and mirrors the existing C1–C15 pattern, so no contract ambiguity is buried by skipping design.
+**False-positive determination (FO, evidence-backed):**
+`--classify` returned `matched=schema` from a single lexical token — one mention of "the existing workflow **schema** (`manual:` field)" in assumption A1 (shape.md), methodology prose about a workflow-config field, NOT a data/DB schema change. `required_skills`/`skill_hints` came back empty. `--validate --domain=schema` returns `status=ok` only because a schema specialist exists in the plugin-default registry — it does not imply this pitch needs one. #60's entire scope is `INVARIANTS.md` prose + a `check-invariants.sh` string-assertion (C16) + its test + doc-sync — **zero** schema / migration / storage / data-model surfaces. `domain:` is left unset. Per INVARIANTS Principle 11 the design stage still runs, but it short-circuits to a Phase 0 trivial-pass PROCEED: no UI, no matched domain, no contract to decide, so design adds no deltas (see design.md).
 
-### Hand-off to Plan
-- design-skipped: true
+### Hand-off to Design
+- affects_ui: false
+- framework_detected: n/a (methodology prose + shell checker; no UI surface)
+- ui_surfaces: []
 - open_design_questions: []
 - open_contract_decisions: []
