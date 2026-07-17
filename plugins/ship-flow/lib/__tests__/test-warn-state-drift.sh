@@ -674,6 +674,44 @@ EOF
   assert_contains "delegates-to-adapter reports debrief due" 'Debrief due' "$TMP_DIR/delegates-to-adapter.out"
 }
 
+run_sentinel_resumable_case() {
+  # (C) codex round-3: a pr-merge:{N} sentinel (merge confirmed, terminalization
+  # deferred by another trigger) must be recognized as a resumable Rule-A record
+  # and delegated to the adapter WITHOUT a redundant gh probe (works offline).
+  local repo="$TMP_DIR/sentinel-resumable-repo"
+  setup_repo "$repo" execute
+  write_flat_entity "${repo}/docs/ship-flow" "sentinel-flat" "ship" "pr-merge:131"
+  git -C "$repo" add -- docs/ship-flow/sentinel-flat.md
+  git -C "$repo" commit -qm "add sentinel-flat entity" -- docs/ship-flow/sentinel-flat.md
+  # Deliberately NO set_pr_states / gh state -- the sentinel IS the confirmed
+  # merge fact, so recognition must not depend on a gh probe.
+
+  local spy_log="$TMP_DIR/sentinel-spy.log"
+  local spy_bin="$TMP_DIR/sentinel-spy.sh"
+  cat > "$spy_bin" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$spy_log"
+slug=""; prev=""
+for arg in "\$@"; do [ "\$prev" = "--entity" ] && slug="\$arg"; prev="\$arg"; done
+printf 'verdict=PROCEED\nentity=%s\nterminal_action=merge_guard_finalized\nstate=reconciled\ndebrief_due=%s\n' "\$slug" "\$slug"
+exit 0
+EOF
+  chmod +x "$spy_bin"
+
+  local rc
+  SHIP_FLOW_STATUS_BIN="$TMP_DIR/status-fixture"
+  SHIP_FLOW_CLOSEOUT_ADAPTER_BIN="$spy_bin"
+  rc="$(run_hook "$repo" "$TMP_DIR/sentinel-resumable.out")"
+  SHIP_FLOW_CLOSEOUT_ADAPTER_BIN=""
+  SHIP_FLOW_STATUS_BIN=""
+
+  assert_exit "sentinel-resumable exits success" 0 "$rc"
+  local spy_calls
+  spy_calls="$(wc -l < "$spy_log" 2>/dev/null | tr -d ' ')"
+  assert_equals "sentinel entity delegated to adapter once" "1" "${spy_calls:-0}"
+  assert_contains "sentinel delegation carries --entity sentinel-flat" '\-\-entity sentinel-flat' "$spy_log"
+}
+
 run_execute_merged_case() {
   local repo="$TMP_DIR/execute-merged-repo"
   setup_repo "$repo" execute
@@ -933,6 +971,7 @@ else
   should_run_case harness-smoke && run_harness_smoke_case
   should_run_case auto-fix-off && run_auto_fix_off_case
   should_run_case delegates-to-adapter && run_delegates_to_adapter_case
+  should_run_case sentinel-resumable && run_sentinel_resumable_case
   should_run_case execute-merged && run_execute_merged_case
   should_run_case dirty-tree && run_dirty_tree_case
   should_run_case missing-helper && run_missing_helper_case

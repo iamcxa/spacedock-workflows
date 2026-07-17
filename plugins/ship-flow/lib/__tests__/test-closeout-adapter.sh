@@ -1633,6 +1633,69 @@ run_real_merge_guard_self_commit_case() {
   assert_contains "real merge-guard self-commit: replay reports already_reconciled terminal_action" '^terminal_action=already_reconciled$' "$TMP_DIR/real-merge-guard-replay.out"
 }
 
+run_codex_hardening_regression_cases() {
+  # REGRESSION guard for the codex round-3/round-4 safety-gate hardening.
+  local repo rc head_sha real_git
+
+  # (A) stale-trunk containment: a merge commit contained in the local trunk
+  # finalizes; a merge commit absent from the local trunk defers (fail closed).
+  repo="$TMP_DIR/hard-a-repo"; setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "hard-a" "ship" "#131" ""
+  git -C "$repo" add docs/ship-flow/hard-a/index.md; git -C "$repo" commit -qm "add hard-a"
+  head_sha="$(git -C "$repo" rev-parse HEAD)"
+  printf 'provider=fixture\nnumber=131\nstate=MERGED\nmerged_at=2026-05-06T00:00:00Z\nhead_ref=ship-hard-a\nbase_ref=main\nurl=x\nmerge_commit=%s\n' "$head_sha" > "$TMP_DIR/hard-a-ok.env"
+  rc="$(run_helper "$repo" "$TMP_DIR/hard-a-ok.out" --entity hard-a --pr-provider fixture --pr-fixture "$TMP_DIR/hard-a-ok.env")"
+  assert_exit "stale-trunk: local trunk contains merge commit -> finalize" 0 "$rc"
+  assert_contains "stale-trunk: contained finalizes" '^terminal_action=merge_guard_finalized$' "$TMP_DIR/hard-a-ok.out"
+
+  repo="$TMP_DIR/hard-a2-repo"; setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "hard-a2" "ship" "#131" ""
+  git -C "$repo" add docs/ship-flow/hard-a2/index.md; git -C "$repo" commit -qm "add hard-a2"
+  printf 'provider=fixture\nnumber=131\nstate=MERGED\nmerged_at=2026-05-06T00:00:00Z\nhead_ref=ship-hard-a2\nbase_ref=main\nurl=x\nmerge_commit=%s\n' "0000000000000000000000000000000000000000" > "$TMP_DIR/hard-a2.env"
+  rc="$(run_helper "$repo" "$TMP_DIR/hard-a2.out" --entity hard-a2 --pr-provider fixture --pr-fixture "$TMP_DIR/hard-a2.env")"
+  assert_exit "stale-trunk: absent merge commit defers non-fatally" 0 "$rc"
+  assert_contains "stale-trunk: stale defers" '^state=closeout-deferred-stale-trunk$' "$TMP_DIR/hard-a2.out"
+  assert_file_exists "stale-trunk: defer leaves entity active" "${repo}/docs/ship-flow/hard-a2/index.md"
+
+  # (#3) an unresolvable trunk (incompatible driver: no `dispatch trunk`) fails
+  # closed as state-driver-unavailable -- distinct from a wrong-branch defer.
+  repo="$TMP_DIR/hard-d-repo"; setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "hard-d" "ship" "#131" ""
+  git -C "$repo" add docs/ship-flow/hard-d/index.md; git -C "$repo" commit -qm "add hard-d"
+  write_fixture_status_bin "$TMP_DIR/hard-d-shared"
+  cat > "$TMP_DIR/hard-d-stub" <<EOF
+#!/usr/bin/env bash
+if [ "\${1:-}" = dispatch ] && [ "\${2:-}" = trunk ]; then echo "unknown command: dispatch" >&2; exit 2; fi
+exec "$TMP_DIR/hard-d-shared" "\$@"
+EOF
+  chmod +x "$TMP_DIR/hard-d-stub"
+  write_merged_pr_fixture "$TMP_DIR/hard-d.env" 131 "ship-hard-d"
+  rc="$(run_helper_with_status_bin "$repo" "$TMP_DIR/hard-d.out" "$TMP_DIR/hard-d-stub" --entity hard-d --pr-provider fixture --pr-fixture "$TMP_DIR/hard-d.env")"
+  assert_exit "driver-unavailable: unresolvable trunk fails closed (exit 1)" 1 "$rc"
+  assert_contains "driver-unavailable: distinct state" '^state=state-driver-unavailable$' "$TMP_DIR/hard-d.out"
+  assert_file_exists "driver-unavailable: entity left active (no mutation)" "${repo}/docs/ship-flow/hard-d/index.md"
+
+  # (B) a failing sentinel commit reports a distinct recoverable state (not a
+  # silent perpetual dirty-tree defer).
+  repo="$TMP_DIR/hard-b-repo"; setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "hard-b" "ship" "#131" ""
+  git -C "$repo" add docs/ship-flow/hard-b/index.md; git -C "$repo" commit -qm "add hard-b"
+  real_git="$(command -v git)"
+  mkdir -p "$TMP_DIR/hard-b-git"
+  cat > "$TMP_DIR/hard-b-git/git" <<EOF
+#!/usr/bin/env bash
+c=0; s=0
+for a in "\$@"; do [ "\$a" = commit ] && c=1; case "\$a" in *"record pr-merge sentinel"*) s=1 ;; esac; done
+if [ "\$c" = 1 ] && [ "\$s" = 1 ]; then echo "fatal: simulated sentinel commit failure" >&2; exit 128; fi
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$TMP_DIR/hard-b-git/git"
+  write_merged_pr_fixture "$TMP_DIR/hard-b.env" 131 "ship-hard-b"
+  rc="$(run_helper_with_path "$repo" "$TMP_DIR/hard-b.out" "$TMP_DIR/hard-b-git:$PATH" --entity hard-b --pr-provider fixture --pr-fixture "$TMP_DIR/hard-b.env")"
+  assert_exit "sentinel-commit-fail: signals non-zero recoverable" 1 "$rc"
+  assert_contains "sentinel-commit-fail: distinct recoverable state" '^state=closeout-sentinel-commit-failed-recoverable$' "$TMP_DIR/hard-b.out"
+}
+
 run_doc_scope_cases() {
   # Dogfood check — only runs when docs/ship-flow/_mods/pr-merge.md exists (adopted host).
   # In fresh-clone standalone mode this function is intentionally skipped.
@@ -1675,6 +1738,7 @@ else
   run_no_raw_terminal_set_case
   run_archive_commit_failure_recovery_case
   run_real_merge_guard_self_commit_case
+  run_codex_hardening_regression_cases
   run_scope_guard
   run_doc_scope_cases
 fi
