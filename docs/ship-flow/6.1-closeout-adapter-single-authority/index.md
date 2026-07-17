@@ -8,6 +8,7 @@ layout: folder
 status: ship
 stage_outputs:
     plan: plan.md
+pr: "#61"
 ---
 
 ### Problem
