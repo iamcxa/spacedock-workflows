@@ -403,6 +403,65 @@ EOF
   echo "$dir"
 }
 
+# Build an exact First Officer feedback-stage-receipt history on the same
+# workflow graph as setup_fo_dispatch_fixture (verify's declared feedback-to
+# is execute). $5 is raw body text appended verbatim to the entity file on
+# the mutation (feature-branch) commit — a canonical ### Feedback Cycles
+# record, an empty string (no record at all), or a forged/broken record, per
+# case. $6 (optional) is raw body text appended on the BASELINE (main/parent)
+# commit instead — used to construct a PARENT revision that already carries
+# Feedback Cycles history, for freshness/monotonic-cycle cases.
+# shellcheck disable=SC2329 # invoked indirectly through assert_exit/eval cases below
+setup_fo_feedback_fixture() {
+  local mutation_msg="$1" before_status="${2:-verify}" after_status="${3:-execute}" entity_slug="${4:-example-feature}" feedback_body="${5:-}" parent_feedback_body="${6:-}"
+  local dir
+  dir="$(mktemp -d)"
+  (
+    cd "$dir" || exit 1
+    git init -q -b main
+    git config user.email test@test
+    git config user.name test
+
+    mkdir -p docs/test-wf
+    cat > docs/test-wf/README.md <<'EOF'
+---
+stages:
+  states:
+    - name: draft
+    - name: shape
+    - name: design
+    - name: plan
+    - name: execute
+    - name: verify
+      feedback-to: execute
+    - name: ship
+    - name: done
+---
+EOF
+    cat > "docs/test-wf/${entity_slug}.md" <<EOF
+---
+title: "Example Feature"
+status: ${before_status}
+---
+EOF
+    if [ -n "$parent_feedback_body" ]; then
+      printf '%s\n' "$parent_feedback_body" >> "docs/test-wf/${entity_slug}.md"
+    fi
+    git add docs/test-wf/README.md "docs/test-wf/${entity_slug}.md"
+    git commit -qm "draft: add example feature"
+
+    git checkout -q -b feature
+    sed -i.bak "s/^status: ${before_status}$/status: ${after_status}/" "docs/test-wf/${entity_slug}.md"
+    rm -f "docs/test-wf/${entity_slug}.md.bak"
+    if [ -n "$feedback_body" ]; then
+      printf '%s\n' "$feedback_body" >> "docs/test-wf/${entity_slug}.md"
+    fi
+    git add "docs/test-wf/${entity_slug}.md"
+    git commit -qm "$mutation_msg"
+  )
+  echo "$dir"
+}
+
 # Build one commit with a skipped transition on an exempt body-table entity and
 # a legal transition on a non-exempt entity. A completion-looking signature must
 # not let the legal path hide the illegal one.
@@ -867,6 +926,158 @@ rm -rf "$TMP"
 TMP="$(setup_fixture "manual body-table correction to plan" "bodytable" "edit")"
 assert_exit 1 "run_check_only_with_git_fault '$TMP' '$GIT_FAULT_WRAPPER' subject-log" "Case-31 subject lookup failure cannot select ownerless compatibility (exit 1)"
 rm -rf "$TMP" "$GIT_FAULT_WRAPPER"
+
+# ---- FO feedback-stage receipt cases (Principle 15 third receipt kind) ----
+# Canonical/forged ### Feedback Cycles body records shared by Cases 32-38.
+FB_VALID=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+FB_MISMATCH_CYCLE=$'\n### Feedback Cycles\n\n- cycle: 2\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+FB_WRONG_DECISION=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: hold\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+FB_BAD_TIMESTAMP=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12 13:48:06\n  verify_artifact: verify.md@abc1234\n'
+FB_BAD_ARTIFACT=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: execute.md@abc1234\n'
+FB_DUPLICATE_SECTION=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+
+echo
+echo "--- Case 32: FEEDBACK canonical receipt (verify->execute, matching body record) → PASS ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_VALID")"
+assert_exit 0 "run_check_only '$TMP'" "Case-32 canonical FO feedback-stage receipt passes (exit 0)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 33: FEEDBACK FORGED — subject with no Feedback Cycles record at all → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "")"
+assert_exit 1 "run_check_only '$TMP'" "Case-33 forged feedback subject without a body record is rejected (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 34: FEEDBACK FORGED — body record cycle mismatches subject cycle → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_MISMATCH_CYCLE")"
+assert_exit 1 "run_check_only '$TMP'" "Case-34 mismatched cycle number cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 35: FEEDBACK FORGED — captain_decision is not fix → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_WRONG_DECISION")"
+assert_exit 1 "run_check_only '$TMP'" "Case-35 non-fix captain_decision cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 36: FEEDBACK FORGED — routed_at is not valid UTC RFC3339 → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_BAD_TIMESTAMP")"
+assert_exit 1 "run_check_only '$TMP'" "Case-36 malformed routed_at cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 37: FEEDBACK FORGED — verify_artifact names the wrong stage → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_BAD_ARTIFACT")"
+assert_exit 1 "run_check_only '$TMP'" "Case-37 verify_artifact stage mismatch cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 38: FEEDBACK FORGED — duplicate Feedback Cycles sections → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_DUPLICATE_SECTION")"
+assert_exit 1 "run_check_only '$TMP'" "Case-38 duplicate Feedback Cycles sections cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 39: FEEDBACK over a NON-feedback edge (graph gate blocks before receipt case) → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature shape cycle 1 to execute" shape execute example-feature "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-39 feedback subject cannot bless an undeclared graph edge (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 40: FEEDBACK malformed subject grammar — missing 'cycle N' → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify to execute" verify execute example-feature "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-40 feedback receipt requires the cycle keyword and number (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 41: FEEDBACK malformed subject grammar — missing 'to <target>' → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 execute" verify execute example-feature "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-41 feedback receipt requires the 'to <target>' clause (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 42: FEEDBACK malformed subject grammar — uppercase target stage → FAIL ---"
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to EXECUTE" verify execute example-feature "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-42 feedback receipt requires lowercase canonical stage grammar (exit 1)"
+rm -rf "$TMP"
+
+# ---- Codex-found authority-gap regressions (feedback-to-edge bind,
+# stale-record replay + monotonic cycle, fence-safety, bounded cycle) ----
+
+echo
+echo "--- Case 43: FEEDBACK subject over a NEXT-STAGE edge that is NOT the rejected stage's declared feedback-to → FAIL (P1-#1) ---"
+# execute->verify IS a legal graph edge (the declared NEXT stage per README
+# order), but it is NOT execute's feedback-to (only verify declares
+# feedback-to: execute). A forged feedback: receipt + matching body record
+# over this forward edge must still be rejected — the shared graph gate
+# alone (legal edge, forward or feedback) is not sufficient authority.
+FB_EXECUTE_TO_VERIFY=$'\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: execute\n  feedback_to: verify\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: execute.md@abc1234\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature execute cycle 1 to verify" execute verify example-feature "$FB_EXECUTE_TO_VERIFY")"
+assert_exit 1 "run_check_only '$TMP'" "Case-43 feedback receipt cannot bless a merely-legal forward edge as if it were the feedback-to edge (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 44: FEEDBACK reusing an UNCHANGED parent cycle record (no newly-added record) → FAIL (P1-#2 freshness) ---"
+# Parent already carries the exact cycle-1 record (FB_VALID). The mutation
+# commit changes status: verify->execute but appends NOTHING new — the
+# "evidence" is stale, byte-identical, pre-existing parent content, not
+# fresh routing evidence produced by THIS commit.
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "" "$FB_VALID")"
+assert_exit 1 "run_check_only '$TMP'" "Case-44 stale unchanged parent cycle record cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 45: FEEDBACK non-monotonic — new record's cycle is LOWER than an already-recorded parent cycle → FAIL (P1-#2 monotonic) ---"
+# Parent already has cycle 2 on record. The mutation commit appends a
+# genuinely NEW, distinct record (different routed_at/verify_artifact, so it
+# passes the freshness check) but claims cycle 1 — lower than the entity's
+# already-recorded maximum. Cycle numbering must be monotonic per entity.
+FB_PARENT_CYCLE2=$'\n### Feedback Cycles\n\n- cycle: 2\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-10T10:00:00Z\n  verify_artifact: verify.md@aaaa111\n'
+FB_CHILD_NEW_CYCLE1=$'- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@bbbb222\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_CHILD_NEW_CYCLE1" "$FB_PARENT_CYCLE2")"
+assert_exit 1 "run_check_only '$TMP'" "Case-45 non-monotonic (lower) cycle number cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 46: FEEDBACK record's ONLY appearance is inside a fenced code block → FAIL (P1-#3 fence-safety) ---"
+# The entity carries no real top-level ### Feedback Cycles section — only a
+# fenced ``` block containing what looks like a canonical record. Fenced
+# example content must never manufacture authority.
+FB_FENCED_ONLY=$'\n```\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n```\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_FENCED_ONLY")"
+assert_exit 1 "run_check_only '$TMP'" "Case-46 fenced-code-block record cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 47: FEEDBACK over-long/huge cycle number in the subject → FAIL (P2 bounded cycle) ---"
+# Cycle digit run exceeds the 9-digit canonical cap. Must be rejected as
+# malformed grammar before any body-record comparison is attempted.
+FB_HUGE_CYCLE=$'\n### Feedback Cycles\n\n- cycle: 123456789012\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 123456789012 to execute" verify execute example-feature "$FB_HUGE_CYCLE")"
+assert_exit 1 "run_check_only '$TMP'" "Case-47 over-long cycle number cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 48: FEEDBACK record inside a REAL \`\`\`-fence whose only 'closing' marker is TAB-indented → FAIL (codex round-2 P1 tab-fence bypass) ---"
+# The outer fence opens unindented, so from CommonMark's view the WHOLE block
+# up to the final unindented \`\`\` is one code fence — the tab-indented \`\`\`
+# mid-block is not a valid ≤3-space-indented closer, so it never actually
+# closes anything. A checker that treats [[:space:]] (which matches TAB) as
+# equivalent to CommonMark's 0-3-SPACE indent would wrongly let that
+# tab-indented line close the fence early, re-exposing the embedded
+# "### Feedback Cycles" record as if it were live, unfenced content.
+FB_TAB_FAKE_CLOSE_BACKTICK=$'\n```\n\t```\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n```\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_TAB_FAKE_CLOSE_BACKTICK")"
+assert_exit 1 "run_check_only '$TMP'" "Case-48 tab-indented fake closing backtick-fence marker cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
+
+echo
+echo "--- Case 49: FEEDBACK record inside a REAL ~~~-fence whose only 'closing' marker is TAB-indented → FAIL (codex round-2 P1 tab-fence bypass, tilde variant) ---"
+FB_TAB_FAKE_CLOSE_TILDE=$'\n~~~\n\t~~~\n### Feedback Cycles\n\n- cycle: 1\n  rejected_stage: verify\n  feedback_to: execute\n  captain_decision: fix\n  routed_at: 2026-07-12T13:48:06Z\n  verify_artifact: verify.md@abc1234\n~~~\n'
+TMP="$(setup_fo_feedback_fixture "feedback: example-feature verify cycle 1 to execute" verify execute example-feature "$FB_TAB_FAKE_CLOSE_TILDE")"
+assert_exit 1 "run_check_only '$TMP'" "Case-49 tab-indented fake closing tilde-fence marker cannot authorize the receipt (exit 1)"
+rm -rf "$TMP"
 
 echo
 if [ "$FAIL" = "0" ]; then
