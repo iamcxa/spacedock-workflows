@@ -9,6 +9,7 @@
 <!-- section:now -->
 | Entity | Title | Stage |
 | --- | --- | --- |
+| 5-issue-anchor-scope-drift-guard | Issue-anchor scope-drift guard (route-back re-anchor) | ship |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)
@@ -25,6 +26,10 @@
 | --- | --- | --- | --- |
 | shape-confirm-instance-awareness | S | shape-confirm.sh and allocate-id.sh ignore the workflow README id-style declaration, write legacy status sharp (3 sites), and never absorb an existing flat entity — confirm path should be instance-aware | pitch 1 |
 | plugin-readme-model-era-refactor | S | Plugin README still model-era-anchored (4.7 voice) + stale | (todo) |
+| issue-anchor-guard-memory-fallback | S | For free-text-origin entities with no tracker issue, best-effort auto-retrieve the originating conversation/journal (episodic-memory + context-lake) as a candidate anchor to surface to the captain — enriches the surface-to-captain exception without faking an authoritative anchor. | pitch 5 |
+| reverse-recovery-audit-dangling-path | S | ship-shape/SKILL.md:585 and ship-plan/SKILL.md:502 reference a nonexistent docs/ship-flow/_mods/reverse-recovery-audit.md; check-no-dangling.sh does not catch it. Pre-existing dangling reference, separate from this pitch. | pitch 5 |
+| issue-anchor-guard-remaining-triggers | S | Extend the guard to the other two trigger points: feedback-rejection-flow cycle-3 escalation (lives in the spacedock core plugin repo, needs a companion change there) and child/prerequisite creation (necessity proof against a named parent AC). | pitch 5 |
+| issue-anchor-guard-resolver-shell-parser-robustness | S | Three named shell-parser-robustness residuals in the issue-anchor-guard resolver: emit's tombstone rm -f does not check its own exit status before fetch; validate's top-level scalar reads are a line-oriented awk scan, not structural yq (unlike the per-AC rows); the AC-block parser is not Markdown-aware (fenced code / quoted examples could be mis-parsed as ACs). | pitch 5 |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
@@ -41,6 +46,9 @@
 | Automatically migrate existing adopters or introduce multiple routing manifests | The selected contract keeps legacy configs readable and adds one canonical manual source. |
 | Refresh README literals to the current release numbers | New hardcoded values would become stale again and preserve the same failure mode. |
 | Record README coupling without a negative grep | A coupling row documents ownership but does not mechanically reject version-shaped drift. |
+| Mirror reverse-recovery-audit.md as an unenforced prose reference (no Hook, no shell test) | The stated analog is itself dangling and untested; ship this guard wired + pinned by a shell test instead, so its AC is enforced not just asserted. |
+| Introduce new SO/EM route values re-anchor and split (per issue #49 text) | The real existing vocabulary is proceed/narrow/return/block/costly_no; adding values would change the science-officer-em.md contract + its tests. Reconcile onto existing vocab (re-anchor maps to return) instead. |
+| Implement all three trigger points (route-back, cycle-3, child-creation) this round | small-batch proves the wedge first; cycle-3 lives in a different repo (spacedock core) and child-creation has no single chokepoint. Deferred to rabbit-holes. |
 | Full-replacement deterministic manual adopter routing (pitch 2 → child 2.1) | Parked 2026-07-16. The original driver #20 (discovery scanning test fixtures) is already fixed and closed, so the acute problem is gone. The ambitious tree-scan→manual-manifest replacement never converged (391 commits, 21 Plan EM re-review/repair cycles, shape cycle 25, `max_dispatches` 32→44) while far exceeding its 2-3 day appetite. Revive only via a fresh minimal shape (e.g. just remove the discovery helper's production reachability + stale docs), not this over-shaped line. Sharp entities `2-deterministic-manual-adopter-routing` / `2.1-manual-fail-closed-adopter-routing` stay dormant (not dispatchable); worktree evidence preserved under `.claude/worktrees/issue20-routing-*`. |
 <!-- /section:not-doing -->
 

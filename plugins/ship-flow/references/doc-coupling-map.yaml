@@ -28,3 +28,8 @@ couplings:
     docPaths: ["plugins/ship-flow/CONTRIBUTING.md", "plugins/ship-flow/_mods/contribution-contract.md"]
     directions: ["source-to-doc", "doc-to-source"]
     rationale: "The generic coupling mechanism and its contributor/FO contracts must evolve as one bidirectional surface."
+  - name: issue-anchor-guard
+    srcGlobs: ["plugins/ship-flow/_mods/issue-anchor-guard.md"]
+    docPaths: ["plugins/ship-flow/skills/ship-shape/SKILL.md"]
+    directions: ["source-to-doc", "doc-to-source"]
+    rationale: "The mod's Hook/resolver contract and the ship-shape pinned Pre-Intake wiring must evolve as one bidirectional surface — a guard change without re-wiring the SKILL section (or vice versa) would silently reintroduce the drift the guard exists to catch."
