@@ -55,6 +55,7 @@ stage_outputs:
   execute: execute.md
   verify: verify.md
   review: review.md
+  ship: ship.md
 ---
 
 <!-- section:stage-artifact-links -->
