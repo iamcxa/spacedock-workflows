@@ -442,6 +442,266 @@ EOF
   chmod +x "$bin"
 }
 
+# write_fixture_status_bin_faithful - ISOLATED variant of write_fixture_status_bin
+# (never mutates the shared stub or any existing case). Reproduces the two real
+# `spacedock merge guard` 0.25.0 behaviors the shared stub does NOT: (1) the
+# archive move is committed by merge guard itself (subject "archive <slug>
+# (merge guard)"), leaving a clean tree instead of a pending mv for the caller
+# to commit; (2) the archived verdict is written lowercase (`verdict: passed`)
+# rather than the shared stub's `PASSED`. Everything else (resolve/where/set,
+# the blocked/not-found/read-only branches) is identical to the shared stub so
+# the adapter's non-merge-guard status calls keep working unmodified.
+write_fixture_status_bin_faithful() {
+  local bin="$1"
+  cat > "$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# --- merge guard <slug> --verdict <v> [--workflow-dir <dir>] --------------
+# Faithful encoding of the REAL installed spacedock 0.25.0 `merge guard`
+# self-commit contract (empirically pinned): merge guard performs the
+# archive-move AND commits it itself, leaving a clean tree, and writes
+# verdict lowercase.
+if [ "${1:-}" = merge ] && [ "${2:-}" = guard ]; then
+  shift 2
+  mg_slug="${1:-}"
+  shift || true
+  mg_workflow_dir=""
+  mg_verdict=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --verdict) mg_verdict="$2"; shift 2 ;;
+      --workflow-dir) mg_workflow_dir="$2"; shift 2 ;;
+      --json|--quiet) shift ;;
+      *) shift ;;
+    esac
+  done
+  [ -n "$mg_workflow_dir" ] || { echo "Error: --workflow-dir required" >&2; exit 2; }
+  [ -n "$mg_verdict" ] || { echo "Error: --verdict required" >&2; exit 2; }
+
+  mg_frontmatter_field() {
+    local file="$1" field="$2"
+    awk -v field="$field" '
+      /^---[[:space:]]*$/ { fence++; next }
+      fence == 1 {
+        prefix = field ":"
+        if (index($0, prefix) == 1) {
+          value = substr($0, length(prefix) + 1)
+          sub(/^[[:space:]]*/, "", value)
+          sub(/[[:space:]]*$/, "", value)
+          gsub(/^["'\''"]|["'\''"]$/, "", value)
+          print value
+          exit
+        }
+      }
+    ' "$file"
+  }
+  mg_update_frontmatter_field() {
+    local file="$1" field="$2" value="$3"
+    local tmp="${file}.tmp"
+    awk -v field="$field" -v value="$value" '
+      /^---[[:space:]]*$/ { fence++; print; next }
+      fence == 1 {
+        prefix = field ":"
+        if (index($0, prefix) == 1) {
+          print field ": " value
+          next
+        }
+      }
+      { print }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+  }
+
+  mg_active_path="${mg_workflow_dir}/${mg_slug}/index.md"
+  mg_archived_path="${mg_workflow_dir}/_archive/${mg_slug}/index.md"
+
+  if [ -n "${MERGE_GUARD_FORCE_BLOCKED:-}" ] && [ "$mg_slug" = "$MERGE_GUARD_FORCE_BLOCKED" ]; then
+    echo "blocked: PR is pending — mod-block left intact, never finalize on an open PR. When gh reports it MERGED, record the sentinel (pr=pr-merge:{number}) and re-run \`merge guard ${mg_slug}\`."
+    exit 0
+  fi
+
+  if [ -f "$mg_archived_path" ]; then
+    echo "Error: archived entity is read-only: ${mg_slug}" >&2
+    exit 1
+  fi
+  if [ ! -f "$mg_active_path" ]; then
+    echo "Error: entity not found: ${mg_slug}" >&2
+    exit 1
+  fi
+
+  mg_pr="$(mg_frontmatter_field "$mg_active_path" pr)"
+  case "$mg_pr" in
+    pr-merge:*)
+      mg_update_frontmatter_field "$mg_active_path" status done
+      mg_update_frontmatter_field "$mg_active_path" verdict passed
+      mg_update_frontmatter_field "$mg_active_path" completed 2026-05-06T00:00:00Z
+      mg_update_frontmatter_field "$mg_active_path" worktree ""
+      mg_update_frontmatter_field "$mg_active_path" archived 2026-05-06T00:01:00Z
+      mkdir -p "${mg_workflow_dir}/_archive"
+      mv "${mg_workflow_dir}/${mg_slug}" "${mg_workflow_dir}/_archive/${mg_slug}"
+      mg_repo_root="$(git -C "$mg_workflow_dir" rev-parse --show-toplevel)"
+      git -C "$mg_repo_root" add -- "${mg_workflow_dir}/${mg_slug}" "${mg_workflow_dir}/_archive/${mg_slug}" >/dev/null 2>&1 || true
+      git -C "$mg_repo_root" commit -q -m "archive ${mg_slug} (merge guard)" \
+          -- "${mg_workflow_dir}/${mg_slug}" "${mg_workflow_dir}/_archive/${mg_slug}"
+      echo "finalized: ${mg_slug} -> done (verdict ${mg_verdict}), archived."
+      exit 0
+      ;;
+    *)
+      echo "blocked: PR ${mg_pr} is pending — mod-block left intact, never finalize on an open PR. When gh reports it MERGED, record the sentinel (pr=pr-merge:{number}) and re-run \`merge guard ${mg_slug}\`."
+      exit 0
+      ;;
+  esac
+fi
+
+workflow_dir=""
+include_archived=no
+cmd=""
+ref=""
+where_expr=""
+slug=""
+
+# Repoint: invoked as `spacedock status <args>` — skip leading subcommand.
+[ "${1:-}" = status ] && shift
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --workflow-dir)
+      workflow_dir="$2"
+      shift 2
+      ;;
+    --archived)
+      include_archived=yes
+      shift
+      ;;
+    --resolve)
+      cmd=resolve
+      ref="$2"
+      shift 2
+      ;;
+    --where)
+      cmd=where
+      where_expr="$2"
+      shift 2
+      ;;
+    --set)
+      cmd=set
+      slug="$2"
+      shift 2
+      break
+      ;;
+    --archive)
+      cmd=archive
+      slug="$2"
+      shift 2
+      ;;
+    *)
+      echo "unknown status arg: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+[ -n "$workflow_dir" ] || exit 2
+
+frontmatter_field() {
+  local file="$1"
+  local field="$2"
+  awk -v field="$field" '
+    /^---[[:space:]]*$/ { fence++; next }
+    fence == 1 {
+      prefix = field ":"
+      if (index($0, prefix) == 1) {
+        value = substr($0, length(prefix) + 1)
+        sub(/^[[:space:]]*/, "", value)
+        sub(/[[:space:]]*$/, "", value)
+        gsub(/^["'\''"]|["'\''"]$/, "", value)
+        print value
+        exit
+      }
+    }
+  ' "$file"
+}
+
+update_frontmatter_field() {
+  local file="$1"
+  local field="$2"
+  local value="$3"
+  local tmp="${file}.tmp"
+  awk -v field="$field" -v value="$value" '
+    /^---[[:space:]]*$/ { fence++; print; next }
+    fence == 1 {
+      prefix = field ":"
+      if (index($0, prefix) == 1) {
+        print field ": " value
+        next
+      }
+    }
+    { print }
+  ' "$file" > "$tmp"
+  mv "$tmp" "$file"
+}
+
+resolve_path() {
+  local raw="$1"
+  raw="${raw#archive:}"
+  if [ "$include_archived" = yes ]; then
+    printf '%s/_archive/%s/index.md\n' "$workflow_dir" "$raw"
+  else
+    printf '%s/%s/index.md\n' "$workflow_dir" "$raw"
+  fi
+}
+
+case "$cmd" in
+  resolve)
+    path="$(resolve_path "$ref")"
+    [ -f "$path" ] || exit 1
+    slug_value="${ref#archive:}"
+    printf 'slug=%s path=%s\n' "$slug_value" "$path"
+    ;;
+  where)
+    slug_value="$(printf '%s\n' "$where_expr" | sed -E 's/^slug[[:space:]]*=[[:space:]]*//')"
+    path="${workflow_dir}/_archive/${slug_value}/index.md"
+    [ -f "$path" ] || exit 1
+    printf 'slug=%s path=%s status=%s\n' "$slug_value" "$path" "$(frontmatter_field "$path" status)"
+    ;;
+  set)
+    path="${workflow_dir}/${slug}/index.md"
+    [ -f "$path" ] || exit 1
+    for pair in "$@"; do
+      case "$pair" in
+        *=*)
+          key="${pair%%=*}"
+          value="${pair#*=}"
+          ;;
+        completed)
+          key=completed
+          value=2026-05-06T00:00:00Z
+          ;;
+        *)
+          echo "unsupported set pair: $pair" >&2
+          exit 2
+          ;;
+      esac
+      update_frontmatter_field "$path" "$key" "$value"
+    done
+    ;;
+  archive)
+    path="${workflow_dir}/${slug}/index.md"
+    [ -f "$path" ] || exit 1
+    update_frontmatter_field "$path" archived 2026-05-06T00:01:00Z
+    mkdir -p "${workflow_dir}/_archive"
+    mv "${workflow_dir}/${slug}" "${workflow_dir}/_archive/${slug}"
+    ;;
+  *)
+    echo "missing status command" >&2
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "$bin"
+}
+
 write_entity() {
   local workflow_dir="$1"
   local slug="$2"
@@ -522,6 +782,20 @@ run_helper_with_path() {
   shift 3
   local rc=0
   PATH="$path_value" STATUS_BIN="$STATUS_BIN" "$HELPER" --workflow-dir "${repo}/docs/ship-flow" "$@" > "$output" 2>&1 || rc=$?
+  echo "$rc"
+}
+
+# run_helper_with_status_bin - like run_helper, but takes an explicit
+# status-bin path instead of the shared $STATUS_BIN global. Used by the
+# faithful-merge-guard-stub case so it never has to reassign the shared
+# global (isolation from the other 125 assertions).
+run_helper_with_status_bin() {
+  local repo="$1"
+  local output="$2"
+  local status_bin="$3"
+  shift 3
+  local rc=0
+  STATUS_BIN="$status_bin" "$HELPER" --workflow-dir "${repo}/docs/ship-flow" "$@" > "$output" 2>&1 || rc=$?
   echo "$rc"
 }
 
@@ -1281,6 +1555,68 @@ run_scope_guard() {
   assert_not_contains "helper has no forbidden git/gh mutation commands" 'git branch -D|git push --delete|gh pr (create|merge)|git merge' "$HELPER"
 }
 
+# run_real_merge_guard_self_commit_case - REGRESSION guard for the two real
+# `spacedock merge guard` 0.25.0 behaviors the shared stub above does NOT
+# reproduce (empirically pinned against the installed binary, fixed in
+# e6d28fe): (1) merge guard commits the archive-move itself, so success must
+# be judged by resulting state, not by whether the adapter's own commit added
+# anything; (2) merge guard writes `verdict: passed` lowercase, so terminal
+# coherence must compare case-insensitively on replay. Uses the ISOLATED
+# write_fixture_status_bin_faithful stub via run_helper_with_status_bin --
+# the shared $STATUS_BIN global and the other 125 assertions are untouched.
+run_real_merge_guard_self_commit_case() {
+  local repo="$TMP_DIR/real-merge-guard-repo"
+  setup_repo "$repo"
+  write_entity "${repo}/docs/ship-flow" "real-merge-guard-entity" "ship" "#131" ""
+  git -C "$repo" add docs/ship-flow/real-merge-guard-entity/index.md
+  git -C "$repo" commit -qm "add real-merge-guard entity"
+
+  local faithful_bin="$TMP_DIR/status-fixture-faithful"
+  write_fixture_status_bin_faithful "$faithful_bin"
+
+  local rc
+  rc="$(run_helper_with_status_bin "$repo" "$TMP_DIR/real-merge-guard-first.out" "$faithful_bin" \
+    --entity real-merge-guard-entity \
+    --pr-provider fixture \
+    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
+
+  assert_exit "real merge-guard self-commit: first run exits success" 0 "$rc"
+  assert_contains "real merge-guard self-commit: terminal action finalized" '^terminal_action=merge_guard_finalized$' "$TMP_DIR/real-merge-guard-first.out"
+  assert_contains "real merge-guard self-commit: debrief_due present" '^debrief_due=real-merge-guard-entity$' "$TMP_DIR/real-merge-guard-first.out"
+
+  local archived_index="${repo}/docs/ship-flow/_archive/real-merge-guard-entity/index.md"
+  assert_file_exists "real merge-guard self-commit: archived index exists" "$archived_index"
+  assert_frontmatter_equals "real merge-guard self-commit: archived status done" "$archived_index" status done
+  assert_frontmatter_equals "real merge-guard self-commit: archived verdict lowercase passed" "$archived_index" verdict passed
+  assert_frontmatter_equals "real merge-guard self-commit: archived pr sentinel" "$archived_index" pr pr-merge:131
+
+  local dirty
+  dirty="$(git -C "$repo" status --porcelain)"
+  if [ -z "$dirty" ]; then
+    record_pass "real merge-guard self-commit: repo tree clean after merge guard's own commit"
+  else
+    record_fail "real merge-guard self-commit: repo tree clean after merge guard's own commit (dirty: ${dirty})"
+  fi
+
+  local commit_log
+  commit_log="$(git -C "$repo" log --oneline)"
+  assert_contains "real merge-guard self-commit: archive-move commit subject matches merge guard's own contract" \
+    'archive real-merge-guard-entity \(merge guard\)' <(printf '%s\n' "$commit_log")
+
+  # Idempotent replay: the case-insensitive verdict-coherence fix must read
+  # this already-archived (lowercase-verdict) entity as already_reconciled,
+  # not archived-terminal-incoherent.
+  local rc2
+  rc2="$(run_helper_with_status_bin "$repo" "$TMP_DIR/real-merge-guard-replay.out" "$faithful_bin" \
+    --entity real-merge-guard-entity \
+    --pr-provider fixture \
+    --pr-fixture "${FIXTURE_ROOT}/pr-merged.env")"
+
+  assert_exit "real merge-guard self-commit: replay exits success" 0 "$rc2"
+  assert_contains "real merge-guard self-commit: replay reports already_reconciled state" '^state=already_reconciled$' "$TMP_DIR/real-merge-guard-replay.out"
+  assert_contains "real merge-guard self-commit: replay reports already_reconciled terminal_action" '^terminal_action=already_reconciled$' "$TMP_DIR/real-merge-guard-replay.out"
+}
+
 run_doc_scope_cases() {
   # Dogfood check — only runs when docs/ship-flow/_mods/pr-merge.md exists (adopted host).
   # In fresh-clone standalone mode this function is intentionally skipped.
@@ -1322,6 +1658,7 @@ else
   run_debrief_due_signal_case
   run_no_raw_terminal_set_case
   run_archive_commit_failure_recovery_case
+  run_real_merge_guard_self_commit_case
   run_scope_guard
   run_doc_scope_cases
 fi
