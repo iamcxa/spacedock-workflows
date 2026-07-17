@@ -61,8 +61,10 @@ or a flat-file entity's own `.md` path. Output lands at
   scaffold's `scope_subset_of_issue` / `goal_still_unmet` / `verdict` /
   `rationale` fields, then re-run `validate` to confirm the edit is still
   non-hollow-consistent.
-- gh failure (rate-limit / offline / auth) — the resolver exits non-zero
-  with a captain-visible stderr message and writes no file. Surface the
+- gh failure (rate-limit / offline / auth), a cross-repo or ambiguous
+  `issue:` reference, or an AC heading with no substantive text — the
+  resolver exits non-zero with a captain-visible stderr message and writes
+  no file (any earlier file for the entity is also removed). Surface the
   error; never proceed as if `verdict: proceed`.
 
 ```bash
@@ -116,6 +118,23 @@ iag_derive_verdict() {
   fi
 }
 
+iag_ac_met_values() {
+  # iag_ac_met_values <file> — one 'true'/'false'/<raw> line per
+  # original_issue_acs[] row's met_by_existing_capability value, in order.
+  # Empty output means zero rows (key absent, or an empty `[]`/block).
+  local file="$1"
+  awk '
+    /^original_issue_acs:[[:space:]]*$/ { infield=1; next }
+    infield && /^[^[:space:]]/ { infield=0 }
+    infield && /met_by_existing_capability:/ {
+      line=$0
+      sub(/^.*met_by_existing_capability:[[:space:]]*/, "", line)
+      sub(/[[:space:]]*$/, "", line)
+      print line
+    }
+  ' "$file"
+}
+
 # ---------------------------------------------------------------------------
 # validate mode — non-hollow rule + CD1 vocabulary lock on an existing,
 # already-populated (possibly model-edited) source-diff YAML.
@@ -142,14 +161,36 @@ if [ "$IAG_MODE" = "validate" ]; then
       ;;
   esac
 
-  if [ "$IAG_V_VERDICT" = "proceed" ]; then
-    if [ "$IAG_V_SCOPE_SUBSET" != "true" ] || [ "$IAG_V_GOAL_UNMET" != "true" ]; then
-      echo "issue-anchor-guard: BLOCKED — non-hollow rule violated: verdict=proceed requires BOTH scope_subset_of_issue=true AND goal_still_unmet=true (got scope_subset_of_issue=$IAG_V_SCOPE_SUBSET, goal_still_unmet=$IAG_V_GOAL_UNMET)" >&2
-      exit 1
-    fi
+  # P1-1: derive goal_still_unmet + verdict from the per-AC
+  # met_by_existing_capability rows -- never trust the independently-editable
+  # scalar fields alone. Zero/removed AC rows, or scalars inconsistent with
+  # what the rows actually say, must BLOCK (not just a proceed+non-hollow
+  # check narrowly gated on verdict=proceed as before).
+  IAG_V_AC_VALUES="$(iag_ac_met_values "$IAG_VALIDATE_FILE")"
+  if [ -z "$IAG_V_AC_VALUES" ]; then
+    echo "issue-anchor-guard: BLOCKED — original_issue_acs[] is empty (zero or removed rows); a verdict can never be validated without at least one quoted AC row" >&2
+    exit 1
   fi
 
-  echo "issue-anchor-guard: validate PASS — verdict=$IAG_V_VERDICT is non-hollow-consistent"
+  IAG_V_DERIVED_GOAL_UNMET=false
+  while IFS= read -r iag_val; do
+    [ -n "$iag_val" ] || continue
+    if [ "$iag_val" != "true" ]; then
+      IAG_V_DERIVED_GOAL_UNMET=true
+    fi
+  done <<< "$IAG_V_AC_VALUES"
+  IAG_V_DERIVED_VERDICT="$(iag_derive_verdict "$IAG_V_SCOPE_SUBSET" "$IAG_V_DERIVED_GOAL_UNMET")"
+
+  if [ "$IAG_V_GOAL_UNMET" != "$IAG_V_DERIVED_GOAL_UNMET" ]; then
+    echo "issue-anchor-guard: BLOCKED — goal_still_unmet=$IAG_V_GOAL_UNMET does not match the value derived from original_issue_acs[].met_by_existing_capability rows (derived=$IAG_V_DERIVED_GOAL_UNMET)" >&2
+    exit 1
+  fi
+  if [ "$IAG_V_VERDICT" != "$IAG_V_DERIVED_VERDICT" ]; then
+    echo "issue-anchor-guard: BLOCKED — verdict=$IAG_V_VERDICT does not match the value derived from scope_subset_of_issue + the per-AC rows (derived=$IAG_V_DERIVED_VERDICT)" >&2
+    exit 1
+  fi
+
+  echo "issue-anchor-guard: validate PASS — verdict=$IAG_V_VERDICT is non-hollow-consistent and derived from the per-AC rows"
   exit 0
 fi
 
@@ -211,6 +252,13 @@ IAG_TRACKER="$(iag_frontmatter_field "$IAG_ENTITY_FM_FILE" tracker)"
 mkdir -p .context/ship-flow
 IAG_OUT_FILE=".context/ship-flow/source-diff-${IAG_ENTITY_ID}.yaml"
 
+# P1-4: run-scoped/tombstoned. Invalidate any earlier run's file for this
+# entity_id up front, before any branch below can succeed or fail. A later
+# failure exit (gh error, cross-repo BLOCK, empty-AC BLOCK, etc.) can then
+# never leave a stale `verdict: proceed` behind for `validate` to find --
+# only a genuinely fresh, successful run further down re-writes this path.
+rm -f "$IAG_OUT_FILE"
+
 # CD3: re-shape detection — status is PRIMARY (covers flat-file entities with
 # no folder to grep); folder artifacts are secondary.
 IAG_RESHAPE=0
@@ -264,7 +312,42 @@ if [ "$IAG_TRACKER" != "gh" ]; then
   exit 1
 fi
 
-IAG_ISSUE_NUM="${IAG_ISSUE#\#}"
+# P1-3: preserve canonical owner/repo identity. A bare "#N" or "N" is an
+# unambiguous same-repo reference (existing behavior). A full GitHub URL or
+# an "owner/repo#N" shorthand carries explicit owner/repo identity this
+# resolver cannot verify against the local repo without a git-remote lookup
+# it does not otherwise depend on -- so it fails VISIBLE BLOCK rather than
+# silently reducing a foreign reference to its trailing number and
+# anchoring to the wrong same-number *local* issue. Anything matching
+# neither shape is ambiguous and also fails VISIBLE BLOCK.
+case "$IAG_ISSUE" in
+  \#*) IAG_ISSUE_BARE="${IAG_ISSUE#\#}" ;;
+  *) IAG_ISSUE_BARE="$IAG_ISSUE" ;;
+esac
+
+case "$IAG_ISSUE_BARE" in
+  ''|*[!0-9]*)
+    IAG_ISSUE_OWNER_REPO=""
+    IAG_ISSUE_CROSS_NUM=""
+    if [[ "$IAG_ISSUE" =~ ^https://github\.com/([^/]+)/([^/]+)/issues/([0-9]+)/?$ ]]; then
+      IAG_ISSUE_OWNER_REPO="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+      IAG_ISSUE_CROSS_NUM="${BASH_REMATCH[3]}"
+    elif [[ "$IAG_ISSUE" =~ ^([^/[:space:]#]+)/([^/[:space:]#]+)#([0-9]+)$ ]]; then
+      IAG_ISSUE_OWNER_REPO="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+      IAG_ISSUE_CROSS_NUM="${BASH_REMATCH[3]}"
+    fi
+
+    if [ -n "$IAG_ISSUE_OWNER_REPO" ]; then
+      echo "issue-anchor-guard: BLOCKED — cross-repo issue reference to '${IAG_ISSUE_OWNER_REPO}#${IAG_ISSUE_CROSS_NUM}' is not supported in v1 (same-repo #N only); refusing to silently reduce it to a local #${IAG_ISSUE_CROSS_NUM} and anchor to the wrong issue" >&2
+      exit 1
+    fi
+
+    echo "issue-anchor-guard: BLOCKED — issue: '${IAG_ISSUE}' is not a recognized same-repo reference (#N); ambiguous references are never silently resolved" >&2
+    exit 1
+    ;;
+esac
+IAG_ISSUE_NUM="$IAG_ISSUE_BARE"
+
 IAG_GH_ERR="$(mktemp)"
 set +e
 IAG_ISSUE_BODY="$(gh issue view "$IAG_ISSUE_NUM" --json body --jq '.body' 2>"$IAG_GH_ERR")"
@@ -277,13 +360,65 @@ if [ "$IAG_GH_RC" != "0" ]; then
 fi
 rm -f "$IAG_GH_ERR"
 
-IAG_AC_LINES="$(printf '%s\n' "$IAG_ISSUE_BODY" | grep -E '^[[:space:]]*-?[[:space:]]*AC-[0-9]+[:.]' || true)"
-if [ -z "$IAG_AC_LINES" ]; then
+# P1-2: capture each AC's multiline continuation block (a heading with no
+# same-line text is followed by indented criterion lines up to the next
+# blank line / next AC heading / EOF), joined into one single-line text
+# field. A heading that matches but never accumulates any substantive text
+# (in-line or continuation) fails closed -- never an empty-but-accepted
+# anchor.
+iag_parse_ac_blocks() {
+  # iag_parse_ac_blocks <body> — one line per AC heading found:
+  #   IAG_AC_TEXT:<AC-N>:<joined single-line text>
+  #   IAG_EMPTY_AC:<AC-N>   (heading matched but no substantive text anywhere)
+  awk '
+    function flush() {
+      if (have) {
+        sub(/^[[:space:]]+/, "", buf)
+        sub(/[[:space:]]+$/, "", buf)
+        if (buf == "") {
+          print "IAG_EMPTY_AC:" acnum
+        } else {
+          print "IAG_AC_TEXT:" acnum ":" buf
+        }
+      }
+    }
+    /^[[:space:]]*-?[[:space:]]*AC-[0-9]+[:.]/ {
+      flush()
+      have = 1
+      match($0, /AC-[0-9]+/)
+      acnum = substr($0, RSTART, RLENGTH)
+      rest = $0
+      sub(/^[[:space:]]*-?[[:space:]]*AC-[0-9]+[:.][[:space:]]*/, "", rest)
+      buf = rest
+      next
+    }
+    have && /^[[:space:]]*$/ { flush(); have = 0; buf = ""; next }
+    have {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      sub(/[[:space:]]+$/, "", line)
+      buf = (buf == "") ? line : buf " " line
+      next
+    }
+    END { flush() }
+  ' <<< "$1"
+}
+
+IAG_AC_BLOCKS="$(iag_parse_ac_blocks "$IAG_ISSUE_BODY")"
+if [ -z "$IAG_AC_BLOCKS" ]; then
   echo "issue-anchor-guard: BLOCKED — no AC-N lines found in issue #${IAG_ISSUE_NUM} body; cannot build a non-hollow source-diff without quoted acceptance criteria (never emits a fake-empty AC list)" >&2
   exit 1
 fi
 
-IAG_FIRST_AC_NUM="$(printf '%s\n' "$IAG_AC_LINES" | head -1 | grep -oE 'AC-[0-9]+' | head -1)"
+IAG_EMPTY_ACS="$(printf '%s\n' "$IAG_AC_BLOCKS" | grep '^IAG_EMPTY_AC:' || true)"
+if [ -n "$IAG_EMPTY_ACS" ]; then
+  IAG_EMPTY_AC_LIST="$(printf '%s\n' "$IAG_EMPTY_ACS" | sed 's/^IAG_EMPTY_AC://' | tr '\n' ',' | sed 's/,$//')"
+  echo "issue-anchor-guard: BLOCKED — AC heading(s) with no substantive criterion text in issue #${IAG_ISSUE_NUM} body: ${IAG_EMPTY_AC_LIST} (fail-closed — never anchors on an empty AC)" >&2
+  exit 1
+fi
+
+IAG_AC_LINES="$(printf '%s\n' "$IAG_AC_BLOCKS" | grep '^IAG_AC_TEXT:' | sed -E 's/^IAG_AC_TEXT:(AC-[0-9]+):(.*)$/\1: \2/')"
+IAG_FIRST_AC_NUM="$(printf '%s\n' "$IAG_AC_BLOCKS" | grep '^IAG_AC_TEXT:' | head -1 | sed -E 's/^IAG_AC_TEXT:(AC-[0-9]+):.*/\1/')"
 IAG_FETCHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 IAG_AC_ROWS="$(
@@ -344,12 +479,17 @@ verdict: <proceed|narrow|return>    # CD1 vocabulary; derived, never independent
 rationale: "<one paragraph, cites at least one AC by number>"
 ```
 
-**Non-hollow rule** (mechanically enforced by `validate`): if `verdict:
-proceed` then BOTH `scope_subset_of_issue: true` AND `goal_still_unmet:
-true` MUST hold; otherwise `verdict` MUST be `narrow` or `return`.
-`original_issue_acs[]` MUST be non-empty when `issue:` is present — an
-empty list with `issue:` set is treated the same as a gh failure
-(fail-visible, never a fake-empty AC list).
+**Non-hollow rule** (mechanically enforced by `validate`): `original_issue_acs[]`
+MUST be non-empty — a zero/removed-row file (even one whose scalar fields look
+internally consistent) BLOCKs. `validate` then derives `goal_still_unmet` from
+the rows (true when ANY row has `met_by_existing_capability: false`) and
+derives `verdict` from `scope_subset_of_issue` + that derived
+`goal_still_unmet` via the same `proceed`/`narrow`/`return` rule the emitter
+uses — it never trusts the file's own `goal_still_unmet`/`verdict` scalars in
+isolation. Either scalar disagreeing with its derived counterpart BLOCKs. This
+subsumes the narrower "if `verdict: proceed` then BOTH `scope_subset_of_issue:
+true` AND `goal_still_unmet: true`" reading, since `proceed` can only ever be
+the derived value when both hold.
 
 **No-issue fallback** (honors "never a fake anchor"):
 
@@ -371,12 +511,32 @@ captain_prompt: "Entity has no tracker issue: field. Confirm current scope manua
 - `tracker: gh` is the only supported tracker in v1; `tracker: linear` is
   the deferred rabbit hole `issue-anchor-guard-remaining-triggers` (ROADMAP
   Later).
+- `issue:` accepts a bare `#N`/`N` same-repo reference only. A full GitHub
+  issue URL or an `owner/repo#N` shorthand carries explicit owner/repo
+  identity the resolver cannot verify against the local repo (no git-remote
+  lookup dependency); it fails VISIBLE BLOCK naming the foreign owner/repo
+  rather than silently reducing it to a bare number and anchoring to the
+  wrong same-number local issue. Any other unrecognized shape is ambiguous
+  and also fails VISIBLE BLOCK. Cross-repo support (comparing the reference
+  against the actual local remote) is a deferred rabbit hole, not this
+  round's scope.
+- `emit` tombstones (`rm -f`) any existing `.context/ship-flow/source-diff-<id>.yaml`
+  for the target entity before doing any work. A later run's failure exit
+  (gh error, cross-repo/ambiguous BLOCK, empty-AC BLOCK, unsupported
+  tracker) therefore always leaves no file behind — a prior run's stale
+  `verdict: proceed` can never survive to be `validate`d after that later
+  failure. Residual: true concurrent overlapping `emit` invocations for the
+  same entity still race on last-writer-wins; this is not a file lock.
 - Known residual (named, not hidden — CD4): the AC-line parser expects
-  issue bodies with explicit `AC-N:`/`AC-N.` lines. An issue body written as
-  free-form prose (no enumerated `AC-N` lines) yields zero matches and the
-  resolver fails visible rather than emitting an empty list — this is
-  correct per the non-hollow rule, but means issues must state ACs in this
-  format for the guard to run end-to-end against them.
+  issue bodies with explicit `AC-N:`/`AC-N.` headings (the criterion text
+  may be inline or on the following continuation lines up to the next
+  blank line / heading / EOF — a heading with no substantive text anywhere
+  in its block fails closed rather than accepting an empty anchor). An
+  issue body written as free-form prose (no enumerated `AC-N` heading at
+  all) yields zero matches and the resolver fails visible rather than
+  emitting an empty list — this is correct per the non-hollow rule, but
+  means issues must state ACs in this format for the guard to run
+  end-to-end against them.
 - Known residual (honest, shell-test cannot close it — CD4): a model can
   still overwrite the scaffold's judgment fields with a false
   ⊆-judgment. Per-AC rows plus captain-gate presentation of the immutable
