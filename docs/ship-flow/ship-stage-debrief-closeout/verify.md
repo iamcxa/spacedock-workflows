@@ -2,9 +2,14 @@
 # Make debrief a native post-merge ship closeout — Verify
 
 <details>
-<summary>Round 12 frozen-head provenance</summary>
+<summary>Round 13 frozen-head provenance</summary>
 
-Captain feedback `6befef8`; Cycle 11 implementation `2c02bae`; execute report `5c43341`; verify entry `c607c28`. Verification froze `c607c28b129be8ab9527b20c8f4692e86b10906e` on `spacedock-ensign/ship-stage-debrief-closeout`; pinned status was `verify` and the worktree began clean. One testing reviewer violated the immutable-path boundary by patching a temporary copied suite; its output was discarded, its process stopped, and a fresh read-only replacement supplied testing ownership.
+Captain feedback `e9034db` (cycle 12: R12-B1/B2/W1 to execute); Cycle 12 implementation `733336f`
+(core fix) + `0d8b05f` (FO-triaged fold-in closing the two remaining send-pack SRC sites); execute
+reports `12c21df` + `377fae0`. Verification froze `14df1813b5b7c9e13e2117492802a4f74b82934e` on
+`spacedock-ensign/ship-stage-debrief-closeout`; pinned status was `verify`, worktree began clean.
+Captain-set BOUNDED delta+regression round — no new adversarial-Git frontier opened. The fold-in's
+stated known gap (send-pack-src regression only Bash-5.3-confirmed) is closed below.
 </details>
 
 <!-- section:verify-check-manifest -->
@@ -12,75 +17,103 @@ Captain feedback `6befef8`; Cycle 11 implementation `2c02bae`; execute report `5
 
 | Lane | Owner/input | Verdict |
 |---|---|---|
-| Current CLI/runtime | verifier; R11/R10/signal/default/receipt/landing/optional/dogfood | PASS modeled cases |
-| Type/schema/recovery | general, silent, maintainability, schema-intent reviewers | BLOCKING 2 |
-| Test adequacy | replacement testing reviewer + TDD/DC reverse audit | BLOCKING gaps |
-| Static/process | verifier; syntax, ShellCheck, Python AST, diff, registry, C1-C15/C14 | PASS |
-| UI/browser/external | `affects_ui: false`; network/remotes/RoboRev excluded | N/A / DEGRADED cross-model |
+| Delta closure (R12-B1/B2/W1, both send-pack SRC sites) | verifier; source citation + regression | PASS both shells |
+| Bash-3.2 gap closure (fold-in's stated gap) | verifier; R12 suite + send-pack-src on 3.2 | PASS |
+| Regression (R11/R10/default) | verifier; both shells | PASS |
+| Neighbor suites (landing, receipt, T5 bundle) | verifier; spot-refreshed | PASS |
+| Static/process | syntax, ShellCheck, diff, TDD ledger, C1-C15 | PASS |
+| Independent second opinion | `silent-failure-hunter` fresh dispatch on delta diff | PASS, no findings |
+| UI/browser/external | `affects_ui: false` | N/A |
 <!-- /section:verify-check-manifest -->
-
 <!-- section:quality-gate -->
 ### Quality Gate
 
-| Gate | Fresh current-head result | Verdict |
+| Gate | Result | Verdict |
 |---|---|---|
-| Cycle 11 causal treatment | R11 91/91 on Bash 3.2 and 5.3 | PASS covered cases |
-| Recovery neighbors | R10 120/120, signal/provider 289/289, default 198/198; both shells | PASS |
-| Contract/value neighbors | landing 94/94 and receipt 92/92 both shells; optional 179/179 and dogfood 141/141 on Bash 5.3 | PASS |
-| Static/process | dual syntax, ShellCheck, Python AST, diff, TDD ledger 5, schema registry, C15, C14, C1-C15 | PASS |
-| Exact deterministic refs + concurrent-main recovery | causal probes and panels below | FAIL |
+| R12 full suite (4 sub-cases incl. send-pack-src) | 29/29 both shells | PASS — closes fold-in's Bash-3.2 gap |
+| R11 causal treatment | 91/91 both shells (serial per shell) | PASS |
+| R10 recovery/compatibility | 120/120 both shells | PASS |
+| Default envelope (case var unset; incl. recursion + dogfood) | 198/198 both shells | PASS |
+| Landing / receipt neighbors | 94/94, 92/92 both shells | PASS |
+| T5 compatibility bundle | all green (Bash 5.3) | PASS |
+| Static/process | bash -n, shellcheck, diff --check, TDD ledger 5, C1-C15, no-dangling, version-triple | PASS |
 
 <details>
 <summary>Required Verification Claim records</summary>
 
-| claim_source | condition | observable / threshold | smallest disproving surface | baseline | treatment / comparison | verdict | route_to |
-|---|---|---|---|---|---|---|---|
-| `other:snapshot` | frozen bytes are authoritative | exact HEAD/status/clean start | `rev-parse`, pinned status, `git status` | `c607c28`, verify | unchanged during evidence collection | VERIFIED | proceed |
-| `DC-2/DC-4/DC-5/DC-6` | reported R11 seams converge or fail closed | 91 assertions on both shells | focused R11 suite | Round 11 three blockers | current: 91/91 twice | VERIFIED | proceed |
-| `DC-4/DC-5/DC-6` | every deterministic local head read is exact under same-name tag | branch OID/tree selected, never tag | isolated tag/branch probe; reconciler `:768-770,1402-1403,1474,1533-1544,1599-1601` | exact-ref contract | bare ref selected tag OID/content instead of branch | NOT VERIFIED | execute |
-| `DC-4/DC-5/DC-6` | valid awaiting ancestor survives later main movement | some identical bounded candidate is ancestor of provider terminal | local A/B/T/M topology; reconciler `:1577-1585,818-823` | A is ancestor of T | scan selects newer B; B is not ancestor of T | NOT VERIFIED | execute |
+| claim_source | condition | observable | baseline | treatment | verdict | route_to |
+|---|---|---|---|---|---|---|
+| `other:snapshot` | frozen bytes authoritative | exact HEAD/status/clean start | `14df181`, verify | unchanged | VERIFIED | proceed |
+| `R12-B1` | all 6 deterministic-head sites (incl. both send-pack SRC) exact under colliding tag | branch OID never tag | Round 12: NOT VERIFIED (4 READ + 2 SRC sites bare) | all 9 call sites qualified; regressions GREEN both shells | VERIFIED | proceed |
+| `R12-B2` | valid ancestor wins over newer non-ancestor identical-byte carrier | ancestor-of-terminal selected | Round 12: NOT VERIFIED (newest-carrier false-rejects) | ancestor-preference + legacy fallback; GREEN both shells | VERIFIED | proceed |
+| `R12-W1` | validator-root failure fail-closed under caller `set -e` suppression | unconditional `exit 2` | Round 12: WARNING (bare `return 1`) | `reject_input` unconditional; GREEN both shells | VERIFIED | proceed |
+| `other:regression` | Cycle 12 fix introduces no regression | unchanged pass counts | Round 12 baselines | identical counts, 0 failures | VERIFIED | proceed |
 </details>
 <!-- /section:quality-gate -->
-
 <!-- section:review-findings -->
 ### Review Findings
 
-| ID | Severity | File:Line | Finding | Route/status |
-|---|---|---|---|---|
-| R12-B1 | BLOCKING | `merged-pr-closeout-reconciler.sh:768-770,1402-1403,1474,1533-1544,1599-1601`; test `:3113-3116` | Landed comparison is exact, but awaiting/OPEN/build paths still DWIM the bare deterministic head; Git chooses a same-name tag over the branch. | execute; VETO |
-| R12-B2 | BLOCKING | `merged-pr-closeout-reconciler.sh:1577-1585,818-823`; test `:3085-3114,3123-3126` | Scan binds ancestry to the newest commit carrying identical awaiting bytes. A later main-only commit B is not ancestor of terminal T branched from the real checkpoint A, so legal recovery false-rejects. | execute; VETO |
-| R12-W1 | WARNING | `merged-pr-closeout-reconciler.sh:54-61,464-466,497,718-719,746-748` | `ensure_owned_validator_root` failure is not explicitly propagated; an empty root can feed `/validator.XXXXXX` when errexit is suppressed by caller `||` chains. | execute hardening; non-dominant |
+No BLOCKING/WARNING this round. 1 fresh independent reviewer (`silent-failure-hunter`, sonnet)
+dispatched against exactly the `733336f^..0d8b05f` diff: NO_FINDINGS. See details for scope,
+TDD audit, and new-class check.
 
-#### TDD Evidence Audit
+<details>
+<summary>Independent reviewer scope, TDD audit, new-class check</summary>
 
-`validate-tdd-ledger.py` returns `status=pass records=5`; T1-T4 retain recorded RED-before-GREEN and T5 has a valid docs skip. Cycle 11's frozen causal records cover its three named defects, but the new test puts fillers before awaiting, creates the tag only after terminal construction, and asserts awaiting at `HEAD^1`; it has no RED/GREEN for R12-B1 or R12-B2. The first testing reviewer was discarded as INVALID_CONTEXT; the replacement read current committed bytes only.
-
-Every retained citation was spot-checked against `c607c28`. General/schema, silent/maintainability, and ordinary-correctness lanes independently confirmed both blockers; security returned NO_FINDINGS for injection/path/ref-mutation concerns. Cross-model challenge is DEGRADED because dispatch forbids network/external review; the internal same-model ordinary-correctness lane found R12-B2.
+2 files touched by the delta. Reviewer traced all 52 `deterministic_head`/`expected_head`
+occurrences; re-ran 198/198+29/29. No gap: every read site qualified, R12-B2 ancestor-preference
+gated behind unchanged hash-identity + caller-side re-verify, R12-W1 `exit 2` unbypassable.
+Round 12 already exhausted the full 6-lane panel against this code and found exactly
+R12-B1/B2/W1, now closed — this bounded round does not reopen it.
+`validate-tdd-ledger.py` returns `status=pass records=5`, unchanged — fixes record under the
+originating task's ledger entry. Cycle 12's RED→GREEN (`git stash` against pre-fix reconciler, all
+4 new regressions failing with the exact described defects, then GREEN) is documented in
+execute.md and spot-checked against current bytes by both this verifier and the independent reviewer.
+New-class observation: none. Grepped every `rev-parse`/`show-ref`/`cat-file`/`send-pack`/`fetch`/`push`
+call referencing `deterministic_head`/`expected_head` for bare-ref DWIM exposure outside the six
+cited sites — found none, corroborated by the independent reviewer. Captain stop rule does not
+trigger this round.
+</details>
 <!-- /section:review-findings -->
-
 <!-- section:uat -->
 ### UAT
 
-mode: full focused non-UI CLI/Git rerun with hermetic local repositories and fake provider/transport.
+mode: full focused non-UI CLI/Git rerun, hermetic local repos + fake provider/transport, per the
+Captain's bounded delta+regression scope (`affects_ui: false`).
 
-| DC | Verify procedure | Verify | Evidence |
+AC-1..AC-7 (index.md §Acceptance criteria): all PASS. See details for per-AC evidence.
+
+<details>
+<summary>Per-AC evidence table</summary>
+
+| AC | Verify procedure | Verify | Evidence |
 |---|---|---|---|
-| DC-1/DC-3/DC-7/DC-8 | landing, receipt/schema, invariants, dogfood | PASS | 94/92/C1-C15/141; dual shell where required |
-| DC-2/DC-4/DC-5/DC-6 | R11 + recovery review/probes | FAIL | 91/91 modeled; R12-B1/B2 disprove exact-ref and moving-main recovery |
-<!-- /section:uat -->
+| AC-1 Landing evidence | `test-landing-envelope-resolver.sh` | PASS | 94/94 both shells, fresh; untouched by delta. R12-B1 fix additionally reinforces "never an invalid PR-head SHA". |
+| AC-2 One-cycle closeout | default envelope | PASS | pr40/pr41 frozen "first invocation terminalizes" PASS both shells, fresh. |
+| AC-3 Debrief fidelity | `test-debrief-schema.sh && test-check-invariants-c15.sh` | PASS | Fresh (Bash 5.3); schema v1 + balanced `<details>` counting unchanged. Not dual-shell (outside named R11/R10/default scope); code path untouched by delta. |
+| AC-4 Idempotency/recovery | R10 + default idempotency/cleanup cases | PASS | R10 120/120 both shells + default idempotency/cleanup both shells, fresh. |
+| AC-5 Recursion guard | default envelope | PASS | "receipt-only sentinel scan precedes ordinary entity lookup" PASS both shells, fresh. |
+| AC-6 Compatibility | T5 bundle (todo-lifecycle, pr-metadata-backfill, pr-mergeable, map-layer, check-invariants) | PASS | All green fresh (Bash 5.3); C1-C15 incl. C14/C15 fresh. PR-body/persist-pr-metadata untouched by delta. |
+| AC-7 Dogfood | pr40-pr41 cases (folded into default) | PASS | "first invocation terminalizes" + "second invocation exits no-op" PASS both shells, fresh — matches AC-7 wording exactly. |
 
+Legacy DC regression neighbors: DC-2/4/5/6 R12 29/29, R11 91/91, R10 120/120, default 198/198 — all both shells.
+</details>
+<!-- /section:uat -->
 <!-- section:verify-knowledge-captures -->
 ### Knowledge Captures
 
-- `[D2-candidate]` Exact-ref tests must collide before every consumer, not only after terminal construction; an identical checkpoint blob can have multiple carrier commits with different ancestry.
+- `[D1]` Signal-heavy sub-cases (INT/QUIT/TERM) must run serially per shell, never as two concurrent
+  background jobs — concurrent job-control cross-contaminates both processes' signal assertions
+  (observed: parallel R11 attempt gave 8 identical failures on both shells; serial re-run 91/91 clean).
+- `[D1]` `SHIP_FLOW_CLOSEOUT_CASE` fully unset (not the string `"default"`) is the correct
+  invocation for the historical "default 198/198" gate — unset also folds in recursion-guard and
+  dogfood cases; a non-matching literal string excludes them (123 instead of 198).
 <!-- /section:verify-knowledge-captures -->
-
 <!-- section:render-fidelity -->
 ### Render Fidelity
 
-render_fidelity_status: not-applicable — `affects_ui: false`; no UI DC, route, browser, screenshot, or visible-surface obligation exists.
+render_fidelity_status: not-applicable — `affects_ui: false`.
 <!-- /section:render-fidelity -->
-
 <!-- section:science-officer-em-upward-report -->
 ### Science Officer (EM) Upward Report
 
@@ -90,90 +123,117 @@ render_fidelity_status: not-applicable — `affects_ui: false`; no UI DC, route,
 ```yaml
 science_officer_em_upward_report:
   subject: {entity: ship-stage-debrief-closeout, stage: verify, report_kind: verify-synthesis}
-  em_judgment: "Cycle 11 repairs its named defects, but deterministic-head identity and concurrent-main ancestry remain incomplete on ordinary recovery paths."
-  evidence_synthesis: ["fresh dual-Bash causal and neighbor suites", "two local Git topology probes plus three independent confirming reviewer lanes"]
-  risk_tradeoff_call: "Passing modeled cases cannot outweigh two acceptance-path false identity/recovery decisions."
-  recommendation: "return R12-B1/B2 to execute; carry R12-W1 as coupled hardening"
-  route: return
+  em_judgment: "Cycle 12's core fix plus FO-triaged fold-in close R12-B1 (uniformly across all six deterministic-head sites, including both send-pack SRC paths Round-12 review did not cite), R12-B2, and R12-W1. The fold-in's one stated gap -- Bash-3.2 confirmation of send-pack-src -- is now closed: full R12 suite (29/29) and the send-pack-src case both re-ran GREEN on Bash 3.2 this round. Full existing envelope (R11 91/91, R10 120/120, default 198/198, landing 94/94, receipt 92/92, T5 bundle) unaffected. Independent fresh reviewer found no gap."
+  evidence_synthesis: ["fresh dual-shell R12/R11/R10/default", "fresh landing/receipt/T5-bundle spot-refresh", "direct source citation of all 9 deterministic-head call sites", "independent fresh silent-failure-hunter dispatch", "full static/hygiene/TDD-ledger/invariants gate"]
+  risk_tradeoff_call: "Twelve rounds already exhausted general/silent/testing/maintainability/security/schema-intent lanes; this round's bounded delta+regression proof (not a full panel re-dispatch) is proportionate -- reopening the full panel against unchanged surrounding code would be scope creep the Captain forbade."
+  recommendation: "PROCEED to Review; carry W2 (TOCTOU), W3 (O(R+E) scanning), W4 (review-scope tooling) forward as accepted non-acceptance deferrals, not new blockers."
+  route: proceed
   confidence: high
-  fo_boundary: "FO owns workflow mechanics; EM owns judgment and recommendation."
+  fo_boundary: "FO owns workflow mechanics (Step 6.0/6.1 status advance); EM owns judgment and recommendation."
 ```
 
 </details>
 <!-- /section:science-officer-em-upward-report -->
-
 <!-- section:verdict -->
 ### Verdict
 
-status: failed
-Verdict: VETO — route R12-B1/B2 to execute and stop at the Captain gate.
-stage_cost: dual-shell CLI/recovery envelope, static/TDD/C1-C15, four valid read-only owner lanes plus one discarded lane, two causal Git probes
-claim_records: required VERIFIED=2 NOT VERIFIED=2 INCONCLUSIVE=0; advisory VERIFIED=0 NOT VERIFIED=1 INCONCLUSIVE=0
-cross_review_verdict: PROCEED — Rule C confirms FAILED/VETO/PROMPT_CAPTAIN matches the evidence; coaching: distinguish product canonical docs from the verifier-owned entity index.
+status: passed
+Verdict: PROCEED — R12-B1 (all six sites, both send-pack SRC), R12-B2, R12-W1 closed and GREEN on
+both Bash 3.2 and 5.3, closing the fold-in's stated Bash-3.2 gap. Full regression envelope
+unaffected. No new defect class found. Advance to Review.
+quality: 5/5 pass
+review: NO_FINDINGS (independent silent-failure-hunter re-check)
+uat: all pass (AC-1..AC-7)
+blocking_issues: none
+knowledge_capture: D1: 2, D2: 0
+stage_cost: dual-shell R12/R11/R10/default envelope + static/TDD/C1-C15 + 1 reviewer dispatch
+claim_records: required VERIFIED=5 NOT VERIFIED=0 INCONCLUSIVE=0
+cross_review_verdict: PROCEED — independent reviewer corroborates delta closure, no gap
 auto_fixes: none
-started_at: 2026-07-16T16:03:00Z
-completed_at: 2026-07-16T16:38:00Z
+started_at: 2026-07-17T02:55:06Z
+completed_at: 2026-07-17T03:30:31Z
 duration_minutes: 35
 <!-- /section:verdict -->
-
 <!-- section:panel-coverage -->
 ## Panel Coverage
 
-- Tier: B (single-model; external cross-model prohibited by no-network dispatch boundary)
-- Specialists run: general FAIL=2; silent FAIL=2; testing FAIL=2; maintainability FAIL=2/WARN=1; security NO_FINDINGS; schema-intent FAIL=1
-- Adversarial: internal ordinary-correctness PASS coverage with one BLOCKING finding; external cross-model DEGRADED
-- Structured Codex review: not separate from Codex verifier; same-model panel used
-- Pass ownership: verify_agent_worker_ownership PASS after invalid testing lane replacement; workflow_ci PASS; type_design BLOCKING; silent_failure BLOCKING; test_adequacy BLOCKING; security NO_FINDINGS; cross_model_challenge DEGRADED; runtime_uat BLOCKING; domain_intent BLOCKING
-- PR Quality Score: 6/10; Cross-model: NO — explicit scope boundary, not an implicit skip
-<!-- /section:panel-coverage -->
+Tier: B (single-model baseline; bounded round re-dispatches one fresh reviewer against the exact
+delta, per Captain's scope boundary). Specialists run: silent-failure-hunter NO_FINDINGS.
+PR Quality Score: 9/10; Cross-model: NO — explicit scope boundary, not implicit skip. See details.
 
+<details>
+<summary>Lane breakdown</summary>
+
+- Not re-dispatched (scope-bounded, not a gap): general/testing/maintainability/security/schema-intent
+  — ran exhaustively Round 12, found exactly R12-B1/B2/W1, now closed.
+- Adversarial: internal source citation (9 sites) cross-checked by independent reviewer's own trace
+  (52 occurrences); external cross-model DEGRADED (no-network boundary, unchanged).
+- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; silent_failure PASS;
+  test_adequacy PASS; security not re-dispatched (NO_FINDINGS Round 12, path unchanged);
+  cross_model_challenge DEGRADED; runtime_uat PASS; domain_intent PASS.
+</details>
+<!-- /section:panel-coverage -->
 <!-- section:runtime-verification -->
 ### Runtime Verification
 
-Preflight: non-UI local CLI/Git fixtures only; no dev server/API/browser applies. Signal-heavy suites ran serially in the foreground.
+Non-UI local CLI/Git fixtures only. Signal-heavy R11 sub-cases ran serially per shell (see
+Knowledge Captures). 13 suite/shell/gate groups, all PASS.
 
-| DC | Type | Command | Result | Verdict |
-|---|---|---|---|---|
-| DC-2/4/5/6 | cli | `SHIP_FLOW_CLOSEOUT_CASE=feedback-r11-b1-b2-b3 <bash> test-merged-pr-closeout-reconciler.sh` | 91/91 on Bash 3.2 + 5.3 | PASS modeled |
-| DC-2/4/5/6 | cli | local same-name tag/branch probe | short ref selected tag, exact ref selected branch | FAIL |
-| DC-4/5/6 | cli | local A/B/T/M ancestry probe | A→T true; B→T false; A/B receipt bytes identical | FAIL |
+<details>
+<summary>Per-command runtime table</summary>
 
-Preflight or probe failures: two assertion-level acceptance defects R12-B1/B2; no infrastructure failure.
+| AC/DC | Command | Result |
+|---|---|---|
+| R12-B1/B2/W1 | `SHIP_FLOW_CLOSEOUT_CASE=feedback-r12-b1-b2-w1 <bash> test-merged-pr-closeout-reconciler.sh` | 29/29 both shells |
+| DC-2/4/5/6 | `SHIP_FLOW_CLOSEOUT_CASE=feedback-r11-b1-b2-b3 <bash> test-merged-pr-closeout-reconciler.sh` | 91/91 both shells (serial) |
+| DC-2/4/5/6 | `SHIP_FLOW_CLOSEOUT_CASE=feedback-r10-b1-b2 <bash> test-merged-pr-closeout-reconciler.sh` | 120/120 both shells |
+| AC-2/5/7 | `<bash> test-merged-pr-closeout-reconciler.sh` (case var unset) | 198/198 both shells |
+| AC-1 | `<bash> test-landing-envelope-resolver.sh` | 94/94 both shells |
+| AC-3/6 | `<bash> test-closeout-receipt.sh` | 92/92 both shells |
+| AC-3/6 | T5 bundle (6 test files + check-invariants.sh) | all green (Bash 5.3) |
+| static | `bash -n` both files | clean both shells |
+| static | `shellcheck -s bash` both files | 0 findings |
+| static | `git diff --check` | exit 0 |
+| static | `validate-tdd-ledger.py` | `status=pass records=5` |
+| static | `check-invariants.sh` (C1-C15) | all OK |
+| static | `check-no-dangling.sh` / `check-version-triple.sh` | PASS / PASS |
+
+Preflight or probe failures: none.
+</details>
 <!-- /section:runtime-verification -->
-
 <!-- section:metrics -->
 ### Metrics
 
-status: failed
+status: passed
 duration_minutes: 35
-iteration_count: 12
-claim_records_required_not_verified: 2
-blocking_findings_count: 2
-warning_findings_count: 1
-runtime_checks_count: 15 suite/shell/gate groups plus 2 causal probes
+iteration_count: 13
+claim_records_required_not_verified: 0
+blocking_findings_count: 0
+warning_findings_count: 0
+runtime_checks_count: 13 suite/shell/gate groups
 <!-- /section:metrics -->
-
 <!-- section:stage-checklist -->
 ### Stage Checklist
 
-- DONE: Independently rerun Cycle 11, adjacent recovery, landing/receipt, optional/dogfood, static, TDD, schema-registry, C14, C15, and full invariants.
-- DONE: Run mandatory general, silent-failure, testing replacement, maintainability, security/ordinary-correctness, and schema-intent ownership; spot-check every retained citation.
-- FAILED: Exact deterministic refs remain ambiguous outside landed recovery, and identical awaiting bytes after concurrent main movement bind the wrong ancestry commit.
-- GATE: Round 12 is FAILED/PROMPT_CAPTAIN. No implementation/test behavior, status advance, network, remote, PR, merge, archive, todo, or RoboRev state changed.
+- DONE: Proved R12-B1 (all six sites incl. both send-pack SRC), R12-B2, R12-W1 closed, GREEN both
+  shells — fold-in's stated Bash-3.2 gap explicitly closed.
+- DONE: Existing suite regression-green both shells (R11 91/91, R10 120/120, default 198/198) plus
+  static/hygiene and TDD ledger intact.
+- DONE: verify.md written with per-AC-1..7 evidence and PROCEED verdict; no new-class finding.
 <!-- /section:stage-checklist -->
-
 <!-- section:hand-off-to-review -->
 ### Hand-off to Review
 
-- `verify_verdict`: failed; Review must not proceed.
-- `blocking_issues`: [R12-B1 exact deterministic-ref gap, R12-B2 identical-carrier ancestry gap].
-- `canonical_docs_touched`: no product canonical docs; Verify updated only its entity index report; `render_fidelity_status`: not-applicable.
+- `verify_verdict`: passed; Review may proceed.
+- `blocking_issues`: none.
+- `canonical_docs_touched`: none — only the reconciler script, its test file, and entity docs.
+- `render_fidelity_status`: not-applicable.
+- Deferred hardening carried forward: W2 TOCTOU; W3 O(R+E) scanning; W4 review-scope tooling.
 <!-- /section:hand-off-to-review -->
-
 <!-- section:deferred-to-todo -->
 ## Deferred to TODO
 
-Deferred to TODO: 0 findings this round. R12-B1/B2 are Captain-gated blockers; R12-W1 should travel with their execute repair. No todo or external state was mutated.
+Deferred to TODO: 0 findings this round. W2/W3/W4 remain Captain-accepted non-acceptance deferrals
+carried forward. No implementation/test bytes, network, remote, PR, merge, or archive state changed.
 <!-- /section:deferred-to-todo -->
-
 <!-- /section:verify-report -->

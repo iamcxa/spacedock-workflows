@@ -251,29 +251,32 @@ Implemented one fail-closed closeout authority chain from authoritative provider
 <!-- section:verify-stage-report -->
 ## Stage Report: verify
 
-- DONE: Fresh Cycle 11 treatment is 91/91, R10 is 120/120, signal/provider is 289/289, and default is 198/198 on Bash
-  3.2 and 5.3; landing 94/94 and receipt 92/92 are dual-shell, while optional 179/179 and dogfood 141/141 are green.
-- DONE: Static/TDD/schema-registry/C1-C15 and focused C14 pass. Valid read-only general, silent, testing-replacement,
-  maintainability, security/ordinary-correctness, and schema-intent owners ran; every retained citation was spot-checked.
-- FAILED: R12-B1 leaves awaiting/OPEN/build deterministic-head reads vulnerable to same-name tag DWIM; R12-B2 binds
-  provider-terminal ancestry to the newest identical receipt carrier, falsely rejecting a legal terminal after main advances.
-- GATE: Round 12 is FAILED/PROMPT_CAPTAIN and routes R12-B1/B2 plus coupled R12-W1 hardening to execute. No
-  implementation/test behavior, Review advance, network, remote, PR, merge, archive, todo, or RoboRev state changed.
+- DONE: Round 13 (BOUNDED delta+regression) proves R12-B1 (all six deterministic-head sites incl. both
+  send-pack SRC), R12-B2, and R12-W1 closed, GREEN on both Bash 3.2 and 5.3 — closing the fold-in's stated
+  Bash-3.2 gap (R12 suite 29/29 + send-pack-src regression re-run on 3.2).
+- DONE: Existing suite regression-green both shells: R11 91/91, R10 120/120, default 198/198; landing 94/94
+  and receipt 92/92 also refreshed both shells; T5 compatibility bundle green. Static/hygiene (C1-C15,
+  no-dangling, version-triple, shellcheck, bash -n, diff --check) and TDD ledger (`status=pass records=5`) pass.
+- DONE: One fresh independent reviewer (`silent-failure-hunter`) dispatched against the exact delta diff:
+  NO_FINDINGS. No new defect class found.
+- GATE: Round 13 is PROCEED. Advance to Review. No implementation/test behavior beyond the reviewed delta,
+  network, remote, PR, merge, archive, todo, or RoboRev state changed.
 
 ### Summary
 
-Cycle 11's named repairs are green, but Round 12 finds two ordinary acceptance-path gaps outside that matrix. The
-Captain-gated VETO, causal Git probes, panel ownership, and falsifiable claims are in [verify.md](verify.md).
+Cycle 12's core fix plus FO-triaged fold-in close all three Round-12 findings uniformly, including the two
+send-pack SRC sites the original review did not cite, and the fold-in's stated Bash-3.2 confirmation gap is
+now closed. Full evidence, per-AC-1..7 citations, and the PROCEED verdict are in [verify.md](verify.md).
 
 ### Metrics
 
-- status: failed
-- duration_minutes: 35 for round 12
-- iteration_count: 12
-- blocking_findings_count: 2 current
-- warning_findings_count: 1
-- claim_records: required VERIFIED=2 NOT VERIFIED=2 INCONCLUSIVE=0
-- reviewer_verdict: VETO round 12; Rule C artifact cross-review PROCEED; Captain Verify gate FAIL/PROMPT_CAPTAIN
+- status: passed
+- duration_minutes: 35 for round 13
+- iteration_count: 13
+- blocking_findings_count: 0
+- warning_findings_count: 0
+- claim_records: required VERIFIED=5 NOT VERIFIED=0 INCONCLUSIVE=0
+- reviewer_verdict: PROCEED round 13; independent silent-failure-hunter re-check corroborates delta closure
 <!-- /section:verify-stage-report -->
 
 ### Feedback Cycles
