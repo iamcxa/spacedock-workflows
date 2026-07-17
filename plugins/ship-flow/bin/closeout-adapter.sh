@@ -172,9 +172,13 @@ read_provider_fixture() {
 read_provider_gh() {
   command -v gh >/dev/null 2>&1 || reject_input "missing-gh" "gh CLI is not available"
   local output
+  # A present-but-failing gh (auth / network / rate-limit / PR not found) must
+  # surface a structured, non-mutating provider-error state -- not abort under
+  # set -e before emit_report, which would leave callers with no diagnostic.
   output="$(gh pr view "$pr_number" \
     --json number,state,mergedAt,headRefName,baseRefName,url \
-    --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")"] | .[]')"
+    --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")"] | .[]' 2>/dev/null)" \
+    || prompt_captain "provider-error" "gh pr view failed for PR #${pr_number} (auth/network/rate-limit/not-found?); no closeout attempted"
   provider="gh"
   provider_number="$(printf '%s\n' "$output" | awk -F= '$1=="number"{print $2; exit}')"
   pr_state="$(printf '%s\n' "$output" | awk -F= '$1=="state"{print $2; exit}')"
@@ -275,7 +279,11 @@ remove_worktree_if_safe() {
   if git -C "$repo_root" worktree remove "$cleanup_worktree_abs" >/dev/null 2>&1; then
     worktree_cleanup="removed"
   else
-    prompt_captain "worktree-remove-failed" "git worktree remove failed"
+    # Non-fatal: this runs ONLY after a confirmed finalize (terminal state +
+    # debrief_due already set). Surface the leftover worktree in the report
+    # instead of prompt_captain-exiting, which would drop the debrief signal
+    # and make replay (already-archived) never re-emit it.
+    worktree_cleanup="remove-failed"
   fi
 }
 
@@ -633,6 +641,21 @@ fi
 # their own once the caller re-runs after clearing the blocker.
 preflight_worktree_cleanup "$worktree_value"
 
+# Guard against absorbing unrelated WIP: if the entity file already carries
+# uncommitted edits BEFORE the sentinel write, the path-scoped sentinel commit
+# would bundle that WIP into the closeout commit. Defer instead (fail closed);
+# a later clean run resumes from the (then-clean) entity file.
+if [ "$sentinel_already_present" = "no" ] && \
+   [ -n "$(git -C "$repo_root" status --porcelain -- "$entity_path" 2>/dev/null || true)" ]; then
+  verdict="PROCEED"
+  terminal_action="deferred"
+  state_name="closeout-deferred-dirty-entity"
+  reason="dirty-entity"
+  detail="the entity file has uncommitted changes; closeout deferred so the sentinel write does not absorb unrelated WIP"
+  emit_report
+  exit 0
+fi
+
 if [ "$sentinel_already_present" = "no" ]; then
   write_sentinel_ahead
 fi
@@ -665,8 +688,10 @@ case "$merge_guard_output" in
     git -C "$repo_root" commit -m "done + archive: $entity_slug (PR #$pr_number merged via spacedock merge guard)" \
         -- "$archive_src" "$archive_dst" >/dev/null 2>&1 || true
     if [ -z "$(git -C "$repo_root" status --porcelain -- "$archive_src" "$archive_dst" 2>/dev/null || true)" ]; then
-      remove_worktree_if_safe
-      cleanup_branch_if_safe
+      # Lock in the confirmed-finalize outcome (incl. the mandatory debrief_due
+      # signal) BEFORE any post-finalize cleanup. Cleanup is a SECONDARY concern
+      # -- a worktree/branch removal failure records itself in the report and
+      # must never drop the debrief_due signal or the reconciled verdict.
       verdict="PROCEED"
       terminal_action="merge_guard_finalized"
       reason="merged-pr-reconciled"
@@ -674,6 +699,8 @@ case "$merge_guard_output" in
       detail="spacedock merge guard finalized $entity_slug (verdict passed) and archived it"
       debrief_due="$entity_slug"
       pr_state="MERGED"
+      remove_worktree_if_safe
+      cleanup_branch_if_safe
       emit_report
       exit 0
     else
