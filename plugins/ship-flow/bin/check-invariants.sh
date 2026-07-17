@@ -1094,10 +1094,10 @@ check_review_surface_shape_not_plan() {
   [ -f "$invariants_file" ] || return 0
   local s1="The human review surface is the shape/spec (and design.md when its conditional gate fires) -- never plan.md or execute.md."
   local s2="The FO MUST NOT offer plan.md or execute.md as a human-review artifact."
-  local missing=0
-  grep -qF "$s1" "$invariants_file" || missing=1
-  grep -qF "$s2" "$invariants_file" || missing=1
-  if [ "$missing" = 1 ]; then
+  local rule_missing=0
+  grep -qF "$s1" "$invariants_file" || rule_missing=1
+  grep -qF "$s2" "$invariants_file" || rule_missing=1
+  if [ "$rule_missing" = 1 ]; then
     echo "ERROR [Principle 17/review-surface]: INVARIANTS.md is missing a load-bearing Principle 17 rule sentence (the human review surface is the shape/spec, never plan.md; the FO MUST NOT offer plan.md/execute.md for human review). See plugins/ship-flow/INVARIANTS.md '### Principle 17'." >&2
     return 1
   fi
