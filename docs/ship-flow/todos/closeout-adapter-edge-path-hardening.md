@@ -17,6 +17,13 @@ source_pitch: "6"
 - **merge-guard output parsing (round-4 #5)** — `run_merge_guard` captures combined `2>&1` and matches `finalized:*` at the START of output; a warning line preceding a real `finalized:` would misclassify an already-mutated closeout as `state-driver-unavailable` and drop its debrief. Fix: parse an anchored `finalized:` LINE (grep) or a structured `--json`/`--quiet` signal, and verify the resulting archived state before assigning the verdict.
 - **replay WIP guard (round-4 #1)** — the dirty-entity WIP guard runs only on the fresh (no-sentinel) path; a sentinel replay can still fold unrelated uncommitted entity edits into the sentinel commit. Fix: apply the dirty-path validation on replay too (commit only a verified sentinel-only diff).
 
+## Findings deferred from #46 (codex round-5, adjudicated real)
+
+- **sentinel-durability vs WIP-absorption tension (round-5 P1)** — the round-2 fix defers on a dirty entity/worktree BEFORE writing the sentinel (to avoid absorbing WIP), but that means a confirmed-merged PR can stay unsentineled and fail to reconverge if the provider later goes unavailable. These two goals conflict under a naive path-scoped commit; the structural fix is to write the sentinel in ISOLATION (e.g. a temp-index or `git stash`-scoped commit) so it always persists on trunk without absorbing unrelated WIP.
+- **recovery porcelain precision (round-5 P1)** — the archived recovery path (`recovery_pending`) treats ANY modification under the active/archive paths as an interrupted move, so a replay could commit unrelated edits under a "recovered pending archive-move" message. Validate porcelain represents EXACTLY the expected active-deletion + archive-addition; otherwise defer without staging.
+- **per-entity serialization (round-5 P2)** — overlapping startup/idle/SessionStart triggers can race on the same entity after resolving it. Acquire a per-entity lock before resolution and re-resolve after obtaining it.
+- **already_reconciled reporting (round-5 P2)** — `warn-state-drift.sh` classifies only `merge_guard_finalized` as success, so a resumed-but-already-done sentinel entity (adapter returns `already_reconciled`) is reported as "Auto-fix blocked", a false alarm. Classify coherent `already_reconciled` as a successful no-op while keeping its distinct state.
+
 ## Shape
 
 Consider a small structural refactor rather than more point-fixes: (a) make `debrief_due` durable/re-emittable across all coherent-archived detections; (b) route every commit path (fresh, recovery, replay) through one shared gate set; (c) robust merge-guard output parsing. Re-run `ship-flow:codex-gate` to confirm convergence.
