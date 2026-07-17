@@ -51,6 +51,7 @@ status: ship
 stage_outputs:
   shape: shape.md
   design: design.md
+  plan: plan.md
   verify: verify.md
 ---
 
