@@ -16,6 +16,7 @@
 <!-- section:next -->
 | Entity | Title | Kind | Appetite |
 | --- | --- | --- | --- |
+| 6-merge-guard-single-closeout-authority | Make spacedock merge guard the single MERGED-to-done closeout authority | (pitch) | small-batch (2-3 days) |
 <!-- /section:next -->
 
 ## Later (ideas with potential, not yet shaped)
@@ -25,6 +26,7 @@
 | --- | --- | --- | --- |
 | shape-confirm-instance-awareness | S | shape-confirm.sh and allocate-id.sh ignore the workflow README id-style declaration, write legacy status sharp (3 sites), and never absorb an existing flat entity — confirm path should be instance-aware | pitch 1 |
 | plugin-readme-model-era-refactor | S | Plugin README still model-era-anchored (4.7 voice) + stale | (todo) |
+| helm-canonical-adapter-registration-dogfood | S | Helm adopts the canonical closeout-adapter registration and dogfoods closeout from a clean isolated checkout (no Helm-specific terminalization code). | pitch 6 |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
@@ -42,6 +44,9 @@
 | Refresh README literals to the current release numbers | New hardcoded values would become stale again and preserve the same failure mode. |
 | Record README coupling without a negative grep | A coupling row documents ownership but does not mechanically reject version-shaped drift. |
 | Full-replacement deterministic manual adopter routing (pitch 2 → child 2.1) | Parked 2026-07-16. The original driver #20 (discovery scanning test fixtures) is already fixed and closed, so the acute problem is gone. The ambitious tree-scan→manual-manifest replacement never converged (391 commits, 21 Plan EM re-review/repair cycles, shape cycle 25, `max_dispatches` 32→44) while far exceeding its 2-3 day appetite. Revive only via a fresh minimal shape (e.g. just remove the discovery helper's production reachability + stale docs), not this over-shaped line. Sharp entities `2-deterministic-manual-adopter-routing` / `2.1-manual-fail-closed-adopter-routing` stay dormant (not dispatchable); worktree evidence preserved under `.claude/worktrees/issue20-routing-*`. |
+| Fix each of the three closeout paths independently | Preserves the fragmentation the issue targets: N paths remain N drift surfaces. |
+| Add a new spacedock-core capability or a new state sweep detector | OUT per Non-goals; merge guard 0.25.0 already provides the mutation authority; no speculative core change without a failing Helm dogfood fixture. |
+| Have the adapter inline-run the full debrief flow on closeout | debrief is an interactive LLM skill and cannot run in a SessionStart shell hook; a non-blocking debrief-due signal (D3) is the proportionate mechanism. |
 <!-- /section:not-doing -->
 
 ## Shipped
