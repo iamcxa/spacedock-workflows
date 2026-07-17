@@ -69,6 +69,35 @@ PITCH_ANSWERS_DENSITY=$(yq --input-format=json '.pitch.answers_density // ""' "$
 # scope (never stamped onto shaped-child entities), mirroring pre_mortem's C1 scope.
 PITCH_ISSUE=$(yq --input-format=json '.pitch.issue // ""' "$PROPOSAL" | tr -d '"')
 PITCH_TRACKER=$(yq --input-format=json '.pitch.tracker // ""' "$PROPOSAL" | tr -d '"')
+
+# P1-C: issue+tracker is an all-or-nothing typed pair -- half-anchored (one
+# present, one absent), an unrecognized tracker value, or a YAML-unsafe
+# issue value must be rejected here, before the write phase, instead of
+# silently emitting a half-stamped frontmatter while still reporting
+# success.
+PITCH_ISSUE_PRESENT=0
+[ -n "$PITCH_ISSUE" ] && [ "$PITCH_ISSUE" != "null" ] && PITCH_ISSUE_PRESENT=1
+PITCH_TRACKER_PRESENT=0
+[ -n "$PITCH_TRACKER" ] && [ "$PITCH_TRACKER" != "null" ] && PITCH_TRACKER_PRESENT=1
+if [ "$PITCH_ISSUE_PRESENT" != "$PITCH_TRACKER_PRESENT" ]; then
+  echo "Error: pitch.issue and pitch.tracker must both be present or both be absent (half-anchored pair rejected)" >&2
+  exit 10
+fi
+if [ "$PITCH_ISSUE_PRESENT" = "1" ]; then
+  case "$PITCH_TRACKER" in
+    gh|linear) ;;
+    *)
+      echo "Error: pitch.tracker must be one of: gh, linear (got: ${PITCH_TRACKER})" >&2
+      exit 10
+      ;;
+  esac
+  case "$PITCH_ISSUE" in
+    *$'\n'*)
+      echo "Error: pitch.issue must not contain newlines (YAML-unsafe)" >&2
+      exit 10
+      ;;
+  esac
+fi
 if yq --input-format=json -e '.pitch | has("shape_mode")' "$PROPOSAL" >/dev/null 2>&1; then
   PITCH_SHAPE_MODE_TYPE=$(yq --input-format=json -r '.pitch.shape_mode | type' "$PROPOSAL")
   if [ "$PITCH_SHAPE_MODE_TYPE" != "!!str" ]; then

@@ -118,21 +118,37 @@ iag_derive_verdict() {
   fi
 }
 
-iag_ac_met_values() {
-  # iag_ac_met_values <file> — one 'true'/'false'/<raw> line per
-  # original_issue_acs[] row's met_by_existing_capability value, in order.
-  # Empty output means zero rows (key absent, or an empty `[]`/block).
-  local file="$1"
-  awk '
-    /^original_issue_acs:[[:space:]]*$/ { infield=1; next }
-    infield && /^[^[:space:]]/ { infield=0 }
-    infield && /met_by_existing_capability:/ {
-      line=$0
-      sub(/^.*met_by_existing_capability:[[:space:]]*/, "", line)
-      sub(/[[:space:]]*$/, "", line)
-      print line
-    }
-  ' "$file"
+iag_ac_rows_count() {
+  # iag_ac_rows_count <file> — P1-A structural (yq) parse: prints the
+  # length of original_issue_acs[] iff the key is present AND is actually a
+  # YAML sequence; prints nothing and returns non-zero otherwise (missing
+  # key, or present but not a sequence). A line-oriented text scan cannot
+  # distinguish a real `met_by_existing_capability:` key from the same
+  # substring appearing inside a quoted `text:` value -- yq's structural
+  # parse walks the real node tree instead, so it is never fooled by that.
+  local file="$1" seq_type
+  seq_type="$(yq eval '(.original_issue_acs // []) | type' "$file" 2>/dev/null)" || return 1
+  [ "$seq_type" = "!!seq" ] || return 1
+  yq eval '(.original_issue_acs // []) | length' "$file" 2>/dev/null
+}
+
+iag_ac_row_met_value() {
+  # iag_ac_row_met_value <file> <index> — P1-A structural (yq) per-row
+  # check: prints the row's met_by_existing_capability value ONLY if the
+  # row at <index> is a map with non-empty (trimmed) `text` AND a
+  # `met_by_existing_capability` whose YAML type is exactly !!bool. Prints
+  # nothing and returns non-zero for ANY structural defect (missing key,
+  # wrong type, blank text) -- callers must BLOCK a malformed row, never
+  # silently coerce it.
+  local file="$1" idx="$2" row_type text_val met_type
+  row_type="$(yq eval ".original_issue_acs[${idx}] | type" "$file" 2>/dev/null)"
+  [ "$row_type" = "!!map" ] || return 1
+  text_val="$(yq eval ".original_issue_acs[${idx}].text // \"\"" "$file" 2>/dev/null)"
+  text_val="$(printf '%s' "$text_val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  [ -n "$text_val" ] || return 1
+  met_type="$(yq eval ".original_issue_acs[${idx}].met_by_existing_capability | type" "$file" 2>/dev/null)"
+  [ "$met_type" = "!!bool" ] || return 1
+  yq eval ".original_issue_acs[${idx}].met_by_existing_capability" "$file" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -161,24 +177,36 @@ if [ "$IAG_MODE" = "validate" ]; then
       ;;
   esac
 
-  # P1-1: derive goal_still_unmet + verdict from the per-AC
+  # P1-1 + P1-A: derive goal_still_unmet + verdict from the per-AC
   # met_by_existing_capability rows -- never trust the independently-editable
-  # scalar fields alone. Zero/removed AC rows, or scalars inconsistent with
-  # what the rows actually say, must BLOCK (not just a proceed+non-hollow
-  # check narrowly gated on verdict=proceed as before).
-  IAG_V_AC_VALUES="$(iag_ac_met_values "$IAG_VALIDATE_FILE")"
-  if [ -z "$IAG_V_AC_VALUES" ]; then
+  # scalar fields alone. original_issue_acs[] must STRUCTURALLY be a
+  # non-empty array (yq-parsed, not text-scanned) where EVERY row has
+  # non-empty criterion text and a real boolean met_by_existing_capability;
+  # zero/removed rows, any missing/empty/malformed row, or scalars
+  # inconsistent with what the rows actually say, must BLOCK.
+  IAG_V_AC_COUNT="$(iag_ac_rows_count "$IAG_VALIDATE_FILE")"
+  if [ -z "$IAG_V_AC_COUNT" ]; then
+    echo "issue-anchor-guard: BLOCKED — original_issue_acs is missing or is not a YAML array (structural yq parse failed)" >&2
+    exit 1
+  fi
+  if [ "$IAG_V_AC_COUNT" -eq 0 ]; then
     echo "issue-anchor-guard: BLOCKED — original_issue_acs[] is empty (zero or removed rows); a verdict can never be validated without at least one quoted AC row" >&2
     exit 1
   fi
 
   IAG_V_DERIVED_GOAL_UNMET=false
-  while IFS= read -r iag_val; do
-    [ -n "$iag_val" ] || continue
-    if [ "$iag_val" != "true" ]; then
+  IAG_V_IDX=0
+  while [ "$IAG_V_IDX" -lt "$IAG_V_AC_COUNT" ]; do
+    IAG_V_ROW_MET="$(iag_ac_row_met_value "$IAG_VALIDATE_FILE" "$IAG_V_IDX")"
+    if [ -z "$IAG_V_ROW_MET" ]; then
+      echo "issue-anchor-guard: BLOCKED — original_issue_acs[$IAG_V_IDX] is malformed (missing/empty text, or met_by_existing_capability is not a real boolean); a verdict can never be validated against a malformed row" >&2
+      exit 1
+    fi
+    if [ "$IAG_V_ROW_MET" != "true" ]; then
       IAG_V_DERIVED_GOAL_UNMET=true
     fi
-  done <<< "$IAG_V_AC_VALUES"
+    IAG_V_IDX=$((IAG_V_IDX + 1))
+  done
   IAG_V_DERIVED_VERDICT="$(iag_derive_verdict "$IAG_V_SCOPE_SUBSET" "$IAG_V_DERIVED_GOAL_UNMET")"
 
   if [ "$IAG_V_GOAL_UNMET" != "$IAG_V_DERIVED_GOAL_UNMET" ]; then
@@ -312,14 +340,42 @@ if [ "$IAG_TRACKER" != "gh" ]; then
   exit 1
 fi
 
-# P1-3: preserve canonical owner/repo identity. A bare "#N" or "N" is an
-# unambiguous same-repo reference (existing behavior). A full GitHub URL or
-# an "owner/repo#N" shorthand carries explicit owner/repo identity this
-# resolver cannot verify against the local repo without a git-remote lookup
-# it does not otherwise depend on -- so it fails VISIBLE BLOCK rather than
-# silently reducing a foreign reference to its trailing number and
-# anchoring to the wrong same-number *local* issue. Anything matching
-# neither shape is ambiguous and also fails VISIBLE BLOCK.
+iag_local_owner_repo() {
+  # iag_local_owner_repo — best-effort "owner/repo" for the local git
+  # remote (origin), supporting both the SSH and HTTPS GitHub remote URL
+  # forms. Prints nothing and returns non-zero if undeterminable (no git
+  # repo, no origin, or a non-GitHub remote) -- callers MUST treat that as
+  # "cannot verify same-repo" and fail closed, never treat it as a match.
+  local url
+  url="$(git remote get-url origin 2>/dev/null)" || return 1
+  case "$url" in
+    git@github.com:*)
+      url="${url#git@github.com:}"
+      url="${url%.git}"
+      printf '%s\n' "$url"
+      ;;
+    https://github.com/*)
+      url="${url#https://github.com/}"
+      url="${url%.git}"
+      url="${url%/}"
+      printf '%s\n' "$url"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# P1-3 + P1-B: preserve canonical owner/repo identity. A bare "#N" or "N" is
+# an unambiguous same-repo reference (existing behavior). A full GitHub
+# issue URL whose owner/repo VERIFIES against the local git remote
+# (origin) is a confirmed same-repo reference -- canonicalize it to a bare
+# #N and accept it, so ship-shape/SKILL.md's advertised full-URL intake
+# actually works end-to-end. An "owner/repo#N" shorthand, an unverifiable
+# full URL (no origin, non-GitHub remote, or a genuine owner/repo
+# mismatch), or anything matching neither shape still fails VISIBLE BLOCK
+# rather than silently reducing a foreign reference to its trailing number
+# and anchoring to the wrong same-number *local* issue.
 case "$IAG_ISSUE" in
   \#*) IAG_ISSUE_BARE="${IAG_ISSUE#\#}" ;;
   *) IAG_ISSUE_BARE="$IAG_ISSUE" ;;
@@ -329,21 +385,29 @@ case "$IAG_ISSUE_BARE" in
   ''|*[!0-9]*)
     IAG_ISSUE_OWNER_REPO=""
     IAG_ISSUE_CROSS_NUM=""
+    IAG_ISSUE_VERIFIED_SAME_REPO=0
     if [[ "$IAG_ISSUE" =~ ^https://github\.com/([^/]+)/([^/]+)/issues/([0-9]+)/?$ ]]; then
       IAG_ISSUE_OWNER_REPO="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
       IAG_ISSUE_CROSS_NUM="${BASH_REMATCH[3]}"
+      IAG_LOCAL_OWNER_REPO="$(iag_local_owner_repo || true)"
+      if [ -n "$IAG_LOCAL_OWNER_REPO" ] && [ "$IAG_LOCAL_OWNER_REPO" = "$IAG_ISSUE_OWNER_REPO" ]; then
+        IAG_ISSUE_BARE="$IAG_ISSUE_CROSS_NUM"
+        IAG_ISSUE_VERIFIED_SAME_REPO=1
+      fi
     elif [[ "$IAG_ISSUE" =~ ^([^/[:space:]#]+)/([^/[:space:]#]+)#([0-9]+)$ ]]; then
       IAG_ISSUE_OWNER_REPO="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
       IAG_ISSUE_CROSS_NUM="${BASH_REMATCH[3]}"
     fi
 
-    if [ -n "$IAG_ISSUE_OWNER_REPO" ]; then
-      echo "issue-anchor-guard: BLOCKED — cross-repo issue reference to '${IAG_ISSUE_OWNER_REPO}#${IAG_ISSUE_CROSS_NUM}' is not supported in v1 (same-repo #N only); refusing to silently reduce it to a local #${IAG_ISSUE_CROSS_NUM} and anchor to the wrong issue" >&2
+    if [ "$IAG_ISSUE_VERIFIED_SAME_REPO" = "1" ]; then
+      : # verified same-repo full URL -- fall through with IAG_ISSUE_BARE canonicalized
+    elif [ -n "$IAG_ISSUE_OWNER_REPO" ]; then
+      echo "issue-anchor-guard: BLOCKED — cross-repo issue reference to '${IAG_ISSUE_OWNER_REPO}#${IAG_ISSUE_CROSS_NUM}' is not supported in v1 (same-repo #N only, or a full URL verified against the local git remote); refusing to silently reduce it to a local #${IAG_ISSUE_CROSS_NUM} and anchor to the wrong issue" >&2
+      exit 1
+    else
+      echo "issue-anchor-guard: BLOCKED — issue: '${IAG_ISSUE}' is not a recognized same-repo reference (#N); ambiguous references are never silently resolved" >&2
       exit 1
     fi
-
-    echo "issue-anchor-guard: BLOCKED — issue: '${IAG_ISSUE}' is not a recognized same-repo reference (#N); ambiguous references are never silently resolved" >&2
-    exit 1
     ;;
 esac
 IAG_ISSUE_NUM="$IAG_ISSUE_BARE"
@@ -360,12 +424,16 @@ if [ "$IAG_GH_RC" != "0" ]; then
 fi
 rm -f "$IAG_GH_ERR"
 
-# P1-2: capture each AC's multiline continuation block (a heading with no
-# same-line text is followed by indented criterion lines up to the next
-# blank line / next AC heading / EOF), joined into one single-line text
-# field. A heading that matches but never accumulates any substantive text
-# (in-line or continuation) fails closed -- never an empty-but-accepted
-# anchor.
+# P1-2 + P2-D: capture each AC's multiline continuation block (a heading
+# with no same-line text is followed by indented criterion lines up to the
+# next blank line / next AC heading / EOF), joined into one single-line
+# text field. Continuation lines must be indented (leading whitespace) --
+# an unindented, non-blank, non-AC-heading line ends the block immediately
+# (flush, stop accumulating) instead of being silently absorbed as if it
+# were part of the AC's own criterion text; this is what stops a following
+# section's heading/prose from masquerading as AC criteria. A heading that
+# matches but never accumulates any substantive text (in-line or indented
+# continuation) fails closed -- never an empty-but-accepted anchor.
 iag_parse_ac_blocks() {
   # iag_parse_ac_blocks <body> — one line per AC heading found:
   #   IAG_AC_TEXT:<AC-N>:<joined single-line text>
@@ -393,6 +461,7 @@ iag_parse_ac_blocks() {
       next
     }
     have && /^[[:space:]]*$/ { flush(); have = 0; buf = ""; next }
+    have && /^[^[:space:]]/ { flush(); have = 0; buf = ""; next }
     have {
       line = $0
       sub(/^[[:space:]]+/, "", line)
