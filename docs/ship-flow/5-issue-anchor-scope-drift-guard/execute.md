@@ -103,133 +103,59 @@ task_count: 4
 
 </details>
 
+<details>
+<summary>Cycle 2 (T5): shape-confirm.sh bounded intake-stamping — collapsed for Principle 8 (C15 artifact-verbosity); see commits `b9598da`/`b46dc35`/`d0668c6`</summary>
+
 ## Execute Addendum (cycle 2): T5 — shape-confirm.sh bounded intake-stamping
 
-Route-back from verify: a review found CD5(b) (design.md Reconciliation — bounded
-intake-stamping, "future entities are born anchored") was a named, captain-adjudicated
-decision with no task, no DC, and no test — a silent-drop doctrine violation. This
-addendum adds T5 to close that gap. Bounded scope, per dispatch: intake issue/tracker
-stamping ONLY — no change to `issue-anchor-guard.md`, no AC-N parsing, no Linear/
-`external_id` handling.
-
-### Execution Log (cycle 2)
-
-| Task | Wave | Model | Status | Files Changed | Retries | Review | Commit | Est. Cost |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T5 | W4 | sonnet | done | `plugins/ship-flow/lib/__tests__/test-shape-confirm.sh`, `plugins/ship-flow/lib/shape-confirm.sh`, `plugins/ship-flow/skills/ship-shape/SKILL.md` | 1 (self-fix: first fixture draft omitted `pm_skill_receipts`, which folder-layout Mode A requires — DC-5.1-1a/1b failed with `exit 10` instead of the intended RED "field absent"; fixed by adding the same receipts block `proposal_with_pre_mortem` already uses) | self-review (GREEN: DC-5.1-1..3 pass; full `test-shape-confirm.sh`, `test-issue-anchor-guard.sh`, `test-doc-impact-gate.sh`, `test-contribution-contract.sh` unaffected) | `b9598da` (RED) · `b46dc35` (GREEN) | 1 dispatch |
+Route-back from verify: CD5(b) (design.md Reconciliation — bounded intake-stamping, "future entities are born anchored") was a named, captain-adjudicated decision with no task/DC/test — a silent-drop doctrine violation. Bounded scope: intake issue/tracker stamping ONLY — no change to `issue-anchor-guard.md`, no AC-N parsing, no Linear/`external_id` handling.
 
 ### TDD Evidence (cycle 2)
 
-| Task | RED Command | Expected RED Failure | GREEN Command | REFACTOR Check | Result |
-| --- | --- | --- | --- | --- | --- |
-| T5 | `bash plugins/ship-flow/lib/__tests__/test-shape-confirm.sh` | DC-5.1-1a/1b (folder `index.md` issue:/tracker:) and DC-5.1-2 (flat `.md` issue:/tracker:) fail — `shape-confirm.sh` has zero issue/tracker handling; DC-5.1-1c/DC-5.1-3 (negative cases) pass trivially since nothing is stamped yet | `bash plugins/ship-flow/lib/__tests__/test-shape-confirm.sh` | `bash -n plugins/ship-flow/lib/shape-confirm.sh && bash -n plugins/ship-flow/lib/__tests__/test-shape-confirm.sh` | RED confirmed (commit `b9598da`) → GREEN after the two-line stamping addition (commit `b46dc35`) |
-
-### Issues Found (cycle 2)
-
-- First fixture draft (`proposal_with_issue_tracker`) omitted `pm_skill_receipts`; folder-layout Mode A rejects that with exit 10 before the pitch entity is even written, so DC-5.1-1a/1b failed for the wrong reason (guard rejection, not "field absent"). Fixed by copying the receipts block from the existing `proposal_with_pre_mortem` fixture. No production-code implication — test-fixture-only fix.
-
-### Execute UAT (cycle 2)
-
-| DC | Verify Procedure | Result | Evidence |
+| Task | Expected RED Failure | GREEN Fix | Result |
 | --- | --- | --- | --- |
-| DC-9 | `test-shape-confirm.sh` DC-5.1-1..3: proposal with `pitch.issue`+`pitch.tracker` → `shape-confirm.sh --layout=folder\|flat` | PASS | Pitch `index.md`/`.md` carry `issue: "#49"` + `tracker: gh`; `090.1-child-a/index.md` carries neither (pitch-only scope); proposal without `pitch.issue` (`sample_proposal`) emits neither |
+| T5 | DC-5.1-1a/1b (folder) / DC-5.1-2 (flat) fail — zero issue/tracker handling | Extract `PITCH_ISSUE`/`PITCH_TRACKER`, conditionally stamp `issue:`/`tracker:` into pitch-only frontmatter (mirrors `instantiate-cut-project.sh`) | RED `b9598da` → GREEN `b46dc35` |
 
-### Self-Check (cycle 2)
+Issues found: first fixture omitted `pm_skill_receipts`, causing a wrong-reason RED (exit 10); fixed by copying the receipts block from `proposal_with_pre_mortem`. Test-fixture-only, no production implication.
 
-- typecheck: N/A — shell/Markdown slice, no typed source
-- lint: PASS — `bash -n` on `shape-confirm.sh` and the test file; `shellcheck -s bash` on `shape-confirm.sh` clean (pre-existing SC2329 info-level finding on an unrelated trap function, not introduced by this task); `git diff --check` clean
-- unit tests: PASS — `test-shape-confirm.sh` full suite (incl. DC-5.1-1..3); `test-issue-anchor-guard.sh` 32/32; `test-doc-impact-gate.sh` 112/112; `test-contribution-contract.sh` 24/24
-- full gate: PASS — `CI=true bash plugins/ship-flow/bin/check-invariants.sh` clean (no FAIL lines); `bash scripts/check-no-dangling.sh` PASS; `bash scripts/check-version-triple.sh` PASS
-- critical-pass lite: PASS — no SQL/data-safety, race/concurrency, LLM trust-boundary, or shell-injection finding; bounded scope honored (`git diff --stat` shows no change to `issue-anchor-guard.md`, no AC-N parsing, no Linear/`external_id` handling)
-
-### Hand-off to Verify (cycle 2 addendum)
+Self-check: PASS — `bash -n`/`shellcheck` clean; `test-shape-confirm.sh` full suite (incl. DC-5.1-1..3); `test-issue-anchor-guard.sh` 32/32; `test-doc-impact-gate.sh` 112/112; `test-contribution-contract.sh` 24/24; `check-invariants.sh`/`check-no-dangling.sh`/`check-version-triple.sh` clean; bounded scope confirmed via `git diff --stat`.
 
 <!-- section:hand-off-to-verify-cycle-2 -->
-- **commit_list (cycle 2)**: `b9598da` (T5 RED — DC-5.1 test authoring) · `b46dc35` (T5 GREEN — shape-confirm.sh stamping + SKILL prose) · `d0668c6` (docs — CD5(b) marked IMPLEMENTED in design.md/plan.md)
+- **commit_list (cycle 2)**: `b9598da` (RED) · `b46dc35` (GREEN) · `d0668c6` (docs — CD5(b) marked IMPLEMENTED)
 - **dc_status (cycle 2)**: DC-9 PASS (folds DC-5.1-1..3).
-- **tdd_evidence_summary (cycle 2)**: T5 RED-first (commit `b9598da`) → GREEN (commit `b46dc35`). One test-fixture self-fix cycle (missing `pm_skill_receipts`), no production-code deviation.
-- **deviations (cycle 2)**: none from the T5 addendum plan in plan.md.
-- **render_fidelity_evidence (cycle 2)**: N/A — non-UI entity.
-- **residual (unchanged from cycle 1)**: the AC-line parser's `AC-N:`/`AC-N.` line requirement still cannot run end-to-end against issue #49's own prose-style ACs — orthogonal to T5, tracked in cycle-1's Issues Found.
+- **residual (unchanged from cycle 1)**: AC-line parser's `AC-N:`/`AC-N.` requirement still can't run end-to-end against issue #49's own prose-style ACs.
 <!-- /section:hand-off-to-verify-cycle-2 -->
+
+</details>
+
+<details>
+<summary>Cycle 3 (P1-1..P1-4): resolver fail-closed/derivation fixes — collapsed for Principle 8 (C15 artifact-verbosity); see commits `8028dcd`/`23d7e7e`</summary>
 
 ## Execute Addendum (cycle 3): P1-1..P1-4 — resolver fail-closed/derivation fixes
 
-Route-back from verify surfaced four resolver-level gaps in
-`issue-anchor-guard.md`, none touched by T1-T5: (P1-1) `validate` trusted the
-file's own `goal_still_unmet`/`verdict` scalars instead of deriving them from
-`original_issue_acs[]`; (P1-2) the AC-N line grep dropped multiline
-continuation text and silently accepted an AC heading with zero criterion
-text; (P1-3) `issue:` resolution did not distinguish a same-repo `#N` from a
-cross-repo URL/`owner/repo#N` reference, risking a silent fall-through to the
-wrong same-number local issue; (P1-4) a later failed `emit` run left an
-earlier successful run's `source-diff-<id>.yaml` (and its `verdict: proceed`)
-on disk for `validate` to find. Bounded scope per dispatch: edits confined to
-`issue-anchor-guard.md` (resolver) + new assertions in
-`test-issue-anchor-guard.sh`; `shape-confirm.sh`, `ship-shape/SKILL.md`, and
-re-entry detection untouched.
-
-### Execution Log (cycle 3)
-
-| Task | Wave | Model | Status | Files Changed | Retries | Review | Commit | Est. Cost |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1-1..P1-4 (RED) | W5 | sonnet | done | `plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | 1 (DC-12's first draft used the real `gh` CLI with a placeholder foreign repo — coincidentally "passed" via a real 404 rather than the guard's own logic; rewrote to pair each DC-12 fixture with a `gh` stub that would succeed if invoked, making RED/GREEN depend only on the guard's parsing, not network reachability) | self-review (RED confirmed: 36/53 pass, 17 fail — exactly DC-10/11/12/13, all pre-existing DC-1..8b/T3 assertions still pass) | `8028dcd` | 1 dispatch |
-| P1-1..P1-4 (GREEN) | W5 | sonnet | done | `plugins/ship-flow/_mods/issue-anchor-guard.md` | 0 | self-review (GREEN: 53/53) | `23d7e7e` | 1 dispatch |
+Route-back surfaced four resolver-level gaps none of T1-T5 touched: (P1-1) `validate` trusted scalars instead of deriving from `original_issue_acs[]`; (P1-2) AC-N parser dropped multiline continuation and silently accepted an empty-text heading; (P1-3) `issue:` resolution didn't distinguish same-repo `#N` from cross-repo/ambiguous refs; (P1-4) a later failed `emit` left a prior run's stale `verdict: proceed` file on disk. Bounded scope: `issue-anchor-guard.md` (resolver) + new assertions in `test-issue-anchor-guard.sh` only; `shape-confirm.sh`/`ship-shape/SKILL.md`/re-entry detection untouched.
 
 ### TDD Evidence (cycle 3)
 
-| Task | RED Command | Expected RED Failure | GREEN Command | REFACTOR Check | Result |
-| --- | --- | --- | --- | --- | --- |
-| P1-1 | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-10 (both sub-cases) fail: validate accepts a proceed with zero AC rows, and accepts goal_still_unmet=true when every row is met_by_existing_capability=true | same | `bash -n` on extracted resolver; `shellcheck -s bash` | RED (commit `8028dcd`) → GREEN via `iag_ac_met_values()` + derivation-based BLOCK checks (commit `23d7e7e`) |
-| P1-2 | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-11 (6 assertions) fail: multiline continuation text not captured; empty-heading cases (mid-body and EOF) silently accepted and emit a file instead of failing closed | same | `bash -n`; `shellcheck -s bash` | RED (commit `8028dcd`) → GREEN via `iag_parse_ac_blocks()` awk state machine + `IAG_EMPTY_AC` fail-closed check (commit `23d7e7e`) |
-| P1-3 | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-12 (7 assertions) fail: cross-repo URL / `owner/repo#N` shorthand / ambiguous ref all pass through to a stubbed `gh` and emit a file instead of BLOCKing | same | `bash -n`; `shellcheck -s bash` | RED (commit `8028dcd`) → GREEN via the owner/repo-qualified-reference BLOCK before any `gh` invocation (commit `23d7e7e`) |
-| P1-4 | `bash plugins/ship-flow/lib/__tests__/test-issue-anchor-guard.sh` | DC-13 (2 assertions) fail: a later gh-failure run leaves the earlier successful run's file in place, and `validate` against that stale path PASSes | same | `bash -n`; `shellcheck -s bash` | RED (commit `8028dcd`) → GREEN via `rm -f "$IAG_OUT_FILE"` at the top of `emit`'s working logic (commit `23d7e7e`) |
-
-### Issues Found (cycle 3)
-
-- DC-12's first draft used the real `gh` CLI (no fakebin) against a
-  placeholder `other-org/other-repo` URL/shorthand. Without the P1-3 fix,
-  that draft still "passed" (exit non-zero) because the real `gh` 404s
-  against a nonexistent repo — a network-dependent, non-deterministic
-  false green that would not have caught the actual bug (the pre-fix code
-  passing the raw URL/shorthand straight through to `gh`). Fixed by pairing
-  each DC-12 fixture with a `write_fake_gh_ok` stub that returns
-  `CANNED_BODY` if invoked; re-confirmed RED against the unmodified mod
-  (emit succeeds via the stub) before implementing the fix.
-- Residual (named, not hidden): P1-4's tombstone-on-start is a practical
-  fix for the two named failure modes (a later gh-failure, a later
-  BLOCK) but is not a file lock — two truly concurrent `emit` invocations
-  for the same entity still race last-writer-wins. Out of this round's
-  bounded scope (resolver-only, no lock-file infrastructure).
-
-### Execute UAT (cycle 3)
-
-| DC | Verify Procedure | Result | Evidence |
+| Task | Expected RED Failure | GREEN Fix | Result |
 | --- | --- | --- | --- |
-| DC-10 | `validate` on a zero-AC-row proceed, an all-met-but-claims-unmet proceed, and a consistent multi-row proceed | PASS | zero-row and all-met cases BLOCK non-zero; consistent multi-row (derived from ANY-false-row, not just row 1) passes |
-| DC-11 | `emit` against a multiline-continuation AC body, a mid-body empty-heading body, and an EOF empty-heading body | PASS | continuation text captured verbatim in `original_issue_acs`; both empty-heading cases BLOCK non-zero with no file written |
-| DC-12 | `emit` against a cross-repo full URL, an `owner/repo#N` shorthand, and an ambiguous string, each paired with a would-succeed `gh` stub | PASS | all three BLOCK non-zero before invoking `gh`, no file written; the URL/shorthand cases name the foreign owner/repo in the error |
-| DC-13 | `emit` (success) → `emit` (gh-failure) on the same entity → `validate` against the now-tombstoned path | PASS | second run still exits non-zero; the first run's file no longer exists; `validate` against the missing path BLOCKs (file not found) |
+| P1-1 | DC-10: proceed accepted with zero AC rows / all-met-but-claims-unmet | `iag_ac_met_values()` + derivation-based BLOCK checks | RED `8028dcd` → GREEN `23d7e7e`, 53/53 |
+| P1-2 | DC-11: multiline continuation dropped; empty-heading (mid-body/EOF) silently accepted | `iag_parse_ac_blocks()` awk state machine + `IAG_EMPTY_AC` fail-closed check | RED `8028dcd` → GREEN `23d7e7e` |
+| P1-3 | DC-12: cross-repo URL / `owner/repo#N` / ambiguous ref pass through to `gh` | owner/repo-qualified-reference BLOCK before any `gh` call | RED `8028dcd` → GREEN `23d7e7e` |
+| P1-4 | DC-13: later gh-failure run leaves earlier successful run's file in place; `validate` PASSes against stale path | `rm -f "$IAG_OUT_FILE"` tombstone at top of `emit` | RED `8028dcd` → GREEN `23d7e7e` |
 
-### Self-Check (cycle 3)
+Issues found: DC-12's first draft used the real `gh` CLI (network-dependent false green); rewrote with a would-succeed `gh` stub so RED/GREEN depends only on the guard's own parsing. Residual (named): P1-4's tombstone is last-writer-wins, not a file lock, under true concurrent `emit` overlap — out of bounded scope.
 
-- typecheck: N/A — shell/Markdown slice, no typed source
-- lint: PASS — `bash -n` on the extracted resolver and the test file; `shellcheck -s bash` on the extracted resolver clean; `git diff --check` clean on both commits
-- unit tests: PASS — `test-issue-anchor-guard.sh` 53/53; `node --test plugins/ship-flow/bin/*.test.mjs` 79/79 unaffected
-- full gate: PASS — `CI=true bash plugins/ship-flow/bin/check-invariants.sh` clean (no FAIL lines, C14 both variants OK); `bash scripts/check-no-dangling.sh` PASS; `bash scripts/check-version-triple.sh` PASS
-- critical-pass lite: PASS — no SQL/data-safety or shell-injection finding; the P1-4 concurrent-overlap residual is named above, not hidden; bounded scope honored (`git diff --stat` across both commits touches only `issue-anchor-guard.md` and `test-issue-anchor-guard.sh`)
-
-### Hand-off to Verify (cycle 3 addendum)
+Self-check: PASS — `bash -n`/`shellcheck` clean on both commits; `test-issue-anchor-guard.sh` 53/53; `node --test` 79/79 unaffected; `check-invariants.sh` clean (C14 both variants); `check-no-dangling.sh`/`check-version-triple.sh` PASS; bounded scope confirmed via `git diff --stat` (only `issue-anchor-guard.md` + `test-issue-anchor-guard.sh`).
 
 <!-- section:hand-off-to-verify-cycle-3 -->
-- **commit_list (cycle 3)**: `8028dcd` (RED — DC-10..13 test authoring) · `23d7e7e` (GREEN — P1-1..P1-4 resolver fixes + doc updates)
-- **dc_status (cycle 3)**: DC-10 PASS; DC-11 PASS; DC-12 PASS; DC-13 PASS. Full suite 53/53 (was 32/32 at end of cycle 2, before DC-10..13 existed).
-- **tdd_evidence_summary (cycle 3)**: RED confirmed 36/53 (commit `8028dcd`, exactly the 17 new DC-10..13 assertions failing) → GREEN 53/53 (commit `23d7e7e`).
-- **deviations (cycle 3)**: one test-authoring self-fix (DC-12's `gh`-stub redesign, see Issues Found); no production-code deviation from the dispatch's four fix descriptions.
-- **render_fidelity_evidence (cycle 3)**: N/A — non-UI entity.
-- **residual (new, named)**: P1-4's tombstone is last-writer-wins, not a lock, under true concurrent `emit` overlap (see Issues Found).
-- **residual (unchanged from cycle 1)**: the AC-line parser still requires an explicit `AC-N:`/`AC-N.` heading (multiline continuation is now supported, but free-form prose with no heading still yields zero matches and fails visible) — issue #49's own body still cannot run end-to-end against this guard as currently formatted.
+- **commit_list (cycle 3)**: `8028dcd` (RED) · `23d7e7e` (GREEN)
+- **dc_status (cycle 3)**: DC-10/11/12/13 PASS. Full suite 53/53 (was 32/32).
+- **residual (new)**: P1-4's tombstone is last-writer-wins under true concurrent overlap.
+- **residual (unchanged)**: AC-line parser still requires an explicit `AC-N:`/`AC-N.` heading.
 <!-- /section:hand-off-to-verify-cycle-3 -->
+
+</details>
 
 <details>
 <summary>Cycle 4 (P1-A/P1-B/P1-C/P2-D): Execute Addendum, TDD Evidence, Self-Check, Hand-off to Verify — collapsed for Principle 8 (C15 artifact-verbosity); see commits `fd0781f`/`3e6eeda`</summary>
@@ -290,3 +216,26 @@ intake paragraph + the two test files only).
 <!-- /section:hand-off-to-verify-cycle-4 -->
 
 </details>
+
+## Execute Addendum (cycle 5): P1-r3-1 — guard invocation gated to existing-entity re-shape only
+
+Route-back surfaced a real flow bug: the Issue-Anchor Guard section in `ship-shape/SKILL.md` invoked the resolver unconditionally "before Intake" regardless of directive form, so a brand-new free-text or todo-based `/shape` (no existing entity yet) could hit the resolver's "entity path not found" BLOCK — contradicting design premise A1 (the guard is for route-back re-entry on an already-shaped entity, never new-shape intake). Bounded scope per dispatch: `ship-shape/SKILL.md` (guard gating) + the resolver mod's Hook/Invocation prose (docs-only, to match) + the mod's Boundary section (residual note) + `test-issue-anchor-guard.sh` assertions + one rabbit-hole todo — no code fix for the three named shell-parser-robustness residuals, no other features.
+
+### TDD Evidence (cycle 5)
+
+| Task | Expected RED Failure | GREEN Fix | Result |
+| --- | --- | --- | --- |
+| P1-r3-1 | DC-6 (flipped): guard section still positioned BEFORE `### Intake`; DC-17 (new, 4 text assertions): guard section lacks Entity id / Free text / Todo tid / "entity path not found" gating language | Move `<!-- section:issue-anchor-guard -->` to after `### Intake`, retitled "Post-Intake ... (existing-entity re-shape only)", with explicit gating prose naming the Entity id condition and the Free text/Todo tid exclusion; `issue-anchor-guard.md`'s Hook/Invocation prose updated to match | RED `74c498d` → GREEN `b943212`, 72/72 |
+
+Issues found: none beyond the fix itself. Residual note: design.md's Test-implications #6 and plan.md's DC-6/T3 text still say "before Intake" (pre-P1-r3-1 wording) — out of this cycle's bounded scope (not in the allowed edit list), left for verify/doc-sync to reconcile.
+
+Self-check: PASS — `bash -n`/`shellcheck -s bash` on the extracted resolver clean; `git diff --check` clean; `test-issue-anchor-guard.sh` 72/72; `test-shape-confirm.sh` full suite unaffected; `node --test` 79/79; `test-doc-impact-gate.sh` 112/112; `test-contribution-contract.sh` 24/24; `CI=true check-invariants.sh` clean (C14 both variants + C15 OK); `check-no-dangling.sh`/`check-version-triple.sh` PASS. Bounded scope confirmed via `git diff --stat` (`ship-shape/SKILL.md`, `issue-anchor-guard.md`, `test-issue-anchor-guard.sh`, + the one todo + its ROADMAP row only).
+
+<!-- section:hand-off-to-verify-cycle-5 -->
+- **commit_list (cycle 5)**: `74c498d` (RED — DC-6 flip + DC-17 test authoring) · `b943212` (GREEN — SKILL.md guard gating + mod prose/residual note) · `6906f29` (docs — rabbit-hole todo `issue-anchor-guard-resolver-shell-parser-robustness` + ROADMAP row)
+- **dc_status (cycle 5)**: DC-6 PASS (corrected polarity); DC-17 PASS (5 assertions). Full suite 72/72 (was 66/66).
+- **deviations (cycle 5)**: none — the resolver's emit/validate logic itself is untouched; only the mod's Hook/Invocation prose and Boundary section changed (docs-only).
+- **render_fidelity_evidence (cycle 5)**: N/A — non-UI entity.
+- **residual (new, named)**: three shell-parser-robustness gaps (tombstone exit-status check, structural-yq scalar reads, Markdown-aware AC extraction) deferred to rabbit hole `issue-anchor-guard-resolver-shell-parser-robustness`, documented in the mod's Boundary section.
+- **residual (unchanged)**: P1-4's tombstone remains last-writer-wins (cycle 3); the AC-line parser still requires an explicit `AC-N:`/`AC-N.` heading (cycle 1); the model-judgment residual in the mod's own Boundary section is named+accepted, not chased; design.md/plan.md's "before Intake" wording is now stale relative to the corrected wiring (see Issues Found above).
+<!-- /section:hand-off-to-verify-cycle-5 -->
