@@ -1106,26 +1106,47 @@ check_review_surface_shape_not_plan() {
 }
 
 check_ship_shape_design_always_runs() {
-  # C17 — INVARIANTS Principle 11 "Design Stage Required": the ship-shape SKILL
-  # must NOT instruct the FO to skip design → plan. Design always runs (the
-  # pre-pitch-116 skip-when clause is removed); pure-mechanical work walks
-  # ship-design's Phase 0 trivial-pass, and C14's transition graph has no
-  # shape→plan edge. This pins the ship-shape prose so it cannot drift back to
-  # the removed skip guidance (which only C14 would catch, reactively, after an
-  # FO already wasted effort). Tier B (text presence). Fixture override:
-  # FIXTURE_SHAPE_SKILL=path.
-  local skill_file="${FIXTURE_SHAPE_SKILL:-${ROOT}/plugins/ship-flow/skills/ship-shape/SKILL.md}"
-  [ -f "$skill_file" ] || return 0
+  # C17 — INVARIANTS Principle 11 "Design Stage Required": NO ship-flow doc may
+  # say the design stage is skipped/bypassed, or that SHAPE (not ship-design)
+  # emits the design-skipped '### Hand-off to Plan'. Design always runs — the
+  # pre-pitch-116 skip-when clause is removed; pure-mechanical work walks
+  # ship-design's Phase 0 trivial-pass, ship-design emits the design-skipped
+  # hand-off (Principle 11.3), and C14's transition graph has no shape→plan edge.
+  # Guards the WHOLE contract surface (ship-shape + ship-design SKILLs, the
+  # entity-body schema, and import-design-dcs.sh) so the pitch-116 migration
+  # cannot silently re-drift in any single file — the way it did until #63, when
+  # only C14 caught it reactively after an FO already wasted effort. Tier B (text
+  # presence). Fixture override for the ship-shape file: FIXTURE_SHAPE_SKILL=path.
+  local sk="${ROOT}/plugins/ship-flow/skills"
+  local shape_skill="${FIXTURE_SHAPE_SKILL:-${sk}/ship-shape/SKILL.md}"
+  local design_skill="${sk}/ship-design/SKILL.md"
+  local schema="${ROOT}/plugins/ship-flow/references/entity-body-schema.yaml"
+  local importer="${ROOT}/plugins/ship-flow/lib/import-design-dcs.sh"
   local drift=0
-  if grep -qiE 'auto-skip to .{0,2}plan' "$skill_file"; then
-    echo "ERROR [Principle 11/ship-shape]: ship-shape/SKILL.md tells the FO to 'auto-skip to plan' — design always runs (no shape→plan skip; C14 rejects the transition). Advance to design; pure-mechanical work walks ship-design Phase 0 trivial-pass. See INVARIANTS.md '### Principle 11'." >&2
+  if [ -f "$shape_skill" ] && grep -qiE 'auto-skip to .{0,2}plan' "$shape_skill"; then
+    echo "ERROR [Principle 11/design-always-runs]: ship-shape/SKILL.md tells the FO to 'auto-skip to plan' — advance to design instead; pure-mechanical work walks ship-design Phase 0 trivial-pass." >&2
     drift=1
   fi
-  if grep -qiE 'emit stub.*hand-off to plan.*design-skipped' "$skill_file"; then
-    echo "ERROR [Principle 11/ship-shape]: ship-shape/SKILL.md instructs SHAPE to emit the design-skipped '### Hand-off to Plan' — that hand-off is emitted by ship-design's Phase 0 trivial-pass (Principle 11.3), not by shape. Shape emits '### Hand-off to Design'." >&2
+  if [ -f "$shape_skill" ] && grep -qiE 'emit stub.*hand-off to plan.*design-skipped' "$shape_skill"; then
+    echo "ERROR [Principle 11/design-always-runs]: ship-shape/SKILL.md instructs SHAPE to emit the design-skipped '### Hand-off to Plan' — that hand-off is emitted by ship-design's Phase 0 trivial-pass (Principle 11.3). Shape emits '### Hand-off to Design'." >&2
     drift=1
   fi
-  if [ "$drift" = 1 ]; then return 1; fi
+  if [ -f "$design_skill" ] && grep -qiE '(emitted|set true) by ship-shape phase 8' "$design_skill"; then
+    echo "ERROR [Principle 11/design-always-runs]: ship-design/SKILL.md says the design-skipped hand-off is emitted by ship-shape — ship-design's Phase 0 trivial-pass emits it (Principle 11.3)." >&2
+    drift=1
+  fi
+  if [ -f "$schema" ] && grep -qiE 'set true by ship-shape phase 8' "$schema"; then
+    echo "ERROR [Principle 11/design-always-runs]: entity-body-schema.yaml says design-skipped is set by ship-shape — ship-design's Phase 0 trivial-pass sets it (Principle 11.3)." >&2
+    drift=1
+  fi
+  if [ -f "$importer" ] && grep -qiE 'bypassed by shape phase 8' "$importer"; then
+    echo "ERROR [Principle 11/design-always-runs]: import-design-dcs.sh says the design stage is bypassed by shape — design always runs a Phase 0 trivial-pass." >&2
+    drift=1
+  fi
+  if [ "$drift" = 1 ]; then
+    echo "See INVARIANTS.md '### Principle 11' — design always runs; ship-design emits the design-skipped Hand-off to Plan; C14 has no shape→plan edge." >&2
+    return 1
+  fi
   echo "OK C17 ship-shape-design-always-runs"
   return 0
 }
