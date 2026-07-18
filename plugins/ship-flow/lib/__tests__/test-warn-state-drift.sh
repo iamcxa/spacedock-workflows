@@ -397,13 +397,72 @@ printf '%s\n' \
   "entity=${SHIP_FLOW_RECONCILER_ENTITY:-flat-merged}" \
   "pr=${SHIP_FLOW_RECONCILER_PR:-131}" \
   "pr_state=${SHIP_FLOW_RECONCILER_PR_STATE:-MERGED}" \
-  "terminal_action=${SHIP_FLOW_RECONCILER_ACTION:-set_done}" \
+  "terminal_action=${SHIP_FLOW_RECONCILER_ACTION:-closeout_bundle}" \
   'worktree_cleanup=not_applicable' \
   'branch_cleanup=not_applicable' \
   "reason=$fixture_reason" \
   "state=$fixture_state" \
   "detail=${SHIP_FLOW_RECONCILER_DETAIL:-fixture reconciled}"
 exit "${SHIP_FLOW_RECONCILER_EXIT:-0}"
+EOF
+  chmod +x "$bin"
+}
+
+write_fixture_mixed_reconciler() {
+  local bin="$1"
+  cat > "$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "$SHIP_FLOW_RECONCILER_LOG"
+entity=""
+pr=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --entity) entity="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+case "$entity" in
+  flat-success)
+    pr=301
+    state=reconciled
+    action=closeout_bundle
+    reason=merged-pr-reconciled
+    ;;
+  flat-blocked)
+    pr=302
+    state=pr_open_noop
+    action=none
+    reason=pr-open
+    ;;
+  *) exit 2 ;;
+esac
+
+printf '%s\n' \
+  'verdict=PROCEED' \
+  "entity=$entity" \
+  "pr=$pr" \
+  'pr_state=MERGED' \
+  "terminal_action=$action" \
+  'worktree_cleanup=not_applicable' \
+  'branch_cleanup=not_applicable' \
+  "reason=$reason" \
+  "state=$state" \
+  'detail=mixed fixture result'
+EOF
+  chmod +x "$bin"
+}
+
+write_fixture_git_spy() {
+  local bin="$1"
+  cat > "$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "$SHIP_FLOW_GIT_LOG"
+exec "$SHIP_FLOW_REAL_GIT" "$@"
 EOF
   chmod +x "$bin"
 }
@@ -428,6 +487,8 @@ run_hook() {
       SHIP_FLOW_RECONCILER_ACTION="${SHIP_FLOW_RECONCILER_ACTION:-}" \
       SHIP_FLOW_RECONCILER_REASON="${SHIP_FLOW_RECONCILER_REASON:-}" \
       SHIP_FLOW_RECONCILER_EXIT="${SHIP_FLOW_RECONCILER_EXIT:-}" \
+      SHIP_FLOW_GIT_LOG="${SHIP_FLOW_GIT_LOG:-}" \
+      SHIP_FLOW_REAL_GIT="${SHIP_FLOW_REAL_GIT:-}" \
       "$HOOK" "$@" > "$output" 2>&1
   ) || rc=$?
   echo "$rc"
@@ -532,11 +593,17 @@ run_reconciler_delegation_case() {
   SHIP_FLOW_STATUS_LOG="$TMP_DIR/reconciler-delegation.status.log"
   SHIP_FLOW_CLOSEOUT_RECONCILER_BIN="$TMP_DIR/reconciler-fixture"
   SHIP_FLOW_RECONCILER_LOG="$TMP_DIR/reconciler-delegation.log"
+  SHIP_FLOW_GIT_LOG="$TMP_DIR/reconciler-delegation.git.log"
+  SHIP_FLOW_REAL_GIT="$REAL_GIT"
+  HOOK_PATH="$TMP_DIR/git-spy-bin:$PATH"
   rc="$(run_hook "$repo" "$TMP_DIR/reconciler-delegation.out")"
   SHIP_FLOW_STATUS_BIN=""
   SHIP_FLOW_STATUS_LOG=""
   SHIP_FLOW_CLOSEOUT_RECONCILER_BIN=""
   SHIP_FLOW_RECONCILER_LOG=""
+  SHIP_FLOW_GIT_LOG=""
+  SHIP_FLOW_REAL_GIT=""
+  unset HOOK_PATH
   calls="$(wc -l < "$TMP_DIR/reconciler-delegation.log" 2>/dev/null || echo 0)"
   calls="$(printf '%s' "$calls" | tr -d '[:space:]')"
 
@@ -545,6 +612,18 @@ run_reconciler_delegation_case() {
   assert_contains "reconciler delegation passes workflow, entity, and direct mode" \
     '^--workflow-dir docs/ship-flow --entity flat-merged --closeout-mode direct$' \
     "$TMP_DIR/reconciler-delegation.log"
+  assert_contains "reconciler real success tuple is classified as reconciled" \
+    'Auto-fixed / reconciled' "$TMP_DIR/reconciler-delegation.out"
+  assert_not_contains "reconciler real success tuple is not classified as blocked" \
+    'Auto-fix blocked' "$TMP_DIR/reconciler-delegation.out"
+  assert_file_exists "reconciler delegation captures hook Git calls" \
+    "$TMP_DIR/reconciler-delegation.git.log"
+  assert_contains "reconciler delegation preserves Git status safety read" \
+    '^status --porcelain$' "$TMP_DIR/reconciler-delegation.git.log"
+  assert_not_contains "reconciler delegation never invokes git add" \
+    '^add([[:space:]]|$)' "$TMP_DIR/reconciler-delegation.git.log"
+  assert_not_contains "reconciler delegation never invokes git commit" \
+    '^commit([[:space:]]|$)' "$TMP_DIR/reconciler-delegation.git.log"
   assert_path_missing "reconciler delegation never invokes raw status helper" "$TMP_DIR/reconciler-delegation.status.log"
   assert_equals "reconciler delegation hook never creates its own commit" "$before_head" "$(git -C "$repo" rev-parse HEAD)"
   assert_path_exists "reconciler delegation leaves mutation ownership to spy" "${repo}/docs/ship-flow/flat-merged.md"
@@ -575,6 +654,8 @@ run_reconciler_open_noop_case() {
   assert_contains "reconciler OPEN/no-op is classified without terminal mutation" \
     'PR became OPEN during reconciliation; no terminal mutation was applied' \
     "$TMP_DIR/reconciler-open-noop.out"
+  assert_not_contains "reconciler OPEN/no-op is not duplicated as Rule A pending" \
+    '\*\*Rule A\*\*' "$TMP_DIR/reconciler-open-noop.out"
 }
 
 run_reconciler_structured_failure_case() {
@@ -608,6 +689,8 @@ run_reconciler_structured_failure_case() {
     "$TMP_DIR/reconciler-structured-failure.out"
   assert_not_contains "reconciler structured failure does not report human detail" \
     'fixture reconciled' "$TMP_DIR/reconciler-structured-failure.out"
+  assert_not_contains "reconciler structured failure is not duplicated as Rule A pending" \
+    '\*\*Rule A\*\*' "$TMP_DIR/reconciler-structured-failure.out"
 }
 
 run_reconciler_awaiting_case() {
@@ -635,6 +718,8 @@ run_reconciler_awaiting_case() {
   assert_contains "reconciler awaiting closeout PR is classified explicitly" \
     'receipt-bound closeout PR is awaiting merge; no direct terminal mutation was applied' \
     "$TMP_DIR/reconciler-awaiting.out"
+  assert_not_contains "reconciler awaiting closeout PR is not duplicated as Rule A pending" \
+    '\*\*Rule A\*\*' "$TMP_DIR/reconciler-awaiting.out"
 }
 
 run_reconciler_replay_case() {
@@ -729,6 +814,8 @@ run_reprobe_not_merged_case() {
 
   assert_exit "re-probe not merged exits success" 0 "$rc"
   assert_contains "re-probe not merged reports blocked reason" 're-probe says state=OPEN, not MERGED' "$TMP_DIR/reprobe-not-merged.out"
+  assert_not_contains "re-probe not merged is not duplicated as Rule A pending" \
+    '\*\*Rule A\*\*' "$TMP_DIR/reprobe-not-merged.out"
   assert_path_missing "re-probe not merged does not archive entity" "${repo}/docs/ship-flow/_archive/flat-merged.md"
   assert_equals "re-probe not merged leaves workflow unchanged" "$before" "$after"
 }
@@ -812,6 +899,34 @@ run_flat_and_folder_case() {
   assert_path_exists "folder entity mutation remains reconciler-owned" "${repo}/docs/ship-flow/folder-merged/index.md"
 }
 
+run_mixed_reconciler_outcomes_case() {
+  local repo="$TMP_DIR/mixed-reconciler-outcomes-repo"
+  setup_repo "$repo" execute
+  write_flat_entity "${repo}/docs/ship-flow" "flat-success" "ship" "#301"
+  write_flat_entity "${repo}/docs/ship-flow" "flat-blocked" "ship" "#302"
+  git -C "$repo" add -- docs/ship-flow/flat-success.md docs/ship-flow/flat-blocked.md
+  git -C "$repo" commit -qm "add mixed reconciler entities" -- docs/ship-flow/flat-success.md docs/ship-flow/flat-blocked.md
+  set_pr_states 301 "MERGED"
+  set_pr_states 302 "MERGED"
+
+  local rc
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN="$TMP_DIR/mixed-reconciler-fixture"
+  SHIP_FLOW_RECONCILER_LOG="$TMP_DIR/mixed-reconciler-outcomes.log"
+  rc="$(run_hook "$repo" "$TMP_DIR/mixed-reconciler-outcomes.out")"
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN=""
+  SHIP_FLOW_RECONCILER_LOG=""
+
+  assert_exit "mixed reconciler outcomes exit advisory success" 0 "$rc"
+  assert_contains "mixed reconciler outcomes report one success" \
+    'Auto-fixed / reconciled.*\(1 entity,' "$TMP_DIR/mixed-reconciler-outcomes.out"
+  assert_contains "mixed reconciler outcomes report one blocked" \
+    'Auto-fix blocked.*\(1 entity' "$TMP_DIR/mixed-reconciler-outcomes.out"
+  assert_equals "mixed reconciler outcomes invoke once per eligible record" 2 \
+    "$(wc -l < "$TMP_DIR/mixed-reconciler-outcomes.log" | tr -d '[:space:]')"
+  assert_not_contains "mixed reconciler outcomes have no duplicate Rule A pending section" \
+    '\*\*Rule A\*\*' "$TMP_DIR/mixed-reconciler-outcomes.out"
+}
+
 run_pathspec_only_commit_case() {
   local repo="$TMP_DIR/pathspec-only-commit-repo"
   setup_repo "$repo" execute
@@ -856,10 +971,13 @@ done
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
-mkdir -p "$TMP_DIR/bin" "$TMP_DIR/home" "$TMP_DIR/gh-state"
+REAL_GIT="$(command -v git)"
+mkdir -p "$TMP_DIR/bin" "$TMP_DIR/git-spy-bin" "$TMP_DIR/home" "$TMP_DIR/gh-state"
 write_fixture_gh "$TMP_DIR/bin"
 write_fixture_status_bin "$TMP_DIR/status-fixture"
 write_fixture_reconciler "$TMP_DIR/reconciler-fixture"
+write_fixture_mixed_reconciler "$TMP_DIR/mixed-reconciler-fixture"
+write_fixture_git_spy "$TMP_DIR/git-spy-bin/git"
 PATH="$TMP_DIR/bin:$PATH"
 
 # Hermetic "no spacedock" PATH: symlink every tool the hook needs, but
@@ -914,6 +1032,7 @@ else
   should_run_case rule-b-folder-drift && run_rule_b_folder_drift_case
   should_run_case unsafe-pr-states && run_unsafe_pr_states_case
   should_run_case flat-and-folder && run_flat_and_folder_case
+  should_run_case mixed-reconciler-outcomes && run_mixed_reconciler_outcomes_case
   should_run_case pathspec-only-commit && run_pathspec_only_commit_case
 fi
 

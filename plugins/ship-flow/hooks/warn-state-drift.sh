@@ -236,7 +236,7 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
       reconcile_reason="$(printf '%s\n' "$reconcile_output" | awk -F= '$1=="reason"{print substr($0,index($0,"=")+1); exit}')"
 
       case "$reconcile_rc:$reconcile_verdict:$reconcile_state:$reconcile_action" in
-        0:PROCEED:reconciled:set_done)
+        0:PROCEED:reconciled:closeout_bundle)
           auto_fixed_lines+="  - \`$slug\` — PR #$pr_num reconciled through the receipt-bound closeout transaction"$'\n'
           auto_fixed_count=$((auto_fixed_count + 1))
           ;;
@@ -263,14 +263,10 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
       esac
     done <<< "$rule_a_records"
 
-    # Subtract auto-fixed from rule_a_lines for clean "pending" reporting
-    if [ "$auto_fixed_count" -gt 0 ]; then
-      # Rebuild rule_a_lines from records that did NOT auto-fix successfully
-      # Simpler approach: zero out rule_a_lines + count, since blocked entities
-      # are already tracked in auto_fix_blocked_lines.
-      rule_a_lines=""
-      rule_a_count=0
-    fi
+    # Every eligible Rule A record was classified above as reconciled or
+    # blocked. Do not duplicate any of them in the generic pending section.
+    rule_a_lines=""
+    rule_a_count=0
   else
     # Pre-condition failed — surface single blanket reason, no per-entity loop
     auto_fix_blocked_lines+="  - auto-fix skipped for all $rule_a_count Rule A entities ($auto_fix_reason)"$'\n'
