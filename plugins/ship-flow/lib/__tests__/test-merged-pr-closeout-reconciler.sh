@@ -221,6 +221,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -n "$workflow_dir" ] || exit 2
+if [ "${SHIP_FLOW_TEST_STATUS_ABSOLUTE_PATHS:-no}" = yes ]; then
+  workflow_dir="$(cd "$workflow_dir" && pwd -P)"
+fi
 
 frontmatter_field() {
   local file="$1"
@@ -4776,6 +4779,100 @@ EOF
   if [ "$conflict_before" = "$(hash_tree "$conflict_repo/docs/ship-flow")" ]; then record_pass 'direct projection conflict preserves tree'; else record_fail 'direct projection conflict preserves tree'; fi
 }
 
+run_owner_participant_normalization_case() {
+  local repo="$TMP_DIR/owner-participant-normalization-repo"
+  local fixture="$TMP_DIR/owner-participant-normalization.env"
+  local output="$TMP_DIR/owner-participant-normalization.out"
+  local receipt rc=0 shared_repo shared_fixture shared_output shared_source shared_anchor
+
+  prepare_full_d1_repo "$repo" "$fixture"
+  (
+    cd "$repo"
+    SHIP_FLOW_TEST_STATUS_ABSOLUTE_PATHS=yes STATUS_BIN="$STATUS_BIN" \
+      "$HELPER" --workflow-dir docs/ship-flow \
+      --entity merged-fixture-entity \
+      --pr-provider fixture \
+      --pr-fixture "$fixture" >"$output" 2>&1
+  ) || rc=$?
+
+  if [ "$rc" != 0 ]; then sed 's/^/    helper: /' "$output"; fi
+  assert_exit 'relative workflow with absolute resolved owner applies' 0 "$rc"
+  receipt="$(find "$repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  if [ -n "$receipt" ] && python3 - "$receipt" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+proof=r["ownership_proof"]
+raise SystemExit(0 if proof["unique_entity_matches"] == 1 and proof["participant_entities"] == [] else 1)
+PY
+  then
+    record_pass 'single owner is not rendered as its own participant'
+  else
+    record_fail 'single owner is not rendered as its own participant'
+  fi
+
+  shared_repo="$TMP_DIR/shared-owner-participant-normalization-repo"
+  shared_fixture="$TMP_DIR/shared-owner-participant-normalization.env"
+  shared_output="$TMP_DIR/shared-owner-participant-normalization.out"
+  prepare_full_d1_repo "$shared_repo" "$shared_fixture"
+  git -C "$shared_repo" checkout -q ship-merged-fixture-entity
+  python3 - "$shared_repo/docs/ship-flow/merged-fixture-entity/index.md" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); lines=p.read_text().splitlines()
+closing=lines.index("---", 1)
+lines.insert(closing, "closeout_owner: true")
+p.write_text("\n".join(lines)+"\n")
+PY
+  write_entity "$shared_repo/docs/ship-flow" shared-participant ship '#131' ''
+  git -C "$shared_repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/shared-participant/index.md
+  git -C "$shared_repo" commit -qm 'implementation: declare shared closeout ownership'
+  shared_source="$(git -C "$shared_repo" rev-parse HEAD)"
+  git -C "$shared_repo" checkout -q main
+  git -C "$shared_repo" cherry-pick "$shared_source" >/dev/null
+  shared_anchor="$(git -C "$shared_repo" rev-parse HEAD)"
+  python3 - "$shared_fixture" "$shared_source" "$shared_anchor" <<'PY'
+import pathlib,sys
+p=pathlib.Path(sys.argv[1]); source,anchor=sys.argv[2:]
+lines=[]
+for line in p.read_text().splitlines():
+    if line.startswith("landing_anchor="):
+        line=f"landing_anchor={anchor}"
+    elif line.startswith("source_commits="):
+        line=f"{line},{source}"
+    elif line.startswith("pr_commit_count="):
+        line="pr_commit_count=3"
+    lines.append(line)
+p.write_text("\n".join(lines)+"\n")
+PY
+  rc=0
+  (
+    cd "$shared_repo"
+    SHIP_FLOW_TEST_STATUS_ABSOLUTE_PATHS=yes STATUS_BIN="$STATUS_BIN" \
+      "$HELPER" --workflow-dir docs/ship-flow \
+      --entity merged-fixture-entity \
+      --pr-provider fixture \
+      --pr-fixture "$shared_fixture" >"$shared_output" 2>&1
+  ) || rc=$?
+
+  if [ "$rc" != 0 ]; then sed 's/^/    helper: /' "$shared_output"; fi
+  assert_exit 'relative shared workflow with absolute resolved owner applies' 0 "$rc"
+  receipt="$(find "$shared_repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  if [ -n "$receipt" ] && [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["ownership_proof"]["unique_entity_matches"])' "$receipt")" = 2 ]; then
+    record_pass 'shared receipt counts owner plus participant'
+  else
+    record_fail 'shared receipt counts owner plus participant'
+  fi
+  if [ -n "$receipt" ] && python3 - "$receipt" <<'PY'
+import json,sys
+participants=json.load(open(sys.argv[1]))["ownership_proof"]["participant_entities"]
+raise SystemExit(0 if participants == ["shared-participant"] else 1)
+PY
+  then
+    record_pass 'shared receipt lists only the non-owner participant'
+  else
+    record_fail 'shared receipt lists only the non-owner participant'
+  fi
+}
+
 run_scope_guard() {
   assert_not_contains "helper has no forbidden merge/delete mutation commands" 'git branch -D|git push --delete|gh pr merge|git merge' "$HELPER"
 }
@@ -5136,6 +5233,8 @@ else
         ;;
       *) record_fail "unknown SHIP_FLOW_R12_ONLY selection" ;;
     esac
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = owner-participant-normalization ]; then
+    run_owner_participant_normalization_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = provider-pagination ]; then
     run_provider_pagination_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r11-b1-b2-b3 ]; then

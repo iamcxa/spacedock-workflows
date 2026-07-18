@@ -1083,8 +1083,9 @@ resolve_merge_method_intent() {
 }
 
 resolve_closeout_ownership() {
-  local candidate candidate_pr normalized owner slug
+  local candidate candidate_path candidate_pr normalized owner slug entity_canonical
   local matches=0 owners=0 owner_path="" participants=()
+  entity_canonical="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$entity_path")"
   while IFS= read -r candidate; do
     valid_frontmatter "$candidate" || reject_input closeout-stage-artifacts-incoherent "ownership candidate has malformed frontmatter"
     candidate_pr="$(read_frontmatter_field "$candidate" pr)"
@@ -1092,17 +1093,21 @@ resolve_closeout_ownership() {
     [ "$normalized" = "$pr_number" ] || continue
     matches=$((matches + 1))
     owner="$(read_frontmatter_field "$candidate" closeout_owner)"
-    if [ "$owner" = true ]; then owners=$((owners + 1)); owner_path="$candidate"; fi
+    if [ "$owner" = true ]; then
+      owners=$((owners + 1))
+      owner_path="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$candidate")"
+    fi
   done < <(find "$workflow_dir" -mindepth 2 -maxdepth 2 -type f -name index.md ! -path '*/_*/*' | sort)
   [ "$matches" -gt 0 ] || reject_input closeout-owner-not-unique "implementation PR has no owning entity"
   if [ "$matches" -eq 1 ]; then
-    owner_path="$entity_path"
+    owner_path="$entity_canonical"
   elif [ "$owners" -ne 1 ]; then
     reject_input closeout-owner-not-unique "shared implementation PR must declare exactly one closeout owner"
   fi
-  [ "$owner_path" = "$entity_path" ] || reject_input closeout-indirect-landing-unowned "requested entity is not the declared closeout owner"
+  [ "$owner_path" = "$entity_canonical" ] || reject_input closeout-indirect-landing-unowned "requested entity is not the declared closeout owner"
   while IFS= read -r candidate; do
-    [ "$candidate" = "$owner_path" ] && continue
+    candidate_path="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$candidate")"
+    [ "$candidate_path" = "$owner_path" ] && continue
     candidate_pr="$(read_frontmatter_field "$candidate" pr)"
     normalized="$(normalize_pr_number "$candidate_pr" || true)"
     [ "$normalized" = "$pr_number" ] || continue
