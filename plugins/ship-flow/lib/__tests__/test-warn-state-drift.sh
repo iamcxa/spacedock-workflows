@@ -7,6 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
 HOOK="${PLUGIN_ROOT}/hooks/warn-state-drift.sh"
+HOOKS_JSON="${PLUGIN_ROOT}/hooks/hooks.json"
+INVARIANTS_DOC="${PLUGIN_ROOT}/INVARIANTS.md"
 PR_MERGE_PATHS_DOC="${PLUGIN_ROOT}/references/pr-merge-paths.md"
 
 PASS=0
@@ -211,6 +213,7 @@ pr: ${pr}
 worktree: ${worktree}
 completed:
 verdict:
+archived:
 ---
 
 # ${slug}
@@ -234,16 +237,29 @@ pr: ${pr}
 worktree: ${worktree}
 completed:
 verdict:
+archived:
 ---
 
 # ${slug}
 EOF
 }
 
+write_folder_closeout_evidence() {
+  local workflow_dir="$1"
+  local slug="$2"
+  local pr="$3"
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' \
+    > "${workflow_dir}/${slug}/review.md"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' \
+    '- Preserve SessionStart closeout evidence.' '' '### Verdict' \
+    'merge_method_intent: rebase' "pr: \"${pr}\"" \
+    > "${workflow_dir}/${slug}/ship.md"
+}
+
 setup_repo() {
   local repo="$1"
   local auto_fix="${2:-off}"
-  git init -q "$repo"
+  git init -q -b main "$repo"
   git -C "$repo" config user.email test@example.test
   git -C "$repo" config user.name "Ship Flow Test"
   mkdir -p "${repo}/docs/ship-flow"
@@ -286,8 +302,10 @@ if [ -n "${SHIP_FLOW_STATUS_LOG:-}" ]; then
 fi
 
 workflow_dir=""
+include_archived=no
 cmd=""
 slug=""
+ref=""
 
 # Repoint: invoked as `spacedock status <args>` — skip leading subcommand.
 [ "${1:-}" = status ] && shift
@@ -296,6 +314,15 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --workflow-dir)
       workflow_dir="$2"
+      shift 2
+      ;;
+    --archived)
+      include_archived=yes
+      shift
+      ;;
+    --resolve)
+      cmd=resolve
+      ref="$2"
       shift 2
       ;;
     --set)
@@ -318,10 +345,20 @@ done
 
 [ -n "$workflow_dir" ] || exit 2
 [ -n "$cmd" ] || exit 2
-[ -n "$slug" ] || exit 2
 
 entity_path_for_slug() {
   local slug_value="$1"
+  if [ "$include_archived" = yes ]; then
+    if [ -f "${workflow_dir}/_archive/${slug_value}/index.md" ]; then
+      printf '%s\n' "${workflow_dir}/_archive/${slug_value}/index.md"
+      return
+    fi
+    if [ -f "${workflow_dir}/_archive/${slug_value}.md" ]; then
+      printf '%s\n' "${workflow_dir}/_archive/${slug_value}.md"
+      return
+    fi
+    return 1
+  fi
   if [ -f "${workflow_dir}/${slug_value}.md" ]; then
     printf '%s\n' "${workflow_dir}/${slug_value}.md"
     return
@@ -353,7 +390,13 @@ update_frontmatter_field() {
 }
 
 case "$cmd" in
+  resolve)
+    slug="${ref#archive:}"
+    path="$(entity_path_for_slug "$slug")"
+    printf 'slug=%s path=%s\n' "$slug" "$path"
+    ;;
   set)
+    [ -n "$slug" ] || exit 2
     path="$(entity_path_for_slug "$slug")"
     for pair in "$@"; do
       key="${pair%%=*}"
@@ -362,7 +405,9 @@ case "$cmd" in
     done
     ;;
   archive)
+    [ -n "$slug" ] || exit 2
     path="$(entity_path_for_slug "$slug")"
+    update_frontmatter_field "$path" archived "2026-07-15T00:01:00Z"
     mkdir -p "${workflow_dir}/_archive"
     case "$path" in
       "${workflow_dir}/${slug}.md")
@@ -467,6 +512,20 @@ EOF
   chmod +x "$bin"
 }
 
+write_fixture_actual_reconciler_wrapper() {
+  local bin="$1"
+  cat > "$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "$SHIP_FLOW_RECONCILER_LOG"
+exec "$SHIP_FLOW_ACTUAL_RECONCILER" "$@" \
+  --pr-provider fixture \
+  --pr-fixture "$SHIP_FLOW_ACTUAL_PROVIDER_FIXTURE"
+EOF
+  chmod +x "$bin"
+}
+
 run_hook() {
   local repo="$1"
   local output="$2"
@@ -489,6 +548,8 @@ run_hook() {
       SHIP_FLOW_RECONCILER_EXIT="${SHIP_FLOW_RECONCILER_EXIT:-}" \
       SHIP_FLOW_GIT_LOG="${SHIP_FLOW_GIT_LOG:-}" \
       SHIP_FLOW_REAL_GIT="${SHIP_FLOW_REAL_GIT:-}" \
+      SHIP_FLOW_ACTUAL_RECONCILER="${SHIP_FLOW_ACTUAL_RECONCILER:-}" \
+      SHIP_FLOW_ACTUAL_PROVIDER_FIXTURE="${SHIP_FLOW_ACTUAL_PROVIDER_FIXTURE:-}" \
       "$HOOK" "$@" > "$output" 2>&1
   ) || rc=$?
   echo "$rc"
@@ -520,14 +581,212 @@ run_harness_smoke_case() {
 }
 
 run_doc_contract_case() {
+  if python3 - "$HOOKS_JSON" <<'PY'
+import json,sys
+hooks=json.load(open(sys.argv[1]))["hooks"]["SessionStart"]
+raise SystemExit(0 if hooks[0]["hooks"][0]["timeout"] == 120 else 1)
+PY
+  then
+    record_pass "SessionStart hook timeout is 120 seconds"
+  else
+    record_fail "SessionStart hook timeout is 120 seconds"
+  fi
+  assert_contains "hook bounds each reconciler child to 90 seconds" \
+    'timeout 90 "\$reconciler_bin"' "$HOOK"
   assert_contains "merge-path doc converges SessionStart on receipt-bound reconciler" \
-    'SessionStart Rule A delegates exactly one `--closeout-mode direct` call to `bin/merged-pr-closeout-reconciler.sh`' \
+    'delegates exactly one `--closeout-mode direct` call' \
     "$PR_MERGE_PATHS_DOC"
+  assert_contains "merge-path doc names the receipt-bound reconciler target" \
+    '`bin/merged-pr-closeout-reconciler.sh`' "$PR_MERGE_PATHS_DOC"
+  assert_contains "merge-path doc records one canonical folder per SessionStart" \
+    'at most one canonical folder entity per SessionStart' "$PR_MERGE_PATHS_DOC"
+  assert_contains "merge-path doc records flat warning-only compatibility" \
+    'Flat legacy `.md` entities remain warning-only' "$PR_MERGE_PATHS_DOC"
   assert_contains "merge-path doc keeps receipt as sole idempotency sentinel" \
     'The closeout receipt remains the sole idempotency sentinel' \
     "$PR_MERGE_PATHS_DOC"
   assert_not_contains "merge-path doc does not add a second sentinel or deferred terminal state" \
     'pr-merge:[0-9]+|debrief_due' "$PR_MERGE_PATHS_DOC"
+  assert_contains "canonical invariants record receipt-bound SessionStart delegation" \
+    'v1.3.0.*receipt-bound closeout reconciler' "$INVARIANTS_DOC"
+  assert_contains "canonical invariants record 120/90 second bounds" \
+    '120-second SessionStart budget.*90-second child bound' "$INVARIANTS_DOC"
+  assert_contains "canonical invariants record one folder and flat warning-only" \
+    'one canonical folder entity per SessionStart.*flat legacy entities remain warning-only' "$INVARIANTS_DOC"
+  assert_contains "canonical invariants forbid hook-owned terminal mutation" \
+    'never owns status, archive, staging, or commit mutation' "$INVARIANTS_DOC"
+}
+
+run_flat_merged_warning_only_case() {
+  local repo="$TMP_DIR/flat-merged-warning-only-repo"
+  setup_repo "$repo" execute
+  write_flat_entity "${repo}/docs/ship-flow" "flat-legacy" "ship" "#131"
+  git -C "$repo" add -- docs/ship-flow/flat-legacy.md
+  git -C "$repo" commit -qm "add flat legacy entity" -- docs/ship-flow/flat-legacy.md
+  set_pr_states 131 "MERGED"
+
+  local rc
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN="$TMP_DIR/reconciler-fixture"
+  SHIP_FLOW_RECONCILER_LOG="$TMP_DIR/flat-merged-warning-only.log"
+  rc="$(run_hook "$repo" "$TMP_DIR/flat-merged-warning-only.out")"
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN=""
+  SHIP_FLOW_RECONCILER_LOG=""
+
+  assert_exit "flat merged warning-only exits advisory success" 0 "$rc"
+  assert_path_missing "flat merged warning-only invokes zero reconciler calls" \
+    "$TMP_DIR/flat-merged-warning-only.log"
+  assert_contains "flat merged warning-only remains Rule A pending" \
+    'flat-legacy.*PR #131 MERGED' "$TMP_DIR/flat-merged-warning-only.out"
+  assert_contains "flat merged warning-only explains zero-call compatibility" \
+    'flat legacy entity; warning-only, no reconciler call' \
+    "$TMP_DIR/flat-merged-warning-only.out"
+  assert_contains "flat merged warning-only requires migration before reconciliation" \
+    'migrate them to the canonical folder artifact contract before reconciliation' \
+    "$TMP_DIR/flat-merged-warning-only.out"
+  assert_not_contains "flat merged warning-only is not given a direct reconciler instruction" \
+    'Before new execute work, run .*merged-pr-closeout-reconciler.*for each' \
+    "$TMP_DIR/flat-merged-warning-only.out"
+  assert_path_exists "flat merged warning-only remains active" \
+    "${repo}/docs/ship-flow/flat-legacy.md"
+}
+
+run_one_folder_per_session_case() {
+  local repo="$TMP_DIR/one-folder-per-session-repo"
+  setup_repo "$repo" execute
+  write_folder_entity "${repo}/docs/ship-flow" "folder-first" "ship" "#301"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-first" "#301"
+  write_folder_entity "${repo}/docs/ship-flow" "folder-second" "ship" "#302"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-second" "#302"
+  git -C "$repo" add -- docs/ship-flow/folder-first docs/ship-flow/folder-second
+  git -C "$repo" commit -qm "add two canonical folder entities" -- docs/ship-flow/folder-first docs/ship-flow/folder-second
+  set_pr_states 301 "MERGED"
+  set_pr_states 302 "MERGED"
+
+  local rc
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN="$TMP_DIR/reconciler-fixture"
+  SHIP_FLOW_RECONCILER_LOG="$TMP_DIR/one-folder-per-session.log"
+  rc="$(run_hook "$repo" "$TMP_DIR/one-folder-per-session.out")"
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN=""
+  SHIP_FLOW_RECONCILER_LOG=""
+
+  assert_exit "one folder per SessionStart exits advisory success" 0 "$rc"
+  assert_equals "one folder per SessionStart invokes exactly one reconciler" 1 \
+    "$(wc -l < "$TMP_DIR/one-folder-per-session.log" | tr -d '[:space:]')"
+  assert_contains "one folder per SessionStart defers the other folder" \
+    'folder-second.*PR #302 MERGED' "$TMP_DIR/one-folder-per-session.out"
+  assert_contains "one folder per SessionStart preserves Rule A pending section" \
+    '\*\*Rule A\*\*' "$TMP_DIR/one-folder-per-session.out"
+}
+
+run_reconciler_timeout_case() {
+  local repo="$TMP_DIR/reconciler-timeout-repo"
+  setup_repo "$repo" execute
+  write_folder_entity "${repo}/docs/ship-flow" "folder-timeout" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-timeout" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-timeout
+  git -C "$repo" commit -qm "add timeout folder entity" -- docs/ship-flow/folder-timeout
+  set_pr_states 131 "MERGED"
+
+  local rc
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN="$TMP_DIR/reconciler-fixture"
+  SHIP_FLOW_RECONCILER_LOG="$TMP_DIR/reconciler-timeout.log"
+  SHIP_FLOW_RECONCILER_EXIT=124
+  rc="$(run_hook "$repo" "$TMP_DIR/reconciler-timeout.out")"
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN=""
+  SHIP_FLOW_RECONCILER_LOG=""
+  SHIP_FLOW_RECONCILER_EXIT=""
+
+  assert_exit "reconciler timeout remains advisory" 0 "$rc"
+  assert_contains "reconciler timeout is a stable fail-closed classification" \
+    'reconciler timed out \(state=.*action=.*reason=timeout, exit=124\)' \
+    "$TMP_DIR/reconciler-timeout.out"
+  assert_not_contains "reconciler timeout never claims success" \
+    'Auto-fixed / reconciled' "$TMP_DIR/reconciler-timeout.out"
+}
+
+prepare_actual_reconciler_repo() {
+  local repo="$1"
+  local fixture="$2"
+  local base source_one source_two anchor
+
+  setup_repo "$repo" execute
+  mkdir -p "$repo/docs/ship-flow/_mods"
+  printf '%s\n' '---' 'name: pr-merge' 'standing: true' '---' '' \
+    '## Agent Prompt' '' 'Fixture merge hook.' \
+    > "$repo/docs/ship-flow/_mods/pr-merge.md"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' \
+    '| Entity | Title |' '| --- | --- |' \
+    '| folder-integrated | folder-integrated |' '<!-- /section:now -->' '' \
+    '## Shipped' '<!-- section:shipped -->' \
+    '| Entity | Title | Shipped |' '| --- | --- | --- |' \
+    '<!-- /section:shipped -->' > "$repo/ROADMAP.md"
+  git -C "$repo" add -- ROADMAP.md docs/ship-flow/_mods/pr-merge.md
+  git -C "$repo" commit -qm "fixture: add closeout contract"
+  base="$(git -C "$repo" rev-parse HEAD)"
+
+  git -C "$repo" checkout -qb integration-topic "$base"
+  write_folder_entity "$repo/docs/ship-flow" "folder-integrated" "ship" "#131"
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' \
+    > "$repo/docs/ship-flow/folder-integrated/review.md"
+  git -C "$repo" add -- docs/ship-flow/folder-integrated/index.md docs/ship-flow/folder-integrated/review.md
+  git -C "$repo" commit -qm "implementation: add reviewed entity"
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' \
+    '- Preserve actual SessionStart integration evidence.' '' \
+    '### Verdict' 'merge_method_intent: rebase' 'pr: "#131"' \
+    > "$repo/docs/ship-flow/folder-integrated/ship.md"
+  git -C "$repo" add -- docs/ship-flow/folder-integrated/ship.md
+  git -C "$repo" commit -qm "implementation: add ship evidence"
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" "$source_two" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' \
+    'merged_at=2026-07-15T00:00:00Z' 'head_ref=integration-topic' \
+    'base_ref=main' 'url=https://github.com/example/repo/pull/131' \
+    'repository=example/repo' "landing_anchor=$anchor" \
+    "source_commits=$source_one,$source_two" 'pr_commit_count=2' > "$fixture"
+}
+
+run_actual_reconciler_folder_case() {
+  local repo="$TMP_DIR/actual-reconciler-folder-repo"
+  local fixture="$TMP_DIR/actual-reconciler-provider.env"
+  local before rc receipt
+  prepare_actual_reconciler_repo "$repo" "$fixture"
+  set_pr_states 131 "MERGED"
+  before="$(git -C "$repo" rev-parse HEAD)"
+
+  SHIP_FLOW_STATUS_BIN="$TMP_DIR/status-fixture"
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN="$TMP_DIR/actual-reconciler-wrapper"
+  SHIP_FLOW_RECONCILER_LOG="$TMP_DIR/actual-reconciler-folder.log"
+  SHIP_FLOW_ACTUAL_RECONCILER="$PLUGIN_ROOT/bin/merged-pr-closeout-reconciler.sh"
+  SHIP_FLOW_ACTUAL_PROVIDER_FIXTURE="$fixture"
+  rc="$(run_hook "$repo" "$TMP_DIR/actual-reconciler-folder.out")"
+  SHIP_FLOW_STATUS_BIN=""
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN=""
+  SHIP_FLOW_RECONCILER_LOG=""
+  SHIP_FLOW_ACTUAL_RECONCILER=""
+  SHIP_FLOW_ACTUAL_PROVIDER_FIXTURE=""
+
+  if ! grep -q 'Auto-fixed / reconciled' "$TMP_DIR/actual-reconciler-folder.out"; then
+    sed 's/^/    actual-reconciler: /' "$TMP_DIR/actual-reconciler-folder.out"
+  fi
+  assert_exit "actual reconciler folder hook exits advisory success" 0 "$rc"
+  assert_contains "actual reconciler folder is classified as reconciled" \
+    'Auto-fixed / reconciled' "$TMP_DIR/actual-reconciler-folder.out"
+  assert_equals "actual reconciler folder creates exactly one terminal commit" 1 \
+    "$(git -C "$repo" rev-list --count "$before..HEAD")"
+  assert_path_missing "actual reconciler folder removes active entity" \
+    "$repo/docs/ship-flow/folder-integrated"
+  assert_file_exists "actual reconciler folder archives canonical index" \
+    "$repo/docs/ship-flow/_archive/folder-integrated/index.md"
+  receipt="$(find "$repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  if [ -n "$receipt" ]; then
+    record_pass "actual reconciler folder lands receipt sentinel"
+  else
+    record_fail "actual reconciler folder lands receipt sentinel"
+  fi
 }
 
 run_auto_fix_off_case() {
@@ -558,9 +817,10 @@ run_auto_fix_off_case() {
 run_execute_merged_case() {
   local repo="$TMP_DIR/execute-merged-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   set_pr_states 131 "MERGED"
 
   local before_head rc
@@ -576,15 +836,16 @@ run_execute_merged_case() {
   assert_exit "execute merged exits success" 0 "$rc"
   assert_contains "execute merged reports reconciled" 'Auto-fixed / reconciled' "$TMP_DIR/execute-merged.out"
   assert_equals "execute merged leaves commit ownership to reconciler" "$before_head" "$(git -C "$repo" rev-parse HEAD)"
-  assert_path_exists "execute merged leaves fixture entity active" "${repo}/docs/ship-flow/flat-merged.md"
+  assert_path_exists "execute merged leaves fixture entity active" "${repo}/docs/ship-flow/folder-merged/index.md"
 }
 
 run_reconciler_delegation_case() {
   local repo="$TMP_DIR/reconciler-delegation-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   set_pr_states 131 "MERGED"
 
   local before_head rc calls
@@ -610,7 +871,7 @@ run_reconciler_delegation_case() {
   assert_exit "reconciler delegation exits success" 0 "$rc"
   assert_equals "reconciler delegation invokes reconciler exactly once" 1 "$calls"
   assert_contains "reconciler delegation passes workflow, entity, and direct mode" \
-    '^--workflow-dir docs/ship-flow --entity flat-merged --closeout-mode direct$' \
+    '^--workflow-dir docs/ship-flow --entity folder-merged --closeout-mode direct$' \
     "$TMP_DIR/reconciler-delegation.log"
   assert_contains "reconciler real success tuple is classified as reconciled" \
     'Auto-fixed / reconciled' "$TMP_DIR/reconciler-delegation.out"
@@ -626,15 +887,16 @@ run_reconciler_delegation_case() {
     '^commit([[:space:]]|$)' "$TMP_DIR/reconciler-delegation.git.log"
   assert_path_missing "reconciler delegation never invokes raw status helper" "$TMP_DIR/reconciler-delegation.status.log"
   assert_equals "reconciler delegation hook never creates its own commit" "$before_head" "$(git -C "$repo" rev-parse HEAD)"
-  assert_path_exists "reconciler delegation leaves mutation ownership to spy" "${repo}/docs/ship-flow/flat-merged.md"
+  assert_path_exists "reconciler delegation leaves mutation ownership to spy" "${repo}/docs/ship-flow/folder-merged/index.md"
 }
 
 run_reconciler_open_noop_case() {
   local repo="$TMP_DIR/reconciler-open-noop-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   set_pr_states 131 "MERGED"
 
   local rc
@@ -661,9 +923,10 @@ run_reconciler_open_noop_case() {
 run_reconciler_structured_failure_case() {
   local repo="$TMP_DIR/reconciler-structured-failure-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   set_pr_states 131 "MERGED"
 
   local rc
@@ -696,9 +959,10 @@ run_reconciler_structured_failure_case() {
 run_reconciler_awaiting_case() {
   local repo="$TMP_DIR/reconciler-awaiting-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   set_pr_states 131 "MERGED"
 
   local rc
@@ -725,9 +989,10 @@ run_reconciler_awaiting_case() {
 run_reconciler_replay_case() {
   local repo="$TMP_DIR/reconciler-replay-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   set_pr_states 131 "MERGED"
 
   local rc
@@ -752,9 +1017,10 @@ run_reconciler_replay_case() {
 run_dirty_tree_case() {
   local repo="$TMP_DIR/dirty-tree-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   echo "dirty" > "${repo}/dirty.txt"
   set_pr_states 131 "MERGED"
 
@@ -767,17 +1033,18 @@ run_dirty_tree_case() {
 
   assert_exit "dirty tree exits success" 0 "$rc"
   assert_contains "dirty tree reports blocked reason" 'working tree has uncommitted changes' "$TMP_DIR/dirty-tree.out"
-  assert_path_exists "dirty tree keeps active entity" "${repo}/docs/ship-flow/flat-merged.md"
-  assert_path_missing "dirty tree does not archive entity" "${repo}/docs/ship-flow/_archive/flat-merged.md"
+  assert_path_exists "dirty tree keeps active entity" "${repo}/docs/ship-flow/folder-merged/index.md"
+  assert_path_missing "dirty tree does not archive entity" "${repo}/docs/ship-flow/_archive/folder-merged/index.md"
   assert_equals "dirty tree leaves workflow unchanged" "$before" "$after"
 }
 
 run_missing_helper_case() {
   local repo="$TMP_DIR/missing-helper-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   set_pr_states 131 "MERGED"
 
   local before after rc
@@ -793,16 +1060,17 @@ run_missing_helper_case() {
   assert_contains "missing helper reports reconciler machine reason" \
     'reconciler failed \(verdict=REJECT, reason=missing-status-helper, exit=2\)' \
     "$TMP_DIR/missing-helper.out"
-  assert_path_missing "missing helper does not archive entity" "${repo}/docs/ship-flow/_archive/flat-merged.md"
+  assert_path_missing "missing helper does not archive entity" "${repo}/docs/ship-flow/_archive/folder-merged/index.md"
   assert_equals "missing helper leaves workflow unchanged" "$before" "$after"
 }
 
 run_reprobe_not_merged_case() {
   local repo="$TMP_DIR/reprobe-not-merged-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-merged" "ship" "#131"
-  git -C "$repo" add -- docs/ship-flow/flat-merged.md
-  git -C "$repo" commit -qm "add flat merged entity" -- docs/ship-flow/flat-merged.md
+  write_folder_entity "${repo}/docs/ship-flow" "folder-merged" "ship" "#131"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "folder-merged" "#131"
+  git -C "$repo" add -- docs/ship-flow/folder-merged
+  git -C "$repo" commit -qm "add canonical merged entity" -- docs/ship-flow/folder-merged
   set_pr_states 131 "MERGED,OPEN"
 
   local before after rc
@@ -816,7 +1084,7 @@ run_reprobe_not_merged_case() {
   assert_contains "re-probe not merged reports blocked reason" 're-probe says state=OPEN, not MERGED' "$TMP_DIR/reprobe-not-merged.out"
   assert_not_contains "re-probe not merged is not duplicated as Rule A pending" \
     '\*\*Rule A\*\*' "$TMP_DIR/reprobe-not-merged.out"
-  assert_path_missing "re-probe not merged does not archive entity" "${repo}/docs/ship-flow/_archive/flat-merged.md"
+  assert_path_missing "re-probe not merged does not archive entity" "${repo}/docs/ship-flow/_archive/folder-merged/index.md"
   assert_equals "re-probe not merged leaves workflow unchanged" "$before" "$after"
 }
 
@@ -894,7 +1162,7 @@ run_flat_and_folder_case() {
   assert_exit "flat and folder exits success" 0 "$rc"
   assert_contains "flat and folder reports flat reconciliation" 'flat-merged.*PR #301' "$TMP_DIR/flat-and-folder.out"
   assert_contains "flat and folder reports folder reconciliation" 'folder-merged.*PR #302' "$TMP_DIR/flat-and-folder.out"
-  assert_equals "flat and folder invoke once per eligible entity" 2 "$(wc -l < "$TMP_DIR/flat-and-folder.reconciler.log" | tr -d '[:space:]')"
+  assert_equals "flat and folder invoke only for canonical folder" 1 "$(wc -l < "$TMP_DIR/flat-and-folder.reconciler.log" | tr -d '[:space:]')"
   assert_path_exists "flat entity mutation remains reconciler-owned" "${repo}/docs/ship-flow/flat-merged.md"
   assert_path_exists "folder entity mutation remains reconciler-owned" "${repo}/docs/ship-flow/folder-merged/index.md"
 }
@@ -902,10 +1170,12 @@ run_flat_and_folder_case() {
 run_mixed_reconciler_outcomes_case() {
   local repo="$TMP_DIR/mixed-reconciler-outcomes-repo"
   setup_repo "$repo" execute
-  write_flat_entity "${repo}/docs/ship-flow" "flat-success" "ship" "#301"
-  write_flat_entity "${repo}/docs/ship-flow" "flat-blocked" "ship" "#302"
-  git -C "$repo" add -- docs/ship-flow/flat-success.md docs/ship-flow/flat-blocked.md
-  git -C "$repo" commit -qm "add mixed reconciler entities" -- docs/ship-flow/flat-success.md docs/ship-flow/flat-blocked.md
+  write_folder_entity "${repo}/docs/ship-flow" "flat-success" "ship" "#301"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "flat-success" "#301"
+  write_folder_entity "${repo}/docs/ship-flow" "flat-blocked" "ship" "#302"
+  write_folder_closeout_evidence "${repo}/docs/ship-flow" "flat-blocked" "#302"
+  git -C "$repo" add -- docs/ship-flow/flat-success docs/ship-flow/flat-blocked
+  git -C "$repo" commit -qm "add mixed canonical entities" -- docs/ship-flow/flat-success docs/ship-flow/flat-blocked
   set_pr_states 301 "MERGED"
   set_pr_states 302 "MERGED"
 
@@ -917,14 +1187,12 @@ run_mixed_reconciler_outcomes_case() {
   SHIP_FLOW_RECONCILER_LOG=""
 
   assert_exit "mixed reconciler outcomes exit advisory success" 0 "$rc"
-  assert_contains "mixed reconciler outcomes report one success" \
-    'Auto-fixed / reconciled.*\(1 entity,' "$TMP_DIR/mixed-reconciler-outcomes.out"
-  assert_contains "mixed reconciler outcomes report one blocked" \
-    'Auto-fix blocked.*\(1 entity' "$TMP_DIR/mixed-reconciler-outcomes.out"
-  assert_equals "mixed reconciler outcomes invoke once per eligible record" 2 \
+  assert_contains "mixed reconciler outcomes classify the selected folder" \
+    'Auto-fixed / reconciled|Auto-fix blocked' "$TMP_DIR/mixed-reconciler-outcomes.out"
+  assert_equals "mixed reconciler outcomes invoke only one eligible record" 1 \
     "$(wc -l < "$TMP_DIR/mixed-reconciler-outcomes.log" | tr -d '[:space:]')"
-  assert_not_contains "mixed reconciler outcomes have no duplicate Rule A pending section" \
-    '\*\*Rule A\*\*' "$TMP_DIR/mixed-reconciler-outcomes.out"
+  assert_contains "mixed reconciler outcomes defer the unselected folder" \
+    '\*\*Rule A\*\*.*1 entity' "$TMP_DIR/mixed-reconciler-outcomes.out"
 }
 
 run_pathspec_only_commit_case() {
@@ -947,7 +1215,8 @@ run_pathspec_only_commit_case() {
   SHIP_FLOW_RECONCILER_LOG=""
 
   assert_exit "pathspec-only commit exits success" 0 "$rc"
-  assert_contains "pathspec-only commit reports reconciled" 'Auto-fixed / reconciled' "$TMP_DIR/pathspec-only-commit.out"
+  assert_contains "pathspec-only flat entity remains pending" 'flat-merged.*PR #401 MERGED' "$TMP_DIR/pathspec-only-commit.out"
+  assert_path_missing "pathspec-only flat entity invokes zero reconciler calls" "$TMP_DIR/pathspec-only-commit.reconciler.log"
   assert_equals "pathspec-only hook does not create a direct commit" "$before_head" "$(git -C "$repo" rev-parse HEAD)"
   if [ -z "$(git -C "$repo" status --porcelain -- tracked.txt)" ]; then
     record_pass "delegation leaves unrelated tracked file untouched"
@@ -978,6 +1247,7 @@ write_fixture_status_bin "$TMP_DIR/status-fixture"
 write_fixture_reconciler "$TMP_DIR/reconciler-fixture"
 write_fixture_mixed_reconciler "$TMP_DIR/mixed-reconciler-fixture"
 write_fixture_git_spy "$TMP_DIR/git-spy-bin/git"
+write_fixture_actual_reconciler_wrapper "$TMP_DIR/actual-reconciler-wrapper"
 PATH="$TMP_DIR/bin:$PATH"
 
 # Hermetic "no spacedock" PATH: symlink every tool the hook needs, but
@@ -1019,6 +1289,10 @@ else
   record_pass "hook exists and is executable"
   should_run_case harness-smoke && run_harness_smoke_case
   should_run_case doc-contract && run_doc_contract_case
+  should_run_case flat-merged-warning-only && run_flat_merged_warning_only_case
+  should_run_case one-folder-per-session && run_one_folder_per_session_case
+  should_run_case reconciler-timeout && run_reconciler_timeout_case
+  should_run_case actual-reconciler-folder && run_actual_reconciler_folder_case
   should_run_case auto-fix-off && run_auto_fix_off_case
   should_run_case execute-merged && run_execute_merged_case
   should_run_case reconciler-delegation && run_reconciler_delegation_case

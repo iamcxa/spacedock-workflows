@@ -18,10 +18,10 @@
 # Auto-fix (v1.3.0; D1 originated in strengthening-roadmap-2026-05.md):
 #
 #   Workflow README frontmatter MAY declare `auto_fix: off | execute`
-#   (default: `off`). When `execute`, this hook delegates each Rule A entity
-#   to the receipt-bound closeout reconciler after a safety re-probe (working
-#   tree clean + PR.state == MERGED still holds at exec time). Rule B is NEVER
-#   auto-fixed (status-update semantics nuanced; surfaces as WARN).
+#   (default: `off`). When `execute`, this hook delegates at most one canonical
+#   folder Rule A entity to the receipt-bound closeout reconciler after a
+#   safety re-probe. Additional folders remain pending for the next session;
+#   flat legacy entities are warning-only. Rule B is NEVER auto-fixed.
 #
 #   Safety guards (any fail → skip auto-fix, fall back to WARN):
 #     - working tree clean (uncommitted changes block all auto-fixes)
@@ -38,10 +38,10 @@
 # Triggers on: SessionStart (matcher: "")
 # Action:      Advisory by default; optional autonomous fix per workflow config
 # Exit:        Always 0
-# Timeout:     10s set by hooks.json; Rule A per-PR check capped at 2s;
+# Timeout:     120s set by hooks.json; Rule A per-PR checks cap at 2s and the
+#              single reconciler child caps at 90s.
 #              Rule B is local-fs-only (no network) so cheap regardless of
-#              entity count. Auto-fix loop adds 2s per entity (re-probe) +
-#              closeout reconciliation time per entity.
+#              entity count.
 
 set -uo pipefail
 
@@ -102,10 +102,13 @@ later_stages_for() {
 # --- 2. Prep accumulators -------------------------------------------------
 rule_a_lines=""
 rule_a_count=0
-# Per-Rule-A entity records for auto-fix loop. Newline-separated, pipe-
+# Every merged Rule-A record, used to rebuild the pending section after the
+# single selected folder entity is classified: slug|id|pr_num|kind.
+rule_a_pending_records=""
+# Canonical folder Rule-A candidates. Newline-separated, pipe-
 # delimited fields: slug|pr_num|entity_file|stage_dir
-# stage_dir is empty for flat .md entities.
 rule_a_records=""
+rule_a_candidate_count=0
 rule_b_lines=""
 rule_b_count=0
 unsafe_pr_lines=""
@@ -119,7 +122,7 @@ command -v gh >/dev/null 2>&1 && have_gh=1
 check_entity() {
   local entity_file="$1"
   local stage_dir="$2"
-  local status pr id slug
+  local status pr id slug pending_kind
   status=$(awk '/^---$/{c++; next} c==1 && /^status:/{print $2; exit}' "$entity_file" 2>/dev/null | tr -d '"' | tr -d "'")
   pr=$(awk '/^---$/{c++; next} c==1 && /^pr:/{print $2; exit}' "$entity_file" 2>/dev/null | tr -d '"' | tr -d "'")
   id=$(awk '/^---$/{c++; next} c==1 && /^id:/{print $2; exit}' "$entity_file" 2>/dev/null | tr -d '"' | tr -d "'")
@@ -148,10 +151,21 @@ check_entity() {
       state=""
       [ "$have_gh" = "1" ] && state=$(timeout 2 gh pr view "$pr_num" --json state -q .state 2>/dev/null || true)
       if [ "$state" = "MERGED" ]; then
-        rule_a_lines+="  - #${id:-?} \`$slug\` — PR #$pr_num MERGED, entity still at \`status: ship\`"$'\n'
+        if [ -n "$stage_dir" ]; then
+          pending_kind=folder
+          rule_a_lines+="  - #${id:-?} \`$slug\` — PR #$pr_num MERGED, canonical folder entity still at \`status: ship\`"$'\n'
+        else
+          pending_kind=flat
+          rule_a_lines+="  - #${id:-?} \`$slug\` — PR #$pr_num MERGED, flat legacy entity; warning-only, no reconciler call"$'\n'
+        fi
         rule_a_count=$((rule_a_count + 1))
-        # Record for D1 auto-fix loop (consumed in section 4b below)
-        rule_a_records+="$slug|$pr_num|$entity_file|$stage_dir"$'\n'
+        rule_a_pending_records+="$slug|${id:-?}|$pr_num|$pending_kind"$'\n'
+        # The receipt reconciler requires canonical folder artifacts. Flat
+        # legacy entities remain visible but are never auto-fix candidates.
+        if [ -n "$stage_dir" ]; then
+          rule_a_records+="$slug|$pr_num|$entity_file|$stage_dir"$'\n'
+          rule_a_candidate_count=$((rule_a_candidate_count + 1))
+        fi
       elif [ -n "$state" ]; then
         unsafe_pr_lines+="  - #${id:-?} \`$slug\` — PR #$pr_num state=${state}; warning-only, no auto-fix attempted"$'\n'
         unsafe_pr_count=$((unsafe_pr_count + 1))
@@ -196,8 +210,9 @@ done < <(find "$workflow_dir" -mindepth 2 -maxdepth 2 -type f -name 'index.md' -
 #   - workflow declares `auto_fix: execute` in README frontmatter
 #   - working tree clean (atomic commits, no parallel-session contamination)
 #   - receipt-bound closeout reconciler discoverable
-#   - at least one Rule A entity detected
-# Any pre-condition fails → all Rule A entities flow into "pending" path.
+#   - at least one canonical folder Rule A entity detected
+# At most one folder entity is classified per SessionStart. Flat legacy and
+# additional folder records remain in the generic pending section.
 # Per-entity re-probe (PR.state == MERGED) catches detect-time → exec-time race.
 auto_fixed_lines=""
 auto_fixed_count=0
@@ -205,7 +220,10 @@ auto_fix_blocked_lines=""
 auto_fix_blocked_count=0
 auto_fix_reason=""
 
-if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
+if [ "$rule_a_candidate_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
+  selected_record="$(printf '%s\n' "$rule_a_records" | sed -n '1p')"
+  IFS='|' read -r slug pr_num entity_file stage_dir <<< "$selected_record"
+
   if [ "$git_clean" = "0" ]; then
     auto_fix_reason="working tree has uncommitted changes"
   elif [ -z "$reconciler_bin" ]; then
@@ -213,20 +231,14 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
   fi
 
   if [ -z "$auto_fix_reason" ]; then
-    # All pre-conditions met. Iterate Rule A entities.
-    while IFS='|' read -r slug pr_num entity_file stage_dir; do
-      [ -z "$slug" ] && continue
-
-      # Per-entity re-probe (paranoia: detect → exec gap; PR may have unmerged)
-      state=$(timeout 2 gh pr view "$pr_num" --json state -q .state 2>/dev/null || true)
-      if [ "$state" != "MERGED" ]; then
-        auto_fix_blocked_lines+="  - \`$slug\` — re-probe says state=${state:-unknown}, not MERGED (race?); manual fix required"$'\n'
-        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
-        continue
-      fi
-
+    # Per-entity re-probe (paranoia: detect → exec gap; PR may have unmerged)
+    state=$(timeout 2 gh pr view "$pr_num" --json state -q .state 2>/dev/null || true)
+    if [ "$state" != "MERGED" ]; then
+      auto_fix_blocked_lines+="  - \`$slug\` — re-probe says state=${state:-unknown}, not MERGED (race?); manual fix required"$'\n'
+      auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+    else
       reconcile_rc=0
-      reconcile_output="$("$reconciler_bin" \
+      reconcile_output="$(timeout 90 "$reconciler_bin" \
         --workflow-dir "$workflow_dir" \
         --entity "$slug" \
         --closeout-mode direct 2>&1)" || reconcile_rc=$?
@@ -235,7 +247,11 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
       reconcile_action="$(printf '%s\n' "$reconcile_output" | awk -F= '$1=="terminal_action"{print substr($0,index($0,"=")+1); exit}')"
       reconcile_reason="$(printf '%s\n' "$reconcile_output" | awk -F= '$1=="reason"{print substr($0,index($0,"=")+1); exit}')"
 
-      case "$reconcile_rc:$reconcile_verdict:$reconcile_state:$reconcile_action" in
+      if [ "$reconcile_rc" = "124" ]; then
+        auto_fix_blocked_lines+="  - \`$slug\` — reconciler timed out (state=${reconcile_state:-unknown}, action=${reconcile_action:-unknown}, reason=timeout, exit=124)"$'\n'
+        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+      else
+        case "$reconcile_rc:$reconcile_verdict:$reconcile_state:$reconcile_action" in
         0:PROCEED:reconciled:closeout_bundle)
           auto_fixed_lines+="  - \`$slug\` — PR #$pr_num reconciled through the receipt-bound closeout transaction"$'\n'
           auto_fixed_count=$((auto_fixed_count + 1))
@@ -260,20 +276,28 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
           fi
           auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
           ;;
-      esac
-    done <<< "$rule_a_records"
-
-    # Every eligible Rule A record was classified above as reconciled or
-    # blocked. Do not duplicate any of them in the generic pending section.
-    rule_a_lines=""
-    rule_a_count=0
+        esac
+      fi
+    fi
   else
-    # Pre-condition failed — surface single blanket reason, no per-entity loop
-    auto_fix_blocked_lines+="  - auto-fix skipped for all $rule_a_count Rule A entities ($auto_fix_reason)"$'\n'
-    auto_fix_blocked_count=$rule_a_count
-    rule_a_lines=""
-    rule_a_count=0
+    auto_fix_blocked_lines+="  - \`$slug\` — auto-fix skipped ($auto_fix_reason)"$'\n'
+    auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
   fi
+
+  # The selected folder is represented above. Rebuild pending from flat
+  # legacy records and deferred folders only.
+  rule_a_lines=""
+  rule_a_count=0
+  while IFS='|' read -r pending_slug pending_id pending_pr pending_kind; do
+    [ -z "$pending_slug" ] && continue
+    [ "$pending_slug" = "$slug" ] && continue
+    if [ "$pending_kind" = flat ]; then
+      rule_a_lines+="  - #${pending_id:-?} \`$pending_slug\` — PR #$pending_pr MERGED, flat legacy entity; warning-only, no reconciler call"$'\n'
+    else
+      rule_a_lines+="  - #${pending_id:-?} \`$pending_slug\` — PR #$pending_pr MERGED, canonical folder entity still at \`status: ship\`"$'\n'
+    fi
+    rule_a_count=$((rule_a_count + 1))
+  done <<< "$rule_a_pending_records"
 fi
 
 # --- 5. Emit structured advisory (only if anything drifted) --------------
@@ -310,7 +334,7 @@ if [ "$rule_a_count" -gt 0 ]; then
 
 🔴 **Rule A** — $rule_a_count $plural with merged PR still at \`status: ship\`:
 $rule_a_lines
-Before new execute work, run \`plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh --workflow-dir $workflow_dir --entity <slug> --closeout-mode direct\` for each. To enable autonomous reconciliation in future sessions, set \`auto_fix: execute\` in workflow README frontmatter."
+With \`auto_fix: execute\`, canonical folder entities are reconciled one per SessionStart and remaining folders stay pending for the next session. Flat legacy entries are warning-only: migrate them to the canonical folder artifact contract before reconciliation."
 fi
 if [ "$unsafe_pr_count" -gt 0 ]; then
   plural=$([ "$unsafe_pr_count" -eq 1 ] && echo "entity" || echo "entities")
