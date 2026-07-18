@@ -29,6 +29,7 @@ actual: not recorded by the current FO runtime
 ratio: not available
 
 ### Verdict
+merge_method_intent: merge_commit
 
 status: shipped
 stage_cost: $0.00 (artifact reconstruction; token accounting unavailable)

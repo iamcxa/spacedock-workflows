@@ -56,6 +56,8 @@ stage_outputs:
   verify: verify.md
   review: review.md
   ship: ship.md
+pr: "#56"
+closeout_owner: true
 ---
 
 <!-- section:stage-artifact-links -->
