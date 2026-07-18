@@ -65,5 +65,5 @@
 | fixture-pollution-discovery-helpers | Fixture-tree exclusion for discovery helpers | 2026-07-15 (landed via PR #39; runtime-reconciled) |
 | 3-root-readme-stale-claims | Refresh root README stale compatibility claims | 2026-07-15 (PR #40) |
 | c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | 2026-07-16 (PR #47) |
-| ship-stage-debrief-closeout | Make debrief a native post-merge ship closeout | 2026-07-17 (PR #56) |
+| ship-stage-debrief-closeout | Make debrief a native post-merge ship closeout | 2026-07-18 (PR #56) |
 <!-- /section:shipped -->

@@ -46,8 +46,8 @@ stated_assumptions:
 pre_mortem:
     category: wrong-dcs
     one_liner: "All strategy fixtures pass, but non-atomic debrief, archive, and ROADMAP writes still force a second manual FO cycle after a crash."
-worktree: .worktrees/spacedock-ensign-ship-stage-debrief-closeout
-status: ship
+worktree: 
+status: done
 stage_outputs:
   shape: shape.md
   design: design.md
@@ -58,6 +58,9 @@ stage_outputs:
   ship: ship.md
 pr: "#56"
 closeout_owner: true
+completed: 2026-07-18T01:44:54Z
+verdict: PASSED
+archived: 2026-07-18T01:44:54Z
 ---
 
 <!-- section:stage-artifact-links -->
