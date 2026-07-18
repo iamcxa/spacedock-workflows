@@ -133,7 +133,7 @@ outputs:
   roadmap_row:
     exact_keys: [identity, sha256]
     fields: { identity: entity_slug, sha256: sha256 }
-    invariant: "roadmap_row.identity equals identity.entity_slug and must occupy cells[0] of exactly one row in the bounded Shipped table"
+    invariant: "roadmap_row.identity equals identity.entity_slug and must occupy cells[0] of exactly one row in the bounded Shipped table; cells[2] equals the provider merge date plus (PR #identity.implementation_pr), and sha256 binds those exact row bytes"
 proof_hash:
   algorithm: sha256
   canonical_payload_keys: [identity, ownership_proof, landing_proof, outputs]

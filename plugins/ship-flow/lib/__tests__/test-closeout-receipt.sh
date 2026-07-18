@@ -435,14 +435,14 @@ printf '%s\n' \
   '<!-- section:shipped -->' \
   '| Entity | Title | Shipped |' \
   '| --- | --- | --- |' \
-  '| widget-closeout | Widget closeout | 2026-07-15 |' \
+  '| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |' \
   '<!-- /section:shipped -->' >"$ARCHIVE_ROOT/ROADMAP.md"
 python3 - "$ARCHIVE_RECEIPT" "$ARCHIVE_ROOT" <<'PY'
 import hashlib,json,pathlib,sys
 receipt=pathlib.Path(sys.argv[1]); root=pathlib.Path(sys.argv[2]); r=json.loads(receipt.read_text())
 for key in ("debrief","ship","archived_entity"):
     r["outputs"][key]["sha256"]=hashlib.sha256((root/r["outputs"][key]["path"]).read_bytes()).hexdigest()
-row="| widget-closeout | Widget closeout | 2026-07-15 |"
+row="| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |"
 r["outputs"]["roadmap_row"]["sha256"]=hashlib.sha256(row.encode()).hexdigest()
 payload={key:r[key] for key in ("identity","ownership_proof","landing_proof","outputs")}
 r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
@@ -498,14 +498,27 @@ mkdir -p "$TMP/docs/ship-flow/_debriefs" "$TMP/docs/ship-flow/_archive/widget-cl
 echo "landed debrief" >"$TMP/docs/ship-flow/_debriefs/2026-07-15-01.md"
 echo "landed ship" >"$TMP/docs/ship-flow/_archive/widget-closeout/ship.md"
 echo "landed entity" >"$TMP/docs/ship-flow/_archive/widget-closeout/index.md"
-printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '| widget-closeout | Widget closeout | 2026-07-15 |' '<!-- /section:shipped -->' >"$TMP/ROADMAP.md"
+printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |' '<!-- /section:shipped -->' >"$TMP/ROADMAP.md"
 echo "source index" >"$TMP/docs/ship-flow/widget-closeout/index.md"
 echo "source review" >"$TMP/docs/ship-flow/widget-closeout/review.md"
 echo "source ship" >"$TMP/docs/ship-flow/widget-closeout/ship.md"
 make_receipt "$CANONICAL" prepared direct 1; bind_repo_bytes "$CANONICAL" "$TMP"
 expect_ok "exact landed output bytes validate" python3 "$VALIDATOR" --receipt "$CANONICAL" --repo-root "$TMP" --allow-any-path --verify-outputs
-SPACED_ROW='| widget-closeout | Widget closeout | 2026-07-15 |'
-COMPACT_ROW='|widget-closeout|Widget closeout|2026-07-15|'
+WRONG_PR_RECEIPT="$TMP/self-rehashed-wrong-roadmap-pr.json"
+WRONG_PR_ROW='| widget-closeout | Widget closeout | 2026-07-15 (PR #999) |'
+printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' "$WRONG_PR_ROW" '<!-- /section:shipped -->' >"$TMP/ROADMAP.md"
+python3 - "$CANONICAL" "$WRONG_PR_RECEIPT" "$WRONG_PR_ROW" <<'PY'
+import hashlib,json,sys
+source,target,row=sys.argv[1:]; r=json.load(open(source))
+r["outputs"]["roadmap_row"]["sha256"]=hashlib.sha256(row.encode()).hexdigest()
+payload={key:r[key] for key in ("identity","ownership_proof","landing_proof","outputs")}
+r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+with open(target,"w") as handle: json.dump(r,handle,sort_keys=True,indent=2); handle.write("\n")
+PY
+expect_reason "self-rehashed wrong ROADMAP PR provenance rejects" closeout-sentinel-payload-mismatch \
+  python3 "$VALIDATOR" --receipt "$WRONG_PR_RECEIPT" --repo-root "$TMP" --allow-any-path --verify-outputs
+SPACED_ROW='| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |'
+COMPACT_ROW='|widget-closeout|Widget closeout|2026-07-15 (PR #40)|'
 SPACED_HASH="$(printf '%s' "$SPACED_ROW" | shasum -a 256 | awk '{print $1}')"
 COMPACT_HASH="$(printf '%s' "$COMPACT_ROW" | shasum -a 256 | awk '{print $1}')"
 if [ "$SPACED_HASH" != "$COMPACT_HASH" ]; then ok "ROADMAP raw row hash excludes newline and distinguishes spacing"; else bad "ROADMAP raw row hash excludes newline and distinguishes spacing"; fi
@@ -546,7 +559,7 @@ expect_reason "output path traversal rejects" closeout-sentinel-invalid python3 
 
 echo "landed ship" >"$TMP/docs/ship-flow/_archive/widget-closeout/ship.md"
 echo "source review" >"$TMP/docs/ship-flow/widget-closeout/review.md"
-printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '| widget-closeout | Widget closeout | 2026-07-15 |' '<!-- /section:shipped -->' >"$TMP/ROADMAP.md"
+printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |' '<!-- /section:shipped -->' >"$TMP/ROADMAP.md"
 make_receipt "$CANONICAL" prepared direct 1; bind_repo_bytes "$CANONICAL" "$TMP"
 printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' 'widget-closeout shipped in prose only' '<!-- /section:shipped -->' >"$TMP/ROADMAP.md"
 python3 - "$CANONICAL" 'widget-closeout shipped in prose only' <<'PY'

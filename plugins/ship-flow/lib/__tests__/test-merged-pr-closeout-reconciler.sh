@@ -4523,6 +4523,26 @@ PY
     record_fail 'direct stale Shipped rejection preserves HEAD'
   fi
 
+  local pre_shipped_apply_repo="$TMP_DIR/direct-pre-shipped-apply-repo" pre_shipped_receipt
+  git clone -q "$pre_shipped_repo" "$pre_shipped_apply_repo"
+  git -C "$pre_shipped_apply_repo" config user.email test@example.test
+  git -C "$pre_shipped_apply_repo" config user.name 'Ship Flow Test'
+  rc="$(run_helper "$pre_shipped_apply_repo" "$TMP_DIR/direct-pre-shipped-apply.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'direct pre-staged Shipped recovery applies' 0 "$rc"
+  if [ "$(grep -c '^| merged-fixture-entity | Merged fixture entity | 2026-07-15 (PR #131) |$' "$pre_shipped_apply_repo/ROADMAP.md")" = 1 ]; then
+    record_pass 'direct pre-staged Shipped recovery preserves canonical PR provenance'
+  else
+    record_fail 'direct pre-staged Shipped recovery preserves canonical PR provenance'
+  fi
+  pre_shipped_receipt="$(find "$pre_shipped_apply_repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  if [ -n "$pre_shipped_receipt" ] && python3 - "$pre_shipped_receipt" <<'PY'
+import hashlib,json,sys
+r=json.load(open(sys.argv[1]))
+row="| merged-fixture-entity | Merged fixture entity | 2026-07-15 (PR #131) |"
+raise SystemExit(0 if r["outputs"]["roadmap_row"]["sha256"]==hashlib.sha256(row.encode()).hexdigest() else 1)
+PY
+  then record_pass 'direct pre-staged receipt hashes exact PR-bearing row bytes'; else record_fail 'direct pre-staged receipt hashes exact PR-bearing row bytes'; fi
+
   local before_head receipt debrief landed_head
   before_head="$(git -C "$repo" rev-parse HEAD)"
   rc="$(run_helper "$repo" "$TMP_DIR/direct.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
@@ -4542,7 +4562,14 @@ PY
   if [ -f "$debrief" ] && bash "$PLUGIN_ROOT/lib/__tests__/validate-debrief-schema.sh" "$debrief" >/dev/null; then record_pass 'direct transaction lands schema-valid debrief'; else record_fail 'direct transaction lands schema-valid debrief'; fi
   if [ -n "$receipt" ]; then record_pass 'direct transaction lands closeout receipt'; else record_fail 'direct transaction lands closeout receipt'; fi
   if [ -n "$receipt" ] && python3 "$PLUGIN_ROOT/lib/validate-closeout-receipt.py" --receipt "$receipt" --repo-root "$repo" --verify-outputs >/dev/null; then record_pass 'direct receipt validates exact terminal outputs'; else record_fail 'direct receipt validates exact terminal outputs'; fi
-  if [ "$(grep -c '^| merged-fixture-entity | Merged fixture entity | 2026-07-15 |$' "$repo/ROADMAP.md")" = 1 ]; then record_pass 'direct transaction lands exactly one Shipped row'; else record_fail 'direct transaction lands exactly one Shipped row'; fi
+  if [ "$(grep -c '^| merged-fixture-entity | Merged fixture entity | 2026-07-15 (PR #131) |$' "$repo/ROADMAP.md")" = 1 ]; then record_pass 'direct transaction lands exactly one PR-bearing Shipped row'; else record_fail 'direct transaction lands exactly one PR-bearing Shipped row'; fi
+  if [ -n "$receipt" ] && python3 - "$receipt" <<'PY'
+import hashlib,json,sys
+r=json.load(open(sys.argv[1]))
+row="| merged-fixture-entity | Merged fixture entity | 2026-07-15 (PR #131) |"
+raise SystemExit(0 if r["outputs"]["roadmap_row"]["sha256"]==hashlib.sha256(row.encode()).hexdigest() else 1)
+PY
+  then record_pass 'direct receipt hashes exact PR-bearing row bytes'; else record_fail 'direct receipt hashes exact PR-bearing row bytes'; fi
   assert_not_contains 'direct transaction removes exact Now identity row' '^\| merged-fixture-entity \| Merged fixture entity \|$' "$repo/ROADMAP.md"
   assert_contains 'direct ROADMAP preserves slug outside bounded sections' '^\| merged-fixture-entity \| Outside sections must survive \|$' "$repo/ROADMAP.md"
   assert_contains 'direct ROADMAP preserves slug in another Now cell' '^\| neighbor \| mentions merged-fixture-entity in another cell \|$' "$repo/ROADMAP.md"

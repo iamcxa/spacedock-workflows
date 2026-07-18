@@ -163,7 +163,7 @@ closeout_record:
     debrief: {path: string, sha256: sha256}
     ship: {path: string, sha256: sha256}
     archived_entity: {path: string, sha256: sha256}
-    roadmap_row: {identity: string, sha256: sha256}
+    roadmap_row: {identity: string, sha256: sha256} # exact `YYYY-MM-DD (PR #<implementation_pr>)` row bytes
   proof_hash: sha256(canonical-json(identity+ownership+landing+outputs))
 ```
 

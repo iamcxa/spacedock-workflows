@@ -1268,7 +1268,7 @@ source_worktree: {source_worktree}
 '''
 # proof_hash deliberately stays receipt-only: it binds these exact ship bytes.
 ship_path=write(ship_rel,ship)
-roadmap=(repo/"ROADMAP.md").read_text().splitlines(); row=f"| {slug} | {title} | {date} |"
+roadmap=(repo/"ROADMAP.md").read_text().splitlines(); row=f"| {slug} | {title} | {date} (PR #{pr_number}) |"
 def bounds(name):
     opens=[i for i,line in enumerate(roadmap) if line.strip()==f"<!-- section:{name} -->"]
     closes=[i for i,line in enumerate(roadmap) if line.strip()==f"<!-- /section:{name} -->"]
