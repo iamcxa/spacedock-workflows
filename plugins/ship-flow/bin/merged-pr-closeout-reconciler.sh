@@ -278,12 +278,135 @@ ensure_gh_repository() {
   repository="$resolved_repository"
 }
 
+read_provider_gh_commits() {
+  local provider_head_oid="$1" repository_owner repository_name graphql_query
+  local page_json page_data page_number page_head_oid page_total_count page_count
+  local page_has_next page_end_cursor page_source_commits cursor="" cursor_hash seen_cursor_hashes=""
+  local expected_total_count="" collected_count=0 duplicate_oid page_rc=0
+  [[ "$provider_head_oid" =~ ^[0-9a-f]{40}$ ]] ||
+    reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR head OID is invalid"
+  repository_owner="${repository%%/*}"
+  repository_name="${repository#*/}"
+  # shellcheck disable=SC2016 # GraphQL variable names are intentionally literal.
+  graphql_query='query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){number headRefOid commits(first:100,after:$after){totalCount nodes{commit{oid}} pageInfo{hasNextPage endCursor}}}}}'
+  source_commits=""
+  ensure_owned_validator_root
+  while :; do
+    page_json="$(mktemp "$owned_validator_root/provider-page.XXXXXX")"
+    page_rc=0
+    if [ -n "$cursor" ]; then
+      gh api graphql -f "query=$graphql_query" -f "owner=$repository_owner" -f "name=$repository_name" \
+        -F "number=$pr_number" -f "after=$cursor" >"$page_json" 2>/dev/null || page_rc=$?
+    else
+      gh api graphql -f "query=$graphql_query" -f "owner=$repository_owner" -f "name=$repository_name" \
+        -F "number=$pr_number" >"$page_json" 2>/dev/null || page_rc=$?
+    fi
+    if [ "$page_rc" -ne 0 ]; then
+      rm -f "$page_json"
+      reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR commit pagination is unavailable"
+    fi
+    page_data="$(python3 - "$page_json" <<'PY'
+import json
+import re
+import sys
+
+try:
+    payload = json.load(open(sys.argv[1]))
+    if payload.get("errors"):
+        raise ValueError("graphql errors")
+    pull = payload["data"]["repository"]["pullRequest"]
+    if not isinstance(pull, dict):
+        raise ValueError("missing pull request")
+    number = pull["number"]
+    head_oid = pull["headRefOid"]
+    connection = pull["commits"]
+    total_count = connection["totalCount"]
+    nodes = connection["nodes"]
+    page_info = connection["pageInfo"]
+    has_next = page_info["hasNextPage"]
+    end_cursor = page_info["endCursor"]
+    if isinstance(number, bool) or not isinstance(number, int):
+        raise ValueError("invalid number")
+    if not isinstance(head_oid, str) or not re.fullmatch(r"[0-9a-f]{40}", head_oid):
+        raise ValueError("invalid head oid")
+    if isinstance(total_count, bool) or not isinstance(total_count, int) or total_count < 1:
+        raise ValueError("invalid total count")
+    if not isinstance(nodes, list) or len(nodes) > 100 or not isinstance(page_info, dict) or not isinstance(has_next, bool):
+        raise ValueError("invalid connection")
+    oids = []
+    for node in nodes:
+        oid = node["commit"]["oid"]
+        if not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid):
+            raise ValueError("invalid commit oid")
+        oids.append(oid)
+    if not oids:
+        raise ValueError("empty commit page")
+    if end_cursor is not None and (not isinstance(end_cursor, str) or any(ord(c) < 32 or ord(c) == 127 for c in end_cursor)):
+        raise ValueError("invalid cursor")
+    if has_next and not end_cursor:
+        raise ValueError("missing cursor")
+except (AttributeError, KeyError, TypeError, ValueError, json.JSONDecodeError, OSError):
+    raise SystemExit(2)
+print(f"number={number}")
+print(f"head_oid={head_oid}")
+print(f"total_count={total_count}")
+print(f"page_count={len(oids)}")
+print(f"has_next={'true' if has_next else 'false'}")
+print(f"end_cursor={end_cursor or ''}")
+print(f"source_commits={','.join(oids)}")
+PY
+    )" || page_rc=$?
+    rm -f "$page_json"
+    if [ "$page_rc" -ne 0 ]; then
+      reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR commit page is malformed"
+    fi
+    page_number="$(printf '%s\n' "$page_data" | awk -F= '$1=="number"{print $2; exit}')"
+    page_head_oid="$(printf '%s\n' "$page_data" | awk -F= '$1=="head_oid"{print $2; exit}')"
+    page_total_count="$(printf '%s\n' "$page_data" | awk -F= '$1=="total_count"{print $2; exit}')"
+    page_count="$(printf '%s\n' "$page_data" | awk -F= '$1=="page_count"{print $2; exit}')"
+    page_has_next="$(printf '%s\n' "$page_data" | awk -F= '$1=="has_next"{print $2; exit}')"
+    page_end_cursor="$(printf '%s\n' "$page_data" | awk -F= '$1=="end_cursor"{sub(/^[^=]*=/, ""); print; exit}')"
+    page_source_commits="$(printf '%s\n' "$page_data" | awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}')"
+    [ "$page_number" = "$pr_number" ] && [ "$page_head_oid" = "$provider_head_oid" ] ||
+      reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR identity changed during commit pagination"
+    if [ -z "$expected_total_count" ]; then
+      expected_total_count="$page_total_count"
+    elif [ "$page_total_count" != "$expected_total_count" ]; then
+      reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR commit count changed during pagination"
+    fi
+    source_commits="${source_commits:+${source_commits},}${page_source_commits}"
+    collected_count=$((collected_count + page_count))
+    if [ "$collected_count" -gt "$expected_total_count" ]; then
+      reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR commit pagination exceeded provider count"
+    fi
+    if [ "$page_has_next" = false ]; then
+      break
+    fi
+    cursor_hash="$(printf '%s' "$page_end_cursor" | git -C "$repo_root" hash-object --stdin)"
+    case "|$seen_cursor_hashes|" in
+      *"|$cursor_hash|"*)
+        reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR commit pagination repeated a cursor"
+        ;;
+    esac
+    seen_cursor_hashes="${seen_cursor_hashes:+${seen_cursor_hashes}|}${cursor_hash}"
+    cursor="$page_end_cursor"
+  done
+  pr_commit_count="$expected_total_count"
+  [ "$collected_count" -eq "$pr_commit_count" ] ||
+    reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR commit pagination is incomplete"
+  duplicate_oid="$(printf '%s\n' "$source_commits" | awk -F, '{for(i=1;i<=NF;i++) if(seen[$i]++) {print $i; exit}}')"
+  [ -z "$duplicate_oid" ] ||
+    reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR commit pagination contains duplicate OIDs"
+  [ "${source_commits##*,}" = "$provider_head_oid" ] ||
+    reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR commit tip does not match provider head OID"
+}
+
 read_provider_gh() {
   local output pr_rc=0
   ensure_gh_repository
   output="$(gh pr view "$pr_number" --repo "$repository" \
-    --json number,state,mergedAt,headRefName,baseRefName,url,mergeCommit,commits \
-    --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")", "landing_anchor=\(.mergeCommit.oid // "")", "source_commits=\([.commits[].oid] | join(","))", "pr_commit_count=\(.commits | length)"] | .[]')" || pr_rc=$?
+    --json number,state,mergedAt,headRefName,headRefOid,baseRefName,url,mergeCommit \
+    --jq '["provider=gh", "number=\(.number)", "state=\(.state)", "merged_at=\(.mergedAt // "")", "head_ref=\(.headRefName // "")", "head_ref_oid=\(.headRefOid // "")", "base_ref=\(.baseRefName // "")", "url=\(.url // "")", "landing_anchor=\(.mergeCommit.oid // "")"] | .[]')" || pr_rc=$?
   if [ "$pr_rc" -ne 0 ]; then
     reject_input landing-patch-equivalence-failed "authoritative GitHub implementation PR metadata is unavailable"
   fi
@@ -296,11 +419,10 @@ read_provider_gh() {
   pr_url="$(printf '%s\n' "$output" | awk -F= '$1=="url"{print $2; exit}')"
   : "$pr_url"
   landing_anchor="$(printf '%s\n' "$output" | awk -F= '$1=="landing_anchor"{print $2; exit}')"
-  source_commits="$(printf '%s\n' "$output" | awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}')"
-  pr_commit_count="$(printf '%s\n' "$output" | awk -F= '$1=="pr_commit_count"{print $2; exit}')"
   if [ "$provider_number" != "$pr_number" ]; then
     reject_input "pr-number-mismatch" "gh PR number does not match entity"
   fi
+  read_provider_gh_commits "$(printf '%s\n' "$output" | awk -F= '$1=="head_ref_oid"{print $2; exit}')"
 }
 
 normalize_github_remote_repository() {

@@ -754,6 +754,7 @@ require_repo_binding() {
 }
 
 if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
+  source_commits="$(field source_commits)"
   require_repo_binding "$@"
   printf '%s\n' \
     'provider=gh' \
@@ -761,11 +762,30 @@ if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
     "state=$(field state)" \
     "merged_at=$(field merged_at)" \
     "head_ref=$(field head_ref)" \
+    "head_ref_oid=${source_commits##*,}" \
     "base_ref=$(field base_ref)" \
     "url=$(field url)" \
     "landing_anchor=$(field landing_anchor)" \
     "source_commits=$(field source_commits)" \
     "pr_commit_count=$(field pr_commit_count)"
+  exit 0
+fi
+
+if [ "${1:-}" = api ] && [ "${2:-}" = graphql ]; then
+  python3 - "$(field source_commits)" "$(field pr_commit_count)" <<'PY'
+import json,sys
+commits=sys.argv[1].split(",")
+count=int(sys.argv[2])
+print(json.dumps({"data":{"repository":{"pullRequest":{
+    "number":131,
+    "headRefOid":commits[-1],
+    "commits":{
+        "totalCount":count,
+        "nodes":[{"commit":{"oid":oid}} for oid in commits],
+        "pageInfo":{"hasNextPage":False,"endCursor":None},
+    },
+}}}}))
+PY
   exit 0
 fi
 
@@ -847,6 +867,231 @@ prepare_feedback_r3_b1_main_only_clone() {
   cp "$source_fixture" "$TMP_DIR/${label}-provider.env"
 
   printf '%s\n' "$origin|$clone|$TMP_DIR/${label}-provider.env"
+}
+
+write_provider_pagination_gh() {
+  local bin="$1"
+  cat >"$bin" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SHIP_FLOW_PAGINATION_PROVIDER_FILE:?missing provider metadata}"
+: "${SHIP_FLOW_PAGINATION_GH_LOG:?missing gh log}"
+printf '%s\n' "$*" >>"$SHIP_FLOW_PAGINATION_GH_LOG"
+
+field() {
+  awk -F= -v key="$1" '$1==key{sub(/^[^=]*=/, ""); print; exit}' "$SHIP_FLOW_PAGINATION_PROVIDER_FILE"
+}
+
+if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
+  truncated="$(printf '%s\n' "$(field source_commits)" | awk -F, '{for(i=1;i<=100;i++) printf "%s%s", (i>1 ? "," : ""), $i; print ""}')"
+  printf '%s\n' \
+    'provider=gh' \
+    "number=$(field number)" \
+    "state=$(field state)" \
+    "merged_at=$(field merged_at)" \
+    "head_ref=$(field head_ref)" \
+    "head_ref_oid=$(field head_ref_oid)" \
+    "base_ref=$(field base_ref)" \
+    "url=$(field url)" \
+    "landing_anchor=$(field landing_anchor)" \
+    "source_commits=$truncated" \
+    'pr_commit_count=100'
+  exit 0
+fi
+
+if [ "${1:-}" = api ] && [ "${2:-}" = graphql ]; then
+  if [ "${SHIP_FLOW_PAGINATION_FAULT:-}" = query ]; then
+    exit 70
+  fi
+  after=""
+  previous=""
+  for arg in "$@"; do
+    if [ "$previous" = -f ] && [ "${arg#after=}" != "$arg" ]; then
+      after="${arg#after=}"
+    fi
+    previous="$arg"
+  done
+  if [ "${SHIP_FLOW_PAGINATION_FAULT:-}" = malformed-json ]; then
+    printf '%s\n' '{not-json'
+    exit 0
+  fi
+  python3 - "$(field source_commits)" "$after" "$(field head_ref_oid)" "${SHIP_FLOW_PAGINATION_FAULT:-}" <<'PY'
+import json, sys
+
+commits = sys.argv[1].split(",")
+after = sys.argv[2]
+head_oid = sys.argv[3]
+fault = sys.argv[4]
+if after == "":
+    page = commits[:100]
+    has_next = True
+    cursor = "cursor-100"
+elif after == "cursor-100":
+    page = commits[100:]
+    has_next = False
+    cursor = None
+else:
+    raise SystemExit(65)
+if fault == "malformed-cursor" and after == "":
+    cursor = ""
+if fault == "empty" and after == "":
+    page = []
+    has_next = False
+    cursor = None
+if fault == "oversized" and after == "":
+    page = commits
+    has_next = False
+    cursor = None
+if fault == "identity" and after == "cursor-100":
+    head_oid = "f" * 40
+if fault == "count" and after == "cursor-100":
+    commits.append("e" * 40)
+if fault == "duplicate" and after == "cursor-100":
+    page = [commits[0]]
+if fault == "repeated-cursor" and after == "cursor-100":
+    has_next = True
+    cursor = "cursor-100"
+total_count = len(commits) + (1 if fault == "incomplete" else 0)
+print(json.dumps({
+    "data": {"repository": {"pullRequest": {
+        "number": 131,
+        "headRefOid": head_oid,
+        "commits": {
+            "totalCount": total_count,
+            "nodes": [{"commit": {"oid": oid}} for oid in page],
+            "pageInfo": {"hasNextPage": has_next, "endCursor": cursor},
+        },
+    }}},
+}))
+PY
+  exit 0
+fi
+
+if [ "${1:-}" = repo ] && [ "${2:-}" = view ]; then
+  field repository
+  exit 0
+fi
+
+echo "unsupported fake gh invocation: $*" >&2
+exit 2
+EOF
+  chmod +x "$bin"
+}
+
+prepare_provider_pagination_clone() {
+  local label="$1" source_repo provider origin clone base source_tip anchor source_commits index
+  source_repo="$TMP_DIR/${label}-source"
+  provider="$TMP_DIR/${label}-provider.env"
+  origin="$TMP_DIR/${label}-origin.git"
+  clone="$TMP_DIR/${label}-main-only"
+  setup_repo "$source_repo"
+  printf '%s\n' '.worktrees/' >"$source_repo/.gitignore"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' \
+    '| Entity | Title |' '| --- | --- |' \
+    '| merged-fixture-entity | Merged fixture entity |' \
+    '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' \
+    '| Entity | Title | Shipped |' '| --- | --- | --- |' \
+    '<!-- /section:shipped -->' >"$source_repo/ROADMAP.md"
+  git -C "$source_repo" add -- .gitignore ROADMAP.md
+  git -C "$source_repo" commit -qm 'fixture: add pagination roadmap'
+  base="$(git -C "$source_repo" rev-parse HEAD)"
+  git -C "$source_repo" checkout -qb ship-merged-fixture-entity "$base"
+  write_entity "$source_repo/docs/ship-flow" merged-fixture-entity ship '#131' ''
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$source_repo/docs/ship-flow/merged-fixture-entity/review.md"
+  git -C "$source_repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/merged-fixture-entity/review.md
+  git -C "$source_repo" commit -qm 'implementation: add paginated reviewed entity'
+  index=2
+  while [ "$index" -le 100 ]; do
+    printf 'commit-%03d\n' "$index" >>"$source_repo/pagination-history.txt"
+    git -C "$source_repo" add -- pagination-history.txt
+    git -C "$source_repo" commit -qm "implementation: pagination history $index"
+    index=$((index + 1))
+  done
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' \
+    '- Preserve complete paginated source proof.' '' '### Verdict' \
+    'merge_method_intent: squash' 'pr: "#131"' \
+    >"$source_repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$source_repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$source_repo" commit -qm 'implementation: add paginated ship evidence'
+  source_tip="$(git -C "$source_repo" rev-parse HEAD)"
+  source_commits="$(git -C "$source_repo" rev-list --reverse "$base..$source_tip" | paste -sd, -)"
+  git -C "$source_repo" checkout -q main
+  git -C "$source_repo" merge --squash -q ship-merged-fixture-entity >/dev/null
+  git -C "$source_repo" commit -qm 'fixture: squash paginated implementation landing'
+  anchor="$(git -C "$source_repo" rev-parse HEAD)"
+  printf '%s\n' 'provider=gh' 'number=131' 'state=MERGED' \
+    'merged_at=2026-07-18T00:00:00Z' \
+    'head_ref=ship-merged-fixture-entity' "head_ref_oid=$source_tip" 'base_ref=main' \
+    'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_commits" 'pr_commit_count=101' >"$provider"
+  git clone -q --bare "$source_repo" "$origin"
+  git -C "$origin" update-ref refs/pull/131/head "$source_tip"
+  git -C "$origin" update-ref -d refs/heads/ship-merged-fixture-entity
+  git -C "$origin" symbolic-ref HEAD refs/heads/main
+  git clone -q --single-branch --branch main --no-tags "$origin" "$clone"
+  git -C "$clone" config user.email test@example.test
+  git -C "$clone" config user.name 'Ship Flow Test'
+  git -C "$clone" config remote.origin.url https://github.com/example/repo.git
+  git -C "$clone" config "url.file://${origin}.insteadOf" https://github.com/example/repo.git
+  rm -f "$clone/.git/FETCH_HEAD"
+  git -C "$clone" reflog expire --expire=now --all
+  git -C "$clone" gc --prune=now >/dev/null
+  printf '%s\n' "$origin|$clone|$provider"
+}
+
+run_provider_pagination_case() {
+  local setup origin repo provider gh_bin_dir gh_log rc source_commits fault expected_detail before_head before_tree
+  setup="$(prepare_provider_pagination_clone provider-pagination)"
+  IFS='|' read -r origin repo provider <<<"$setup"
+  gh_bin_dir="$TMP_DIR/provider-pagination-gh-bin"
+  gh_log="$TMP_DIR/provider-pagination-gh.log"
+  mkdir -p "$gh_bin_dir"
+  : >"$gh_log"
+  write_provider_pagination_gh "$gh_bin_dir/gh"
+  source_commits="$(awk -F= '$1=="source_commits"{sub(/^[^=]*=/, ""); print; exit}' "$provider")"
+  before_head="$(git -C "$repo" rev-parse HEAD)"
+  before_tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  for fault in query malformed-json malformed-cursor empty oversized identity count duplicate incomplete repeated-cursor; do
+    case "$fault" in
+      query) expected_detail='commit pagination is unavailable' ;;
+      malformed-json|malformed-cursor|empty|oversized) expected_detail='commit page is malformed' ;;
+      identity) expected_detail='identity changed during commit pagination' ;;
+      count) expected_detail='commit count changed during pagination' ;;
+      duplicate) expected_detail='commit pagination contains duplicate OIDs' ;;
+      incomplete) expected_detail='commit pagination is incomplete' ;;
+      repeated-cursor) expected_detail='commit pagination repeated a cursor' ;;
+    esac
+    rc="$(SHIP_FLOW_PAGINATION_PROVIDER_FILE="$provider" SHIP_FLOW_PAGINATION_GH_LOG="$gh_log" \
+      SHIP_FLOW_PAGINATION_FAULT="$fault" \
+      run_helper_with_path "$repo" "$TMP_DIR/provider-pagination-$fault.out" "$gh_bin_dir:$PATH" \
+        --entity merged-fixture-entity --pr-provider gh --dry-run)"
+    assert_exit "GitHub provider fails closed for $fault pagination result" 2 "$rc"
+    assert_contains "GitHub provider reports stable $fault pagination detail" \
+      "^detail=authoritative GitHub implementation PR $expected_detail$" "$TMP_DIR/provider-pagination-$fault.out"
+    if [ "$before_head" = "$(git -C "$repo" rev-parse HEAD)" ] &&
+       [ "$before_tree" = "$(git -C "$repo" rev-parse 'HEAD^{tree}')" ]; then
+      record_pass "GitHub provider preserves repository bytes after $fault pagination failure"
+    else
+      record_fail "GitHub provider preserves repository bytes after $fault pagination failure"
+    fi
+    assert_feedback_r3_b1_objects_missing \
+      "GitHub provider materializes no source objects after $fault pagination failure" "$repo" "$source_commits"
+  done
+  : >"$gh_log"
+  rc="$(SHIP_FLOW_PAGINATION_PROVIDER_FILE="$provider" SHIP_FLOW_PAGINATION_GH_LOG="$gh_log" \
+    run_helper_with_path "$repo" "$TMP_DIR/provider-pagination.out" "$gh_bin_dir:$PATH" \
+      --entity merged-fixture-entity --pr-provider gh --dry-run)"
+  if [ "$rc" != 0 ]; then sed 's/^/    pagination: /' "$TMP_DIR/provider-pagination.out"; fi
+  assert_exit 'GitHub provider paginates all 101 implementation commits' 0 "$rc"
+  assert_contains 'GitHub provider keeps metadata query repository-bound' '^pr view 131 --repo example/repo ' "$gh_log"
+  assert_contains 'GitHub provider queries the commit connection through GraphQL' '^api graphql ' "$gh_log"
+  if [ "$(grep -c '^api graphql ' "$gh_log" || true)" = 2 ]; then
+    record_pass 'GitHub provider follows exactly one cursor for 101 commits'
+  else
+    record_fail 'GitHub provider follows exactly one cursor for 101 commits'
+  fi
+  assert_feedback_r3_b1_objects_present 'GitHub provider materializes all 101 ordered source commits' "$repo" "$source_commits"
 }
 
 assert_feedback_r3_b1_objects_missing() {
@@ -1479,6 +1724,7 @@ if [ "${1:-}" = repo ] && [ "${2:-}" = view ]; then
 fi
 
 if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
+  source_commits="$(provider_field source_commits)"
   require_repo_binding "$@"
   printf '%s\n' \
     'provider=gh' \
@@ -1486,11 +1732,30 @@ if [ "${1:-}" = pr ] && [ "${2:-}" = view ] && [ "${3:-}" = 131 ]; then
     "state=$(provider_field state)" \
     "merged_at=$(provider_field merged_at)" \
     "head_ref=$(provider_field head_ref)" \
+    "head_ref_oid=${source_commits##*,}" \
     "base_ref=$(provider_field base_ref)" \
     "url=$(provider_field url)" \
     "landing_anchor=$(provider_field landing_anchor)" \
     "source_commits=$(provider_field source_commits)" \
     "pr_commit_count=$(provider_field pr_commit_count)"
+  exit 0
+fi
+
+if [ "${1:-}" = api ] && [ "${2:-}" = graphql ]; then
+  python3 - "$(provider_field source_commits)" "$(provider_field pr_commit_count)" <<'PY'
+import json,sys
+commits=sys.argv[1].split(",")
+count=int(sys.argv[2])
+print(json.dumps({"data":{"repository":{"pullRequest":{
+    "number":131,
+    "headRefOid":commits[-1],
+    "commits":{
+        "totalCount":count,
+        "nodes":[{"commit":{"oid":oid}} for oid in commits],
+        "pageInfo":{"hasNextPage":False,"endCursor":None},
+    },
+}}}}))
+PY
   exit 0
 fi
 
@@ -4800,6 +5065,8 @@ else
         ;;
       *) record_fail "unknown SHIP_FLOW_R12_ONLY selection" ;;
     esac
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = provider-pagination ]; then
+    run_provider_pagination_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r11-b1-b2-b3 ]; then
     case "${SHIP_FLOW_R11_ONLY:-all}" in
       history) run_feedback_r11_mature_main_case ;;
@@ -4848,6 +5115,7 @@ else
     run_pull_request_roadmap_validation_case
     run_doc_scope_cases
   else
+  run_provider_pagination_case
   run_runtime_regression_cases
   run_incomplete_landing_contract_case
   run_missing_landing_field_matrix
