@@ -9,6 +9,11 @@
 # pre-mortem guard): keep this set small and reviewed where staleness has
 # actually bitten and is NOT already gated elsewhere (e.g. version claims —
 # scripts/check-version-triple.sh already gates those; do not duplicate).
+#
+# checker-source-map.exemptGlobs (issue #46): merged-pr-closeout-reconciler.sh
+# was renamed to closeout-adapter.sh; the retired path is exempt from the
+# protected-path delete gate. See the closeout-adapter Source-Map row in
+# doc-sync-context.md for the live coupling.
 schema_version: "1.1"
 couplings:
   - name: stage-skill-readme
