@@ -104,7 +104,7 @@ done
 echo ""
 echo "Block 5: schema allowance"
 check "entity body schema allows ui_quality_contract in design handoff" \
-  "awk '/hand_off_to_plan:/{in_block=1} in_block && /^  plan:/{exit} in_block {print}' '${SCHEMA}' | grep -q 'ui_quality_contract'"
+  "awk '/hand_off_to_plan:/{in_block=1} in_block && /^  plan:/{exit} in_block && /ui_quality_contract/{found=1} END{exit(found ? 0 : 1)}' '${SCHEMA}'"
 
 echo ""
 echo "Block 6: boundaries"

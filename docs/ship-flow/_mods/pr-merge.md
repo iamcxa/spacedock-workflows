@@ -10,13 +10,11 @@ Manages the PR lifecycle for workflow entities processed in worktree stages. Pus
 
 ## Hook: startup
 
-Scan all entity files (in the workflow directory only, not `_archive/`) for entities with a non-empty `pr` field and a non-terminal status. For each, extract the PR number (strip any `#`, `owner/repo#` prefix) and check: `gh pr view {number} --json state --jq '.state'`.
+Run `plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh` before the ordinary entity scan for every validated `docs/ship-flow/_closeouts/*.json` receipt in `awaiting_closeout_pr`, `applied`, or `complete`. Route by the receipt's path-derived entity identity, deterministic closeout head, and recorded closeout PR. This sentinel-first pass is authoritative even when the active entity path is already absent: an OPEN exact-head PR remains `closeout-pr-awaiting-merge`; a MERGED exact-head PR is `closeout-pr-terminal-noop` only after the landed receipt and all output hashes validate. Never classify a closeout PR from title or body.
 
-If `MERGED`, advance the entity to its terminal stage. Because a `mod-block` may be set while the PR is pending, the clear and the terminalization are two separate `--set` calls (the mechanism refuses combining `mod-block=` with terminal fields):
-1. `spacedock status --workflow-dir {dir} --set {slug} mod-block=` when a `mod-block` is set (skip when empty);
-2. `spacedock status --workflow-dir {dir} --set {slug} status={terminal} completed verdict=PASSED worktree=`, then `spacedock status --workflow-dir {dir} --archive {slug}`.
+After receipt recovery, scan all entity files (in the workflow directory only, not `_archive/`) for entities with a non-empty `pr` field and a non-terminal status. For each, extract the PR number (strip any `#`, `owner/repo#` prefix) and delegate the state decision to the same reconciler; direct mode is the default.
 
-Clean up any worktree/branch. Report each auto-advanced entity to the captain.
+If `MERGED`, report the reconciler outcome. The reconciler is the only owner of the receipt-bound terminal projection, archival, and eligible local worktree/branch cleanup; this mod must not issue a second status or archive mutation. A missing or invalid landing envelope fails closed and leaves the entity unchanged.
 
 If `CLOSED` (closed without merge), report to the captain: "{entity title} has PR {pr number} which was closed without merging. How to proceed? Options: reopen the PR, create a new PR from the same branch, or clear `pr` and fall back to local merge." Wait for the captain's direction before taking action.
 
@@ -28,7 +26,7 @@ Provider scope: the v1 reconciler supports GitHub `gh` and fixture-backed tests 
 
 ## Hook: idle
 
-Check PR-pending entities using the same logic as the startup hook: scan entity files for non-empty `pr` and non-terminal status, run `gh pr view` for each, and advance merged PRs (two-step `mod-block=` clear then terminalize). This is the workflow's PR-pending scan: the generic event loop fires this idle hook and owns no PR scan of its own, so a workflow with no `pr-merge` mod never reaches for `gh` in its loop. Report any advanced entities to the captain.
+Repeat the startup ordering: reconcile validated `_closeouts` receipts first, then scan ordinary PR-pending entities. The generic event loop fires this idle hook and owns no PR scan of its own, so a workflow with no `pr-merge` mod never reaches for `gh` in its loop. The reconciler owns terminal projection and idempotency; this mod only schedules calls and reports outcomes to the captain.
 
 ## Hook: merge
 
@@ -99,4 +97,4 @@ Set the entity's `pr` field to the PR number (e.g., `#57`). Report the PR to the
 
 **On decline:** Do NOT automatically fall back to local merge. Ask the captain how to proceed — options include local merge or leaving the branch unmerged. Only act on the captain's explicit choice.
 
-Do NOT archive yet. The entity stays at its current stage with `pr` set until the PR is merged. The FO handles advancement to the terminal stage and archival when it detects the merge (via this idle hook, the startup hook, or the reconcile sweep's un-advanced-pr class).
+Do NOT archive yet. The entity stays at its current stage with `pr` set until the PR is merged. On a later startup, idle hook, or reconcile sweep, the mod schedules the reconciler; only the reconciler may apply terminal projection and archival.

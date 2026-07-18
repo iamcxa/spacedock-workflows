@@ -64,7 +64,18 @@ uncapped utility skills (`domain-registry`, `ui-verify`,
 `references/*.yaml`/`.md` hold schemas consumed by both skills and checkers
 (`flow-map-schema.yaml`, `entity-body-schema.yaml`, `doc-sync-context.md`,
 `architecture-lens-triggers.yaml`, `stack-skill-map.yaml`,
-`doc-coupling-map.yaml`).
+`doc-coupling-map.yaml`, `closeout-receipt-schema.yaml`).
+
+`bin/merged-pr-closeout-reconciler.sh` orchestrates the native post-merge
+closeout: it composes `lib/resolve-landing-envelope.sh` (rebase/squash/
+merge-commit landing proof from provider `mergedAt` plus a landing anchor,
+never PR head or current main tip), `lib/persist-closeout-intent.sh`
+(pre-merge owner + `merge_method_intent`), `lib/apply-closeout-bundle.sh`
+(one atomic direct-mode terminal Git bundle: debrief, final `ship.md`,
+archive move, ROADMAP row, receipt), and
+`lib/validate-closeout-receipt.py` (schema/binding validation for the
+versioned `docs/ship-flow/_closeouts/<closeout_id>.json` receipt, which also
+serves as the recursion sentinel for the optional closeout PR).
 
 ```mermaid
 C4Component
@@ -73,14 +84,18 @@ C4Component
   Component(libcore, "lib/ core", "bash", "advance-stage, allocate-id, registry-resolve, extract/patch-map, validate-tdd-ledger.py")
   Component(libtest, "lib/__tests__/", "bash test-*.sh + .rb assertions", "One test file per checker/lib surface; CI's full-suite loop")
   Component(binckeckers, "bin/ checkers", "bash + *.mjs", "check-invariants, canonical-doc-sync-checker, doc-impact-gate, semantic-review/auto-merge-* stack")
+  Component(closeoutlib, "lib/ closeout primitives", "bash + python", "resolve-landing-envelope, persist-closeout-intent, apply-closeout-bundle, validate-closeout-receipt.py")
   Component(refs, "references/", "yaml + md", "Schema + coupling-map + decision records consumed by both skill and checker layers")
 
   Rel(stageskills, libcore, "source/invoke")
   Rel(utilskills, libcore, "source/invoke")
   Rel(binckeckers, refs, "parse schema/coupling config")
   Rel(binckeckers, libcore, "source shared shell primitives (glob-match, doc-rationale)")
+  Rel(binckeckers, closeoutlib, "merged-pr-closeout-reconciler.sh orchestrates the closeout bundle")
+  Rel(closeoutlib, refs, "reads/writes closeout-receipt-schema.yaml")
   Rel(libtest, binckeckers, "RED/GREEN pins each checker")
   Rel(libtest, libcore, "RED/GREEN pins each lib primitive")
+  Rel(libtest, closeoutlib, "RED/GREEN pins landing proof, receipt, bundle, and recursion sentinel")
 ```
 <!-- /section:components -->
 
@@ -101,6 +116,7 @@ C4Component
 - Canonical docs (this file, PRODUCT.md, ROADMAP.md) are section-tag +
   script-mediated (Principle 5): mutate via `lib/patch-map.sh` CAS, not
   freehand edits, once a section exists.
+- Post-merge closeout (`bin/merged-pr-closeout-reconciler.sh`) treats provider `mergedAt` plus a versioned landing-envelope proof — never a rebase-rewritten PR-head SHA or the current main tip — as the only valid landing evidence (D1); closeout identity is one owner per repository + workflow + entity + implementation PR (D2); every terminal state change (debrief, final `ship.md`, archive move, ROADMAP row, receipt) is one atomic Git bundle per mode, direct or optional-PR (D3); recursion is prevented by the persisted `docs/ship-flow/_closeouts/<closeout_id>.json` receipt acting as sentinel, never PR title/body prose (D4); the actual landing method is proof-derived, with a pre-merge `merge_method_intent` breaking ties only among proof-valid candidates, never trusted as provider fact alone (D5).
 <!-- /section:constraints -->
 
 <!-- section:dependencies -->
@@ -123,6 +139,7 @@ C4Component
 | --- | --- |
 | 1-self-adoption-dogfood-bootstrap | Bootstrapped this file (previously WARN-skipped by Principle 5b) + `PRODUCT.md`/`ROADMAP.md` completion; added `bin/doc-impact-gate.sh` — a mechanical, config-driven coupling gate (`references/doc-coupling-map.yaml`) that fails plugin-touching PRs which skip a coupled doc without a `doc-impact: none — <reason>` declaration. D1: new tight YAML coupling map (not a direct parse of the coarser `doc-sync-context.md`). D2: declaration lives in the PR body, passed to the checker as an explicit input — never fetched by the checker itself, preserving offline testability and the R3 mechanical-only boundary. D3: path-class threshold (coupling `srcGlobs` are the configurable surface; no LOC/file-count size variable). D4: shell checker family, sibling to `canonical-doc-sync-checker.sh`; `glob_to_regex` and `is_weak_skip_rationale` extracted from `resolve-skill-routing.sh` / `canonical-doc-sync-checker.sh` into sourceable `lib/glob-match.sh` / `lib/doc-rationale.sh` (DRY — second live consumer). |
 | c14-fo-dispatch-contract | Defines exactly two independent owner-bearing transition contracts plus one narrow ownerless compatibility exception outside that contract model. First Officer stage entry uses a subject-only `dispatch:` or `advance:` receipt with a nonempty summary, every after-status bound to the named stage, and parent-revision direct/feedback graph validation first. Stage-worker completion uses the atomic `advance-stage.sh` helper chain only on compatible folder entities, registers the completed stage without entering the next one, and requires the caller to supply the completion signature before a real status mutation. Automation must never select the exception: First Officer automation still emits Contract 1. Only a graph-gated shape-confirm-era folder entity whose body table exists without `stage_outputs:` may use the ownerless legacy manual-mutation compatibility path until shape-confirm seeds that map; arbitrary manual bypass otherwise remains rejected. The checked-in skill/checker contract activates immediately for the next `/ship` and for a compatible current entity. Migration/rename is deferred to #36, merge semantics to #37, and authenticated provenance to #38. |
+| ship-stage-debrief-closeout | Makes debrief a native post-merge ship closeout. D1-D5 (design.md): a versioned landing-envelope proof (never PR head/current main) is the only valid landing evidence; closeout identity is one owner per repository+workflow+entity+PR; the repo-owned `_closeouts/<closeout_id>.json` receipt is both the write-ahead journal and the recursion sentinel; direct mode applies one atomic terminal bundle, optional-PR mode makes its closeout PR authoritative only on merge; the landing method is inferred from topology/patch proof with a persisted pre-merge intent as tie-breaker only. Idempotent and crash-resumable at every durable boundary; the frozen PR #40/#41 fixture dogfoods the exact manually-reconciled outcome. |
 | 5-issue-anchor-scope-drift-guard | Adds `plugins/ship-flow/_mods/issue-anchor-guard.md`, a wired mod (`## Hook: pre-shape` + extractable resolver) invoked from a pinned `<!-- section:issue-anchor-guard -->` block in `ship-shape/SKILL.md` before Intake, that re-anchors a re-shaped entity against its immutable original tracker issue before the model re-summarizes its own drifted `shape.md`/`design.md`/`plan.md`. CD1: reuses the existing SO/EM `proceed`/`narrow`/`return` route triad — no new enum values (`re-anchor` maps to a narrowly-scoped `return`; `split` deferred). CD2: enforcement is a shell-testable resolver + end-to-end fixture (`test-issue-anchor-guard.sh`), not unenforced SKILL prose. CD3: re-shape detection is `status:` PRIMARY (covers flat-file entities) with folder artifacts (`design.md`/`plan.md`/`execute.md`/`verify.md`/`review.md`) as a secondary signal; default-on with an explicit `--skip-issue-anchor-guard` escape hatch. CD4: the source-diff YAML carries per-AC rows (`original_issue_acs[]`, each with `met_by_existing_capability`), with a mechanically-enforced non-hollow rule (`verdict:proceed` requires both `scope_subset_of_issue:true` and `goal_still_unmet:true`). CD5: an empty-string `issue:` is treated identically to absent, and a `gh issue view` failure exits non-zero with a captain-visible error rather than a fake-empty AC list. |
 | 7-review-surface-shape-not-plan | Adds INVARIANTS.md Principle 17: the human review surface is the shape/spec (and design.md when the conditional design gate fires), never plan.md/execute.md; the FO MUST NOT offer plan.md/execute.md as a human-review artifact, drives plan→execute→verify autonomously, and stops only for a direction-confirm or UAT. Extends `## FO Discipline` (Autonomous continuation) with a direction-confirm captain-stop + a plan.md-offer Violation pattern (cross-referenced, not re-derived). Enforced by C16 (`check_review_surface_shape_not_plan`, `--check review-surface-shape-not-plan`) — Tier B per Principle 16: it pins the rule TEXT (discoverability + regression-proofing), not FO runtime behavior; the `manual:`-only-on-shape schema declares intent but does not mechanically enforce it, so FO/captain discipline stays the real backstop. Verify-gate posture unchanged: `science-officer-em` + ship-verify's auto-fired Codex adversarial (Phase C, Tier A) stay the substitute — no new verify-gate machinery. Deliberately split from #49's route-back guard to avoid scope drift; the codex-gate→mandatory pilot is deferred to a rabbit-hole todo. |
 <!-- /section:decisions -->

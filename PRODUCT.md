@@ -16,4 +16,5 @@ a Claude Code plugin from this marketplace repo (`plugins/ship-flow/`).
 | Staged pipeline stage skills (shape / design / plan / execute / verify / review / ship) | pipeline |
 | Mechanical CI gates: check-invariants, check-no-dangling, check-version-triple, shell + node test suites | quality |
 | Adopter sync and drift detection (`bin/sync-drift-check.mjs` + sync-manifest) | adoption |
+| Native post-merge ship closeout: landing-envelope proof (rebase/squash/merge-commit, concurrent-main-safe), one atomic terminal bundle, and a receipt-sentinel recursion guard for the optional closeout PR | pipeline |
 <!-- /section:capabilities -->
