@@ -1105,6 +1105,31 @@ check_review_surface_shape_not_plan() {
   return 0
 }
 
+check_ship_shape_design_always_runs() {
+  # C17 — INVARIANTS Principle 11 "Design Stage Required": the ship-shape SKILL
+  # must NOT instruct the FO to skip design → plan. Design always runs (the
+  # pre-pitch-116 skip-when clause is removed); pure-mechanical work walks
+  # ship-design's Phase 0 trivial-pass, and C14's transition graph has no
+  # shape→plan edge. This pins the ship-shape prose so it cannot drift back to
+  # the removed skip guidance (which only C14 would catch, reactively, after an
+  # FO already wasted effort). Tier B (text presence). Fixture override:
+  # FIXTURE_SHAPE_SKILL=path.
+  local skill_file="${FIXTURE_SHAPE_SKILL:-${ROOT}/plugins/ship-flow/skills/ship-shape/SKILL.md}"
+  [ -f "$skill_file" ] || return 0
+  local drift=0
+  if grep -qiE 'auto-skip to .{0,2}plan' "$skill_file"; then
+    echo "ERROR [Principle 11/ship-shape]: ship-shape/SKILL.md tells the FO to 'auto-skip to plan' — design always runs (no shape→plan skip; C14 rejects the transition). Advance to design; pure-mechanical work walks ship-design Phase 0 trivial-pass. See INVARIANTS.md '### Principle 11'." >&2
+    drift=1
+  fi
+  if grep -qiE 'emit stub.*hand-off to plan.*design-skipped' "$skill_file"; then
+    echo "ERROR [Principle 11/ship-shape]: ship-shape/SKILL.md instructs SHAPE to emit the design-skipped '### Hand-off to Plan' — that hand-off is emitted by ship-design's Phase 0 trivial-pass (Principle 11.3), not by shape. Shape emits '### Hand-off to Design'." >&2
+    drift=1
+  fi
+  if [ "$drift" = 1 ]; then return 1; fi
+  echo "OK C17 ship-shape-design-always-runs"
+  return 0
+}
+
 # ---- C10-C13: 2026-05-13 Phase 1/2B/3A merge enforcement ----
 # Elevates Hermetic Dependency Policy + Multi-Specialist Panel + FO Receipt
 # contracts from stage-SKILL-internal invariants to plugin-level CI checks.
@@ -2417,6 +2442,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     visible-surface-map-contract) check_visible_surface_map_contract; exit $? ;;
     artifact-verbosity) check_artifact_verbosity; exit $? ;;
     review-surface-shape-not-plan) check_review_surface_shape_not_plan; exit $? ;;
+    ship-shape-design-always-runs) check_ship_shape_design_always_runs; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -2487,5 +2513,8 @@ check_artifact_verbosity || FAIL=1
 # C16: Principle 17 — review-surface rule text pin (2026-07-18)
 # Source: 7-review-surface-shape-not-plan / issue #60
 check_review_surface_shape_not_plan || FAIL=1
+# C17: Principle 11 — ship-shape must not tell the FO to skip design→plan (2026-07-18)
+# Source: #63
+check_ship_shape_design_always_runs || FAIL=1
 
 exit $FAIL
