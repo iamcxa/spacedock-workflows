@@ -210,6 +210,37 @@ build_young_squash_repo() {
   ANCHOR="$(git -C "$repo" rev-parse HEAD)"
 }
 
+build_sync_merge_landing_repo() {
+  local repo="$1"
+  init_repo "$repo"
+
+  git -C "$repo" checkout -qb topic "$INITIAL"
+  git -C "$repo" commit --allow-empty -qm "source metadata marker"
+  EMPTY_SOURCE="$(git -C "$repo" rev-parse HEAD)"
+  commit_file "$repo" feature-one.txt "feature one" "source one"
+  SRC1="$(git -C "$repo" rev-parse HEAD)"
+
+  git -C "$repo" checkout -q main
+  commit_file "$repo" synced-main.txt "synced main" "main advance before topic sync"
+
+  git -C "$repo" checkout -q topic
+  git -C "$repo" merge --no-ff -q main -m "sync main into topic"
+  SYNC_MERGE="$(git -C "$repo" rev-parse HEAD)"
+  commit_file "$repo" feature-two.txt "feature two" "source two"
+  SRC2="$(git -C "$repo" rev-parse HEAD)"
+  ORIGINAL_HEAD="$SRC2"
+
+  git -C "$repo" checkout -q main
+  commit_file "$repo" main-after-sync.txt "later main" "main advance after topic sync"
+  BASE_BEFORE="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" merge --no-ff -q topic -m "merge landing"
+  ANCHOR="$(git -C "$repo" rev-parse HEAD)"
+  MAIN_TIP="$ANCHOR"
+
+  SOURCE_CSV="${EMPTY_SOURCE},${SRC1},${SYNC_MERGE},${SRC2}"
+  TAMPERED_SOURCE_CSV="${EMPTY_SOURCE},${SRC1},${SRC2},${SYNC_MERGE}"
+}
+
 build_octopus_repo() {
   local repo="$1"
   init_repo "$repo"
@@ -353,6 +384,17 @@ else
   run_success_case rebase
   run_success_case squash
   run_success_case merge_commit
+
+  sync_merge_repo="$TMP_DIR/sync-merge-repo"
+  build_sync_merge_landing_repo "$sync_merge_repo"
+  sync_merge_out="$TMP_DIR/sync-merge.out"
+  sync_merge_rc="$(run_resolver "$sync_merge_repo" "$sync_merge_out" "$ANCHOR" "$SOURCE_CSV" 4 merge_commit)"
+  assert_exit "merge landing with source sync merge exits success" 0 "$sync_merge_rc"
+  assert_field "sync merge landing selects merge commit" "$sync_merge_out" strategy merge_commit
+  assert_field "sync merge landing preserves final base-before" "$sync_merge_out" base_before "$BASE_BEFORE"
+  assert_field "sync merge landing keeps provider commit order" "$sync_merge_out" landing_commits "${SOURCE_CSV},${ANCHOR}"
+  assert_fields_equal "sync merge landing effective aggregate agrees" "$sync_merge_out" source_patch_digest landing_patch_digest
+  run_rejection_case "tampered sync merge source order" "$sync_merge_repo" "$ANCHOR" "$TAMPERED_SOURCE_CSV" 4 merge_commit "$REASON_PATCH_FAILED"
 
   young_repo="$TMP_DIR/young-squash-repo"
   build_young_squash_repo "$young_repo"

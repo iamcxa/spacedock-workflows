@@ -22,6 +22,7 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 PHASES = ("prepared", "awaiting_closeout_pr", "applied", "complete")
 LANDING_STRATEGIES = ("rebase", "squash", "merge_commit")
 STRATEGY_EVIDENCE = "topology+ordered-patch-ids+aggregate-patch-digest"
+EMPTY_PATCH_ID = hashlib.sha1(b"ship-flow-empty-patch-v1\n").hexdigest()
 RFC3339_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
 )
@@ -231,6 +232,8 @@ def git_output(
 
 
 def patch_id_from_bytes(patch: bytes) -> str:
+    if not patch:
+        return EMPTY_PATCH_ID
     try:
         result = subprocess.run(
             ["git", "patch-id", "--stable"],
@@ -248,9 +251,18 @@ def patch_id_from_bytes(patch: bytes) -> str:
 
 
 def commit_patch_id(repo_root: Path, commit: str) -> str:
-    patch = git_output(
-        repo_root, ["show", "--format=", "--no-ext-diff", "--binary", commit]
-    )
+    parent_fields = git_output(
+        repo_root, ["rev-list", "--parents", "-n", "1", commit]
+    ).decode().split()
+    if len(parent_fields) > 2:
+        patch = git_output(
+            repo_root,
+            ["diff", "--no-ext-diff", "--binary", f"{commit}^1", commit],
+        )
+    else:
+        patch = git_output(
+            repo_root, ["show", "--format=", "--no-ext-diff", "--binary", commit]
+        )
     return patch_id_from_bytes(patch)
 
 
@@ -483,7 +495,7 @@ def verify_output_bytes(receipt: dict[str, Any], repo_root: Path) -> None:
     if len(opens) != 1 or len(closes) != 1 or opens[0] >= closes[0]:
         fail("closeout-stage-artifacts-incoherent", "ROADMAP must contain one bounded Shipped section")
     identity = outputs["roadmap_row"]["identity"]
-    matched_rows: list[str] = []
+    matched_rows: list[tuple[str, list[str]]] = []
     for line in lines[opens[0] + 1 : closes[0]]:
         stripped = line.strip()
         if not (stripped.startswith("|") and stripped.endswith("|")):
@@ -492,10 +504,18 @@ def verify_output_bytes(receipt: dict[str, Any], repo_root: Path) -> None:
         if len(cells) < 2 or all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
             continue
         if cells[0] == identity:
-            matched_rows.append(line)
+            matched_rows.append((line, cells))
     if len(matched_rows) != 1:
         fail("closeout-stage-artifacts-incoherent", "ROADMAP identity must be one exact Shipped table cell")
-    if sha256_hex(matched_rows[0].encode("utf-8")) != outputs["roadmap_row"]["sha256"]:
+    matched_line, matched_cells = matched_rows[0]
+    merge_date = receipt["landing_proof"]["provider_merged_at"][:10]
+    expected_shipped = f"{merge_date} (PR #{receipt['identity']['implementation_pr']})"
+    if len(matched_cells) != 3 or matched_cells[2] != expected_shipped:
+        fail(
+            "closeout-sentinel-payload-mismatch",
+            "landed ROADMAP row does not bind provider merge date and implementation PR",
+        )
+    if sha256_hex(matched_line.encode("utf-8")) != outputs["roadmap_row"]["sha256"]:
         fail("closeout-sentinel-payload-mismatch", "landed ROADMAP row bytes differ")
 
 

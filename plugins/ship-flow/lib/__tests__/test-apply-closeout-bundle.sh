@@ -79,7 +79,7 @@ make_bundle() {
   printf '%s\n' '# Ship' '' '### Verdict' "merge_method_intent: $strategy" 'pr: "#40"' 'closeout_id: pending' '' '### Closeout' 'status: applied' >"$bundle/docs/ship-flow/_archive/widget-closeout/ship.md"
   awk '
     $0 == "| widget-closeout | Widget closeout |" { next }
-    $0 == "<!-- /section:shipped -->" { print "| widget-closeout | Widget closeout | 2026-07-15 |" }
+    $0 == "<!-- /section:shipped -->" { print "| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |" }
     { print }
   ' "$repo/ROADMAP.md" >"$bundle/ROADMAP.md"
 
@@ -133,7 +133,7 @@ for line in envelope.read_text().splitlines():
         landing[key]=value.split(",")
     else:
         landing[key]=value
-row="| widget-closeout | Widget closeout | 2026-07-15 |"
+row="| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |"
 r={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":ident,
  "ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{
    "index":h(repo/"docs/ship-flow/widget-closeout/index.md"),"review":h(repo/"docs/ship-flow/widget-closeout/review.md"),"ship":h(repo/"docs/ship-flow/widget-closeout/ship.md")}},
@@ -234,7 +234,7 @@ else
   assert_eq 'nested TDD ledger is archived byte-for-byte' "$source_ledger_hash" "$(sha256_file "$repo/docs/ship-flow/_archive/widget-closeout/ledgers/tdd.yaml" 2>/dev/null || true)"
   if [ ! -e "$repo/docs/ship-flow/_archive/widget-closeout/ignored-private.txt" ]; then pass 'ignored untracked bytes are not archived'; else fail 'ignored untracked bytes are not archived'; fi
   if [ -f "$repo/docs/ship-flow/_debriefs/2026-07-15-01.md" ]; then pass 'debrief landed'; else fail 'debrief landed'; fi
-  assert_eq 'exactly one Shipped row landed' 1 "$(grep -c '^| widget-closeout | Widget closeout | 2026-07-15 |$' "$repo/ROADMAP.md")"
+  assert_eq 'exactly one Shipped row landed' 1 "$(grep -c '^| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |$' "$repo/ROADMAP.md")"
   assert_eq 'ROADMAP preserves exact slug row outside bounded sections' 1 "$(grep -c '^| widget-closeout | Outside bounded sections |$' "$repo/ROADMAP.md")"
   assert_eq 'ROADMAP ignores slug in a non-identity Now cell' 1 "$(grep -c '^| neighbor | widget-closeout |$' "$repo/ROADMAP.md")"
   first_head="$(git -C "$repo" rev-parse HEAD)"

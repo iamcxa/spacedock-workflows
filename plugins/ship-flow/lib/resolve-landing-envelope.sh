@@ -39,12 +39,41 @@ join_by_comma() {
   printf '%s\n' "$output"
 }
 
+empty_patch_id() {
+  if command -v shasum >/dev/null 2>&1; then
+    printf 'ship-flow-empty-patch-v1\n' | shasum | awk '{print $1}'
+  else
+    printf 'ship-flow-empty-patch-v1\n' | sha1sum | awk '{print $1}'
+  fi
+}
+
 commit_patch_id() {
   local repo="$1"
   local commit="$2"
-  git -C "$repo" show --format= --no-ext-diff --binary "$commit" |
-    git patch-id --stable |
-    awk 'NR == 1 { print $1; exit }'
+  local parent_line
+  local parent_fields=()
+  local patch_id
+
+  parent_line="$(git -C "$repo" rev-list --parents -n 1 "$commit")"
+  read -r -a parent_fields <<< "$parent_line"
+  if [ "${#parent_fields[@]}" -gt 2 ]; then
+    patch_id="$(
+      git -C "$repo" diff --no-ext-diff --binary "${commit}^1" "$commit" |
+        git patch-id --stable |
+        awk 'NR == 1 { print $1; exit }'
+    )"
+  else
+    patch_id="$(
+      git -C "$repo" show --format= --no-ext-diff --binary "$commit" |
+        git patch-id --stable |
+        awk 'NR == 1 { print $1; exit }'
+    )"
+  fi
+  if [ -n "$patch_id" ]; then
+    printf '%s\n' "$patch_id"
+  else
+    empty_patch_id
+  fi
 }
 
 ordered_patch_ids() {
@@ -313,6 +342,12 @@ if [ "$parent_count" -eq 1 ]; then
 else
   merge_base_before="${parent_fields[1]}"
   merge_topic_tip="${parent_fields[2]}"
+  merge_source_base="$(git -C "$repo_dir" merge-base "$merge_base_before" "$source_last" 2>/dev/null || true)"
+  [ -n "$merge_source_base" ] ||
+    reject "landing-topology-unsupported" "source tip has no common base with the landing base"
+  source_patch_digest="$(aggregate_patch_digest "$repo_dir" "$merge_source_base" "$source_last" || true)"
+  [ -n "$source_patch_digest" ] ||
+    reject "landing-patch-equivalence-failed" "source effective aggregate patch is empty"
   while IFS= read -r commit; do
     [ -n "$commit" ] && merge_commits+=("$commit")
   done < <(git -C "$repo_dir" rev-list --reverse --topo-order "${merge_base_before}..${merge_topic_tip}")

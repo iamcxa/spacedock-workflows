@@ -68,8 +68,8 @@ landing_proof:
     strategy: { type: enum, values: [rebase, squash, merge_commit] }
     strategy_evidence: { type: const, value: "topology+ordered-patch-ids+aggregate-patch-digest" }
     pr_commit_count: { type: integer, minimum: 1 }
-    source_commit_patch_ids: { type: array, items: 40-hex }
-    source_patch_digest: { type: sha256 }
+    source_commit_patch_ids: { type: array, items: 40-hex, semantics: "ordered stable patch identities; a merge commit uses its first-parent diff, and an empty diff uses sha1('ship-flow-empty-patch-v1\\n')" }
+    source_patch_digest: { type: sha256, semantics: "effective source tree delta; merge_commit uses merge-base(base_before, provider source tip) through that tip so already-synced base changes are not counted twice" }
     landing_commits: { type: array, items: 40-hex, unique: true }
     landing_commit_patch_ids: { type: array, items: 40-hex }
     landing_patch_digest: { type: sha256 }
@@ -93,6 +93,9 @@ landing_proof:
     - "rebase ordered first-parent range from base_before through anchor equals landing_commits"
     - "squash anchor has one parent equal to base_before"
     - "merge_commit anchor has two parents, first parent equals base_before, and second-parent topic range plus anchor equals landing_commits"
+    - "merge commits in the ordered source or landing range use stable first-parent diff identity, including topic sync merges"
+    - "an empty ordinary or first-parent merge diff uses the domain-separated v1 empty-patch identity without removing that commit from the ordered proof"
+    - "merge_commit source aggregate uses the common base of base_before and the provider source tip, while landing aggregate uses base_before through the anchor"
     - "Git-derived landing patch IDs and aggregate digest equal the receipt"
 transaction:
   phase: { type: enum, values: [prepared, awaiting_closeout_pr, applied, complete] }
@@ -130,7 +133,7 @@ outputs:
   roadmap_row:
     exact_keys: [identity, sha256]
     fields: { identity: entity_slug, sha256: sha256 }
-    invariant: "roadmap_row.identity equals identity.entity_slug and must occupy cells[0] of exactly one row in the bounded Shipped table"
+    invariant: "roadmap_row.identity equals identity.entity_slug and must occupy cells[0] of exactly one row in the bounded Shipped table; cells[2] equals the provider merge date plus (PR #identity.implementation_pr), and sha256 binds those exact row bytes"
 proof_hash:
   algorithm: sha256
   canonical_payload_keys: [identity, ownership_proof, landing_proof, outputs]
