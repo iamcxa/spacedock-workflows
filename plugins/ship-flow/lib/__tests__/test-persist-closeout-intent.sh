@@ -9,6 +9,7 @@ PASS=0; FAIL=0
 ok(){ echo "  PASS: $1"; PASS=$((PASS+1)); }; bad(){ echo "  FAIL: $1"; FAIL=$((FAIL+1)); }
 hash(){ shasum -a 256 "$1" | awk '{print $1}'; }
 entity(){ local p="$1" slug="$2" owner="${3:-}" title="${4:-x}" pr="${5:-#40}"; mkdir -p "$(dirname "$p")"; printf '%s\n' '---' "title: $title" 'status: ship' "slug: $slug" "pr: \"$pr\"" ${owner:+"closeout_owner: $owner"} '---' '' '## Body' >"$p"; }
+entity_without_slug(){ local p="$1" owner="${2:-}" title="${3:-x}" pr="${4:-#40}"; mkdir -p "$(dirname "$p")"; printf '%s\n' '---' "title: $title" 'status: ship' "pr: \"$pr\"" ${owner:+"closeout_owner: $owner"} '---' '' '## Body' >"$p"; }
 ship(){ printf '%s\n' '## Summary' '' '### Verdict' 'status: PASSED' >"$1"; }
 run(){ set +e; bash "$HELPER" "$@" >"$TMP/out" 2>&1; RC=$?; set -e; }
 reason(){ if grep -q "^reason=$2$" "$TMP/out" && [ "$RC" -ne 0 ]; then ok "$1"; else bad "$1"; cat "$TMP/out"; fi; }
@@ -17,6 +18,20 @@ echo "=== persist closeout intent contract ==="
 entity "$TMP/active/index.md" one; cp "$TMP/active/index.md" "$TMP/main.md"; ship "$TMP/ship.md"
 run --entity "$TMP/active/index.md" --if-hash "$(hash "$TMP/active/index.md")" --mirror-entity "$TMP/main.md" --mirror-if-hash "$(hash "$TMP/main.md")" --ship "$TMP/ship.md" --ship-if-hash "$(hash "$TMP/ship.md")" --merge-method-intent squash
 if [ "$RC" -eq 0 ] && grep -q '^closeout_owner: true$' "$TMP/active/index.md" && grep -q '^closeout_owner: true$' "$TMP/main.md" && grep -q '^merge_method_intent: squash$' "$TMP/ship.md"; then ok "unique match owns implicitly and mirrors optional intent"; else bad "unique match owns implicitly and mirrors optional intent"; cat "$TMP/out"; fi
+
+entity_without_slug "$TMP/fallback/active/path-identity/index.md"; entity_without_slug "$TMP/fallback/mirror/path-identity/index.md"
+run --entity "$TMP/fallback/active/path-identity/index.md" --if-hash "$(hash "$TMP/fallback/active/path-identity/index.md")" --mirror-entity "$TMP/fallback/mirror/path-identity/index.md" --mirror-if-hash "$(hash "$TMP/fallback/mirror/path-identity/index.md")"
+if [ "$RC" -eq 0 ] && grep -q '^closeout_owner: true$' "$TMP/fallback/active/path-identity/index.md" && grep -q '^closeout_owner: true$' "$TMP/fallback/mirror/path-identity/index.md"; then ok "missing slug falls back to matching entity directory identity"; else bad "missing slug falls back to matching entity directory identity"; cat "$TMP/out"; fi
+
+entity_without_slug "$TMP/fallback/mirror/other-identity/index.md"
+FB_ACTIVE_BEFORE="$(hash "$TMP/fallback/active/path-identity/index.md")"; FB_MISMATCH_BEFORE="$(hash "$TMP/fallback/mirror/other-identity/index.md")"
+run --entity "$TMP/fallback/active/path-identity/index.md" --if-hash "$FB_ACTIVE_BEFORE" --mirror-entity "$TMP/fallback/mirror/other-identity/index.md" --mirror-if-hash "$FB_MISMATCH_BEFORE" --closeout-owner true
+reason "derived mirror slug mismatch stops" closeout-checkpoint-conflict
+if [ "$FB_ACTIVE_BEFORE" = "$(hash "$TMP/fallback/active/path-identity/index.md")" ] && [ "$FB_MISMATCH_BEFORE" = "$(hash "$TMP/fallback/mirror/other-identity/index.md")" ]; then ok "derived slug mismatch leaves active and mirror byte-stable"; else bad "derived slug mismatch leaves active and mirror byte-stable"; fi
+
+entity "$TMP/explicit/active-name/index.md" shared-identity; entity "$TMP/explicit/mirror-name/index.md" shared-identity
+run --entity "$TMP/explicit/active-name/index.md" --if-hash "$(hash "$TMP/explicit/active-name/index.md")" --mirror-entity "$TMP/explicit/mirror-name/index.md" --mirror-if-hash "$(hash "$TMP/explicit/mirror-name/index.md")"
+if [ "$RC" -eq 0 ]; then ok "explicit matching slug wins over different directory names"; else bad "explicit matching slug wins over different directory names"; cat "$TMP/out"; fi
 
 H="$(hash "$TMP/active/index.md")"; SH="$(hash "$TMP/ship.md")"
 run --entity "$TMP/active/index.md" --if-hash "$H" --mirror-entity "$TMP/main.md" --mirror-if-hash "$(hash "$TMP/main.md")" --ship "$TMP/ship.md" --ship-if-hash "$SH" --merge-method-intent squash
@@ -52,6 +67,16 @@ reason "shared PR with zero owners stops" closeout-owner-not-unique
 entity "$TMP/a.md" a false; entity "$TMP/b.md" b false
 run --entity "$TMP/a.md" --if-hash "$(hash "$TMP/a.md")" --closeout-owner true --participant-entity "$TMP/b.md" --participant-if-hash "$(hash "$TMP/b.md")"
 if [ "$RC" -eq 0 ] && grep -q '^closeout_owner: true$' "$TMP/a.md"; then ok "shared PR with one owner persists"; else bad "shared PR with one owner persists"; cat "$TMP/out"; fi
+
+entity_without_slug "$TMP/fallback/participants/owner/index.md" true; entity_without_slug "$TMP/fallback/participants/member/index.md" false
+run --entity "$TMP/fallback/participants/owner/index.md" --if-hash "$(hash "$TMP/fallback/participants/owner/index.md")" --closeout-owner true --participant-entity "$TMP/fallback/participants/member/index.md" --participant-if-hash "$(hash "$TMP/fallback/participants/member/index.md")"
+if [ "$RC" -eq 0 ] && grep -q '^closeout_owner: true$' "$TMP/fallback/participants/owner/index.md"; then ok "participant identities fall back to distinct entity directories"; else bad "participant identities fall back to distinct entity directories"; cat "$TMP/out"; fi
+
+entity_without_slug "$TMP/fallback/duplicates/a/shared/index.md" true; entity_without_slug "$TMP/fallback/duplicates/b/shared/index.md" false
+DUP_OWNER_BEFORE="$(hash "$TMP/fallback/duplicates/a/shared/index.md")"; DUP_MEMBER_BEFORE="$(hash "$TMP/fallback/duplicates/b/shared/index.md")"
+run --entity "$TMP/fallback/duplicates/a/shared/index.md" --if-hash "$DUP_OWNER_BEFORE" --closeout-owner true --participant-entity "$TMP/fallback/duplicates/b/shared/index.md" --participant-if-hash "$DUP_MEMBER_BEFORE"
+reason "duplicate derived participant slug stops" closeout-owner-not-unique
+if [ "$DUP_OWNER_BEFORE" = "$(hash "$TMP/fallback/duplicates/a/shared/index.md")" ] && [ "$DUP_MEMBER_BEFORE" = "$(hash "$TMP/fallback/duplicates/b/shared/index.md")" ]; then ok "duplicate derived participant rejection is byte-stable"; else bad "duplicate derived participant rejection is byte-stable"; fi
 
 entity "$TMP/a.md" a true; entity "$TMP/b.md" b true
 run --entity "$TMP/a.md" --if-hash "$(hash "$TMP/a.md")" --closeout-owner true --participant-entity "$TMP/b.md" --participant-if-hash "$(hash "$TMP/b.md")"
