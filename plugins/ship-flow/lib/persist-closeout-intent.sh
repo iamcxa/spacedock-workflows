@@ -81,6 +81,11 @@ frontmatter_field_present() {
     END { if (!closed) exit 3 }
   ' "$file"
 }
+valid_closeout_slug() {
+  # Canonical closeout identity grammar: references/closeout-receipt-schema.yaml
+  # identity.entity_slug and validate-closeout-receipt.py SLUG_RE.
+  [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]
+}
 normalize_explicit_slug() {
   local raw="$1" slug
   raw="$(printf '%s\n' "$raw" | sed -E 's/[[:space:]]+#.*$//')"
@@ -92,9 +97,7 @@ normalize_explicit_slug() {
     null|Null|NULL|~|"") return 1 ;;
     *) slug="$raw" ;;
   esac
-  # Canonical closeout identity grammar: references/closeout-receipt-schema.yaml
-  # identity.entity_slug and validate-closeout-receipt.py SLUG_RE.
-  [[ "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]] || return 1
+  valid_closeout_slug "$slug" || return 1
   printf '%s\n' "$slug"
 }
 slug_for_file() {
@@ -105,7 +108,9 @@ slug_for_file() {
     printf '%s\n' "$slug"
     return
   fi
-  basename "$(cd -- "$(dirname -- "$file")" && pwd -P)"
+  slug="$(basename "$(cd -- "$(dirname -- "$file")" && pwd -P)")"
+  valid_closeout_slug "$slug" || return 1
+  printf '%s\n' "$slug"
 }
 validate_frontmatter() {
   frontmatter_field "$1" __ship_flow_frontmatter_validation__ >/dev/null
@@ -143,11 +148,11 @@ fi
 PRIMARY_PR="$(frontmatter_field "$ENTITY" pr)"
 [ -n "$PRIMARY_PR" ] || report_stop missing-pr "entity has no implementation PR"
 PRIMARY_PR_NORMALIZED="$(normalize_pr "$PRIMARY_PR")" || report_stop malformed-frontmatter "entity PR is not normalized numeric identity"
-PRIMARY_SLUG="$(slug_for_file "$ENTITY")" || report_stop malformed-frontmatter "entity has empty slug"
+PRIMARY_SLUG="$(slug_for_file "$ENTITY")" || report_stop malformed-frontmatter "entity has invalid slug"
 PRIMARY_TITLE="$(frontmatter_field "$ENTITY" title)"
 [ -n "$PRIMARY_TITLE" ] || report_stop malformed-frontmatter "entity has no title"
 if [ -n "$MIRROR_ENTITY" ]; then
-  MIRROR_SLUG="$(slug_for_file "$MIRROR_ENTITY")" || report_stop malformed-frontmatter "mirror has empty slug"
+  MIRROR_SLUG="$(slug_for_file "$MIRROR_ENTITY")" || report_stop malformed-frontmatter "mirror has invalid slug"
   MIRROR_TITLE="$(frontmatter_field "$MIRROR_ENTITY" title)"
   MIRROR_PR="$(frontmatter_field "$MIRROR_ENTITY" pr)"
   MIRROR_PR_NORMALIZED="$(normalize_pr "$MIRROR_PR")" || report_stop closeout-checkpoint-conflict "mirror PR is not numeric identity"
@@ -178,7 +183,7 @@ for index in "${!PARTICIPANTS[@]}"; do
   participant_pr="$(frontmatter_field "$participant" pr)"
   participant_pr_normalized="$(normalize_pr "$participant_pr")" || report_stop closeout-owner-not-unique "participant PR is not numeric identity"
   [ "$participant_pr_normalized" = "$PRIMARY_PR_NORMALIZED" ] || report_stop closeout-owner-not-unique "participants do not share one PR"
-  participant_slug="$(slug_for_file "$participant")" || report_stop malformed-frontmatter "participant has empty slug"
+  participant_slug="$(slug_for_file "$participant")" || report_stop malformed-frontmatter "participant has invalid slug"
   if printf '%s\n' "$SEEN_SLUGS" | grep -Fxq "$participant_slug"; then
     report_stop closeout-owner-not-unique "duplicate participant slug"
   fi

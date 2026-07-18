@@ -25,6 +25,16 @@ entity_without_slug "$TMP/fallback/active/path-identity/index.md"; entity_withou
 run --entity "$TMP/fallback/active/path-identity/index.md" --if-hash "$(hash "$TMP/fallback/active/path-identity/index.md")" --mirror-entity "$TMP/fallback/mirror/path-identity/index.md" --mirror-if-hash "$(hash "$TMP/fallback/mirror/path-identity/index.md")"
 if [ "$RC" -eq 0 ] && grep -q '^closeout_owner: true$' "$TMP/fallback/active/path-identity/index.md" && grep -q '^closeout_owner: true$' "$TMP/fallback/mirror/path-identity/index.md"; then ok "missing slug falls back to matching entity directory identity"; else bad "missing slug falls back to matching entity directory identity"; cat "$TMP/out"; fi
 
+entity_without_slug "$TMP/fallback/invalid/Bad_Slug/index.md"
+INVALID_DERIVED_BEFORE="$(hash "$TMP/fallback/invalid/Bad_Slug/index.md")"
+run --entity "$TMP/fallback/invalid/Bad_Slug/index.md" --if-hash "$INVALID_DERIVED_BEFORE" --closeout-owner true
+reason "invalid derived slug is malformed" malformed-frontmatter
+if [ "$INVALID_DERIVED_BEFORE" = "$(hash "$TMP/fallback/invalid/Bad_Slug/index.md")" ]; then ok "invalid derived slug rejection is byte-stable"; else bad "invalid derived slug rejection is byte-stable"; fi
+
+entity_without_slug "$TMP/fallback/valid/null/index.md"
+run --entity "$TMP/fallback/valid/null/index.md" --if-hash "$(hash "$TMP/fallback/valid/null/index.md")"
+if [ "$RC" -eq 0 ] && grep -q '^closeout_owner: true$' "$TMP/fallback/valid/null/index.md"; then ok "derived null directory is a canonical string slug"; else bad "derived null directory is a canonical string slug"; cat "$TMP/out"; fi
+
 entity_without_slug "$TMP/fallback/mirror/other-identity/index.md"
 FB_ACTIVE_BEFORE="$(hash "$TMP/fallback/active/path-identity/index.md")"; FB_MISMATCH_BEFORE="$(hash "$TMP/fallback/mirror/other-identity/index.md")"
 run --entity "$TMP/fallback/active/path-identity/index.md" --if-hash "$FB_ACTIVE_BEFORE" --mirror-entity "$TMP/fallback/mirror/other-identity/index.md" --mirror-if-hash "$FB_MISMATCH_BEFORE" --closeout-owner true
