@@ -22,6 +22,7 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 PHASES = ("prepared", "awaiting_closeout_pr", "applied", "complete")
 LANDING_STRATEGIES = ("rebase", "squash", "merge_commit")
 STRATEGY_EVIDENCE = "topology+ordered-patch-ids+aggregate-patch-digest"
+EMPTY_PATCH_ID = hashlib.sha1(b"ship-flow-empty-patch-v1\n").hexdigest()
 RFC3339_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
 )
@@ -231,6 +232,8 @@ def git_output(
 
 
 def patch_id_from_bytes(patch: bytes) -> str:
+    if not patch:
+        return EMPTY_PATCH_ID
     try:
         result = subprocess.run(
             ["git", "patch-id", "--stable"],
@@ -248,9 +251,18 @@ def patch_id_from_bytes(patch: bytes) -> str:
 
 
 def commit_patch_id(repo_root: Path, commit: str) -> str:
-    patch = git_output(
-        repo_root, ["show", "--format=", "--no-ext-diff", "--binary", commit]
-    )
+    parent_fields = git_output(
+        repo_root, ["rev-list", "--parents", "-n", "1", commit]
+    ).decode().split()
+    if len(parent_fields) > 2:
+        patch = git_output(
+            repo_root,
+            ["diff", "--no-ext-diff", "--binary", f"{commit}^1", commit],
+        )
+    else:
+        patch = git_output(
+            repo_root, ["show", "--format=", "--no-ext-diff", "--binary", commit]
+        )
     return patch_id_from_bytes(patch)
 
 

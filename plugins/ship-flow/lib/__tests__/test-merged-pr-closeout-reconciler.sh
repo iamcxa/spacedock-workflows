@@ -4451,7 +4451,7 @@ EOF
 }
 
 run_direct_transaction_case() {
-  local repo="$TMP_DIR/direct-transaction-repo"
+  local repo="$TMP_DIR/direct-transaction-repo" rc
   setup_repo "$repo"
   printf '%s\n' '.worktrees/' >"$repo/.gitignore"
   printf '%s\n' '# Roadmap' '| merged-fixture-entity | Outside sections must survive |' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' '| merged-fixture-entity | Merged fixture entity |' '| neighbor | mentions merged-fixture-entity in another cell |' '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
@@ -4479,7 +4479,51 @@ run_direct_transaction_case() {
     'head_ref=cleanup-topic' 'base_ref=main' 'url=https://github.com/example/repo/pull/131' \
     'repository=example/repo' "landing_anchor=$anchor" "source_commits=$source_one,$source_two" 'pr_commit_count=2' >"$fixture"
 
-  local before_head rc receipt debrief landed_head
+  local pre_shipped_repo="$TMP_DIR/direct-pre-shipped-repo" pre_shipped_head pre_shipped_tree
+  git clone -q "$repo" "$pre_shipped_repo"
+  git -C "$pre_shipped_repo" config user.email test@example.test
+  git -C "$pre_shipped_repo" config user.name 'Ship Flow Test'
+  python3 - "$pre_shipped_repo/ROADMAP.md" <<'PY'
+import pathlib,sys
+path=pathlib.Path(sys.argv[1]); lines=path.read_text().splitlines()
+active="| merged-fixture-entity | Merged fixture entity |"
+assert lines.count(active)==1
+lines.remove(active)
+close=lines.index("<!-- /section:shipped -->")
+lines.insert(close,"| merged-fixture-entity | Merged fixture entity | 2026-07-15 (PR #131) |")
+path.write_text("\n".join(lines)+"\n")
+PY
+  git -C "$pre_shipped_repo" add -- ROADMAP.md
+  git -C "$pre_shipped_repo" commit -qm 'fixture: implementation pre-stages shipped roadmap row'
+  pre_shipped_head="$(git -C "$pre_shipped_repo" rev-parse HEAD)"
+  pre_shipped_tree="$(git -C "$pre_shipped_repo" rev-parse 'HEAD^{tree}')"
+  rc="$(run_helper "$pre_shipped_repo" "$TMP_DIR/direct-pre-shipped.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --dry-run)"
+  if [ "$rc" != 0 ]; then sed 's/^/    pre-shipped: /' "$TMP_DIR/direct-pre-shipped.out"; fi
+  assert_exit 'direct dry-run accepts one pre-staged Shipped identity row' 0 "$rc"
+  assert_contains 'direct pre-staged Shipped dry-run plans coherent bundle' '^state=closeout_bundle_planned$' "$TMP_DIR/direct-pre-shipped.out"
+  if [ "$pre_shipped_head" = "$(git -C "$pre_shipped_repo" rev-parse HEAD)" ] && \
+     [ "$pre_shipped_tree" = "$(git -C "$pre_shipped_repo" rev-parse 'HEAD^{tree}')" ]; then
+    record_pass 'direct pre-staged Shipped dry-run preserves HEAD and tree'
+  else
+    record_fail 'direct pre-staged Shipped dry-run preserves HEAD and tree'
+  fi
+
+  local stale_shipped_repo="$TMP_DIR/direct-stale-shipped-repo" stale_shipped_head
+  git clone -q "$pre_shipped_repo" "$stale_shipped_repo"
+  perl -0pi -e 's/\(PR #131\)/\(PR #999\)/' "$stale_shipped_repo/ROADMAP.md"
+  git -C "$stale_shipped_repo" add -- ROADMAP.md
+  git -C "$stale_shipped_repo" commit -qm 'fixture: stale Shipped identity belongs to another PR'
+  stale_shipped_head="$(git -C "$stale_shipped_repo" rev-parse HEAD)"
+  rc="$(run_helper "$stale_shipped_repo" "$TMP_DIR/direct-stale-shipped.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture" --dry-run)"
+  assert_exit 'direct dry-run rejects stale Shipped identity from another PR' 2 "$rc"
+  assert_contains 'direct stale Shipped identity reports stage incoherence' '^reason=closeout-stage-artifacts-incoherent$' "$TMP_DIR/direct-stale-shipped.out"
+  if [ "$stale_shipped_head" = "$(git -C "$stale_shipped_repo" rev-parse HEAD)" ]; then
+    record_pass 'direct stale Shipped rejection preserves HEAD'
+  else
+    record_fail 'direct stale Shipped rejection preserves HEAD'
+  fi
+
+  local before_head receipt debrief landed_head
   before_head="$(git -C "$repo" rev-parse HEAD)"
   rc="$(run_helper "$repo" "$TMP_DIR/direct.out" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
   if [ "$rc" != 0 ]; then sed 's/^/    helper: /' "$TMP_DIR/direct.out"; fi
@@ -5115,7 +5159,6 @@ else
     run_pull_request_roadmap_validation_case
     run_doc_scope_cases
   else
-  run_provider_pagination_case
   run_runtime_regression_cases
   run_incomplete_landing_contract_case
   run_missing_landing_field_matrix

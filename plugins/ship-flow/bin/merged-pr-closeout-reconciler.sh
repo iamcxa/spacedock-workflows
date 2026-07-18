@@ -1284,11 +1284,22 @@ def identity_rows(start,end):
     return found
 now_open,now_close=bounds("now"); shipped_open,shipped_close=bounds("shipped")
 now_rows=identity_rows(now_open,now_close); shipped_rows=identity_rows(shipped_open,shipped_close)
-if len(now_rows)!=1: raise SystemExit("ROADMAP Now must contain exactly one identity row")
-if shipped_rows: raise SystemExit("ROADMAP Shipped already contains identity row")
-out=roadmap[:now_rows[0]]+roadmap[now_rows[0]+1:]
-if now_rows[0]<shipped_close: shipped_close-=1
-out.insert(shipped_close,row)
+if len(now_rows)==1 and not shipped_rows:
+    out=roadmap[:now_rows[0]]+roadmap[now_rows[0]+1:]
+    if now_rows[0]<shipped_close: shipped_close-=1
+    out.insert(shipped_close,row)
+elif not now_rows and len(shipped_rows)==1:
+    # The implementation PR may have pre-staged its own Shipped row while the
+    # entity remains active. Canonicalize that one bounded identity row rather
+    # than creating a duplicate or requiring a false Now projection.
+    existing=roadmap[shipped_rows[0]].strip()
+    cells=[cell.strip() for cell in existing[1:-1].split("|")]
+    pr_marker=rf"\d{{4}}-\d{{2}}-\d{{2}} \(PR #{re.escape(pr_number)}\)"
+    if len(cells)!=3 or cells[1]!=title or not re.fullmatch(pr_marker,cells[2]):
+        raise SystemExit("ROADMAP pre-staged Shipped row does not match entity and implementation PR")
+    out=list(roadmap); out[shipped_rows[0]]=row
+else:
+    raise SystemExit("ROADMAP identity must occupy exactly one Now or Shipped row")
 write("ROADMAP.md","\n".join(out)+"\n")
 arrays={"source_commit_patch_ids","landing_commits","landing_commit_patch_ids"}; ints={"schema_version","implementation_pr","pr_commit_count"}
 # source_commits is provider/rendering input, not part of the canonical D1 receipt proof.

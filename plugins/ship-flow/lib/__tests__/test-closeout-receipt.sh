@@ -205,6 +205,78 @@ PY
   printf '%s\n' "$canonical"
 }
 
+make_real_sync_merge_receipt() {
+  local repo="$1" saved_receipt="$2"
+  git init -q -b main "$repo"
+  git -C "$repo" config user.email receipt@example.test
+  git -C "$repo" config user.name 'Receipt Proof Fixture'
+  printf '%s\n' 'base' >"$repo/base.txt"
+  git -C "$repo" add base.txt
+  git -C "$repo" commit -qm 'fixture: base'
+  local initial empty_source first sync_merge second anchor envelope canonical
+  initial="$(git -C "$repo" rev-parse HEAD)"
+
+  git -C "$repo" checkout -qb source-topic "$initial"
+  git -C "$repo" commit --allow-empty -qm 'fixture: source metadata marker'
+  empty_source="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'feature one' >"$repo/feature-one.txt"
+  git -C "$repo" add feature-one.txt
+  git -C "$repo" commit -qm 'fixture: first source patch'
+  first="$(git -C "$repo" rev-parse HEAD)"
+
+  git -C "$repo" checkout -q main
+  printf '%s\n' 'synced main' >"$repo/synced-main.txt"
+  git -C "$repo" add synced-main.txt
+  git -C "$repo" commit -qm 'fixture: main advance before sync'
+  git -C "$repo" checkout -q source-topic
+  git -C "$repo" merge --no-ff -q main -m 'fixture: sync main into topic'
+  sync_merge="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'feature two' >"$repo/feature-two.txt"
+  git -C "$repo" add feature-two.txt
+  git -C "$repo" commit -qm 'fixture: second source patch'
+  second="$(git -C "$repo" rev-parse HEAD)"
+
+  git -C "$repo" checkout -q main
+  printf '%s\n' 'later main' >"$repo/later-main.txt"
+  git -C "$repo" add later-main.txt
+  git -C "$repo" commit -qm 'fixture: main advance after sync'
+  git -C "$repo" merge --no-ff -q source-topic -m 'fixture: merge landing'
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+
+  envelope="$TMP/real-sync-merge-landing.env"
+  "$LANDING_RESOLVER" --repo-dir "$repo" --repository acme/widgets --base-ref main \
+    --implementation-pr 40 --provider-merged-at 2026-07-15T00:00:00Z \
+    --landing-anchor "$anchor" --source-commits "$empty_source,$first,$sync_merge,$second" --pr-commit-count 4 \
+    --merge-method-intent merge_commit >"$envelope"
+  canonical="$(python3 - "$repo" "$envelope" "$saved_receipt" <<'PY'
+import hashlib,json,pathlib,sys
+repo,envelope,saved=sys.argv[1:]
+env={}
+for line in pathlib.Path(envelope).read_text().splitlines():
+    key,value=line.split("=",1); env[key]=value
+arrays={"source_commit_patch_ids","landing_commits","landing_commit_patch_ids"}
+ints={"schema_version","implementation_pr","pr_commit_count"}
+landing={key:(value.split(",") if key in arrays else int(value) if key in ints else value) for key,value in env.items()}
+identity={"provider":"github","repository":"acme/widgets","workflow":"docs/ship-flow","entity_slug":"widget-closeout","implementation_pr":40}
+cid=hashlib.sha256("\0".join(("v1","github","acme/widgets","docs/ship-flow","widget-closeout","40")).encode()).hexdigest(); h="a"*64
+receipt={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":identity,
+ "ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{"index":h,"review":h,"ship":h}},
+ "mode":"direct","merge_method_intent":"merge_commit","deterministic_closeout_head":"ship-closeout/"+cid,
+ "landing_proof":landing,"transaction":{"phase":"prepared","generation":1,"closeout_pr":None,"main_commit":None},
+ "outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-07-15-01.md","sha256":h},
+ "ship":{"path":"docs/ship-flow/_archive/widget-closeout/ship.md","sha256":h},
+ "archived_entity":{"path":"docs/ship-flow/_archive/widget-closeout/index.md","sha256":h},
+ "roadmap_row":{"identity":"widget-closeout","sha256":h}}}
+payload={key:receipt[key] for key in ("identity","ownership_proof","landing_proof","outputs")}
+receipt["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+canonical=pathlib.Path(repo)/"docs/ship-flow/_closeouts"/(cid+".json"); canonical.parent.mkdir(parents=True)
+text=json.dumps(receipt,sort_keys=True,indent=2)+"\n"; canonical.write_text(text); pathlib.Path(saved).write_text(text)
+print(canonical)
+PY
+)"
+  printf '%s\n' "$canonical"
+}
+
 forge_real_git_receipt() {
   local source="$1" target="$2" metadata="$3" mutation="$4"
   python3 - "$source" "$target" "$metadata" "$mutation" <<'PY'
@@ -341,6 +413,12 @@ PY
 expect_reason "self-rehashed squash source patch IDs reject against authoritative commits" closeout-sentinel-invalid \
   python3 "$VALIDATOR" --receipt "$SQUASH_RECEIPT" --repo-root "$SQUASH_REPO" \
     --source-commits "$SQUASH_SOURCES"
+
+SYNC_MERGE_REPO="$TMP/real-sync-merge-proof-repo"
+SYNC_MERGE_SAVED="$TMP/real-sync-merge-proof-valid.json"
+SYNC_MERGE_RECEIPT="$(make_real_sync_merge_receipt "$SYNC_MERGE_REPO" "$SYNC_MERGE_SAVED")"
+expect_ok "real sync-merge landing proof validates" \
+  python3 "$VALIDATOR" --receipt "$SYNC_MERGE_RECEIPT" --repo-root "$SYNC_MERGE_REPO"
 
 ARCHIVE_ROOT="$TMP/exported-tree"
 ARCHIVE_RECEIPT="$ARCHIVE_ROOT/docs/ship-flow/_closeouts/$(basename "$REAL_RECEIPT")"

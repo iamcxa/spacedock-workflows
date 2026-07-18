@@ -127,8 +127,8 @@ landing_envelope:
 
 Proof grammar is deterministic:
 
-- Common: `mergedAt` is present; anchor/base/set are full SHAs; anchor is reachable from the named base; aggregate source and landing digests match; current main tip and original PR head are never substituted.
-- Merge commit: anchor has exactly two parents; first parent is `base_before`; topic-only commits are the ordered second-parent range and the anchor is appended to `landing_commits`.
+- Common: `mergedAt` is present; anchor/base/set are full SHAs; anchor is reachable from the named base; aggregate source and landing digests match; current main tip and original PR head are never substituted. Stable per-commit identity uses the ordinary commit diff, except that merge commits use their deterministic first-parent diff. An empty diff remains in the ordered proof with the domain-separated identity `sha1("ship-flow-empty-patch-v1\n")`; it is never skipped.
+- Merge commit: anchor has exactly two parents; first parent is `base_before`; topic-only commits are the ordered second-parent range and the anchor is appended to `landing_commits`. The source aggregate is the effective topic delta from `merge-base(base_before, provider source tip)` through that tip, while the landing aggregate is `base_before..anchor`; this keeps provider-ordered sync merges in the identity proof without counting base changes already synced into the topic twice.
 - Squash: anchor has one parent, `base_before=anchor^`, `landing_commits=[anchor]`, and the anchor patch matches the PR aggregate while the ordered source-commit candidate does not also validate.
 - Rebase: anchor has one parent; walking exactly `pr_commit_count` first-parent commits yields the ordered set; ordered patch IDs match source commits and the aggregate range digest matches.
 - Zero valid candidates fail closed. When multiple candidates validate, a persisted pre-merge `merge_method_intent` may select only its matching valid candidate; absent intent is ambiguous and conflicting intent is a mismatch. The receipt records `method_source: topology|intent-discriminator`, never falsely `provider`.
