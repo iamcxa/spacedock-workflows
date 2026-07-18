@@ -1167,6 +1167,37 @@ run_flat_and_folder_case() {
   assert_path_exists "folder entity mutation remains reconciler-owned" "${repo}/docs/ship-flow/folder-merged/index.md"
 }
 
+run_flat_folder_same_slug_collision_case() {
+  local repo="$TMP_DIR/flat-folder-same-slug-repo"
+  setup_repo "$repo" execute
+  write_flat_entity "${repo}/docs/ship-flow" "same-slug" "ship" "#301"
+  write_folder_entity "${repo}/docs/ship-flow" "same-slug" "ship" "#302"
+  git -C "$repo" add -- docs/ship-flow/same-slug.md docs/ship-flow/same-slug
+  git -C "$repo" commit -qm "add flat and folder entities with the same slug" -- \
+    docs/ship-flow/same-slug.md docs/ship-flow/same-slug
+  set_pr_states 301 "MERGED"
+  set_pr_states 302 "MERGED"
+
+  local rc
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN="$TMP_DIR/reconciler-fixture"
+  SHIP_FLOW_RECONCILER_LOG="$TMP_DIR/flat-folder-same-slug.reconciler.log"
+  rc="$(run_hook "$repo" "$TMP_DIR/flat-folder-same-slug.out")"
+  SHIP_FLOW_CLOSEOUT_RECONCILER_BIN=""
+  SHIP_FLOW_RECONCILER_LOG=""
+
+  assert_exit "same-slug collision exits advisory success" 0 "$rc"
+  assert_equals "same-slug collision invokes exactly one folder reconciler" 1 \
+    "$(wc -l < "$TMP_DIR/flat-folder-same-slug.reconciler.log" | tr -d '[:space:]')"
+  assert_contains "same-slug flat record remains warning-only pending" \
+    'same-slug.*PR #301 MERGED, flat legacy entity; warning-only, no reconciler call' \
+    "$TMP_DIR/flat-folder-same-slug.out"
+  assert_not_contains "same-slug selected folder is not duplicated in pending" \
+    'same-slug.*PR #302 MERGED, canonical folder entity still' \
+    "$TMP_DIR/flat-folder-same-slug.out"
+  assert_equals "same-slug selected folder appears exactly once" 1 \
+    "$(grep -c 'same-slug.*PR #302' "$TMP_DIR/flat-folder-same-slug.out" || true)"
+}
+
 run_mixed_reconciler_outcomes_case() {
   local repo="$TMP_DIR/mixed-reconciler-outcomes-repo"
   setup_repo "$repo" execute
@@ -1306,6 +1337,7 @@ else
   should_run_case rule-b-folder-drift && run_rule_b_folder_drift_case
   should_run_case unsafe-pr-states && run_unsafe_pr_states_case
   should_run_case flat-and-folder && run_flat_and_folder_case
+  should_run_case flat-folder-same-slug && run_flat_folder_same_slug_collision_case
   should_run_case mixed-reconciler-outcomes && run_mixed_reconciler_outcomes_case
   should_run_case pathspec-only-commit && run_pathspec_only_commit_case
 fi

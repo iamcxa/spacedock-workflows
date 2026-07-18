@@ -288,9 +288,16 @@ if [ "$rule_a_candidate_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
   # legacy records and deferred folders only.
   rule_a_lines=""
   rule_a_count=0
+  selected_pending_skipped=0
   while IFS='|' read -r pending_slug pending_id pending_pr pending_kind; do
     [ -z "$pending_slug" ] && continue
-    [ "$pending_slug" = "$slug" ] && continue
+    if [ "$selected_pending_skipped" = "0" ] && \
+       [ "$pending_kind" = folder ] && \
+       [ "$pending_slug" = "$slug" ] && \
+       [ "$pending_pr" = "$pr_num" ]; then
+      selected_pending_skipped=1
+      continue
+    fi
     if [ "$pending_kind" = flat ]; then
       rule_a_lines+="  - #${pending_id:-?} \`$pending_slug\` — PR #$pending_pr MERGED, flat legacy entity; warning-only, no reconciler call"$'\n'
     else
