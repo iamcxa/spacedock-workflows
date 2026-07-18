@@ -10,7 +10,8 @@ ok(){ echo "  PASS: $1"; PASS=$((PASS+1)); }; bad(){ echo "  FAIL: $1"; FAIL=$((
 hash(){ shasum -a 256 "$1" | awk '{print $1}'; }
 entity(){ local p="$1" slug="$2" owner="${3:-}" title="${4:-x}" pr="${5:-#40}"; mkdir -p "$(dirname "$p")"; printf '%s\n' '---' "title: $title" 'status: ship' "slug: $slug" "pr: \"$pr\"" ${owner:+"closeout_owner: $owner"} '---' '' '## Body' >"$p"; }
 entity_without_slug(){ local p="$1" owner="${2:-}" title="${3:-x}" pr="${4:-#40}"; mkdir -p "$(dirname "$p")"; printf '%s\n' '---' "title: $title" 'status: ship' "pr: \"$pr\"" ${owner:+"closeout_owner: $owner"} '---' '' '## Body' >"$p"; }
-entity_with_empty_slug(){ local p="$1" owner="${2:-}" title="${3:-x}" pr="${4:-#40}"; mkdir -p "$(dirname "$p")"; printf '%s\n' '---' "title: $title" 'status: ship' 'slug: ""' "pr: \"$pr\"" ${owner:+"closeout_owner: $owner"} '---' '' '## Body' >"$p"; }
+entity_with_slug_scalar(){ local p="$1" scalar="$2" owner="${3:-}" title="${4:-x}" pr="${5:-#40}"; mkdir -p "$(dirname "$p")"; printf '%s\n' '---' "title: $title" 'status: ship' "slug: $scalar" "pr: \"$pr\"" ${owner:+"closeout_owner: $owner"} '---' '' '## Body' >"$p"; }
+entity_with_empty_slug(){ entity_with_slug_scalar "$1" '""' "${2:-}" "${3:-x}" "${4:-#40}"; }
 ship(){ printf '%s\n' '## Summary' '' '### Verdict' 'status: PASSED' >"$1"; }
 run(){ set +e; bash "$HELPER" "$@" >"$TMP/out" 2>&1; RC=$?; set -e; }
 reason(){ if grep -q "^reason=$2$" "$TMP/out" && [ "$RC" -ne 0 ]; then ok "$1"; else bad "$1"; cat "$TMP/out"; fi; }
@@ -45,6 +46,29 @@ EMPTY_ACTIVE_BEFORE="$(hash "$TMP/explicit-empty/active/shared/index.md")"; EMPT
 run --entity "$TMP/explicit-empty/active/shared/index.md" --if-hash "$EMPTY_ACTIVE_BEFORE" --mirror-entity "$TMP/explicit-empty/mirror/shared/index.md" --mirror-if-hash "$EMPTY_MIRROR_BEFORE" --closeout-owner true
 reason "explicit empty mirror slug is malformed" malformed-frontmatter
 if [ "$EMPTY_ACTIVE_BEFORE" = "$(hash "$TMP/explicit-empty/active/shared/index.md")" ] && [ "$EMPTY_MIRROR_BEFORE" = "$(hash "$TMP/explicit-empty/mirror/shared/index.md")" ]; then ok "explicit empty mirror slug rejection is byte-stable"; else bad "explicit empty mirror slug rejection is byte-stable"; fi
+
+semantic_empty_slug_case(){
+  local label="$1" scalar="$2" path before
+  path="$TMP/semantic-empty/$label/index.md"
+  entity_with_slug_scalar "$path" "$scalar"
+  before="$(hash "$path")"
+  run --entity "$path" --if-hash "$before" --closeout-owner true
+  if [ "$RC" -ne 0 ] && grep -q '^reason=malformed-frontmatter$' "$TMP/out" && [ "$before" = "$(hash "$path")" ]; then ok "semantic-empty slug $label is malformed and byte-stable"; else bad "semantic-empty slug $label is malformed and byte-stable"; cat "$TMP/out"; fi
+}
+semantic_empty_slug_case single-quoted-empty "''"
+semantic_empty_slug_case null-lower null
+semantic_empty_slug_case null-title Null
+semantic_empty_slug_case null-upper NULL
+semantic_empty_slug_case tilde '~'
+semantic_empty_slug_case comment '# comment'
+
+entity_with_slug_scalar "$TMP/explicit-valid/active-name/index.md" "'shared-valid'"; entity_with_slug_scalar "$TMP/explicit-valid/mirror-name/index.md" '"shared-valid"'
+run --entity "$TMP/explicit-valid/active-name/index.md" --if-hash "$(hash "$TMP/explicit-valid/active-name/index.md")" --mirror-entity "$TMP/explicit-valid/mirror-name/index.md" --mirror-if-hash "$(hash "$TMP/explicit-valid/mirror-name/index.md")"
+if [ "$RC" -eq 0 ]; then ok "single and double quoted canonical slugs share identity"; else bad "single and double quoted canonical slugs share identity"; cat "$TMP/out"; fi
+
+entity_with_slug_scalar "$TMP/explicit-valid/quoted-null/index.md" "'null'"
+run --entity "$TMP/explicit-valid/quoted-null/index.md" --if-hash "$(hash "$TMP/explicit-valid/quoted-null/index.md")"
+if [ "$RC" -eq 0 ]; then ok "quoted null is a canonical string slug"; else bad "quoted null is a canonical string slug"; cat "$TMP/out"; fi
 
 H="$(hash "$TMP/active/index.md")"; SH="$(hash "$TMP/ship.md")"
 run --entity "$TMP/active/index.md" --if-hash "$H" --mirror-entity "$TMP/main.md" --mirror-if-hash "$(hash "$TMP/main.md")" --ship "$TMP/ship.md" --ship-if-hash "$SH" --merge-method-intent squash

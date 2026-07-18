@@ -45,8 +45,8 @@ sha256_of() {
   fi
 }
 frontmatter_field() {
-  local file="$1" field="$2"
-  awk -v field="$field" '
+  local file="$1" field="$2" mode="${3:-value}"
+  awk -v field="$field" -v mode="$mode" '
     NR == 1 {
       if ($0 !~ /^---[[:space:]]*$/) exit 3
       opened=1
@@ -59,7 +59,8 @@ frontmatter_field() {
     }
     opened && index($0, field ":") == 1 && !found {
       value=substr($0,length(field)+2); sub(/^[[:space:]]*/,"",value); sub(/[[:space:]]*$/, "", value)
-      gsub(/^"|"$/, "", value); found=1
+      if (mode != "raw") gsub(/^"|"$/, "", value)
+      found=1
     }
     END { if (!closed) exit 3 }
   ' "$file"
@@ -80,11 +81,27 @@ frontmatter_field_present() {
     END { if (!closed) exit 3 }
   ' "$file"
 }
+normalize_explicit_slug() {
+  local raw="$1" slug
+  raw="$(printf '%s\n' "$raw" | sed -E 's/[[:space:]]+#.*$//')"
+  case "$raw" in
+    \#*) return 1 ;;
+    \"*\") slug="${raw#\"}"; slug="${slug%\"}" ;;
+    \'*\') slug="${raw#\'}"; slug="${slug%\'}" ;;
+    \"*|\'*) return 1 ;;
+    null|Null|NULL|~|"") return 1 ;;
+    *) slug="$raw" ;;
+  esac
+  # Canonical closeout identity grammar: references/closeout-receipt-schema.yaml
+  # identity.entity_slug and validate-closeout-receipt.py SLUG_RE.
+  [[ "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]] || return 1
+  printf '%s\n' "$slug"
+}
 slug_for_file() {
-  local file="$1" slug
-  slug="$(frontmatter_field "$file" slug)"
+  local file="$1" slug raw
   if frontmatter_field_present "$file" slug; then
-    [ -n "$slug" ] || return 1
+    raw="$(frontmatter_field "$file" slug raw)"
+    slug="$(normalize_explicit_slug "$raw")" || return 1
     printf '%s\n' "$slug"
     return
   fi
