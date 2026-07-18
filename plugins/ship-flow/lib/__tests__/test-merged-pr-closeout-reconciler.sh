@@ -221,6 +221,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -n "$workflow_dir" ] || exit 2
+if [ "${SHIP_FLOW_TEST_STATUS_ABSOLUTE_PATHS:-no}" = yes ]; then
+  workflow_dir="$(cd "$workflow_dir" && pwd -P)"
+fi
 
 frontmatter_field() {
   local file="$1"
@@ -4776,6 +4779,38 @@ EOF
   if [ "$conflict_before" = "$(hash_tree "$conflict_repo/docs/ship-flow")" ]; then record_pass 'direct projection conflict preserves tree'; else record_fail 'direct projection conflict preserves tree'; fi
 }
 
+run_owner_participant_normalization_case() {
+  local repo="$TMP_DIR/owner-participant-normalization-repo"
+  local fixture="$TMP_DIR/owner-participant-normalization.env"
+  local output="$TMP_DIR/owner-participant-normalization.out"
+  local receipt rc=0
+
+  prepare_full_d1_repo "$repo" "$fixture"
+  (
+    cd "$repo"
+    SHIP_FLOW_TEST_STATUS_ABSOLUTE_PATHS=yes STATUS_BIN="$STATUS_BIN" \
+      "$HELPER" --workflow-dir docs/ship-flow \
+      --entity merged-fixture-entity \
+      --pr-provider fixture \
+      --pr-fixture "$fixture" >"$output" 2>&1
+  ) || rc=$?
+
+  if [ "$rc" != 0 ]; then sed 's/^/    helper: /' "$output"; fi
+  assert_exit 'relative workflow with absolute resolved owner applies' 0 "$rc"
+  receipt="$(find "$repo/docs/ship-flow/_closeouts" -type f -name '*.json' -print -quit 2>/dev/null || true)"
+  if [ -n "$receipt" ] && python3 - "$receipt" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]))
+proof=r["ownership_proof"]
+raise SystemExit(0 if proof["unique_entity_matches"] == 1 and proof["participant_entities"] == [] else 1)
+PY
+  then
+    record_pass 'single owner is not rendered as its own participant'
+  else
+    record_fail 'single owner is not rendered as its own participant'
+  fi
+}
+
 run_scope_guard() {
   assert_not_contains "helper has no forbidden merge/delete mutation commands" 'git branch -D|git push --delete|gh pr merge|git merge' "$HELPER"
 }
@@ -5136,6 +5171,8 @@ else
         ;;
       *) record_fail "unknown SHIP_FLOW_R12_ONLY selection" ;;
     esac
+  elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = owner-participant-normalization ]; then
+    run_owner_participant_normalization_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = provider-pagination ]; then
     run_provider_pagination_case
   elif [ "${SHIP_FLOW_CLOSEOUT_CASE:-}" = feedback-r11-b1-b2-b3 ]; then
