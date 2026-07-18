@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ship-flow-hook-version: 1.2.0
+# ship-flow-hook-version: 1.3.0
 # Ship-flow FO state-drift — SessionStart hook
 #
 # Two drift detectors, both advisory-by-default (never blocks session start):
@@ -15,20 +15,21 @@
 #           don't invoke the frontmatter helpers (see entity 099-ship-flow-
 #           stage-wiring). Rule B is the detection safety-net.
 #
-# Auto-fix (v1.2.0, D1 from strengthening-roadmap-2026-05.md):
+# Auto-fix (v1.3.0; D1 originated in strengthening-roadmap-2026-05.md):
 #
 #   Workflow README frontmatter MAY declare `auto_fix: off | execute`
-#   (default: `off`). When `execute`, this hook auto-runs the `done + archive`
-#   sequence for each Rule A entity that passes a safety re-probe (working
-#   tree clean + PR.state == MERGED still holds at exec time). Rule B is
-#   NEVER auto-fixed (status-update semantics nuanced; surfaces as WARN).
+#   (default: `off`). When `execute`, this hook delegates each Rule A entity
+#   to the receipt-bound closeout reconciler after a safety re-probe (working
+#   tree clean + PR.state == MERGED still holds at exec time). Rule B is NEVER
+#   auto-fixed (status-update semantics nuanced; surfaces as WARN).
 #
 #   Safety guards (any fail → skip auto-fix, fall back to WARN):
 #     - working tree clean (uncommitted changes block all auto-fixes)
-#     - spacedock status binary discoverable in expected paths
+#     - receipt-bound closeout reconciler discoverable in the plugin
 #     - per-entity PR state re-probe matches MERGED
 #
-#   Output reformats: ✅ Auto-fixed (N) / ⚠️ Auto-fix blocked (M reason) /
+#   Output reformats: ✅ Auto-fixed / reconciled (N) /
+#   ⚠️ Auto-fix blocked (M reason) /
 #   🔴 Rule A pending (K, auto_fix off or blocked) / 🔴 Rule B (P).
 #
 # Also extended to scan folder entities (<slug>/index.md at depth 2), which
@@ -40,7 +41,7 @@
 # Timeout:     10s set by hooks.json; Rule A per-PR check capped at 2s;
 #              Rule B is local-fs-only (no network) so cheap regardless of
 #              entity count. Auto-fix loop adds 2s per entity (re-probe) +
-#              ~100ms per entity (status binary + git commit).
+#              closeout reconciliation time per entity.
 
 set -uo pipefail
 
@@ -57,7 +58,7 @@ done
 
 # --- 1b. Read auto_fix config from workflow README frontmatter (D1) -------
 # Default: off (status quo for all adopters who don't opt in).
-# Values: off | execute (advise reserved for future; treat as off for v1.2.0).
+# Values: off | execute (advise reserved for future; treat as off for v1.3.0).
 auto_fix=$(awk '/^---$/{c++; next} c==1 && /^auto_fix:/{print $2; exit}' \
   "$workflow_dir/README.md" 2>/dev/null | tr -d '"' | tr -d "'")
 auto_fix="${auto_fix:-off}"
@@ -69,15 +70,18 @@ if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
   git_clean=0
 fi
 
-# --- 1d. Locate spacedock status binary (needed for auto-fix) -------------
-# The status helper is the `spacedock` Go binary on PATH, invoked as
-# `spacedock status <args>`. SHIP_FLOW_STATUS_BIN overrides for tests.
-status_bin=""
+# --- 1d. Locate the receipt-bound closeout reconciler ---------------------
+# The reconciler owns every terminal mutation and its receipt sentinel.
+# SHIP_FLOW_CLOSEOUT_RECONCILER_BIN is a test-only seam following the
+# existing executable override convention used by SHIP_FLOW_STATUS_BIN.
+hook_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+reconciler_bin=""
 if [ "$auto_fix" = "execute" ]; then
-  if [ -n "${SHIP_FLOW_STATUS_BIN:-}" ] && [ -x "$SHIP_FLOW_STATUS_BIN" ]; then
-    status_bin="$SHIP_FLOW_STATUS_BIN"
+  if [ -n "${SHIP_FLOW_CLOSEOUT_RECONCILER_BIN:-}" ] && [ -x "$SHIP_FLOW_CLOSEOUT_RECONCILER_BIN" ]; then
+    reconciler_bin="$SHIP_FLOW_CLOSEOUT_RECONCILER_BIN"
   else
-    status_bin="$(command -v spacedock 2>/dev/null || true)"
+    reconciler_bin="$hook_dir/../bin/merged-pr-closeout-reconciler.sh"
+    [ -x "$reconciler_bin" ] || reconciler_bin=""
   fi
 fi
 
@@ -191,7 +195,7 @@ done < <(find "$workflow_dir" -mindepth 2 -maxdepth 2 -type f -name 'index.md' -
 # Pre-conditions for execute path:
 #   - workflow declares `auto_fix: execute` in README frontmatter
 #   - working tree clean (atomic commits, no parallel-session contamination)
-#   - status binary discoverable
+#   - receipt-bound closeout reconciler discoverable
 #   - at least one Rule A entity detected
 # Any pre-condition fails → all Rule A entities flow into "pending" path.
 # Per-entity re-probe (PR.state == MERGED) catches detect-time → exec-time race.
@@ -204,8 +208,8 @@ auto_fix_reason=""
 if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
   if [ "$git_clean" = "0" ]; then
     auto_fix_reason="working tree has uncommitted changes"
-  elif [ -z "$status_bin" ]; then
-    auto_fix_reason="spacedock status binary not found on PATH"
+  elif [ -z "$reconciler_bin" ]; then
+    auto_fix_reason="merged PR closeout reconciler is not executable"
   fi
 
   if [ -z "$auto_fix_reason" ]; then
@@ -221,43 +225,42 @@ if [ "$rule_a_count" -gt 0 ] && [ "$auto_fix" = "execute" ]; then
         continue
       fi
 
-      ts=$(date -u +%FT%TZ)
+      reconcile_rc=0
+      reconcile_output="$("$reconciler_bin" \
+        --workflow-dir "$workflow_dir" \
+        --entity "$slug" \
+        --closeout-mode direct 2>&1)" || reconcile_rc=$?
+      reconcile_verdict="$(printf '%s\n' "$reconcile_output" | awk -F= '$1=="verdict"{print substr($0,index($0,"=")+1); exit}')"
+      reconcile_state="$(printf '%s\n' "$reconcile_output" | awk -F= '$1=="state"{print substr($0,index($0,"=")+1); exit}')"
+      reconcile_action="$(printf '%s\n' "$reconcile_output" | awk -F= '$1=="terminal_action"{print substr($0,index($0,"=")+1); exit}')"
+      reconcile_reason="$(printf '%s\n' "$reconcile_output" | awk -F= '$1=="reason"{print substr($0,index($0,"=")+1); exit}')"
 
-      # status --set (advance to done + verdict + completed)
-      if ! "$status_bin" status --workflow-dir "$workflow_dir" \
-           --set "$slug" status=done verdict=PASSED completed="$ts" \
-           >/dev/null 2>&1; then
-        auto_fix_blocked_lines+="  - \`$slug\` — status --set failed"$'\n'
-        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
-        continue
-      fi
-
-      # status --archive (move to _archive/)
-      if ! "$status_bin" status --workflow-dir "$workflow_dir" \
-           --archive "$slug" >/dev/null 2>&1; then
-        auto_fix_blocked_lines+="  - \`$slug\` — status --archive failed after set"$'\n'
-        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
-        continue
-      fi
-
-      # Determine src + dst pathspec for explicit-pathspec commit
-      if [ -n "$stage_dir" ]; then
-        src="$stage_dir"
-        dst="$workflow_dir/_archive/$slug"
-      else
-        src="$entity_file"
-        dst="$workflow_dir/_archive/$(basename "$entity_file")"
-      fi
-
-      if git add -- "$src" "$dst" 2>/dev/null && \
-         git commit -m "done + archive: $slug (PR #$pr_num merged, auto-fix from SessionStart hook)" \
-             -- "$src" "$dst" >/dev/null 2>&1; then
-        auto_fixed_lines+="  - \`$slug\` — PR #$pr_num → status=done verdict=PASSED + archived + committed"$'\n'
-        auto_fixed_count=$((auto_fixed_count + 1))
-      else
-        auto_fix_blocked_lines+="  - \`$slug\` — commit failed (status updated, archive moved, but \`git commit\` errored)"$'\n'
-        auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
-      fi
+      case "$reconcile_rc:$reconcile_verdict:$reconcile_state:$reconcile_action" in
+        0:PROCEED:reconciled:set_done)
+          auto_fixed_lines+="  - \`$slug\` — PR #$pr_num reconciled through the receipt-bound closeout transaction"$'\n'
+          auto_fixed_count=$((auto_fixed_count + 1))
+          ;;
+        0:PROCEED:already_reconciled:already_reconciled)
+          auto_fixed_lines+="  - \`$slug\` — receipt already reconciled; replay made no terminal mutation"$'\n'
+          auto_fixed_count=$((auto_fixed_count + 1))
+          ;;
+        0:PROCEED:pr_open_noop:none)
+          auto_fix_blocked_lines+="  - \`$slug\` — PR became OPEN during reconciliation; no terminal mutation was applied"$'\n'
+          auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+          ;;
+        0:PROCEED:closeout_pr_awaiting_merge:none)
+          auto_fix_blocked_lines+="  - \`$slug\` — receipt-bound closeout PR is awaiting merge; no direct terminal mutation was applied"$'\n'
+          auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+          ;;
+        *)
+          if [ -n "$reconcile_verdict" ] && [ -n "$reconcile_reason" ]; then
+            auto_fix_blocked_lines+="  - \`$slug\` — reconciler failed (verdict=$reconcile_verdict, reason=$reconcile_reason, exit=$reconcile_rc)"$'\n'
+          else
+            auto_fix_blocked_lines+="  - \`$slug\` — reconciler returned an incomplete structured result (state=${reconcile_state:-unknown}, action=${reconcile_action:-unknown}, exit=$reconcile_rc)"$'\n'
+          fi
+          auto_fix_blocked_count=$((auto_fix_blocked_count + 1))
+          ;;
+      esac
     done <<< "$rule_a_records"
 
     # Subtract auto-fixed from rule_a_lines for clean "pending" reporting
@@ -289,9 +292,9 @@ if [ "$auto_fixed_count" -gt 0 ]; then
   plural=$([ "$auto_fixed_count" -eq 1 ] && echo "entity" || echo "entities")
   msg+="
 
-✅ **Auto-fixed** ($auto_fixed_count $plural, via \`auto_fix: execute\` workflow config):
+✅ **Auto-fixed / reconciled** ($auto_fixed_count $plural, via \`auto_fix: execute\` workflow config):
 $auto_fixed_lines
-No action needed — entities are now at \`status: done\` and moved to \`_archive/\`. Each had its own atomic commit on this branch."
+No action needed — the receipt-bound reconciler completed the terminal transaction or verified its coherent receipt replay."
 fi
 
 # Auto-fix blocked section (D1) — Rule A entities where execute path tripped a guard
@@ -301,7 +304,7 @@ if [ "$auto_fix_blocked_count" -gt 0 ]; then
 
 ⚠️ **Auto-fix blocked** ($auto_fix_blocked_count $plural — execute mode set but pre-condition or re-probe failed):
 $auto_fix_blocked_lines
-Resolve the blocking reason (commit/stash uncommitted work; verify status binary; re-check PR state) and re-trigger SessionStart, or run the manual \`done + archive\` sequence from \`plugins/ship-flow/skills/ship-execute/SKILL.md\` for each entity."
+Resolve the blocking reason (commit/stash uncommitted work; verify the closeout reconciler and status helper; re-check PR state) and re-trigger SessionStart, or run the receipt-bound reconciler directly for each entity."
 fi
 
 # Rule A pending section — auto_fix off OR all entities blocked above
@@ -311,7 +314,7 @@ if [ "$rule_a_count" -gt 0 ]; then
 
 🔴 **Rule A** — $rule_a_count $plural with merged PR still at \`status: ship\`:
 $rule_a_lines
-Before new execute work, run the \`done + archive\` sequence from \`plugins/ship-flow/skills/ship-execute/SKILL.md\` for each. To enable autonomous fix in future sessions, set \`auto_fix: execute\` in workflow README frontmatter (D1, see \`plugins/ship-flow/_plans/strengthening-roadmap-2026-05.md\`)."
+Before new execute work, run \`plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh --workflow-dir $workflow_dir --entity <slug> --closeout-mode direct\` for each. To enable autonomous reconciliation in future sessions, set \`auto_fix: execute\` in workflow README frontmatter."
 fi
 if [ "$unsafe_pr_count" -gt 0 ]; then
   plural=$([ "$unsafe_pr_count" -eq 1 ] && echo "entity" || echo "entities")
