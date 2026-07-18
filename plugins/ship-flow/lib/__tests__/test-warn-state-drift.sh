@@ -243,7 +243,11 @@ EOF
 setup_repo() {
   local repo="$1"
   local auto_fix="${2:-off}"
-  git init -q "$repo"
+  # Init on `main` explicitly: the closeout-adapter this hook delegates to gates
+  # commits on the trunk (resolved as `main` by the fixture stub's
+  # `dispatch trunk`), so the fixture repo must be on `main` regardless of the
+  # host's `init.defaultBranch` (CI runners default to `master`).
+  git init -q -b main "$repo"
   git -C "$repo" config user.email test@example.test
   git -C "$repo" config user.name "Ship Flow Test"
   mkdir -p "${repo}/docs/ship-flow"

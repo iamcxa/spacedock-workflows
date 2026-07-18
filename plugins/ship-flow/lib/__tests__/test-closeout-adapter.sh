@@ -771,7 +771,11 @@ FIXEOF
 
 setup_repo() {
   local repo="$1"
-  git init -q "$repo"
+  # Init on `main` explicitly: the adapter's trunk gate resolves the trunk via
+  # the fixture stub's `dispatch trunk` (which returns `main`), so the fixture
+  # repo must be on `main` regardless of the host's `init.defaultBranch` (CI
+  # runners default to `master`, which would otherwise defer every finalize).
+  git init -q -b main "$repo"
   git -C "$repo" config user.email test@example.test
   git -C "$repo" config user.name "Ship Flow Test"
   mkdir -p "${repo}/docs/ship-flow"

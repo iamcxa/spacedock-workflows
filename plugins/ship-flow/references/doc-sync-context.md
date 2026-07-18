@@ -45,6 +45,7 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `bin/debrief-boundary-resolver.sh` | `README.md` (debrief flow) | `references/debrief-schema.yaml` |
 | `bin/pr-feedback-rollback.sh` | `README.md` (PR feedback recovery) | `INVARIANTS.md` (rollback safety, if promoted) |
 | `bin/stale-worktree-cleanup-planner.sh` | `README.md` (cleanup planning) | `INVARIANTS.md` (non-destructive cleanup principle) |
+| `bin/closeout-adapter.sh` | `references/pr-merge-paths.md` (post-merge closeout convergence) | `README.md` (Layer C primitive inventory) |
 | `bin/semantic-review-policy.mjs` | `README.md` (semantic review policy boundary) | `workflow-template.yaml` (adopter policy example, if scaffolded) |
 | `bin/semantic-review-packet.mjs` | `README.md` (semantic review packet primitive) | `INVARIANTS.md` (PR gate evidence, if promoted) |
 | `bin/semantic-review-prepare.mjs` | `README.md` (semantic review prepare helper) | `workflow-template.yaml` (adopter command wiring, if scaffolded) |

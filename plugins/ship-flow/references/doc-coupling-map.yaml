@@ -22,7 +22,8 @@ couplings:
   - name: checker-source-map
     srcGlobs: ["plugins/ship-flow/bin/*.sh"]
     docPaths: ["plugins/ship-flow/references/doc-sync-context.md"]
-    rationale: "New/changed shell checkers must register a Source-Map row per doc-sync-context.md's own coverage contract."
+    exemptGlobs: ["plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh"]
+    rationale: "New/changed shell checkers must register a Source-Map row per doc-sync-context.md's own coverage contract. exemptGlobs: merged-pr-closeout-reconciler.sh was renamed to closeout-adapter.sh (issue #46); the retired path is exempt from the protected-path delete gate."
   - name: contribution-contract
     srcGlobs: [".github/workflows/ship-flow-invariants.yml", ".github/workflows/ship-flow-doc-impact.yml", "plugins/ship-flow/bin/doc-impact-gate.sh", "plugins/ship-flow/references/doc-coupling-map.yaml", "plugins/ship-flow/references/ship-flow-doc-impact-workflow.yml", "plugins/ship-flow/lib/__tests__/test-adopter-doc-impact-ci.sh", "plugins/ship-flow/lib/__tests__/test-doc-impact-gate.sh", "plugins/ship-flow/lib/__tests__/test-contribution-contract.sh", "plugins/ship-flow/skills/ship-onboard/SKILL.md"]
     docPaths: ["plugins/ship-flow/CONTRIBUTING.md", "plugins/ship-flow/_mods/contribution-contract.md"]
