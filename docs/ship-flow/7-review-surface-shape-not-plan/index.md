@@ -22,6 +22,7 @@ stage_outputs:
 captain_bet: "以後 FO 不會再叫我看 plan，反而會用白話方式多跟我確認 spec (shape) 的內容"
 issue: "#60"
 tracker: gh
+pr: "#62"
 worktree: /Users/kent/conductor/workspaces/spacedock-workflows/muscat/.claude/worktrees/issue-60
 ---
 
