@@ -64,14 +64,31 @@ frontmatter_field() {
     END { if (!closed) exit 3 }
   ' "$file"
 }
+frontmatter_field_present() {
+  local file="$1" field="$2"
+  awk -v field="$field" '
+    NR == 1 {
+      if ($0 !~ /^---[[:space:]]*$/) exit 3
+      opened=1
+      next
+    }
+    opened && /^---[[:space:]]*$/ {
+      closed=1
+      exit found ? 0 : 1
+    }
+    opened && index($0, field ":") == 1 { found=1 }
+    END { if (!closed) exit 3 }
+  ' "$file"
+}
 slug_for_file() {
   local file="$1" slug
   slug="$(frontmatter_field "$file" slug)"
-  if [ -n "$slug" ]; then
+  if frontmatter_field_present "$file" slug; then
+    [ -n "$slug" ] || return 1
     printf '%s\n' "$slug"
     return
   fi
-  basename "$(dirname "$file")"
+  basename "$(cd -- "$(dirname -- "$file")" && pwd -P)"
 }
 validate_frontmatter() {
   frontmatter_field "$1" __ship_flow_frontmatter_validation__ >/dev/null
@@ -109,11 +126,11 @@ fi
 PRIMARY_PR="$(frontmatter_field "$ENTITY" pr)"
 [ -n "$PRIMARY_PR" ] || report_stop missing-pr "entity has no implementation PR"
 PRIMARY_PR_NORMALIZED="$(normalize_pr "$PRIMARY_PR")" || report_stop malformed-frontmatter "entity PR is not normalized numeric identity"
-PRIMARY_SLUG="$(slug_for_file "$ENTITY")"
+PRIMARY_SLUG="$(slug_for_file "$ENTITY")" || report_stop malformed-frontmatter "entity has empty slug"
 PRIMARY_TITLE="$(frontmatter_field "$ENTITY" title)"
 [ -n "$PRIMARY_TITLE" ] || report_stop malformed-frontmatter "entity has no title"
 if [ -n "$MIRROR_ENTITY" ]; then
-  MIRROR_SLUG="$(slug_for_file "$MIRROR_ENTITY")"
+  MIRROR_SLUG="$(slug_for_file "$MIRROR_ENTITY")" || report_stop malformed-frontmatter "mirror has empty slug"
   MIRROR_TITLE="$(frontmatter_field "$MIRROR_ENTITY" title)"
   MIRROR_PR="$(frontmatter_field "$MIRROR_ENTITY" pr)"
   MIRROR_PR_NORMALIZED="$(normalize_pr "$MIRROR_PR")" || report_stop closeout-checkpoint-conflict "mirror PR is not numeric identity"
@@ -144,7 +161,7 @@ for index in "${!PARTICIPANTS[@]}"; do
   participant_pr="$(frontmatter_field "$participant" pr)"
   participant_pr_normalized="$(normalize_pr "$participant_pr")" || report_stop closeout-owner-not-unique "participant PR is not numeric identity"
   [ "$participant_pr_normalized" = "$PRIMARY_PR_NORMALIZED" ] || report_stop closeout-owner-not-unique "participants do not share one PR"
-  participant_slug="$(slug_for_file "$participant")"
+  participant_slug="$(slug_for_file "$participant")" || report_stop malformed-frontmatter "participant has empty slug"
   if printf '%s\n' "$SEEN_SLUGS" | grep -Fxq "$participant_slug"; then
     report_stop closeout-owner-not-unique "duplicate participant slug"
   fi
