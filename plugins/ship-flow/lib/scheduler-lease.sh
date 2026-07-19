@@ -49,7 +49,11 @@ scheduler_lease_new_token() {
 # holder that overruns is forcibly ended — it becomes reclaimable via the
 # SAME dead-pid path, not a separate age heuristic. `max_timeout` is kept as a
 # parameter for call-site compatibility (and documents the intended bound)
-# but is otherwise unused here now.
+# but is otherwise unused here now. SCHEDULER_LEASE_TOKEN (below) is an
+# intentional implicit global — the caller (bin/ship-flow-scheduler.sh, a
+# separate file) reads it after a successful acquire to pass the token on to
+# scheduler_lease_release; shellcheck can't see that cross-file use.
+# shellcheck disable=SC2034
 scheduler_lease_acquire() {
   local worktree="$1" tick_id="$2" max_timeout="${3:-}" entity="${4:-}"
   local dir record pid token

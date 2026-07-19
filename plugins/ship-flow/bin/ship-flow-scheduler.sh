@@ -147,7 +147,8 @@ pr_exists_for_slug() {
   # write window: a real PR opened by a prior run is dedup ground truth even
   # when the run crashed before recording it. UNKNOWN (gh unavailable/lookup
   # failure) is treated as "exists" by the caller — fail-closed.
-  local slug="$1" branch="spacedock-ensign/${slug}"
+  local slug="$1"
+  local branch="spacedock-ensign/${slug}"
   if [ "$GH_PROVIDER" = "fixture" ]; then
     local f="${GH_FIXTURE_DIR}/pr-${slug}.env"
     [ -f "$f" ] || { printf 'NONE\n'; return 0; }

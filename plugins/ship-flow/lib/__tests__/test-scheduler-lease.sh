@@ -26,6 +26,7 @@ assert_eq() {
 }
 
 # shellcheck source=../scheduler-lease.sh
+# shellcheck disable=SC1091
 source "$LEASE_LIB"
 
 run_stale_but_alive_not_reclaimed_case() {
