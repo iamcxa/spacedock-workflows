@@ -1,6 +1,6 @@
 ---
 title: L3 scheduler tick — stateless SD scheduler (Step-3 wedge v0)
-status: verify
+status: execute
 source: captain hackathon contract (.context/l3-hackathon-contract.md, GO 2026-07-19; converged Claude FO + SO-EM + codex/sol panel)
 started: 2026-07-19T02:22:05Z
 completed:
@@ -119,3 +119,12 @@ Landed the full T0-T7 wedge: controller worktree + sentinel GO (T0), RED-first 8
 ### Summary
 
 Independent re-run confirms execute's quality-gate numbers exactly (118/118 shell, 79/79 node, all gates green) and 4 of 6 ACs (AC-2/AC-3/AC-4/AC-6) are cleanly VERIFIED. The cross-model challenge — the reason this dimension exists, since Claude authored execute and cannot adversarially review its own diff — surfaced 3 BLOCKING findings the green test suite structurally cannot catch: crash-before-frontmatter-write double-dispatch risk, a lease-reclaim path that can steal from a still-alive holder (violates the design's own concurrency=1 rule and the RUNBOOK's stated operator invariant), and a full-cycle test whose own "next-ready" fixture would itself fail eligibility on a real third tick. Verdict: **NOT VERIFIED (VETO) — route_to: execute**, all four codex findings tabulated with verifier-owned severity/routing in verify.md. Bad news early: this is not a clean PASS, and the gap is real, not cosmetic.
+
+### Feedback Cycles
+
+- cycle: 1
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-19T09:05:55Z
+  verify_artifact: verify.md@07b726c
