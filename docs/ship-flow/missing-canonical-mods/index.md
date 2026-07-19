@@ -1,12 +1,12 @@
 ---
 title: Missing canonical mods — author or de-reference (both tiers)
-status: shape
+status: design
 source: hackathon-2 Wave 2c (todo missing-canonical-mods-both-tiers; rra shape discovery)
 started: 2026-07-19T16:04:46Z
 completed:
 verdict:
 score:
-worktree:
+worktree: .worktrees/spacedock-ensign-missing-canonical-mods
 issue: "#77"
 pr:
 ---
