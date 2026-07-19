@@ -10,20 +10,23 @@ affects_ui: false
 design_required: false
 contract_decision_required: false
 pre_mortem:
-  category: wrong-dcs
-  one_liner: 'The C16 string-test pins that the rule text exists but not that the FO obeys it, so verify passes while FO behavior stays unchanged (accepted: the value is discoverability + regression-proofing, not behavioral enforcement).'
-status: ship
+    category: wrong-dcs
+    one_liner: 'The C16 string-test pins that the rule text exists but not that the FO obeys it, so verify passes while FO behavior stays unchanged (accepted: the value is discoverability + regression-proofing, not behavioral enforcement).'
+status: done
 stage_outputs:
-  shape: shape.md
-  design: design.md
-  execute: execute.md
-  verify: verify.md
-  review: review.md
+    shape: shape.md
+    design: design.md
+    execute: execute.md
+    verify: verify.md
+    review: review.md
 captain_bet: "以後 FO 不會再叫我看 plan，反而會用白話方式多跟我確認 spec (shape) 的內容"
 issue: "#60"
 tracker: gh
 pr: "#62"
 worktree: /Users/kent/conductor/workspaces/spacedock-workflows/muscat/.claude/worktrees/issue-60
+verdict: PASSED
+completed: 2026-07-19T16:32:51Z
+archived: 2026-07-19T16:32:51Z
 ---
 
 ## Captain Bet (gate approval 2026-07-18)
