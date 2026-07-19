@@ -142,3 +142,20 @@ twin) → extend with a no-twin missing-everywhere branch + fixture. AC-3: integ
 RED (proven live), authoring greens it. **Key surprise flagged BLOCKING**: the entity's working
 branch iamcxa/muscat-v1 is 233 behind origin/main and lacks PR #71 — execute MUST baseline off
 origin/main or it edits a phantom (177-line) resolver.
+
+## Stage Report: design
+
+- DONE: decide trivial-pass vs full design honestly
+  Full design — contract-bearing (new mod content contract + resolver code-gate + prose de-refs); trivial-pass rejected per stage-def. design.md written.
+- DONE: enumerate EVERY dangling architecture-canon/canonical-doc-sync reference with per-reference decision (author-minimal vs de-reference)
+  design.md AC-1 table: architecture-canon ×3 (ship-shape:596, ship-plan:501, migrate-debrief template:33) + decisions-log INVARIANTS:199 (discovered peer) → de-ref; canonical-doc-sync ship-review:24/29/156/461 + doc-format:3 → author at adopter path. Existence + zero-test-pin verified.
+- DONE: guard extension spec (synthetic missing-everywhere fixture red, repo green)
+  design.md AC-2: classify-by-twin branch (new `missing-everywhere-canonical-mod` label) + `--exclude-dir=__tests__` + adopter-tree guard + aggregator grep at :300; named the 3 test surfaces; real-repo green-set enumerated (8 mods) proving repo-green.
+- DONE: baseline off origin/main's 312-line resolver in the seeded worktree
+  Verified: worktree HEAD 0 behind origin/main, check-no-dangling.sh = 312 lines (#71 resolver). Shape's BLOCKING baseline risk resolved by the seed.
+- DONE: keep it fast (time budget)
+  Design done inside budget; no re-litigation of shape's already-verified AC evidence, only the contract-delta/test-surface layer added.
+
+### Summary
+
+Full design (contract-bearing). Contract deltas: author canonical-doc-sync.md at the adopter path (13 grep-pinned tokens = the two integration tests' spec) and de-reference the bibliographic architecture-canon refs. Guard: a `missing-everywhere-canonical-mod` branch classifying by twin-presence, with `--exclude-dir=__tests__` (F2, required — else case9 self-reds on its foo/bar fixtures) and an adopter-tree-present guard (F3, preserves plugins-only clone-green). Two scope findings flagged for the gate: **F1** — a class-wide guard mechanically surfaces a third missing-everywhere peer, `decisions-log.md`, folded in as a one-line de-ref (gate may defer); **F2/F3** as above. Baseline risk from shape is resolved by the seeded worktree (312-line resolver, 0 behind origin/main).
