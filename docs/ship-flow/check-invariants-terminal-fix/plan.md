@@ -28,6 +28,9 @@ this line fires before any tag/grandfather logic, so each fixture needs only fro
 Reference implementation (execute may adjust minor shell syntax but MUST preserve these 4
 assertions' RED/GREEN semantics — each was live-verified this session):
 
+<details>
+<summary>Reference implementation — DC-18 fixture block (4 cases, live-verified)</summary>
+
 ```bash
 # ========== DC-18: _entity_is_terminal predicate — only status: done is terminal ==========
 # Zero prior coverage (grep _entity_is_terminal over __tests__/ = 0 hits before this task).
@@ -69,6 +72,8 @@ else
   echo "FAIL DC-18d status: done IS terminal (over-correction guard)"; FAIL=1
 fi
 ```
+
+</details>
 
 | Case | Frontmatter | Assertion | Today (RED) | After Task 2 (GREEN) |
 | --- | --- | --- | --- | --- |
