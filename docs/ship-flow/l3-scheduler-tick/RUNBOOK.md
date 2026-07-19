@@ -73,11 +73,20 @@ Templates: `plugins/ship-flow/references/launchd/com.spacedock.ship-flow-schedul
        sed -e "s|@CONTROLLER_WORKTREE@|<ctrl>|g" \
            -e "s|@SPACEDOCK_BIN@|$(command -v spacedock)|g" \
            -e "s|@WORKFLOW_DIR@|<wf>|g" \
+           -e "s|@USER_LOCAL_BIN@|$HOME/.local/bin|g" \
            plugins/ship-flow/references/launchd/com.spacedock.ship-flow-scheduler.tick.plist \
            > ~/Library/LaunchAgents/com.spacedock.ship-flow-scheduler.tick.plist
        launchctl load ~/Library/LaunchAgents/com.spacedock.ship-flow-scheduler.tick.plist
 
-   (Same for the rollup plist.)
+   (Same for the rollup plist — it has no `@USER_LOCAL_BIN@` token since it
+   never spawns `claude`/`spacedock`; that `-e` line is simply a no-op for it.)
+
+   `@USER_LOCAL_BIN@` MUST resolve to wherever `claude`/`spacedock` actually
+   live for this machine's login shell (typically `$HOME/.local/bin` — never
+   a hardcoded `/Users/kent`; launchd does not expand `$HOME` itself in
+   `EnvironmentVariables`, so the substitution above must happen at install
+   time). This closes the "claude CLI not available" class that recurs when
+   the tick plist's PATH omits the directory the real binaries are on.
 
 2. Uninstall / pause:
 
