@@ -23,7 +23,7 @@ authority (no auto-merge), audit-by-exception via a deterministic rollup.
   follow-up todo needed.
 - Promoted into shaped entities this run: none.
 
-### Canonical Docs Update
+## Canonical Docs Update
 
 - ROADMAP.md: 80c31e1 — Now row for l3-scheduler-tick
 - ARCHITECTURE.md: b95cce3 — carrier-swap scheduler-tick decision
@@ -50,11 +50,11 @@ no plugin bump this ship — repo convention batches bumps into separate
 
 ### Verdict
 status: shipped
-pr: (pending — set after gh pr create)
+pr: "#70"
 tasks: 8/8 (T0-T7, plan.md)
 verify: PASS (PROCEED) — verify.md cycle 3, final
 roadmap: Now row added (80c31e1)
 product: capability row added (9c8b67a)
 started_at: 2026-07-19T10:37:35Z
-completed_at: (pending)
-duration_minutes: (pending)
+completed_at: 2026-07-19T11:01:39Z
+duration_minutes: 24
