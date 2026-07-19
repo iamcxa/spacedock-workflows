@@ -44,3 +44,16 @@ Verified by: SKILL seam text + one worked mechanizable example.
 (references studied, zero third-party runtime dependency — greppable proof of no external
 invocation).
 Verified by: rubric files exist + grep proves no third-party plugin references in runtime paths.
+
+## Stage Report: shape
+
+- DONE: Shape the LOOP as a contract, not an implementation dream: the four ACs are the value spine — verify each against what actually exists today and cite file:line for every claimed seam; classify each seam WORKING/EXISTS_BROKEN/MISSING per reverse-recovery.
+  `shape.md` reverse-recovery layer-trace table: AC-1 MISSING (rides EXISTS_BROKEN `### Feedback Cycles`, `INVARIANTS.md:571` + `check-invariants.sh:1546-1601,1578`; verify UAT `ship-verify/SKILL.md:704`), AC-2 STUB (harvest→ratify→ledger LIVE `harvest-decide/SKILL.md:68-71,75-88` + `INVARIANTS.md:607-621,615`, no `design-canon.md`), AC-3a/b MISSING w/ reusable blocks (`ship-design/SKILL.md:26-31,764,770`; `ui-verify/SKILL.md:43-67`; `generate-ui-verify-spec.sh`), AC-4 MISSING but distill precedent LIVE (`lib/design-methodology/INDEX.md:3,11` + `shotgun.md:2-3`). Every AC = known pattern + new payload → no greenfield.
+- DONE: The captain's distill-not-depend HARD CONSTRAINT is non-negotiable — shape must define what "distilled rubric asset" means concretely and the greppable no-dependency proof.
+  `shape.md` §Distill-not-depend: "distilled rubric asset" = in-repo file authored by studying methodologies with a `Source:` provenance line (the shipped `lib/design-methodology/*.md` discipline); zero runtime tokens. Proof `grep -rniE "Skill: design-(review|shotgun|consultation|html)|npx +design-|gstack-|\$D\b"` over loop-introduced files returns empty — baseline validated clean over `rubrics/` today. Scoping note: pre-existing `ship-design:661` `design-review` dispatch is out of scope.
+- DONE: Appetite honesty: 1h30m covers shape + design ONLY tonight; shape must slice the ACs so execute is separable (a next-session S/M entity or two), and record the cut-line explicitly. Captain articulation already given — do NOT re-ask.
+  `shape.md` §Execute slicing: Slice-1 (S) = AC-1 + AC-4 (author-an-asset, no wiring); Slice-2 (M) = AC-2 + AC-3 (integration, depends on Slice-1 schema). Cut-line recorded: shape+design tonight → Slice-1 → Slice-2. Captain articulation (hackathon-2 Wave 3 GO +「原則上是都核准」+ distill directive) recorded in §Captain Articulation, NOT re-asked.
+
+### Summary
+
+Shaped as a brownfield recovery, not greenfield: the reverse-recovery audit classifies all four ACs (AC-1 MISSING-on-broken-host, AC-2 STUB, AC-3a/b MISSING, AC-4 MISSING) and shows every one is a shipped ship-flow pattern pointed at a new payload — the harvest→ratify→ledger→never-self-mutate loop, the awk-enforced record family, the pre-gen consult slot, the target→ui-verify generator, and the `lib/design-methodology/` distill-with-provenance discipline all already exist. The captain's distill-not-depend constraint is pinned to a concrete definition (in-repo asset + `Source:` line + zero runtime tokens) with a scoped greppable proof. Execute is honestly cut to two separable next-session entities (S: capture+rubric; M: harvest+consume), with typed DCs, ROADMAP Later→Now intent, and canonical-doc impact handed to design.
