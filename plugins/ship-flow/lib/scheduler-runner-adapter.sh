@@ -24,9 +24,10 @@
 # Lets tests assert the resolved spawn form without a real spawn.
 #
 # Test-only seam: when $SHIP_FLOW_SCHEDULER_RUNNER_CMD is set, it replaces the
-# real `claude -p "/ship <entity>"` invocation (run via `bash -c`) so
-# success/timeout/error can be exercised hermetically. Unset in production —
-# the real carrier always spawns `claude -p` (see SPAWN_LINE below).
+# real spawn (a shell command string run via `bash -c`, since the test author
+# controls its content) so success/timeout/error can be exercised
+# hermetically. Unset in production — the real carrier always execs
+# SPAWN_ARGV directly, never through a shell (see SPAWN_ARGV below).
 
 set -uo pipefail
 
@@ -86,17 +87,29 @@ if [ -n "$TICK_ID" ]; then
 [ship-flow-scheduler tick delegation — tick_id=${TICK_ID} receipt=$(basename "$RECEIPT"); autonomous per Rule 1/10, not a manual hand-dispatch]"
 fi
 
-# AC-2: single source-of-truth spawn command string, resolved once and reused
-# by both --print-spawn (hermetic inspection) and the real exec branch below
-# — never two hand-written forms that can drift apart. Spawns via the
-# spacedock launcher (owns plugin/env wiring + session metadata) rather than
-# raw `claude -p`; `--plugin-dir` relaxes the launcher's version gate AND
-# loads the controller-worktree's OWN plugin checkout (the code this tick is
-# running), not a possibly-stale globally-installed one. Raw `claude -p
-# "$SHIP_PROMPT" --output-format text` is the documented fallback if the
-# launcher path misbehaves in practice (never silent — a raw-mode switch
-# would need its own explicit flag, not shipped here).
-SPAWN_LINE="${SPACEDOCK_BIN:-spacedock} claude \"${SHIP_PROMPT}\" --plugin-dir \"${WORKDIR}/plugins/ship-flow\" -- -p --output-format text"
+# AC-2: single source-of-truth spawn ARGV, resolved once and reused by both
+# --print-spawn (hermetic inspection, rendered as a display string) and the
+# real exec branch below — never two hand-written forms that can drift
+# apart. Spawns via the spacedock launcher (owns plugin/env wiring + session
+# metadata) rather than raw `claude -p`; `--plugin-dir` relaxes the
+# launcher's version gate AND loads the controller-worktree's OWN plugin
+# checkout (the code this tick is running), not a possibly-stale
+# globally-installed one. Raw `claude -p "$SHIP_PROMPT" --output-format
+# text` is the documented fallback if the launcher path misbehaves in
+# practice (never silent — a raw-mode switch would need its own explicit
+# flag, not shipped here).
+#
+# SHIP_PROMPT embeds ENTITY, which is an unsanitized caller-supplied string
+# (the scheduler passes a folder basename, but this adapter itself places no
+# restriction on --entity's content). SPAWN_ARGV is executed directly as an
+# argv array (see the exec branch below) — never re-parsed by a shell — so
+# shell metacharacters in ENTITY/WORKDIR can never be interpreted as command
+# syntax. SPAWN_LINE is a DISPLAY-ONLY rendering for --print-spawn/logging;
+# it is never passed to `bash -c`.
+SPAWN_BIN="${SPACEDOCK_BIN:-spacedock}"
+SPAWN_ARGV=("$SPAWN_BIN" claude "$SHIP_PROMPT" --plugin-dir "${WORKDIR}/plugins/ship-flow" -- -p --output-format text)
+SPAWN_LINE="$(printf '%q ' "${SPAWN_ARGV[@]}")"
+SPAWN_LINE="${SPAWN_LINE% }"
 
 if [ "$PRINT_SPAWN" = "yes" ]; then
   # Hermetic mode: print the resolved prompt/spawn, exec nothing. Raw
@@ -118,9 +131,15 @@ run_cmd() {
 }
 
 if [ -n "${SHIP_FLOW_SCHEDULER_RUNNER_CMD:-}" ]; then
+  # Test-only seam: SHIP_FLOW_SCHEDULER_RUNNER_CMD is a full shell command
+  # string the TEST author controls directly (not attacker-influenced ENTITY
+  # content), so bash -c is fine here.
   ( cd "$WORKDIR" && run_cmd timeout "$TIMEOUT" bash -c "$SHIP_FLOW_SCHEDULER_RUNNER_CMD" ) > "$RECEIPT" 2>&1
 else
-  ( cd "$WORKDIR" && run_cmd timeout "$TIMEOUT" bash -c "$SPAWN_LINE" ) > "$RECEIPT" 2>&1
+  # Real spawn: argv-array exec, never re-parsed by a shell (B1 fix) --
+  # SHIP_PROMPT (which embeds the unsanitized entity string) is passed as a
+  # single argv element, not interpolated into a string a shell re-tokenizes.
+  ( cd "$WORKDIR" && run_cmd timeout "$TIMEOUT" "${SPAWN_ARGV[@]}" ) > "$RECEIPT" 2>&1
 fi
 RUN_EXIT=$?
 

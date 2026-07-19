@@ -106,6 +106,28 @@ run_print_spawn_delegation_case() {
   assert_contains "print-spawn delegation: delegation marker text present" 'ship-flow-scheduler tick delegation' "$OUT"
 }
 
+run_spawn_no_shell_reparse_case() {
+  # B1 regression: ENTITY is an unsanitized caller-supplied string (the tick
+  # passes a folder basename, but this adapter places no restriction on
+  # --entity itself). The old SPAWN_LINE/`bash -c` reconstruction let a
+  # shell-metacharacter-bearing entity execute arbitrary code when the
+  # nested shell re-parsed it. Points SPACEDOCK_BIN at a stub script so the
+  # real (non SHIP_FLOW_SCHEDULER_RUNNER_CMD) exec branch actually runs,
+  # proving the fix end to end rather than just via --print-spawn.
+  local marker
+  marker="${WORKDIR}/PWNED-$$"
+  rm -f "$marker"
+  SPACEDOCK_BIN="${FIXTURE_ROOT}/runner/stub-spacedock-argv-echo.sh" \
+    run_capture "$HELPER" run --entity "fixture\$(touch ${marker})" --workdir "$WORKDIR" --timeout 5
+  assert_exit "no shell reparse: exit 0 (stub terminal reached)" 0 "$EXIT_CODE"
+  if [ -f "$marker" ]; then
+    record_fail "no shell reparse: entity metacharacters executed (marker file created — INJECTION)"
+  else
+    record_pass "no shell reparse: entity metacharacters NOT executed (no marker file)"
+  fi
+  rm -f "$marker"
+}
+
 run_tick_surfaces_timeout_as_blocked_case() {
   # AC-3's "timeout -> blocked, no retry" is a tick-level contract; exercise it
   # end to end through the real tick with --runner gh so it actually calls this
@@ -248,6 +270,7 @@ else
   run_tick_id_marker_case
   run_print_spawn_prompt_case
   run_print_spawn_delegation_case
+  run_spawn_no_shell_reparse_case
   if [ -x "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" ]; then
     run_tick_surfaces_timeout_as_blocked_case
     run_tick_threads_tick_id_case
