@@ -1,12 +1,12 @@
 ---
 title: L3 scheduler tick — stateless SD scheduler (Step-3 wedge v0)
-status: shape
+status: design
 source: captain hackathon contract (.context/l3-hackathon-contract.md, GO 2026-07-19; converged Claude FO + SO-EM + codex/sol panel)
 started: 2026-07-19T02:22:05Z
 completed:
 verdict:
 score:
-worktree:
+worktree: .worktrees/spacedock-ensign-l3-scheduler-tick
 issue:
 pr:
 ---
