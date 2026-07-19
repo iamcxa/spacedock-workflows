@@ -27,12 +27,14 @@
 | shape-confirm-instance-awareness | S | shape-confirm.sh and allocate-id.sh ignore the workflow README id-style declaration, write legacy status sharp (3 sites), and never absorb an existing flat entity — confirm path should be instance-aware | pitch 1 |
 | plugin-readme-model-era-refactor | S | Plugin README still model-era-anchored (4.7 voice) + stale | (todo) |
 | issue-anchor-guard-memory-fallback | S | For free-text-origin entities with no tracker issue, best-effort auto-retrieve the originating conversation/journal (episodic-memory + context-lake) as a candidate anchor to surface to the captain — enriches the surface-to-captain exception without faking an authoritative anchor. | pitch 5 |
-| reverse-recovery-audit-dangling-path | S | ship-shape/SKILL.md:585 and ship-plan/SKILL.md:502 reference a nonexistent docs/ship-flow/_mods/reverse-recovery-audit.md; check-no-dangling.sh does not catch it. Pre-existing dangling reference, separate from this pitch. | pitch 5 |
 | issue-anchor-guard-remaining-triggers | S | Extend the guard to the other two trigger points: feedback-rejection-flow cycle-3 escalation (lives in the spacedock core plugin repo, needs a companion change there) and child/prerequisite creation (necessity proof against a named parent AC). | pitch 5 |
 | issue-anchor-guard-resolver-shell-parser-robustness | S | Three named shell-parser-robustness residuals in the issue-anchor-guard resolver: emit's tombstone rm -f does not check its own exit status before fetch; validate's top-level scalar reads are a line-oriented awk scan, not structural yq (unlike the per-AC rows); the AC-block parser is not Markdown-aware (fenced code / quoted examples could be mis-parsed as ACs). | pitch 5 |
 | scheduler-tick-delegation-marker | S | Tick spawn needs explicit delegation marker (env+prompt) vs hand-dispatch | (todo) |
 | pipeline-timeout-checkpoint-event | S | Runner timeout must scale w/ appetite + emit resumable checkpoint | (todo) |
 | nested-controller-worktree-support | S | dispatch build refuses nested controller-worktree entity paths | (todo) |
+| no-dangling-guard-qualifier-precision | S | W1-W5 guard-robustness follow-ups from #71 verify | (todo) |
+| check-invariants-terminal-misclassification | S | _entity_is_terminal treats empty completed: as terminal repo-wide | (todo) |
+| missing-canonical-mods-both-tiers | S | architecture-canon + canonical-doc-sync mods resolve in neither tier | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
@@ -64,4 +66,6 @@
 | fixture-pollution-discovery-helpers | Fixture-tree exclusion for discovery helpers | 2026-07-15 (landed via PR #39; runtime-reconciled) |
 | 3-root-readme-stale-claims | Refresh root README stale compatibility claims | 2026-07-15 (PR #40) |
 | c14-fo-dispatch-contract | Align C14 with First Officer stage-entry transitions | 2026-07-16 (PR #47) |
+| l3-scheduler-tick | L3 scheduler tick — stateless SD scheduler (Step-3 wedge v0) | 2026-07-19 (PR #70 + hotfix PR #72) |
+| reverse-recovery-audit-dangling-path | Fix dangling reverse-recovery-audit mod ref + regress-guard (first tick-dispatched entity) | 2026-07-19 (PR #71, issue #69) |
 <!-- /section:shipped -->
