@@ -36,6 +36,9 @@
 | check-invariants-terminal-misclassification | S | _entity_is_terminal treats empty completed: as terminal repo-wide | (todo) |
 | missing-canonical-mods-both-tiers | S | architecture-canon + canonical-doc-sync mods resolve in neither tier | (todo) |
 | design-taste-learning-loop | M | Captain UAT taste → ratified per-repo design canon (distilled, zero third-party dep) | (todo) |
+| reconciler-review-artifact-assumption | S | Reconciler demands review.md this workflow never produces — blocks auto-closeout | (todo) |
+| tick-refusal-scan-head-block | S | Refusal consumes the beat + no dedup — scan never reaches eligible entities | (todo) |
+| plist-installer-placeholder-validation | S | Installer must validate zero remaining @PLACEHOLDER@ tokens | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
