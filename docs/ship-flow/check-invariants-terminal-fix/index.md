@@ -144,3 +144,21 @@ live-verified this session (patch/run/revert cycle, working tree confirmed clean
 than trusted from design.md. Task 4 carries an explicit scope note that "suite green" means the test
 suite, not the real-corpus `check-invariants.sh` run, which is expected to flip RED — this is called
 out to prevent execute/verify from misreading the designed AC-2 outcome as a regression.
+
+## Stage Report: execute
+
+- DONE: Execute the 4-task plan exactly: RED fixture committed with observed red BEFORE the predicate fix; the one-line fix; AC-2 surfacing (## AC-2 Surfaced Findings in execute.md — roborov findings LISTED with entity|check|finding table, NOT fixed); dual-env gate with the plan's scope note (real-corpus check-invariants RED is the designed AC-2 outcome, cite it as such)
+  Task 1 commit 3ddd2c2 (DC-18a/b/c observed FAIL pre-fix, DC-18d OK); Task 2 commit 5f5ae69 (all 4 OK); Task 3 commit b4e0863 (execute.md table, roborev findings listed, zero entity bodies touched); Task 4 results in execute.md with the scope note cited.
+- DONE: Full local gate before handoff; git diff --check clean; atomic commits with explicit pathspec
+  Env 1: shell 128/129 + node 79/79 + version-triple 0 + no-dangling 0. Env 2 (CI=true): shell 127/129 + node 79/79 + corpus exit 1 (designed AC-2 RED: C1 roborev + pre-existing C15). Both suite exceptions diagnosed in execute.md (archived-corpus = corpus-RED propagation, pre-existing at pre-fix probe; reconciler = 90s CI-timeout machine-speed artifact, solo 198/198). git diff --check rc=0; all commits path-scoped.
+- DONE: Budget: ~25m remaining of the entity's 1h15m — if the gate run exposes anything beyond the roborov surfacing, park it in the report (bad-news-early), do not expand scope
+  Parked, not fixed: (1) C15 plan.md 220>200 lines (pre-existing, forces before-exit=1 so corpus measured 1→1 not the designed 0→1); (2) archived-corpus suite test asserts corpus exit 0 and is now RED by design. Budget overrun (gate re-runs after two background-runner failures) reported honestly; scope held to the one-line fix + fixture + surfacing.
+
+### Summary
+
+All 4 plan tasks executed in order with RED-before-GREEN in git history (fixture commit precedes fix
+commit). AC-2 findings surfaced in execute.md exactly per design — roborev drives the corpus RED (25
+orphan-header ERRORs + C1 pre-mortem FAIL), nothing silently fixed. Two deviations flagged
+bad-news-early: corpus exit measured 1→1 (not 0→1) because this entity's own plan.md already trips
+C15; and the archived-corpus suite test embeds that corpus run, so it is RED by design — verify
+should read both as the documented AC-2 end-state, not regressions.
