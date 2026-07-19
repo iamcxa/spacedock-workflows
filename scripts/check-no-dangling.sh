@@ -133,6 +133,123 @@ run_pattern_check() {
 }
 
 # ---------------------------------------------------------------------------
+# Mislocated-canonical-mod resolver (AC-2): flags a backtick-fenced
+# `docs/ship-flow/_mods/<name>.md` reference when the adopter-local file is
+# absent, the plugin-canonical twin `plugins/ship-flow/_mods/<name>.md`
+# exists, and the reference's full logical unit (paragraph/list-item, not
+# just the matched physical line) carries no adopter-optional qualifier.
+# Both candidate paths are resolved against the given root, not SCAN_ROOT —
+# the two trees straddle docs/ and plugins/. Takes an explicit root argument
+# (not the global REPO_ROOT) so tests can drive it against a scratch tree.
+# ---------------------------------------------------------------------------
+_mislocated_mod_logical_unit() {
+  local file="$1"
+  local start="$2"
+
+  awk -v start="$start" '
+    {
+      line = $0
+      sub(/^> /, "", line)
+      lines[NR] = line
+    }
+    END {
+      s = start
+      while (s > 1) {
+        prev = lines[s - 1]
+        if (prev ~ /^[[:space:]]*$/) break
+        if (prev ~ /^[[:space:]]*[-*][[:space:]]/) break
+        if (prev ~ /^[[:space:]]*[0-9]+\.[[:space:]]/) break
+        if (prev ~ /^#/) break
+        s--
+      }
+      e = start
+      while (e < NR) {
+        nxt = lines[e + 1]
+        if (nxt ~ /^[[:space:]]*$/) break
+        if (nxt ~ /^[[:space:]]*[-*][[:space:]]/) break
+        if (nxt ~ /^[[:space:]]*[0-9]+\.[[:space:]]/) break
+        if (nxt ~ /^#/) break
+        e++
+      }
+      out = ""
+      for (i = s; i <= e; i++) {
+        out = out lines[i] " "
+      }
+      print out
+    }
+  ' "$file"
+}
+
+run_mislocated_canonical_mods() {
+  local root="$1"
+  local violation_count=0
+
+  # NOTE: -E (POSIX ERE), not -P — BSD/macOS grep has no -P, and this
+  # pattern needs no lookaround, so -E is the portable equivalent (the
+  # backtick delimiters in the pattern itself are what give constraint (a):
+  # a double-quoted JSON path never matches).
+  local hits
+  # shellcheck disable=SC2016  # intentional literal backtick-fenced regex, not a var/command substitution
+  hits=$(grep -rnoE '`docs/ship-flow/_mods/[A-Za-z0-9_-]+\.md`' \
+    --include="*.sh" --include="*.md" --include="*.yaml" \
+    --include="*.json" --include="*.ts" --include="*.rb" \
+    "${EXCLUDE_ARGS[@]}" \
+    "${root}/plugins/ship-flow" 2>/dev/null || true)
+
+  if [[ -z "$hits" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    local file="${hit%%:*}"
+    local rest="${hit#*:}"
+    local lineno="${rest%%:*}"
+    local match="${rest#*:}"
+
+    local name="${match#*_mods/}"
+    name="${name%\`}"
+    name="${name%.md}"
+
+    local relfile="${file#"${root}"/}"
+
+    # Constraint (d): a mod file describing its own adoption path is never
+    # dangling — the twin IS the file being scanned.
+    if [[ "$relfile" == "plugins/ship-flow/_mods/${name}.md" ]]; then
+      continue
+    fi
+
+    local adopter_path="${root}/docs/ship-flow/_mods/${name}.md"
+    local plugin_path="${root}/plugins/ship-flow/_mods/${name}.md"
+
+    # Cond 1: adopter file absent.
+    [[ -f "$adopter_path" ]] && continue
+    # Cond 2: plugin-canonical twin exists (resolved against root, not
+    # SCAN_ROOT — the two paths straddle docs/ and plugins/).
+    [[ ! -f "$plugin_path" ]] && continue
+
+    # Cond 3: the full logical unit (not just the matched physical line)
+    # carries no adopter-optional qualifier.
+    local unit
+    unit="$(_mislocated_mod_logical_unit "$file" "$lineno")"
+    if printf '%s' "$unit" | grep -qE \
+      'when present|if a workflow override exists|if the repo has|otherwise the plugin copy|adopter override|override'; then
+      continue
+    fi
+
+    local content
+    content="$(sed -n "${lineno}p" "$file")"
+    echo "  VIOLATION [mislocated-canonical-mod]: ${file}:${lineno}:${content}"
+    violation_count=$((violation_count + 1))
+  done <<< "$hits"
+
+  if [[ $violation_count -gt 0 ]]; then
+    return 1
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # Self-test mode: inject a violation, assert gate exits 1, clean up.
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" == "--self-test" ]]; then
@@ -158,20 +275,38 @@ fi
 
 # ---------------------------------------------------------------------------
 # Normal run
+#
+# Guarded so the script is safely source-able (defines functions only, does
+# not auto-run or exit the sourcing shell) — needed so
+# lib/__tests__/test-check-no-dangling.sh can source this file and call
+# run_mislocated_canonical_mods() directly against scratch fixture trees.
 # ---------------------------------------------------------------------------
-echo "=== check-no-dangling.sh — scanning plugins/ship-flow/ ==="
-echo "Excluded dirs: ${EXCLUDE_DIRS[*]}"
-echo ""
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  echo "=== check-no-dangling.sh — scanning plugins/ship-flow/ ==="
+  echo "Excluded dirs: ${EXCLUDE_DIRS[*]}"
+  echo ""
 
-for label in "${PATTERN_ORDER[@]}"; do
-  run_pattern_check "$label" "${PATTERNS[$label]}"
-done
+  for label in "${PATTERN_ORDER[@]}"; do
+    run_pattern_check "$label" "${PATTERNS[$label]}"
+  done
 
-echo ""
-if [[ $violations -eq 0 ]]; then
-  echo "PASS: no dangling references found (${#PATTERN_ORDER[@]} patterns checked)."
-  exit 0
-else
-  echo "FAIL: $violations dangling reference(s) found — see violations above."
-  exit 1
+  mislocated_output=""
+  mislocated_status=0
+  mislocated_output="$(run_mislocated_canonical_mods "$REPO_ROOT")" || mislocated_status=$?
+  if [[ -n "$mislocated_output" ]]; then
+    echo "$mislocated_output"
+  fi
+  if [[ $mislocated_status -ne 0 ]]; then
+    mislocated_count=$(printf '%s\n' "$mislocated_output" | grep -c '^  VIOLATION \[mislocated-canonical-mod\]')
+    violations=$((violations + mislocated_count))
+  fi
+
+  echo ""
+  if [[ $violations -eq 0 ]]; then
+    echo "PASS: no dangling references found (${#PATTERN_ORDER[@]} patterns checked)."
+    exit 0
+  else
+    echo "FAIL: $violations dangling reference(s) found — see violations above."
+    exit 1
+  fi
 fi

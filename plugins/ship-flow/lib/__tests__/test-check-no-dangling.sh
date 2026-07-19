@@ -9,6 +9,8 @@
 # real-repo case. Before the resolver function exists, every case records a
 # single uniform skip-fail so the assertion count matches the post-fix run
 # (only PASS/FAIL flips, not the count).
+#
+# shellcheck disable=SC2329  # build_case* functions are invoked indirectly via variable ($build_fn) in assert_case
 
 set -euo pipefail
 
@@ -139,7 +141,7 @@ assert_case() {
   fi
 
   local actual_violations
-  actual_violations=$(printf '%s\n' "$actual_output" | grep -c '^  VIOLATION \[mislocated-canonical-mod\]')
+  actual_violations=$(printf '%s\n' "$actual_output" | grep -c '^  VIOLATION \[mislocated-canonical-mod\]' || true)
 
   rm -rf "$root"
 
