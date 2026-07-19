@@ -1,12 +1,12 @@
 ---
 title: check-invariants terminal misclassification fix
-status: shape
+status: design
 source: hackathon-2 Wave 2b (todo check-invariants-terminal-misclassification; #71 verify finding)
 started: 2026-07-19T16:04:46Z
 completed:
 verdict:
 score:
-worktree:
+worktree: .worktrees/spacedock-ensign-check-invariants-terminal-fix
 issue: "#76"
 pr:
 ---
