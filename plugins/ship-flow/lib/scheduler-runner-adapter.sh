@@ -31,6 +31,7 @@ ACTION="${1:-}"
 ENTITY=""
 WORKDIR=""
 TIMEOUT=""
+TICK_ID=""
 ENV_PAIRS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -38,11 +39,20 @@ while [ $# -gt 0 ]; do
     --workdir) WORKDIR="${2:-}"; shift 2 ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
     --env) ENV_PAIRS+=("${2:-}"); shift 2 ;;
+    --tick-id) TICK_ID="${2:-}"; shift 2 ;;
     *) usage; exit 2 ;;
   esac
 done
 [ -n "$ENTITY" ] && [ -n "$WORKDIR" ] && [ -n "$TIMEOUT" ] || { usage; exit 2; }
 [ -d "$WORKDIR" ] || { echo "scheduler-runner-adapter: no such workdir: $WORKDIR" >&2; exit 2; }
+
+# AC-1: an explicit --tick-id becomes a machine-readable delegation marker on
+# the spawned child (both the hermetic SHIP_FLOW_SCHEDULER_RUNNER_CMD branch
+# and the real-claude branch see it identically, since both flow through
+# run_cmd's env wrapper).
+if [ -n "$TICK_ID" ]; then
+  ENV_PAIRS+=("SHIP_FLOW_SCHEDULER_TICK_ID=${TICK_ID}")
+fi
 
 RECEIPT_DIR="${WORKDIR}/.ship-flow-scheduler-receipts"
 mkdir -p "$RECEIPT_DIR"

@@ -66,6 +66,20 @@ run_timeout_case() {
   assert_contains "timeout: exit_class=timeout" '"exit_class":"timeout"' "$OUT"
 }
 
+run_tick_id_marker_case() {
+  # AC-1a: an explicit --tick-id reaches the spawned child as
+  # SHIP_FLOW_SCHEDULER_TICK_ID (env), in both the hermetic and production
+  # branches identically (design.md AC-1 delta).
+  SHIP_FLOW_SCHEDULER_RUNNER_CMD="bash ${FIXTURE_ROOT}/runner/stub-runner-echo-tick-id.sh" \
+    run_capture "$HELPER" run --entity fixture-tick-id --workdir "$WORKDIR" --timeout 30 --tick-id T-42
+  assert_exit "tick-id: exit 0 (success)" 0 "$EXIT_CODE"
+  local receipt
+  receipt="$(printf '%s' "$OUT" | sed -n 's/.*"receipt":"\([^"]*\)".*/\1/p')"
+  local receipt_body=""
+  [ -n "$receipt" ] && [ -f "$receipt" ] && receipt_body="$(cat "$receipt")"
+  assert_contains "tick-id: TICK_ID_SEEN=T-42 in receipt" 'TICK_ID_SEEN=T-42' "$receipt_body"
+}
+
 run_tick_surfaces_timeout_as_blocked_case() {
   # AC-3's "timeout -> blocked, no retry" is a tick-level contract; exercise it
   # end to end through the real tick with --runner gh so it actually calls this
@@ -95,6 +109,7 @@ else
   run_success_case
   run_error_case
   run_timeout_case
+  run_tick_id_marker_case
   if [ -x "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" ]; then
     run_tick_surfaces_timeout_as_blocked_case
   else
