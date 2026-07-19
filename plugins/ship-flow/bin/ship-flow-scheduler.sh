@@ -313,10 +313,15 @@ cmd_tick() {
   # SHIP_FLOW_SCHEDULER_RUNNER_CMD is the runner adapter's own test-only seam
   # (scheduler-runner-adapter.sh) that replaces the real `claude -p` spawn —
   # when it's set, this preflight must not require the real binary to be on
-  # PATH, or CI (which has no `claude` CLI installed) fails this guard before
-  # the hermetic seam ever gets a chance to run.
-  if [ "$runner" = "gh" ] && [ -z "${SHIP_FLOW_SCHEDULER_RUNNER_CMD:-}" ] && ! command -v claude >/dev/null 2>&1; then
-    echo "ship-flow-scheduler: claude CLI not available for --runner gh" >&2; return 3
+  # PATH, or CI (which has no `claude`/`spacedock` CLI installed) fails this
+  # guard before the hermetic seam ever gets a chance to run.
+  # AC-2: the adapter now spawns via the spacedock launcher
+  # (${SPACEDOCK_BIN:-spacedock} claude ...); either binary satisfies the
+  # preflight -- both absent is the only fail-closed case.
+  if [ "$runner" = "gh" ] && [ -z "${SHIP_FLOW_SCHEDULER_RUNNER_CMD:-}" ] \
+    && ! command -v claude >/dev/null 2>&1 \
+    && ! command -v "${SPACEDOCK_BIN:-spacedock}" >/dev/null 2>&1; then
+    echo "ship-flow-scheduler: neither claude nor ${SPACEDOCK_BIN:-spacedock} CLI available for --runner gh" >&2; return 3
   fi
 
   local tick_id

@@ -88,8 +88,15 @@ fi
 
 # AC-2: single source-of-truth spawn command string, resolved once and reused
 # by both --print-spawn (hermetic inspection) and the real exec branch below
-# — never two hand-written forms that can drift apart.
-SPAWN_LINE="claude -p \"${SHIP_PROMPT}\" --output-format text"
+# — never two hand-written forms that can drift apart. Spawns via the
+# spacedock launcher (owns plugin/env wiring + session metadata) rather than
+# raw `claude -p`; `--plugin-dir` relaxes the launcher's version gate AND
+# loads the controller-worktree's OWN plugin checkout (the code this tick is
+# running), not a possibly-stale globally-installed one. Raw `claude -p
+# "$SHIP_PROMPT" --output-format text` is the documented fallback if the
+# launcher path misbehaves in practice (never silent — a raw-mode switch
+# would need its own explicit flag, not shipped here).
+SPAWN_LINE="${SPACEDOCK_BIN:-spacedock} claude \"${SHIP_PROMPT}\" --plugin-dir \"${WORKDIR}/plugins/ship-flow\" -- -p --output-format text"
 
 if [ "$PRINT_SPAWN" = "yes" ]; then
   # Hermetic mode: print the resolved prompt/spawn, exec nothing. Raw

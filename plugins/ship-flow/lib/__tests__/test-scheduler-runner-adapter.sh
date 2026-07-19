@@ -92,6 +92,10 @@ run_print_spawn_prompt_case() {
   assert_contains "print-spawn: prompt field present" '"prompt":"/ship fixture-print-spawn"' "$OUT"
   if [ "$before_count" = "$after_count" ]; then record_pass "print-spawn: no receipt file created"
   else record_fail "print-spawn: no receipt file created (count went ${before_count} -> ${after_count})"; fi
+  # AC-2: the resolved spawn goes through the launcher, not raw claude.
+  assert_contains "print-spawn: spawn uses --plugin-dir" '\-\-plugin-dir' "$OUT"
+  assert_contains "print-spawn: spawn passes through -- -p --output-format text" '\-\- -p --output-format text' "$OUT"
+  assert_contains "print-spawn: spawn resolves \${SPACEDOCK_BIN:-spacedock}" '(spacedock|SPACEDOCK_BIN)' "$OUT"
 }
 
 run_print_spawn_delegation_case() {
@@ -142,6 +146,31 @@ run_tick_threads_tick_id_case() {
   assert_contains "tick threads tick_id: TICK_ID_SEEN shaped like a tick id" 'TICK_ID_SEEN=[0-9]{8}T[0-9]{6}Z' "$receipt_body"
 }
 
+run_tick_preflight_accepts_spacedock_bin_case() {
+  # AC-2: with the launcher path, `command -v spacedock` alone must also
+  # satisfy the --runner gh preflight (not just `command -v claude`). A
+  # genuinely hermetic PATH (excludes /opt/homebrew/bin, /usr/local/bin,
+  # ~/.local/bin -- where a real claude/spacedock might live on a dev
+  # machine) with ONLY a stub `spacedock` proves the widened check, not the
+  # developer's own PATH.
+  local fake_bin_dir wf
+  fake_bin_dir="$(mktemp -d)"
+  cat > "${fake_bin_dir}/spacedock" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+  chmod +x "${fake_bin_dir}/spacedock"
+  wf="$(mktemp -d)"
+  PATH="${fake_bin_dir}:/usr/bin:/bin" \
+    run_capture "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" tick \
+      --workflow-dir "$wf" --controller-worktree "$wf" \
+      --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+      --runner gh --timeout 30 \
+      --events-log "${wf}/events.jsonl"
+  rm -rf "$fake_bin_dir" "$wf"
+  assert_exit "preflight accepts spacedock-only PATH: exit 0 (not 3)" 0 "$EXIT_CODE"
+}
+
 echo "=== test-scheduler-runner-adapter.sh ==="
 echo ""
 
@@ -158,6 +187,7 @@ else
   if [ -x "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" ]; then
     run_tick_surfaces_timeout_as_blocked_case
     run_tick_threads_tick_id_case
+    run_tick_preflight_accepts_spacedock_bin_case
   else
     echo "  NOTE: bin/ship-flow-scheduler.sh not yet built — skipping tick-level blocked surfacing (covered again once T2 lands)"
   fi
