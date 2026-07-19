@@ -1,13 +1,13 @@
 ---
 title: Tick hardening — delegation marker, launcher spawn, time-budget, blocked-backoff
-status: draft
+status: shape
 source: hackathon-2 contract Wave 1 (todos scheduler-tick-delegation-marker + pipeline-timeout-checkpoint-event merged; +2 Wave-0 live findings)
-started:
+started: 2026-07-19T15:52:48Z
 completed:
 verdict:
 score:
 worktree:
-issue:
+issue: "#74"
 pr:
 ---
 
