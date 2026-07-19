@@ -59,6 +59,9 @@ build; T0/T1 sit inside the already-partly-spent H0:00-1:30 freeze window; T7 is
 
 ---
 
+<details>
+<summary>Per-task detail — TDD contracts, DC commands, file lists (T0–T7)</summary>
+
 ### T0 — Go/no-go precondition (not a commit)
 
 Shape's H0:00-0:45 rule: *"one harmless bounded `claude -p` run returning a parseable terminal
@@ -260,6 +263,8 @@ OPEN with `verdict: PASSED` (the `awaiting_merge` projection, design §3). Capta
 post-merge reconcile/advance are explicitly OUT of tonight's real-proof scope (real runs stop at
 `awaiting_merge` per Rule 2 — the post-merge half is proven by T5's fixtures only tonight, per
 shape.md's own "Post-merge half proven by fixtures tonight, exercised live after morning merge").
+
+</details>
 
 ---
 
