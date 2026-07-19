@@ -80,6 +80,43 @@ run_dedup_case() {
   assert_contains "${desc}: reason names the dedup key" "\"reason\":\"${expected_reason}\"" "$OUT"
 }
 
+run_live_worktree_dedup_case() {
+  # F1 (feedback cycle 1, BLOCKING, AC-1): a crash after the real worktree was
+  # created on disk but before `/ship` wrote `worktree:` into frontmatter must
+  # still dedup-exclude the entity. The fixture's frontmatter worktree/pr are
+  # BOTH empty; only a LIVE directory at the conventional path proves it.
+  local desc="worktree-exists dedup (live filesystem, no frontmatter record)"
+  local wf
+  wf="$(one_entity_workflow worktree-live-only-entity)"
+  mkdir -p "${wf}/.worktrees/spacedock-ensign-worktree-live-only-entity"
+  run_capture "$HELPER" tick --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  rm -rf "$wf"
+  assert_exit "${desc}: tick exit 0" 0 "$EXIT_CODE"
+  assert_contains "${desc}: no dispatch event" '"event":"(refusal|no-op)"' "$OUT"
+  assert_contains "${desc}: reason=worktree-exists" '"reason":"worktree-exists"' "$OUT"
+}
+
+run_live_pr_dedup_case() {
+  # F1 (feedback cycle 1, BLOCKING, AC-1): same crash window, but the
+  # already-created artifact is a PR, not a worktree. frontmatter `pr:` is
+  # empty; only a live gh lookup keyed by the entity's conventional branch
+  # (independent of any recorded PR number) proves it.
+  local desc="pr-exists dedup (live gh lookup, no frontmatter record)"
+  local wf
+  wf="$(one_entity_workflow pr-live-only-entity)"
+  run_capture "$HELPER" tick --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  rm -rf "$wf"
+  assert_exit "${desc}: tick exit 0" 0 "$EXIT_CODE"
+  assert_contains "${desc}: no dispatch event" '"event":"(refusal|no-op)"' "$OUT"
+  assert_contains "${desc}: reason=pr-exists" '"reason":"pr-exists"' "$OUT"
+}
+
 run_eligible_case() {
   local wf
   wf="$(one_entity_workflow eligible-entity)"
@@ -105,6 +142,8 @@ else
   run_refusal_case "not-sd-approved" not-approved-entity "not-sd-approved"
   run_dedup_case "worktree-exists dedup" worktree-exists-entity "worktree-exists"
   run_dedup_case "pr-exists dedup" pr-exists-entity "pr-exists"
+  run_live_worktree_dedup_case
+  run_live_pr_dedup_case
   run_eligible_case
 fi
 
