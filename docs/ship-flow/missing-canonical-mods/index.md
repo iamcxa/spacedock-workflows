@@ -8,7 +8,7 @@ verdict:
 score:
 worktree: .worktrees/spacedock-ensign-missing-canonical-mods
 issue: "#77"
-pr:
+pr: "#79"
 ---
 
 Time budget: 1h00m. architecture-canon.md and some canonical-doc-sync.md references resolve in
