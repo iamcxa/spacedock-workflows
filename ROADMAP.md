@@ -35,6 +35,7 @@
 | no-dangling-guard-qualifier-precision | S | W1-W5 guard-robustness follow-ups from #71 verify | (todo) |
 | check-invariants-terminal-misclassification | S | _entity_is_terminal treats empty completed: as terminal repo-wide | (todo) |
 | missing-canonical-mods-both-tiers | S | architecture-canon + canonical-doc-sync mods resolve in neither tier | (todo) |
+| design-taste-learning-loop | M | Captain UAT taste → ratified per-repo design canon (distilled, zero third-party dep) | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
