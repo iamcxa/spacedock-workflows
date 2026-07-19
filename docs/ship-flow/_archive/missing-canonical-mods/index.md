@@ -1,14 +1,15 @@
 ---
 title: Missing canonical mods — author or de-reference (both tiers)
-status: design
+status: done
 source: hackathon-2 Wave 2c (todo missing-canonical-mods-both-tiers; rra shape discovery)
 started: 2026-07-19T16:04:46Z
-completed:
-verdict:
+completed: 2026-07-19T19:52:01Z
+verdict: passed
 score:
 worktree: .worktrees/spacedock-ensign-missing-canonical-mods
 issue: "#77"
-pr:
+pr: pr-merge:79
+archived: 2026-07-19T19:52:01Z
 ---
 
 Time budget: 1h00m. architecture-canon.md and some canonical-doc-sync.md references resolve in
