@@ -121,6 +121,27 @@ run_tick_surfaces_timeout_as_blocked_case() {
   assert_contains "tick surfaces timeout: source=run-timeout" '"source":"run-timeout"' "$OUT"
 }
 
+run_tick_threads_tick_id_case() {
+  # AC-1c: the tick's own computed tick_id (cmd_tick, date -u +%Y%m%dT%H%M%SZ)
+  # threads into the adapter call for a real --runner gh dispatch -- not just
+  # the adapter's standalone --tick-id support proven above.
+  local wf receipt receipt_body
+  wf="$(mktemp -d)"
+  cp -R "${FIXTURE_ROOT}/workflow/eligible-entity" "${wf}/eligible-entity"
+  SHIP_FLOW_SCHEDULER_RUNNER_CMD="bash ${FIXTURE_ROOT}/runner/stub-runner-echo-tick-id.sh" \
+    run_capture "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" tick \
+      --workflow-dir "$wf" --controller-worktree "$wf" \
+      --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+      --runner gh --timeout 30 \
+      --events-log "${wf}/events.jsonl"
+  receipt="$(printf '%s' "$OUT" | sed -n 's/.*"receipt":"\([^"]*\)".*/\1/p')"
+  receipt_body=""
+  [ -n "$receipt" ] && [ -f "$receipt" ] && receipt_body="$(cat "$receipt")"
+  rm -rf "$wf"
+  assert_exit "tick threads tick_id: exit 0" 0 "$EXIT_CODE"
+  assert_contains "tick threads tick_id: TICK_ID_SEEN shaped like a tick id" 'TICK_ID_SEEN=[0-9]{8}T[0-9]{6}Z' "$receipt_body"
+}
+
 echo "=== test-scheduler-runner-adapter.sh ==="
 echo ""
 
@@ -136,6 +157,7 @@ else
   run_print_spawn_delegation_case
   if [ -x "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" ]; then
     run_tick_surfaces_timeout_as_blocked_case
+    run_tick_threads_tick_id_case
   else
     echo "  NOTE: bin/ship-flow-scheduler.sh not yet built — skipping tick-level blocked surfacing (covered again once T2 lands)"
   fi

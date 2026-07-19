@@ -364,7 +364,7 @@ cmd_tick() {
     evaluate_entity "$path" "$controller_worktree"
     case $? in
       0)
-        run_dispatch_action "$path" "$(entity_slug_from_path "$path")" "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run"
+        run_dispatch_action "$path" "$(entity_slug_from_path "$path")" "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run" "$tick_id"
         return 0
         ;;
       1 | 2)
@@ -399,7 +399,7 @@ cmd_tick() {
 }
 
 run_dispatch_action() {
-  local path="$1" slug="$2" runner="$3" runner_fixture="$4" timeout_sec="$5" controller_worktree="$6" dry_run="$7"
+  local path="$1" slug="$2" runner="$3" runner_fixture="$4" timeout_sec="$5" controller_worktree="$6" dry_run="$7" tick_id="${8:-}"
   local exit_class sentinel receipt pr_from_sentinel
 
   if [ "$dry_run" = "yes" ]; then
@@ -417,7 +417,9 @@ run_dispatch_action() {
     local out
     # Exit code is redundant with exit_class (parsed below) — the adapter
     # already maps 0/124/1 -> success/timeout/error in its own JSON output.
-    out="$("$RUNNER_ADAPTER" run --entity "$slug" --workdir "$controller_worktree" --timeout "$timeout_sec" 2>&1)"
+    local tick_id_args=()
+    [ -n "$tick_id" ] && tick_id_args=(--tick-id "$tick_id")
+    out="$("$RUNNER_ADAPTER" run --entity "$slug" --workdir "$controller_worktree" --timeout "$timeout_sec" "${tick_id_args[@]}" 2>&1)"
     exit_class="$(printf '%s' "$out" | sed -n 's/.*"exit_class":"\([^"]*\)".*/\1/p')"
     sentinel="$(printf '%s' "$out" | sed -n 's/.*"sentinel":"\([^"]*\)".*/\1/p')"
     receipt="$(printf '%s' "$out" | sed -n 's/.*"receipt":"\([^"]*\)".*/\1/p')"
