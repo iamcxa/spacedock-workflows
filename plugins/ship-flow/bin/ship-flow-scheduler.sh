@@ -110,6 +110,27 @@ derive_timeout_sec() {
   printf '%s' $(( h * 3600 + m * 60 ))
 }
 
+# entity_in_backoff <slug> <events-log> <window-sec> — AC-4: returns 0 (in
+# backoff, skip it) iff <slug>'s MOST RECENT event in <events-log> is
+# `blocked` and its `ts` is within <window-sec> of now. Reads events.jsonl
+# only (Rule 3: no new store; reuses scheduler_lease_epoch for ts->epoch).
+# Skip-past, never retry (Rule 4, DC-3): callers `continue` past a
+# in-backoff entity to the next candidate, they never re-dispatch/re-
+# reconcile it within the window.
+entity_in_backoff() {
+  local slug="$1" events_log="$2" window="$3"
+  [ -n "$events_log" ] && [ -f "$events_log" ] || return 1
+  local line event ts ts_epoch now_epoch
+  line="$(grep "\"entity\":\"${slug}\"" "$events_log" | tail -1)"
+  [ -n "$line" ] || return 1
+  event="$(printf '%s' "$line" | sed -n 's/.*"event":"\([^"]*\)".*/\1/p')"
+  [ "$event" = "blocked" ] || return 1
+  ts="$(printf '%s' "$line" | sed -n 's/.*"ts":"\([^"]*\)".*/\1/p')"
+  ts_epoch="$(scheduler_lease_epoch "$ts")"
+  now_epoch="$(date -u +%s)"
+  [ $(( now_epoch - ts_epoch )) -lt "$window" ]
+}
+
 # list_entities <workflow-dir> — one path per line, sorted by slug, folder-based
 # entities only (docs/ship-flow/<slug>/index.md — this plan's entity shape).
 list_entities() {
@@ -355,6 +376,9 @@ cmd_tick() {
 
   local tick_id
   tick_id="$(date -u +%Y%m%dT%H%M%SZ)"
+  # AC-4: > the 300s tick interval, so a blocked entity is skipped for
+  # several ticks rather than re-acted-on next cycle; tunable.
+  local BACKOFF_WINDOW_SEC=3600
 
   if ! scheduler_lease_acquire "$controller_worktree" "$tick_id" "$timeout_sec" "" >/dev/null; then
     emit_event no-op "" ok lease-held '{"reason":"lease-held"}'
@@ -373,6 +397,14 @@ cmd_tick() {
   local path slug pr_val pr_state
   for path in $(list_entities "$workflow_dir"); do
     slug="$(entity_slug_from_path "$path")"
+    # AC-4: skip-past (Rule 4: never retry) an entity blocked within the
+    # backoff window -- this is the head-block fix (was: the loop's own
+    # `return 0` two lines below hit the FIRST non-OPEN-PR entity every
+    # cycle, so a perpetually-PROMPT_CAPTAIN/reconciler-error entity starved
+    # every entity behind it in list order).
+    if [ -n "${EVENTS_LOG:-}" ] && entity_in_backoff "$slug" "$EVENTS_LOG" "$BACKOFF_WINDOW_SEC"; then
+      continue
+    fi
     pr_val="$(read_frontmatter_field "$path" pr)"
     [ -n "$pr_val" ] || continue
     [ "$(read_frontmatter_field "$path" status)" != "done" ] || continue
@@ -395,10 +427,16 @@ cmd_tick() {
   # --- Precedence 2: dispatch (an eligible entity exists), else refusal ---
   local first_refusal_path="" first_refusal_reason="" first_refusal_keys=""
   for path in $(list_entities "$workflow_dir"); do
+    slug="$(entity_slug_from_path "$path")"
+    # AC-4: a recently run-error/run-timeout entity doesn't re-consume the
+    # tick's single action either.
+    if [ -n "${EVENTS_LOG:-}" ] && entity_in_backoff "$slug" "$EVENTS_LOG" "$BACKOFF_WINDOW_SEC"; then
+      continue
+    fi
     evaluate_entity "$path" "$controller_worktree"
     case $? in
       0)
-        run_dispatch_action "$path" "$(entity_slug_from_path "$path")" "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run" "$tick_id"
+        run_dispatch_action "$path" "$slug" "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run" "$tick_id"
         return 0
         ;;
       1 | 2)
