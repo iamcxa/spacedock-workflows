@@ -155,6 +155,18 @@ run_fullcycle_case() {
   assert_contains "leg 2: reconcile event, terminal_state=reconciled" '"event":"reconcile".*"terminal_state":"reconciled"' "$OUT"
   assert_contains "leg 2: advance names the next-ready child" '"event":"advance".*"dispatched":"fullcycle-child-entity"' "$OUT"
 
+  # --- Leg 3 (F3, feedback cycle 1, BLOCKING): a THIRD tick, with the parent
+  # now archived (no PR-bearing active entity left), must actually DISPATCH
+  # the child — the real "NEXT tick dispatches the next entity" half of AC-5
+  # that leg 2's `advance` event alone only NAMES, never proves.
+  STATUS_BIN="$status_bin" run_capture "$HELPER" tick \
+    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  assert_exit "leg 3 (dispatch the next entity): tick exit 0" 0 "$EXIT_CODE"
+  assert_contains "leg 3: dispatch event for the child" '"event":"dispatch".*"entity":"fullcycle-child-entity"' "$OUT"
+
   rm -rf "$wf"
 }
 
