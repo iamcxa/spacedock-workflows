@@ -45,6 +45,9 @@ check-invariants.sh=0 (pre-verify.md), 120-file shell suite=120/120,
 
 ## Review Findings
 
+<details>
+<summary>Proportionality call + Codex cross-model degraded-attempt narrative (raw evidence; collapsed per Principle 8 / C15)</summary>
+
 **Proportionality call (declared, not silent):** `review-scope.sh` measures
 `DIFF_LINES=503` (fec9b32..HEAD) — over the SKILL's `<50` short-circuit — but
 `SCOPE_AUTH/BACKEND/FRONTEND/API/MIGRATIONS` are all `false` (pure bash CLI +
@@ -67,6 +70,8 @@ task-engagement/exploration behavior. Per the circuit-breaker rule (2
 consecutive same-symptom failures → stop, switch strategy), retries stopped;
 tagged `cross_model: false`.
 
+</details>
+
 **Claude adversarial (fallback, sonnet, fresh context, scoped to the 4 changed
 files only)** — findings, verifier disposition in the last column:
 
@@ -77,6 +82,9 @@ files only)** — findings, verifier disposition in the last column:
 | W3 | Qualifier allowlist too narrow for plausible legit phrasing ("if present", "falls back to") → future false-positive risk | P3 | advisory, follow-up |
 | W4 | `check-no-dangling.sh:300` `grep -c` lacks `\|\| true`; unreachable today (format is internally guaranteed) but fragile if it drifts | P3 | advisory, follow-up |
 | W5 | Fixture cases 6/7 give weaker regression coverage than their names imply | P3 | advisory, follow-up |
+
+<details>
+<summary>Severity rationale + incidental out-of-scope finding detail (raw evidence; collapsed per Principle 8 / C15)</summary>
 
 Severity rationale: W1/W2 are gaps in the guard's robustness against
 *future, hypothetical* content, not defects in the shipped detection of the
@@ -91,6 +99,8 @@ key `completed:` regardless of value, so any entity with an *empty*
 `completed:` field — the normal state of every in-flight entity, including
 this one — is misclassified "terminal historical" and silently skipped from
 section-tag enforcement repo-wide. Not this ticket's scope to fix.
+
+</details>
 
 ## Runtime UAT
 
