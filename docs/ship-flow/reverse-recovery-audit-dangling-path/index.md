@@ -4,7 +4,7 @@ status: shape
 source: todo reverse-recovery-audit-dangling-path (pitch 5) + captain 票ok 2026-07-19 (L3 tick real-proof ticket)
 started: 2026-07-19T02:37:40Z
 completed:
-verdict:
+verdict: PASSED
 score:
 worktree:
 issue: "#69"
