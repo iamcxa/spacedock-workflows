@@ -219,3 +219,21 @@ invariants job now reds only on the two designed/pre-existing findings (roborev 
 C15) — matching execute.md/verify.md exactly, confirmed by re-running the job once to rule out an
 observed transient unrelated-test flake. Auto-merge NOT armed per the stage-def caveat; ship.md
 reports the state for FO/captain to route the roborev-red vs merge decision.
+
+## Stage Report: ship (cycle 2)
+
+- DONE: clear this entity's own C15 (plan.md 220 lines) via the established details-collapse remedy, content unchanged
+  Commit 7724c4d: DC-18 reference bash block wrapped in <details> (+5 wrapper lines, 0 deletions); local CI=true check-invariants.sh reports OK C15.
+- DONE: verify remaining PR invariants red is EXACTLY the designed AC-2 finding and nothing else
+  Fresh CI run 29699406055 on 7724c4d: FAIL C1 (roborev pre_mortem) only, propagated into test-archived-corpus-invariants.sh; no C15, no other FAILs; doc_impact + GitGuardian pass.
+- DONE: final PR comment stating red = designed corpus honesty, one pre-existing entity, follow-up filed
+  PR #80 issuecomment-5016971866; ship.md CI-result section updated to match (60 lines, at cap).
+- DONE: auto-merge still NOT armed
+  gh pr view: autoMergeRequest null — roborev routing left as a captain call.
+
+### Summary
+
+Coordinator follow-up executed: this entity's own C15 breach (plan.md 220 > 200) was cleared with
+the sibling-established details-collapse (content unchanged), leaving the PR's invariants red as
+purely the designed AC-2 surfacing — roborev's missing pre_mortem — confirmed on a fresh CI run and
+stated precisely in a final PR comment for the morning reviewer. Auto-merge remains unarmed.

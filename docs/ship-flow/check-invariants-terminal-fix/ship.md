@@ -12,11 +12,14 @@ persisted to `index.md` after `gh pr view 80` confirmed.
   (`check-invariants.sh` already has a Source-Map row at
   `doc-sync-context.md:40`; this is a predicate correctness fix, not a
   new/removed checker).
-- `invariants`: **fail** — but only on the designed AC-2 outcome: `FAIL C1`
-  (roborev missing `pre_mortem:`) + `FAIL C15` (this entity's own `plan.md`
-  220 lines, pre-existing). Matches execute.md/verify.md's surfacing table
-  exactly.
-- `GitGuardian`: pass.
+- `invariants`: **fail** — as of `7724c4d`, EXACTLY the designed AC-2
+  outcome and nothing else: `FAIL C1` (roborev missing `pre_mortem:`),
+  propagated into `test-archived-corpus-invariants.sh`. The earlier
+  `FAIL C15` (this entity's own `plan.md`, 220 lines) was cleared by
+  collapsing the DC-18 reference block under `<details>` (content
+  unchanged, +5 wrapper lines; local + CI both show `OK C15`).
+- `GitGuardian`: pass. Final state posted as a PR comment for the
+  morning reviewer (issuecomment-5016971866).
 
 **Not arming auto-merge** — invariants reds (by design), and the caveat
 says only arm on green. Reporting for FO/captain routing.
@@ -28,11 +31,11 @@ GitHub's `pull_request.base.sha` stayed pinned to the pre-merge tip across
 two synchronize events, so `doc-impact-gate.sh` diffed against a stale
 merge-base and misattributed PR #79's files (`SKILL.md`, etc.) to this PR's
 changed-file set — spurious `stage-skill-readme`/`issue-anchor-guard`
-BLOCKERs. Fixed by merging `origin/main` into this branch (clean,
-no conflicts; DC-18 4/4 + full local suite 66/66 re-verified after). Also
-observed one transient flake on the first post-merge CI run
-(`test-merged-pr-closeout-provider-pagination.sh`, unrelated file, passed
-46/46 locally and on job re-run) — not reproducible, not routed further.
+BLOCKERs. Fixed by merging `origin/main` into this branch (clean, no
+conflicts; DC-18 4/4 + full local suite 66/66 re-verified after). One
+transient unrelated-test flake on the first post-merge run
+(`test-merged-pr-closeout-provider-pagination.sh`) passed 46/46 locally
+and on job re-run — not reproducible, not routed further.
 
 ## Canonical docs
 
@@ -54,5 +57,4 @@ Named candidates for follow-up (none blocking this ship):
 
 ## Verdict
 
-status: shipped (PR open, not auto-merged — awaiting FO/captain route
-decision on the roborev-red vs merge tradeoff)
+status: shipped (PR open, not auto-merged — roborev routing is a captain call)
