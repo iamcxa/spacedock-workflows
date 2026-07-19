@@ -325,6 +325,15 @@ cmd_tick() {
     [ -n "$pr_val" ] || continue
     [ "$(read_frontmatter_field "$path" status)" != "done" ] || continue
     pr_state="$(gh_pr_state "$slug" "$pr_val")"
+    if [ "$pr_state" = "UNKNOWN" ]; then
+      # F4 fix (feedback cycle 1, WARNING): UNKNOWN is a transient gh lookup
+      # failure (auth/network/rate-limit), not a real terminal PR state.
+      # Funneling it into reconcile like CLOSED would send an actually-open
+      # PR into a spurious PROMPT_CAPTAIN on every API flake. Nothing is
+      # mutated here, so the very next tick just re-derives and retries.
+      emit_event no-op "$slug" ok gh-state-unknown '{"reason":"gh-state-unknown","pr_state":"UNKNOWN"}'
+      return 0
+    fi
     if [ "$pr_state" != "OPEN" ]; then
       run_reconcile_action "$path" "$slug" "$dry_run" "$workflow_dir" "$timeout_sec"
       return 0

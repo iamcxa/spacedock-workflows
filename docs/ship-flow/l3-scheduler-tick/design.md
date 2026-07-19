@@ -95,7 +95,7 @@ emit).
 | `dispatch` | `runner:{workdir,timeout_sec,exit_class,sentinel,receipt}`, `pr:"<number\|null>"` |
 | `advance` | `ready_set:[…]`, `dispatched:"<slug\|null>"` (the next entity this tick handed off) |
 | `reconcile` | `pr`, `reconciler_verdict:"<PROCEED\|PROMPT_CAPTAIN\|REJECT>"`, `terminal_state:"<reconciled\|blocked>"` |
-| `no-op` | `reason:"<idle\|lease-held\|nothing-ready\|nothing-eligible>"` |
+| `no-op` | `reason:"<idle\|lease-held\|nothing-ready\|nothing-eligible\|gh-state-unknown>"` |
 | `refusal` | `keys:{shaped,issue_open,sd_approved,dor}` (each bool), `reason:"<code>"` |
 | `blocked` | `source:"<run-timeout\|run-error\|reconciler-prompt-captain>"`, `receipt` |
 
