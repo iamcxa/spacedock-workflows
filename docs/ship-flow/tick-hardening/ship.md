@@ -56,9 +56,7 @@ hardening, not a new capability; bumps land in separate release commits.
 status: auto-merge-armed
 pr: "#81"
 tasks: 9/9 (cycle 1) + 3/3 bounce fixes (cycle 2)
-verify: PASS (PROCEED) — cycle 2, independent re-run, injection PoC re-blocked
-  firsthand
-dependency: hackathon-2 Wave 1 (#74); merge unblocks the live W2a tick-dispatch
-  finale (FO-owned, post-merge)
+verify: PASS (PROCEED) — cycle 2, independent re-run, injection PoC re-blocked firsthand
+dependency: hackathon-2 Wave 1 (#74); merge unblocks the live W2a tick-dispatch finale (FO-owned, post-merge)
 
 <!-- /section:ship-report -->
