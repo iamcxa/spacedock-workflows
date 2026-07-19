@@ -1,14 +1,15 @@
 ---
 title: Tick hardening — delegation marker, launcher spawn, time-budget, blocked-backoff
-status: design
+status: done
 source: hackathon-2 contract Wave 1 (todos scheduler-tick-delegation-marker + pipeline-timeout-checkpoint-event merged; +2 Wave-0 live findings)
 started: 2026-07-19T15:52:48Z
-completed:
-verdict:
+completed: 2026-07-19T19:52:01Z
+verdict: passed
 score:
 worktree: .worktrees/spacedock-ensign-tick-hardening
 issue: "#74"
-pr:
+pr: pr-merge:81
+archived: 2026-07-19T19:52:01Z
 ---
 
 Harden the scheduler tick's spawn seam and scheduling loop. Time budget: 2h30m (hackathon-2
