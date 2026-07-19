@@ -1317,4 +1317,44 @@ assert_stderr_contains "renderer invoked external spacedock" "bash '$CHECK_SCRIP
   "C14 runtime proof rejects external status invocation"
 rm -rf "$AUTH_TMP"
 
+# ========== DC-18: _entity_is_terminal predicate — only status: done is terminal ==========
+# Zero prior coverage (grep _entity_is_terminal over __tests__/ = 0 hits before this task).
+_dc18_check_terminal_skip() {
+  # $1 = fixture frontmatter+body (heredoc string), $2 = "present"|"absent" (expected SKIP line)
+  local d; d="$(create_mock_plugin_dir)" || return 1
+  printf '%s\n' "$1" > "$d/docs/ship-flow/dc18-entity.md"
+  local err
+  err=$(bash "$CHECK_SCRIPT" --test-fixture "$d" --check section-tag-coverage 2>&1 >/dev/null)
+  rm -rf "$d"
+  if [ "$2" = "present" ]; then
+    echo "$err" | grep -qF "terminal historical entity"
+  else
+    ! echo "$err" | grep -qF "terminal historical entity"
+  fi
+}
+
+if _dc18_check_terminal_skip $'---\nstatus: shape\ncompleted:\n---\n\n## H' "absent"; then
+  echo "OK DC-18a empty completed: on active entity is NOT terminal"
+else
+  echo "FAIL DC-18a empty completed: on active entity is NOT terminal"; FAIL=1
+fi
+
+if _dc18_check_terminal_skip $'---\nstatus: ship\n---\n\n## H' "absent"; then
+  echo "OK DC-18b status: ship is NOT terminal"
+else
+  echo "FAIL DC-18b status: ship is NOT terminal"; FAIL=1
+fi
+
+if _dc18_check_terminal_skip $'---\nstatus: verify\nverdict: PASSED\n---\n\n## H' "absent"; then
+  echo "OK DC-18c verdict: PASSED is NOT terminal"
+else
+  echo "FAIL DC-18c verdict: PASSED is NOT terminal"; FAIL=1
+fi
+
+if _dc18_check_terminal_skip $'---\nstatus: done\ncompleted: 2026-01-01T00:00:00Z\n---\n\n## H' "present"; then
+  echo "OK DC-18d status: done IS terminal (over-correction guard)"
+else
+  echo "FAIL DC-18d status: done IS terminal (over-correction guard)"; FAIL=1
+fi
+
 exit $FAIL
