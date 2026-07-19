@@ -157,7 +157,15 @@ pr_exists_for_slug() {
   fi
   command -v gh >/dev/null 2>&1 || { printf 'UNKNOWN\n'; return 0; }
   local out
-  out="$(gh pr list --head "$branch" --state all --json state --jq '.[0].state' 2>/dev/null || true)"
+  # W1 fix (feedback cycle 2, WARNING): distinguish a gh command FAILURE
+  # (auth/network error) from a SUCCESSFUL call that simply found no PR —
+  # mirroring gh_pr_state's `|| printf UNKNOWN` pattern. The prior `|| true`
+  # swallowed the exit code, so any gh error looked identical to "no PR"
+  # (NONE) and fell through to dispatch-allowed instead of failing closed.
+  if ! out="$(gh pr list --head "$branch" --state all --json state --jq '.[0].state' 2>/dev/null)"; then
+    printf 'UNKNOWN\n'
+    return 0
+  fi
   [ -n "$out" ] || { printf 'NONE\n'; return 0; }
   printf '%s\n' "$out"
 }
@@ -260,7 +268,11 @@ evaluate_entity() {
   local live_pr_state
   live_pr_state="$(pr_exists_for_slug "$slug")"
   case "$live_pr_state" in
-    OPEN|MERGED|UNKNOWN) EVAL_REASON="pr-exists"; return 2 ;;
+    # W2 fix (feedback cycle 2, WARNING): CLOSED (not just OPEN/MERGED/
+    # UNKNOWN) is also dedup ground truth — a closed-unmerged PR on the
+    # conventional branch proves a prior run already dispatched, so it must
+    # exclude rather than fall through to a fresh dispatch.
+    OPEN|MERGED|CLOSED|UNKNOWN) EVAL_REASON="pr-exists"; return 2 ;;
   esac
 
   EVAL_REASON=""
