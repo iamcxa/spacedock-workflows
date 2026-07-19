@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../../.." &> /dev/null && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../../../.." &> /dev/null && pwd)"
 MOD_FILE="${REPO_ROOT}/docs/ship-flow/_mods/canonical-doc-sync.md"
 REVIEW_SKILL="${REPO_ROOT}/plugins/ship-flow/skills/ship-review/SKILL.md"
 SCHEMA_FILE="${REPO_ROOT}/plugins/ship-flow/references/entity-body-schema.yaml"

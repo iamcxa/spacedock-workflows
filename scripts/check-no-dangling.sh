@@ -193,7 +193,7 @@ run_mislocated_canonical_mods() {
   hits=$(grep -rnoE '`docs/ship-flow/_mods/[A-Za-z0-9_-]+\.md`' \
     --include="*.sh" --include="*.md" --include="*.yaml" \
     --include="*.json" --include="*.ts" --include="*.rb" \
-    "${EXCLUDE_ARGS[@]}" \
+    "${EXCLUDE_ARGS[@]}" --exclude-dir="__tests__" \
     "${root}/plugins/ship-flow" 2>/dev/null || true)
 
   if [[ -z "$hits" ]]; then
@@ -224,9 +224,19 @@ run_mislocated_canonical_mods() {
 
     # Cond 1: adopter file absent.
     [[ -f "$adopter_path" ]] && continue
-    # Cond 2: plugin-canonical twin exists (resolved against root, not
-    # SCAN_ROOT — the two paths straddle docs/ and plugins/).
-    [[ ! -f "$plugin_path" ]] && continue
+
+    # Classify by twin presence (both paths resolved against root, not
+    # SCAN_ROOT — the two trees straddle docs/ and plugins/).
+    local label
+    if [[ -f "$plugin_path" ]]; then
+      label="mislocated-canonical-mod"        # unchanged class: adopter absent, twin present.
+    else
+      # Missing-everywhere: adopter absent AND twin absent. Guard (F3): only
+      # fire when the adopter tree exists — a plugins-only extraction ships
+      # neither file and must stay green (preserves #71 clone-safety).
+      [[ ! -d "${root}/docs/ship-flow/_mods" ]] && continue
+      label="missing-everywhere-canonical-mod"
+    fi
 
     # Cond 3: the full logical unit (not just the matched physical line)
     # carries no adopter-optional qualifier.
@@ -239,7 +249,7 @@ run_mislocated_canonical_mods() {
 
     local content
     content="$(sed -n "${lineno}p" "$file")"
-    echo "  VIOLATION [mislocated-canonical-mod]: ${file}:${lineno}:${content}"
+    echo "  VIOLATION [${label}]: ${file}:${lineno}:${content}"
     violation_count=$((violation_count + 1))
   done <<< "$hits"
 
@@ -297,7 +307,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "$mislocated_output"
   fi
   if [[ $mislocated_status -ne 0 ]]; then
-    mislocated_count=$(printf '%s\n' "$mislocated_output" | grep -c '^  VIOLATION \[mislocated-canonical-mod\]')
+    mislocated_count=$(printf '%s\n' "$mislocated_output" | grep -cE '^  VIOLATION \[(mislocated|missing-everywhere)-canonical-mod\]')
     violations=$((violations + mislocated_count))
   fi
 

@@ -196,7 +196,7 @@ When a cross-review emits PROMPT_CAPTAIN on a high-density entity, FO MAY flip t
   - `reason_matches_canonical_constraint` — finding traces to PRODUCT.md / ARCHITECTURE.md hard constraint already documented
   - `reason_matches_precedent_count_ge_2` — finding pattern has ≥2 prior shipped precedents in `_archive/done/`
   - `reason_is_NIT_class` — severity classification = NIT (per ship-verify Step 4.6 mechanical auto-fix rule)
-- Each flip MUST append a decisions.md row (see `docs/ship-flow/_mods/decisions-log.md`)
+- Each flip MUST append a decisions.md row.
 - Principle 4 cross-reference: the 4-row whitelist is itself 4 boolean predicates evaluable without runtime enum lookup
 
 **Reviewer-unresponsive circuit breaker**: if the cross-review teammate is unresponsive (phantom team / SendMessage timeout / fresh-Agent stall), fall back per Rule A Fallback above — fresh sonnet by default, fresh opus when `appetite: big-batch`. Do not block stage advancement on an unresponsive reviewer. Each stage SKILL cross-review subsection MUST reference this fallback (pitch 091 grep-enforces this cross-reference; see `check_cross_review_gate` / `check_team_fallback_documented`).

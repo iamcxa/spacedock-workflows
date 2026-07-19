@@ -110,7 +110,7 @@ HEADER
 # Design-skipped short-circuit
 if echo "$HANDOFF" | grep -qE '^[[:space:]]*-?[[:space:]]*design-skipped:[[:space:]]*true'; then
   cat <<'EOF'
-**Status**: design-skipped (entity has `affects_ui: false`; design stage bypassed by shape Phase 8).
+**Status**: design-skipped (entity has `affects_ui: false`; design ran a Phase 0 trivial-pass — not bypassed; the design stage always runs, INVARIANTS Principle 11).
 
 No design DCs to import. Plan proceeds without UI/render-fidelity DC imports.
 

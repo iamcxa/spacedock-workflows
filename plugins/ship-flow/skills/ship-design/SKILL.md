@@ -779,7 +779,7 @@ single composite mockup or prose-plus-selector target instead of a full
 machine-readable verification target. For non-UI domain-only design,
 `whole_page_visual_targets[]` may be omitted.
 
-**Design-skipped path** (G14): when design stage is skipped (`!affects_ui && !domain && !design_required && !contract_decision_required` route from shape), the entity body MUST still contain `### Hand-off to Plan` with single field `design-skipped: true`. Emitted by ship-shape Phase 8 hand-off only when `affects_ui: false`, `domain:` is unset, `design_required: false`, `contract_decision_required: false`, and `open_contract_decisions[]` is empty. Plan Step 1.6 reads this marker to bypass design-DC import explicitly (vs absence of the block, which is ambiguous).
+**Design trivial-pass path** (G14; INVARIANTS Principle 11 — design always runs): for a pure-mechanical entity (`!affects_ui && !domain && !design_required && !contract_decision_required`), design is NOT skipped — it runs this stage's Phase 0 trivial-pass fast-path. The entity body MUST contain `### Hand-off to Plan` with single field `design-skipped: true`, **emitted by this design stage's Phase 0 trivial-pass** (Principle 11.3) when `affects_ui: false`, `domain:` is unset, `design_required: false`, `contract_decision_required: false`, and `open_contract_decisions[]` is empty. (Shape emits `### Hand-off to Design`; design emits the Plan hand-off.) Plan Step 1.6 reads this marker to skip design-DC import explicitly (vs absence of the block, which is ambiguous).
 
 If `affects_ui: true`, `domain:` is set, `design_required: true`, or
 `contract_decision_required: true`, `design-skipped: true` is invalid by

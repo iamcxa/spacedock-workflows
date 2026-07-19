@@ -43,8 +43,8 @@ check "shape names selector grammar/API vocabulary/protocol as contract-design t
   "grep -q 'selector grammar' '${SHAPE_SKILL}' && grep -q 'API vocabulary' '${SHAPE_SKILL}' && grep -q 'protocol' '${SHAPE_SKILL}'"
 check "shape sets contract_decision_required when open contract decisions exist" \
   "grep -q 'contract_decision_required: true' '${SHAPE_SKILL}' && grep -q 'open_contract_decisions\\[\\]' '${SHAPE_SKILL}'"
-check "shape design skip gate includes contract_decision_required" \
-  "grep -q '!contract_decision_required' '${SHAPE_SKILL}' && grep -q 'advance to design stage' '${SHAPE_SKILL}'"
+check "shape design gate: design always runs; contract_decision_required is a design-lane trigger (Principle 11)" \
+  "grep -qi 'design always runs' '${SHAPE_SKILL}' && grep -q 'contract_decision_required' '${SHAPE_SKILL}'"
 
 echo "Block 3: design resolves contract decisions before plan"
 check "ship-design trigger accepts contract_decision_required" \
