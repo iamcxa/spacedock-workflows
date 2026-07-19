@@ -91,3 +91,16 @@ Fixed the v0 contract deltas concretely in design.md and resolved all four of sh
 ### Summary
 
 Wrote plan.md: 8 serial atomic-commit tasks (T0 go/no-go precondition, T1 RED fixture suite covering all 9 AC test gates, T2-T6 implementation umbrellas mapped 1:1 to design §1/§3/§4/§5/§6/§7/§8, T7 the two H7 terminal proofs) each with an explicit TDD contract and an exact-command DC. Verified gh issue #69 (`reverse-recovery-audit-dangling-path`) is live, OPEN, and `sd:approved` — the real-proof target — and flagged its still-`draft` shape-confirm as a precondition outside this plan's own scope. Named 3 explicit cuts (multi-epic advance scan, rollup cost field, launchd installer automation) as follow-up todos, none narrowing an AC. Zero SKILL.md edits, zero new captain decisions, all 4 canonical docs recorded skip/defer-to-ship per design §11.
+
+## Stage Report: execute
+
+- DONE: TDD evidence discipline: T1 RED fixture suite is committed with OBSERVED red output before any implementation commit; every T2-T6 commit cites its green run in execute.md; deviations from plan.md get a one-line rationale, never silent.
+  354fb88 = RED-only commit (8 files, observed exit=1 "helper missing" each) before 94f2571/20c6a0b/ef2d837/1cd8b1d/dd8c5f5; execute.md cites each green run + 10 one-line deviations.
+- DONE: Full local gate before handoff: shell suite + node tests + check-invariants + check-no-dangling + check-version-triple all green in the worktree, git diff --check clean — the execute stage def's pre-handoff self-check is the handoff blocker.
+  Shell suite 118/118 files pass; node 79/79; check-invariants exit 0 (C15 on plan.md fixed via <details> wrap, commit 288827e); check-no-dangling PASS; check-version-triple PASS; git diff --check clean.
+- DONE: T7 boundary: the fixture full-cycle proof runs inside execute; the LIVE single-entity proof (tick dispatches the reverse-recovery-audit-dangling-path entity, issue #69) is FO-owned at H7 from the project root — do NOT hand-run /ship on that entity from inside execute.
+  DC-1 fixture full-cycle GREEN (test-ship-flow-scheduler-fullcycle.sh 6/6: dispatch -> merged -> reconcile -> next-ready); no /ship run on #69 from this worktree — LIVE proof left to FO at H7.
+
+### Summary
+
+Landed the full T0-T7 wedge: controller worktree + sentinel GO (T0), RED-first 8-file fixture suite (T1), tick CLI with lease/eligibility/dispatch (T2), claude-p runner adapter with real spawn receipt (T3), read-only gate report with dual no-write gates (T4), fail-closed reconcile + advance via unmodified reconciler/dag-waves (T5), launchd templates + deterministic rollup + RUNBOOK (T6), and the fixture full-cycle terminal proof (T7 DC-1). Notable deviations (all one-lined in execute.md): a hermetic --gh-provider fixture seam for CI, advance feeding dag-waves --stdin with archive-aware TSV (its --from-workflow mode cannot see _archive), and an is_shaped whitelist that keeps draft entities ineligible. Ready for verify; the live #69 proof (tick --runner gh from project root) is the FO's H7 step.
