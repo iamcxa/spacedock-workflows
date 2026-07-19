@@ -96,3 +96,29 @@ un-mask genuine pre-existing findings (AC-2 by design). Two FO flags: (1) AC-1's
 taxonomy" wording implies dropping `ship`/`shipped`, not only fixing the empty-`completed:` accident;
 (2) the working branch is 233 commits behind origin/main, so AC-3's "suite green" baseline needs
 execute to work on a tree near main.
+
+## Stage Report: design
+
+- DONE: evaluate the trivial-pass fast-path honestly; if contract-bearing, write the minimal design.md
+  Contract-bearing (corpus-semantics shift: 6 entities flip terminal→active, CI exit 0→1) → full design.md written at docs/ship-flow/check-invariants-terminal-fix/design.md.
+- DONE: name the exact new predicate (only status done; drop empty-completed AND ship/shipped)
+  `^status:[[:space:]]*done[[:space:]]*$` (check-invariants.sh:61). Design refinement flagged: also drop `verdict: PASSED` branch (taxonomically forced, zero-hit today) — surfaced for gate veto.
+- DONE: name the 5 gated check sites (:195,:607,:662,:823,:842) and expected corpus-honesty diff
+  Empirically measured (old vs fixed run, source reverted): 6 flip; roborev drives RED (25 orphan-header ERRORs + 1 C1 FAIL); 5 grandfather WARNs + 2 pitch WARNs non-blocking; :607/:842 add nothing.
+- DONE: RED fixture spec (--test-fixture harness, zero current coverage)
+  `--check section-tag-coverage` on `--test-fixture`, assert terminal-SKIP presence; 4 cases (empty-completed/ship/verdict:PASSED RED + done-entity GREEN control); 0 prior coverage confirmed (grep _entity_is_terminal over __tests__ = 0 hits).
+- DONE: AC-2 surfacing format (findings listed in execute.md, NOT silently fixed)
+  `## AC-2 Surfaced Findings` section in execute.md (before/after diff + entity|check|finding table); no entity bodies touched.
+- DONE: Work in seeded worktree off origin/main (branch spacedock-ensign/check-invariants-terminal-fix)
+  Verified worktree corpus == origin/main baseline (6-flip count matches shape's "6 of 9"); all reads/writes/commit under the worktree.
+- DONE: Time budget — design lean
+  Single design.md + decisions/stage-report; no code changes (design owes a spec, not the edit).
+
+### Summary
+Contract-bearing (not trivial-pass): the 1-line predicate fix shifts corpus semantics — 6 active
+entities flip terminal→active and the suite flips green→RED on one real masked entity (roborev). The
+before/after diff was measured empirically (patch, run, revert; source uncommitted). Two decisions
+carried to the gate: (1) the predicate reduces to `status: done` only, which forces dropping the
+`verdict: PASSED` branch beyond shape's literal enumeration — taxonomically required, empirically
+zero-hit today, flagged for veto; (2) execute must surface the un-masked roborev findings in
+execute.md, not silently fix them (captain attestation covers surfacing).
