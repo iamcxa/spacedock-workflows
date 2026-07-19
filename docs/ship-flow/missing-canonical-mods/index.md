@@ -225,3 +225,31 @@ One execute-stage finding not anticipated by shape/design/plan: this entity's ow
 the C15 artifact-verbosity cap (pre-existing since the plan-stage commit) — fixed as a separate
 commit using the exact remedy a sibling entity already established for this same gate, so
 check-invariants.sh is green at handoff. Full detail and commit citations in execute.md.
+
+## Stage Report: verify
+
+- DONE: Independent re-run (FOREGROUND bounded only) — guard fixture suite + the two integration tests + full local gate both envs; per-AC evidence
+  Guard fixture suite 12/12; test-canonical-doc-sync-mod.sh 14/14; test-canonical-context-lifecycle.sh 8/10 (2 residual re-confirmed unrelated: 0 grep hits for architecture-canon/canonical-doc-sync/decisions-log in README.md, 0 commits touched it); standalone shell suite 129/129 (one 90s-timeout false-alarm on test-merged-pr-closeout-reconciler.sh re-confirmed 198/198 at 300s); check-no-dangling/--self-test/check-invariants/check-version-triple all PASS; git diff --check clean. Full detail in verify.md.
+- DONE: verify authored canonical-doc-sync.md content against the 13-token contract from the integration tests (not invented prose)
+  Checked token-by-token against the two tests' own `grep -q` patterns directly (not design.md's paraphrase) — 13/13 present verbatim; file is 21 lines, no content beyond the recovered spec.
+- DONE: confirm all four de-references resolve and the class guard reds on the synthetic fixture / greens on repo
+  `grep -rn 'architecture-canon\|decisions-log'` across all 4 sites → 0 hits. Beyond the shipped fixture suite: sourced check-no-dangling.sh directly and drove `run_mislocated_canonical_mods()` against an independently-named fixture (`zzz-independent-probe-never-in-repo-test.md`, never in the repo's own test file) — RED with adopter tree present, GREEN (F3 guard) with it removed, ruling out name-hardcoding.
+- DONE: verify.md C11/C12/C15-conformant from the start
+  `## Panel Coverage` + `## Deferred to TODO` present; body 101/120 lines, raw 114/240. `check-invariants.sh` re-run with verify.md present: rc=0, C11/C12/C15 all OK.
+- DONE: proportional review for S doc-reconciliation entity — declare panel coverage honestly; scoped cross-model per ship-verify (DEGRADED visible if unavailable)
+  `panel_coverage: scoped` declared (non-doc source diff = 86 changed lines, zero UI/API/security/migration flags, S/mechanical carried from shape/design/plan) — full 5-specialist panel not dispatched. Codex cross-model attempted scoped (stdin diff, read-only sandbox, no-explore prompt) and converged clean (~170s, NO_FINDINGS) — unlike the sibling entity's DEGRADED run this same session. `cross_model: true`.
+- DONE: BLOCKING → route_to execute; NIT auto-fix per rules
+  No BLOCKING or NIT findings this round — Codex converged NO_FINDINGS and the verifier's own diff read found nothing to route or auto-fix.
+
+### Summary
+
+Independently re-ran (not relayed) the guard fixture suite (12/12), both dogfood integration tests
+(14/14 + 8/10, the 2 residuals re-confirmed pre-existing/unrelated), and the full local gate
+(129/129 standalone with one confirmed timeout false-alarm, check-no-dangling/self-test/
+check-invariants/check-version-triple/git-diff-check all green). Went beyond relay on both content
+ACs: verified canonical-doc-sync.md's 13 tokens against the tests' own grep patterns directly, and
+drove the resolver function against an independently-named synthetic fixture never in the repo's
+own test file to rule out hardcoding. Proportionality declared visibly: scoped panel for an
+S/mechanical entity with zero UI/API/security/migration flags; Codex cross-model converged clean
+this time (contrast: the sibling entity's DEGRADED run). Zero BLOCKING/WARNING findings; 2
+pre-existing out-of-scope items deferred to TODO. Verdict: PASS (PROCEED). Full evidence in verify.md.
