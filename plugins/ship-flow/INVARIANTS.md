@@ -6,6 +6,7 @@
 
 ## Revision History
 
+- **2026-07-18** — **v1.5.0** Principle 17 (the human review surface is the shape/spec, never plan.md) added from entity #60/issue #60. FO Discipline's Autonomous continuation section gained a direction-confirm captain-stop + a plan.md-offer Violation pattern. C16 (`--check review-surface-shape-not-plan`) pins the rule text — Tier B per Principle 17's own framing: discoverability + regression-proofing, not behavioral FO enforcement.
 - **2026-05-30** — **v1.4.0** Principle 16 (Tier-A Validity: M1 provenance-not-structure + M2 fixture-verified) added from the 19-skill rubric-ification audit. First Tier-A-valid instance: `lib/check-cross-review-threshold.sh` + the meta-rubric frame at `rubrics/_meta-rubric.md`. CI wiring of the cross-review gate is deferred (needs the per-skill contract emission + the forward-only stamp decision).
 - **2026-05-28** — **v1.3.0** (T1-3 of SkillLens-derived MEMORY rubric rollout). Success-mode harvest invariant added (see below). Codex pre-discussed + FO-adjudicated; ship-review Step 4.5 + Step 8 gate added; backward-compatible (BLOCKER applies forward-only to new reviews).
 - **2026-04-21** — **v1 initial** (entity #067, slot 046e). Principle #5 reformulated in-session from "bounded entity file" to "structured docs are section-tagged + script-mediated + direct-Read warn" after captain push-back — the re-read cost assumption was obsoleted by #049 (extract-section.sh) + #053 (write-section.sh) script primitives. Preserves other 5 principles from 2026-04-20 diagnosis verbatim.
@@ -17,7 +18,7 @@ Three layers, each catching a different failure mode:
 1. **CI grep** (`bin/check-invariants.sh`): runs on every PR touching `plugins/ship-flow/**` or `docs/ship-flow/**`. Fails on structural regressions (preamble regrowth, skill count > 7, unwrapped H2/H3, fan-out reviewer bloat, etc.). Green = repo passes its own rules.
 2. **Runtime warn-hooks**:
    - `hooks/warn-direct-read.js`: PreToolUse hook on `Read`/`Edit` tool calls. Fires `systemMessage` warning when an agent attempts direct full-file Read on `docs/ship-flow/*.md` entity files (active, non-archived). **Warn-not-block** — operation still proceeds, but the agent sees the nudge to use `lib/extract-section.sh` instead.
-   - `hooks/warn-state-drift.sh`: SessionStart hook. Scans active entities for the `status: ship` + `pr: #N MERGED` drift pattern observed 4× the week of 2026-04-20 (catch-up commits `f6029c4c`, `f7a8cacb`, plus #030+#037 hanging at session-start 2026-04-22). Injects `additionalContext` listing drifted entities so FO runs the Step 3c `done + archive` sequence before new execute work. `gh` is required only for provider PR state checks; without `gh`, local frontmatter-only validation can still warn for missing or invalid PR values while provider-state drift gracefully no-ops. **v1.2.0 (D1, strengthening-roadmap-2026-05.md)**: optional autonomous fix path — when workflow README declares `auto_fix: execute` (default `off`, backward compat) AND working tree is clean AND status binary discoverable, hook auto-runs `done + archive` for each Rule A entity that passes a re-probe (PR.state == MERGED still holds). Rule B is NEVER auto-fixed. Open, closed, empty, invalid, and other non-Rule-A PR states are warning-only and never terminal-mutated. Output reformats to ✅ auto-fixed / ⚠️ blocked / 🔴 pending / ⚠️ warning-only sections. Atomic per-entity commits with explicit pathspec — parallel-session staging defense preserved.
+   - `hooks/warn-state-drift.sh`: SessionStart hook. Scans active entities for the `status: ship` + `pr: #N MERGED` drift pattern and injects `additionalContext`; `gh` is required only for provider state checks. **v1.3.0** delegates opted-in (`auto_fix: execute`) terminal work to the receipt-bound closeout reconciler after a clean-tree guard and MERGED re-probe. The hook has a 120-second SessionStart budget and applies a 90-second child bound to the selected reconciler call. It processes at most one canonical folder entity per SessionStart; additional folders stay pending and flat legacy entities remain warning-only because they lack the reconciler's `index.md` + `review.md` + `ship.md` contract. The hook never owns status, archive, staging, or commit mutation; the reconciler's closeout receipt remains the sole idempotency sentinel. Rule B is never auto-fixed, and structured failures or timeouts fail closed as advisory output.
 3. **Captain-gate checklist** (§Captain-Gate Checklist below): design-review questions used during PR review for decisions that cannot be grep-enforced reliably (e.g., Principle #4 boolean-vs-enum gate — grep has high false-positive rate on prose skill files).
 
 ---
@@ -363,6 +364,7 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 
 **Captain is in the loop at**:
 - **Shape stage** — the ONE captain-interactive gate (defines problem + scope)
+- **Genuine change of direction or scope** — a mid-flight "direction-confirm" ONLY when continuing would build the wrong thing (the spec's problem/scope is now known to be wrong). NOT routine stage uncertainty, an "am I on track?" check, or a proceed-to-next-stage confirmation (those stay autonomous — see Violation patterns) (Principle 17)
 - **Verify findings with BLOCKING severity** or feedback-to-execute (NOT for PASSED)
 - **PR merge** — captain's web-side action, post-ship
 - **Explicit captain interrupt** ("stop", "wait", "not yet", etc.)
@@ -380,6 +382,7 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 - "Dispatch ship ensign now?" — verify PASSED, ship is the declared next stage
 - "Next is ship, confirm?" — pipeline contract already answered by template
 - "Fix NITs or skip?" — Step 4.6 disposition rule answers this mechanically
+- "Want to review plan.md before I proceed?" — the FO offering plan.md or execute.md as a human-review artifact; the captain's review surface is the shape/spec (Principle 17), never the agent-facing plan
 
 **Pre-action narration** (per CLAUDE.md Autonomous Action Boundaries) still applies for commits / pushes / PR creation. **Narration ≠ permission request.** FO states the action in DOING form and proceeds; captain interrupts if needed.
 
@@ -601,6 +604,18 @@ Receipt schema requires **12 top-level keys** (validated at `write-fo-receipt.sh
 **Grep check** (Tier B / design-review): for each Tier-A criterion a skill declares, the design-review agent confirms its target is non-self-authored (M1 case a/b/c) and that the check command was fixture-run (M2). Future Tier A: a `check-invariants.sh --check tier-a-validity` lint that, for each `rubrics/*.rubric.yaml` dimension marked `tier: A-grep-script`, asserts the `check:` command passes `bash -n` and that its grep target path is not the artifact the skill writes.
 
 **Source**: 19-skill rubric-ification audit (2026-05-30). Adversarial pass surfaced M1 (provenance ≠ structure) across ~13 skills and M2 (unverified check commands) across ~8. Full frame: `plugins/ship-flow/rubrics/_meta-rubric.md`. First Tier-A-valid instance: `lib/check-cross-review-threshold.sh` (cross-review summary line, M1 case b).
+
+---
+
+### Principle 17: The human review surface is the shape/spec, never plan.md
+
+**Rule**: The human review surface is the shape/spec (and design.md when its conditional gate fires) -- never plan.md or execute.md. The FO MUST NOT offer plan.md or execute.md as a human-review artifact. plan.md and execute.md are agent-facing contracts (the executer's spec + the implementation log); the captain's review surface is the shape (what & why) and, when the conditional design gate fires for UI/contract work (Principle 10), design.md. Instead of showing the captain a plan, the FO confirms the shape/spec content with the captain in plain language. After the shape gate the FO drives plan → execute → verify autonomously, stopping only for a genuine direction/scope confirmation (a "direction-confirm") or UAT — it does not re-derive the captain-in-loop enumeration here (see `## FO Discipline → Autonomous continuation between stages`). Verify-gate posture is unchanged: the existing science-officer-em engineering-judgment dispatch and ship-verify's already-autonomous Codex adversarial pass (Phase C, Tier A) remain the plan/execute-stage substitute for a captain plan.md skim — this principle adds no new verify-gate machinery.
+
+**Failure mode**: Offering plan.md as a "review" burns captain attention on an agent-authored implementation contract and invites rubber-stamping of the agent's framing — a fake review that looks like captain oversight while laundering agent decisions as captain-approved. The captain loses the one surface (the spec) where they own problem + scope, and silent scope drift enters through a plan the captain skimmed but never truly owned.
+
+**Grep check** (Tier B — text presence, NOT behavior): `check-invariants.sh --check review-surface-shape-not-plan` asserts the two load-bearing rule sentences are present in this file. Per Principle 16 this pins the rule TEXT (discoverability + regression-proofing), not FO runtime behavior — the `manual: true`-only-on-`shape` workflow schema declares the autonomy intent but does not mechanically enforce it (it did not prevent this incident, nor entity #078's over-pausing). FO/captain discipline (Tier B) remains the actual enforcement.
+
+**Source**: entity #60 / issue #60 (2026-07-18). Surfaced during the #49 build — the FO briefly offered the captain a plan.md review and the captain corrected it (recorded in the 2026-07-17 session debrief). Deliberately split from #49's route-back guard to avoid scope drift.
 
 ---
 

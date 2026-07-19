@@ -71,6 +71,34 @@ What is deprecating on the carlove side (and ONLY there):
    mechanics, wiring policy through `--policy-json` /
    `--required-independent-approvals` rather than forking the primitives.
 
+## Post-merge closeout trigger convergence
+
+Both merge paths converge after authoritative provider evidence reports the
+implementation PR as merged. `bin/merged-pr-closeout-reconciler.sh` owns the
+terminal projection, landing proof, debrief, final ship record, archive,
+ROADMAP transition, and idempotency validation as one receipt-bound Git
+transaction. Trigger surfaces only schedule that transaction and classify its
+structured `verdict`, `state`, `terminal_action`, and `reason` fields.
+
+For an opted-in workflow (`auto_fix: execute`), SessionStart Rule A processes
+at most one canonical folder entity per SessionStart. The selected entity
+delegates exactly one `--closeout-mode direct` call to
+`bin/merged-pr-closeout-reconciler.sh`; the SessionStart hook budget is 120
+seconds and that child call is bounded to 90 seconds. Additional merged folder
+entities remain in Rule-A pending output for the next SessionStart.
+
+Flat legacy `.md` entities remain warning-only: they do not satisfy the
+reconciler's canonical `index.md` + `review.md` + `ship.md` artifact contract,
+so the hook never delegates or restores raw mutation for them. The hook does
+not run status mutation, archive, staging, or commit commands itself. A
+provider race to `pr_open_noop`, a structured failure, timeout, or
+`closeout_pr_awaiting_merge` remains advisory and applies no second terminal
+mutation. `already_reconciled` is a successful receipt replay no-op.
+
+The closeout receipt remains the sole idempotency sentinel. New trigger paths
+must reuse it through the reconciler rather than introduce parallel markers or
+deferred terminal states.
+
 ## Near-miss that motivated this record
 
 A 2026-07-07 improvement review proposed "clean up the deprecated review trio
