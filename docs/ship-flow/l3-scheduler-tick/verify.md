@@ -1,12 +1,13 @@
-# L3 scheduler tick — Verify (cycle 2)
+# L3 scheduler tick — Verify (cycle 3, final)
 
-Re-review of the feedback-cycle-1 fixes (F1-F4) to my cycle-1 VETO
-(verify.md@07b726c; routing receipt a6601b0). Scope: fix diff `a6601b0..575e81c`
-(19 files, +556/-44). Branch was rebased by the FO to fix its own C14 receipt
-grammar — execute.md prose cites pre-rebase SHAs; this document cites
-current-branch SHAs only: F1 bc195e6→d1d148d, F2 ac52c16→e849754,
-F4 4612d85→31b4db1, F3 e2d3752→84525b2, plus de661a3 (shellcheck), 55ecd88
-(docs), a1263ed (stage report).
+Cycle 2: re-review of the feedback-cycle-1 fixes (F1-F4) to my cycle-1 VETO
+(verify.md@07b726c; routing a6601b0), fix diff `a6601b0..575e81c` (+556/-44).
+FO rebase note: execute.md prose cites pre-rebase SHAs; this doc cites
+current-branch SHAs: F1 bc195e6→d1d148d, F2 ac52c16→e849754, F4
+4612d85→31b4db1, F3 e2d3752→84525b2 (+ de661a3/55ecd88/a1263ed). Cycle 3
+(round cap reached — scoped confirmation, not a new round): execute fixed
+exactly W1+W2 (RED f655f34 → GREEN eafa77b; docs f0b878b), confirmed below;
+nothing new beyond W1/W2 scope — no PROMPT_CAPTAIN needed.
 
 ## Independent Quality Gate Re-Run (cycle 2)
 
@@ -64,8 +65,8 @@ realistic probability (rationale per finding in the collapsed block):
 
 | # | Finding (file:line) | Codex | Verifier | route_to |
 | --- | --- | --- | --- | --- |
-| W1 | gh-present-but-erroring → `NONE` fail-open in `pr_exists_for_slug` (:160) — contradicts its own fail-closed comment; confirmed empirically with a stub gh | P1 | WARNING | follow-up |
-| W2 | live-PR dedup case omits `CLOSED` (:262) — crash-window entity with a closed-unmerged PR redispatches, bypassing PROMPT_CAPTAIN authority | P1 | WARNING | follow-up |
+| W1 | gh-present-but-erroring → `NONE` fail-open in `pr_exists_for_slug` (:160) — contradicts its own fail-closed comment; confirmed empirically with a stub gh | P1 | WARNING | **FIXED cycle 3** (f655f34→eafa77b) |
+| W2 | live-PR dedup case omits `CLOSED` (:262) — crash-window entity with a closed-unmerged PR redispatches, bypassing PROMPT_CAPTAIN authority | P1 | WARNING | **FIXED cycle 3** (f655f34→eafa77b) |
 | W3 | torn/dead-lease recovery race (lease.sh:72,86) — two simultaneous ticks can both reclaim; mkdir-atomicity covers fresh acquire only | P1 | WARNING | follow-up |
 | W4 | `timeout` can kill the reconciler mid-mutation (:450) — raises probability of a crash class the composed reconciler already owns | P1 | WARNING | follow-up |
 | W5 | token release falls through when record absent/token-less (lease.sh:108) — documented back-compat fallback, ms-window race | P2 | advisory | follow-up |
@@ -130,16 +131,19 @@ token release, dead-pid reclaim, fresh acquire).
 
 ## Verdict
 
-**PASS (PROCEED).** All four cycle-1 findings are genuinely fixed with
-independently re-proven RED-before-fix evidence and first-hand behavioral
-probes. The cycle-2 scoped codex challenge surfaced 5 real but strictly
-narrower residuals — 4 WARNING + 1 advisory, none falsifying an AC at
-realistic probability — all routed to follow-up below. Post-rewrite receipt:
-`check-invariants` exit 0 (C11/C12/C14/C15 all OK) and
-`test-archived-corpus-invariants.sh` PASS, re-run after this file was written.
-FO option, explicitly surfaced: W1+W2 are one-line AUTO-FIX-sized; a quick
-round-2 bounce before PR-create is within the 2-round cap if the FO prefers
-zero known fail-open edges at ship — my verdict does not require it.
+**PASS (PROCEED) — cycle 3, final.** All four cycle-1 findings genuinely fixed
+(independently re-proven RED-before-fix + first-hand probes, cycle 2). The FO
+took the surfaced option: W1+W2 fixed in feedback cycle 2 and confirmed here
+independently — diffs match my finding sites exactly (`pr_exists_for_slug`
+:157-165 now splits gh exit-failure→UNKNOWN from success-empty→NONE; dedup
+case-arm :268-272 now includes CLOSED); eligibility 34/34 re-run (30/34 at RED
+f655f34, exactly the four W1/W2 assertions, re-proven in a detached worktree);
+first-hand stub-gh probe → UNKNOWN on gh error, and the CLOSED crash-window
+fixture → `refusal reason=pr-exists`. design.md §3/§4 wording updated to "no
+open/merged/closed PR". Cycle-3 gate: check-invariants exit 0 (0 FAILs), all 9
+scheduler files green (117 assertions), node 79/79, no-dangling/version-triple
+PASS, `git diff --check` clean. Nothing new surfaced beyond W1/W2 scope, so no
+PROMPT_CAPTAIN. Remaining follow-ups (W3/W4/W5 + carryovers) stand below.
 
 ## Panel Coverage
 
@@ -147,16 +151,14 @@ zero known fail-open edges at ship — my verdict does not require it.
 cross-model challenge; no multi-specialist panel was dispatched (the cycle-2
 dispatch scoped exactly: independent gate re-run + AC-1/AC-5 re-verify +
 scoped codex re-challenge + invariant conformance). `cross_model: true` both
-cycles (full-diff challenge at cycle 1, fix-diff challenge at cycle 2), NOT
-degraded either time. Specialist lenses (security/perf/api-contract) not
-separately run — bash CLI surface, no API/UI/schema change.
+review cycles (full-diff challenge at cycle 1, fix-diff challenge at cycle 2),
+NOT degraded either time; cycle 3 is a scoped W1/W2 confirmation inside the
+round cap, no new codex run by design. Specialist lenses
+(security/perf/api-contract) not separately run — bash CLI surface, no
+API/UI/schema change.
 
 ## Deferred to TODO
 
-- W1: `pr_exists_for_slug` — distinguish gh exit-failure (→UNKNOWN, fail
-  closed) from success-empty (→NONE); mirror `gh_pr_state`'s pattern (:160).
-- W2: add `CLOSED` to the live-PR dedup case (:262) so a closed-unmerged
-  crash-window PR excludes rather than redispatches.
 - W3+W5: lease recovery/release races — atomic takeover (rmdir+mkdir CAS) for
   torn/dead-lease reclaim; strict token match when the caller supplies one.
 - W4: document/verify reconciler crash-resumability under the new `timeout`

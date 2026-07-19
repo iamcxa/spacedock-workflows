@@ -175,3 +175,17 @@ Re-reviewed the execute worker's F1-F4 fixes, not my own work: every RED commit 
 ### Summary
 
 Scoped round-2 bounce, fixed ONLY the two WARNING findings verify.md cycle-2 routed to `## Deferred to TODO` and named for an optional fix: W1 (`pr_exists_for_slug`'s real-gh branch fell open to NONE on a `gh pr list` error instead of failing closed to UNKNOWN — fixed by using the command's own exit status instead of `|| true`, mirroring `gh_pr_state`'s existing pattern) and W2 (the live-PR dedup case-arm omitted `CLOSED`, so a closed-unmerged PR didn't count toward duplicate-dispatch exclusion — fixed by adding `CLOSED` to the case arm). Both got their own RED fixture before the one-line fix, both hand-verified beyond the assertion suite. W2 changed a documented contract (design.md §3/§4's "no open/merged PR" phrasing), so design.md was updated to match; §2's reason-code vocabulary itself was untouched (no new/removed code). No other Deferred-to-TODO item (W3-W5, cycle-1 carryovers) was touched, no refactors, no scope growth beyond the two named fixes plus their required doc sync.
+## Stage Report: verify (cycle 3)
+
+- DONE: Confirm the two diffs match your finding sites and are fail-closed as specified.
+  eafa77b read line-by-line: `pr_exists_for_slug` (:157-165) now splits gh exit-failure→UNKNOWN (fail-closed) from success-empty→NONE via `if ! out=$(gh ...)` — exactly the prescribed mirror of `gh_pr_state`; dedup case-arm (:268-272) now `OPEN|MERGED|CLOSED|UNKNOWN`. First-hand probes (not relayed): stub gh exiting 1 → UNKNOWN; stub gh success-empty → NONE; `pr-closed-live-only-entity` fixture (empty frontmatter, state=CLOSED) → `refusal reason=pr-exists`, no dispatch. design.md §3/§4 wording sync confirmed ("no open/merged/closed PR").
+- DONE: Re-run the eligibility fixture test + check-invariants yourself.
+  eligibility 34/34 at HEAD; RED re-proven in a detached worktree at f655f34 (30/34 — exactly the four W1/W2 assertions). check-invariants exit 0, 0 FAILs (C11/C12/C14/C15 all OK, re-run after the verify.md cycle-3 edits). Also re-ran unrequested but cheap: all 9 scheduler files green (117 assertions), node 79/79, no-dangling/version-triple PASS, archived-corpus wrapper exit 0, git diff --check clean.
+- DONE: Update verify.md — move W1/W2 out of Deferred to TODO into the fixed table with citations, keep C11/C12/C15 conformance, keep the verdict document as cycle-3 final.
+  Title now "Verify (cycle 3, final)"; findings table W1/W2 rows marked "FIXED cycle 3 (f655f34→eafa77b)"; W1/W2 bullets removed from Deferred to TODO (W3+W5, W4, carryovers remain); Verdict rewritten as the cycle-3 final PASS; body re-trimmed under the 120-line C15 cap (raw 167/240).
+- DONE: Append the verify (cycle 3) stage report with the final verdict.
+  This section; final verdict PASS (PROCEED), nothing new beyond W1/W2 scope, no PROMPT_CAPTAIN required.
+
+### Summary
+
+Round-cap confirmation pass, scope held to W1/W2: both one-line fixes land exactly at my cited finding sites, behave fail-closed under first-hand adversarial probes (gh-error stub, CLOSED crash-window fixture), carry genuine RED-before-fix evidence (30/34→34/34), and sync the design.md contract wording. Full gate independently green: check-invariants 0 FAILs, 9/9 scheduler files, node 79/79, dangling/version-triple clean. verify.md is now the cycle-3 final verdict document — PASS (PROCEED); remaining follow-ups W3/W4/W5 + cycle-1 carryovers stay in Deferred to TODO; the LIVE #69 proof remains FO-owned at H7.
