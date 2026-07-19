@@ -2,23 +2,25 @@
 
 ### Summary
 
-Five small, independently-verifiable commits, strictly ordered so `scripts/check-no-dangling.sh`
-is never live against an unfixed repo (same invariant the sibling `reverse-recovery-audit-dangling-path`
-plan established for this exact guard file): **T1** authors the missing-everywhere RED/GREEN
-fixtures in `test-check-no-dangling.sh` against the unmodified resolver (test-only, safe); **T2**
-fixes an independently-discovered `REPO_ROOT` off-by-one in the two dogfood integration tests this
-entity's AC-3 depends on (see **Plan finding**, below — required precondition, not in shape/design);
-**T3** authors `docs/ship-flow/_mods/canonical-doc-sync.md` (adopter tier); **T4** de-references
-architecture-canon (3 sites) + decisions-log (1 site, F1 fold); **T5** implements the
-`missing-everywhere-canonical-mod` classify-by-twin branch + F3 adopter-tree guard +
-`--exclude-dir=__tests__` (F2) + aggregator update, turning T1's fixture GREEN. T3+T4 land
-*before* T5 so the guard's own first real-repo run is already clean — no transient CI-red commit.
+Five small, independently-verifiable commits, strictly ordered so `check-no-dangling.sh` is never
+live against an unfixed repo (same invariant `reverse-recovery-audit-dangling-path` established for
+this guard file): **T1** authors missing-everywhere RED/GREEN fixtures in
+`test-check-no-dangling.sh` against the unmodified resolver (test-only, safe); **T2** fixes an
+independently-discovered `REPO_ROOT` off-by-one in the two dogfood integration tests this entity's
+AC-3 depends on (see **Plan finding** — required precondition, not in shape/design); **T3** authors
+`docs/ship-flow/_mods/canonical-doc-sync.md` (adopter tier); **T4** de-references architecture-canon
+(3 sites) + decisions-log (1 site, F1 fold); **T5** implements the `missing-everywhere-canonical-mod`
+classify-by-twin branch + F3 adopter-tree guard + `--exclude-dir=__tests__` (F2) + aggregator
+update, turning T1's fixture GREEN. T3+T4 land *before* T5 so the guard's first real-repo run is
+already clean.
 
 ### Plan finding (BLOCKING for AC-3 as literally scoped — read before executing)
 
-Live-verified (not re-read): `test-canonical-doc-sync-mod.sh` and `test-canonical-context-lifecycle.sh`
-both compute `REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../../.." ...)"` from
-`plugins/ship-flow/lib/__tests__/integration/` — **four** `..` segments, which resolves to
+<details>
+<summary>Live-verified: REPO_ROOT off-by-one blocks AC-3 regardless of mod content (T2 fixes it as a precondition) — bug reproduction + scope-boundary detail</summary>
+
+`test-canonical-doc-sync-mod.sh` and `test-canonical-context-lifecycle.sh` both compute
+`REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../../.." ...)"` — **four** `..` segments, which resolves to
 `<repo>/plugins`, not the repo root (confirmed live: `ls "$REPO_ROOT/docs"` → No such file or
 directory). Of the 22 integration tests that define `REPO_ROOT` this way (`grep -n
 "^REPO_ROOT=" plugins/ship-flow/lib/__tests__/integration/*.sh`, 22 hits out of 28 files), 11 share
@@ -26,20 +28,21 @@ this exact 4-level bug and 10 correctly use 5 levels (`../../../../..`, e.g.
 `test-check-pr-mergeable-dogfood.sh:13`) — proving 5 is correct and 4 is a bug, not a deliberate
 convention (the remaining file resolves via a different base variable, `${PLUGIN_ROOT}/../..`).
 
-Consequence for AC-3: **authoring `canonical-doc-sync.md` alone would never green
-`test-canonical-doc-sync-mod.sh`** — `MOD_FILE`/`REVIEW_SKILL`/`SCHEMA_FILE`/`DOC_FORMAT` would all
-keep resolving one directory too shallow (`plugins/docs/...`, `plugins/plugins/ship-flow/...`),
+Consequence for AC-3: `MOD_FILE`/`REVIEW_SKILL`/`SCHEMA_FILE`/`DOC_FORMAT` would all keep
+resolving one directory too shallow (`plugins/docs/...`, `plugins/plugins/ship-flow/...`),
 permanently absent regardless of what execute does. Reproduced live in a disposable scratch copy
-(patched `..` count + a temp mod file dropped at the real adopter path, then deleted): **14/14 PASS**
+(patched `..` count + a temp mod file dropped at the real adopter path, then deleted): 14/14 PASS
 on `test-canonical-doc-sync-mod.sh`, and `test-canonical-context-lifecycle.sh` goes from 0/10 (all
-failing for the *wrong* reason — wrong directory, not missing content) to **8/10** — the 2 residual
+failing for the *wrong* reason — wrong directory, not missing content) to 8/10 — the 2 residual
 failures (`README states canonical context control-plane meaning`,
 `ship SOT names architecture updates with roadmap and product`) are a `docs/ship-flow/README.md`
 wording gap (`Canonical context control plane`, `ARCHITECTURE.md Update`/`ARCHITECTURE.md updated`
 absent) entirely unrelated to architecture-canon/canonical-doc-sync/decisions-log — out of this
 entity's 3 ACs, not touched by T1-T5. Fixing only the 2 files this entity's AC-3 already names is
 in scope (a precondition for this entity's own claim to hold); fixing the other 9 files sharing the
-bug is **not** — flagged as a follow-up todo, not this entity's problem.
+bug is not — flagged as a follow-up todo, not this entity's problem.
+
+</details>
 
 **Narrowed AC-3 (what this plan actually delivers, for the gate to ratify):**
 (1) standalone CI tier — full green, unchanged shape.
@@ -69,6 +72,9 @@ Summary).
 
 ---
 
+<details>
+<summary>Task detail — T1-T5 implementation spec, TDD contracts, per-task DC (see commits for final content)</summary>
+
 ### T1 — Resolver test, RED-fixture-only (test file, no resolver-behavior change)
 
 **File**: `plugins/ship-flow/lib/__tests__/test-check-no-dangling.sh`. The resolver function
@@ -97,9 +103,8 @@ MDEOF
 ```
 
 Both use a fresh name (`baz.md`) with **no** plugin twin ever created; `mkdir -p docs/ship-flow/_mods`
-scaffolds the adopter tree so Guard F3 fires once T5 lands (distinguishing these from the existing
-`build_case5_no_twin`, which deliberately does *not* scaffold `docs/ship-flow/_mods` and must stay
-green throughout — proof of the plugins-only-clone invariant).
+scaffolds the adopter tree so Guard F3 fires once T5 lands (distinguishing these from
+`build_case5_no_twin`, which deliberately does *not* scaffold and must stay green throughout).
 
 **Wiring**: insert `assert_case 9 "RED-missing-everywhere-unqualified" build_case9_missing_everywhere_red 1 1`
 and `assert_case 10 "GREEN-missing-everywhere-qualified" build_case10_missing_everywhere_qualified 0 ""`
@@ -110,10 +115,9 @@ last. Update the existence-check-failure fallback loop's case-description list t
 `"9 (green-on-real-repo-after-fix)"` → `"11 (green-on-real-repo-after-fix)"`. Update the file's
 header comment ("9 fixture cases") to "11 fixture cases".
 
-**Generalize the count regex** (line 144, required now so T5 doesn't need a second touch to this
-file): `grep -c '^  VIOLATION \[mislocated-canonical-mod\]'` →
-`grep -cE '^  VIOLATION \[(mislocated|missing-everywhere)-canonical-mod\]'`. Harmless pre-T5 (no
-`missing-everywhere-canonical-mod` label exists yet to miscount).
+**Generalize the count regex** (line 144, required now so T5 doesn't need a second touch): `grep -c
+'^  VIOLATION \[mislocated-canonical-mod\]'` → `grep -cE '^  VIOLATION
+\[(mislocated|missing-everywhere)-canonical-mod\]'`. Harmless pre-T5.
 
 **TDD contract**:
 - `red_command`: `CI=true timeout 90 bash plugins/ship-flow/lib/__tests__/test-check-no-dangling.sh`
@@ -123,10 +127,9 @@ file): `grep -c '^  VIOLATION \[mislocated-canonical-mod\]'` →
 - `green_command`: same command, re-run after T5.
 - `refactor_check`: none (test authoring only).
 
-**DC**: red_command above shows exactly one new FAIL (`case 9 (RED-missing-everywhere-unqualified)`)
-with the exit-code mismatch reason; all pre-existing cases (renumbered 11's real-repo check
-included) still PASS unchanged. Commit: `test(check-no-dangling): add missing-everywhere RED
-fixture (AC-2)` — pathspec `plugins/ship-flow/lib/__tests__/test-check-no-dangling.sh`.
+**DC**: red_command above shows exactly one new FAIL (case 9), all pre-existing cases (renumbered
+11's real-repo check included) still PASS. Commit: `test(check-no-dangling): add
+missing-everywhere RED fixture (AC-2)` — pathspec `test-check-no-dangling.sh`.
 
 ---
 
@@ -139,10 +142,8 @@ diff each (`4` → `5` `..` segments):
 - Before: `REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../../.." &> /dev/null && pwd)"`
 - After: `REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../../../.." &> /dev/null && pwd)"`
 
-Verified against the 11 other integration tests already using the 5-level form (e.g.
-`test-check-pr-mergeable-dogfood.sh:13`) and by direct `cd`/`pwd` resolution from
-`plugins/ship-flow/lib/__tests__/integration/` (5 segments lands at the true repo root; 4 lands
-one level shallow, at `<repo>/plugins`).
+Verified against 11 other integration tests already using the correct 5-level form (e.g.
+`test-check-pr-mergeable-dogfood.sh:13`); direct `cd`/`pwd` confirms 5 segments lands at repo root.
 
 **TDD contract**: this is itself the RED-to-GREEN pivot for the *diagnostic accuracy* of both
 tests, not a new fixture — no separate test-of-a-test exists (matches the pattern: no test asserts
@@ -157,12 +158,8 @@ checks passing (Block 4 of the doc-sync test, 6 of the 10 lifecycle checks) even
 doesn't exist yet. Commit: `fix(integration-tests): correct REPO_ROOT off-by-one in
 canonical-doc-sync/context-lifecycle tests (AC-3 precondition)` — pathspec both files.
 
-**Not in scope**: the other 9 integration tests sharing the same 4-level bug
-(`test-copilot-bot-head-guard.sh`, `test-distill-reference-first-report.sh`,
-`test-parallel-stage-contract.sh`, `test-pr-merge-claude-challenge-gate.sh`,
-`test-pr-merge-fo-receipts.sh`, `test-pr-title-format.sh`, `test-sync-workflow-sot.sh`,
-`test-verify-agent-worker-ownership-contract.sh`, `test-workflow-sot-sync.sh`) — flagged as a
-follow-up todo, not touched here (this entity's ACs name only the two tests above).
+**Not in scope**: 9 other integration tests share the same 4-level bug — flagged as a follow-up
+todo, not touched here (this entity's ACs name only the two tests above).
 
 ---
 
@@ -198,11 +195,9 @@ Required when the entity is a `shaped-child`, `pitch`, `epic`, or carries `child
 ```
 
 **Verified live** (disposable copy, deleted after): dropped exactly this content at the real
-adopter path against a REPO_ROOT-fixed copy of the test → `test-canonical-doc-sync-mod.sh`
-**14/14 PASS**. Execute must **not** touch `ship-review/SKILL.md` (`umbrella closeout` substring),
-`entity-body-schema.yaml` (`umbrella_closeout`), or `doc-format.md` (`Umbrella Shipped Row` /
-`Architecture Patch` / `durable architecture change`) — all 5 Block-4 surfaces already carry the
-required text (re-verified this session); editing them is out of this task's scope and unnecessary.
+adopter path against a REPO_ROOT-fixed copy of the test → **14/14 PASS**. Execute must **not**
+touch `ship-review/SKILL.md`, `entity-body-schema.yaml`, or `doc-format.md` — all 5 Block-4
+surfaces already carry the required text; editing them is unnecessary.
 
 **TDD contract**:
 - `red_command`: `bash plugins/ship-flow/lib/__tests__/integration/test-canonical-doc-sync-mod.sh`
@@ -246,12 +241,10 @@ guard on the real repo, per the design gate's CONFIRMED note):
 **TDD contract**: prose-only, no RED/GREEN pair (no test asserts the removed text). DC is the AC-1
 grep proof plus a full-suite regression run.
 
-**DC**: `grep -rn 'architecture-canon\|decisions-log' plugins/ship-flow/skills/ship-shape/SKILL.md
-plugins/ship-flow/skills/ship-plan/SKILL.md plugins/ship-flow/INVARIANTS.md
-"plugins/ship-flow/_mods/migrate-debrief-vN-to-vN+1.md.template"` → 0 hits; full local suite
-(`for t in plugins/ship-flow/lib/__tests__/test-*.sh; ...`) unchanged (129 pre-existing files, zero
-touching this text). Commit: `fix(ship-shape,ship-plan,invariants,migrate-debrief): de-reference
-dangling architecture-canon and decisions-log mods (AC-1, F1)` — pathspec all four files.
+**DC**: `grep -rn 'architecture-canon\|decisions-log'` across all four files → 0 hits; full local
+suite unchanged (129 pre-existing files, zero touching this text). Commit:
+`fix(ship-shape,ship-plan,invariants,migrate-debrief): de-reference dangling architecture-canon
+and decisions-log mods (AC-1, F1)` — pathspec all four files.
 
 ---
 
@@ -308,12 +301,9 @@ Cond 3 (qualifier check, lines 231-238) is unchanged and applies to both classes
 → `mislocated_count=$(printf '%s\n' "$mislocated_output" | grep -cE '^  VIOLATION \[(mislocated|missing-everywhere)-canonical-mod\]')`.
 
 **Verified real-repo green-set** (post T3+T4, live enumeration of every backtick-fenced adopter-path
-ref in `plugins/ship-flow/` outside `_archive`/`_debriefs-evidence`/`_plans`/`integration`):
-`pr-merge` (adopter present, Cond 1 skips), `contribution-contract`/`reverse-recovery-audit`/
-`science-officer-em` (twin present, mislocated class, already qualified or N/A — unaffected),
-`canonical-doc-sync` (adopter now present, Cond 1 skips — T3), architecture-canon/decisions-log
-(refs gone — T4), `foo`/`bar` test fixtures (excluded by F2). Zero remaining missing-everywhere
-candidates — case 11 (real-repo) is green the moment T5 lands, no transient CI-red commit.
+ref outside `_archive`/`_debriefs-evidence`/`_plans`/`integration`): every ref resolves via Cond 1
+(adopter present) or the unaffected mislocated class (twin present, already qualified) — zero
+remaining missing-everywhere candidates. Case 11 (real-repo) is green the moment T5 lands.
 
 **TDD contract**:
 - `red_command`: `CI=true timeout 90 bash plugins/ship-flow/lib/__tests__/test-check-no-dangling.sh`
@@ -343,12 +333,12 @@ branch (AC-2)` — pathspec `scripts/check-no-dangling.sh`.
 - **`plugins/ship-flow/lib/__tests__/integration/test-canonical-context-lifecycle.sh`** — REPO_ROOT
   fix (T2) + `Silent omission` satisfied (T3) → 8/10 (2 residual, out-of-scope failures — see Plan
   finding).
-- **No other `test-*.sh` asserts the de-referenced prose** (verified live: `grep -rl
-  'architecture-canon\|decisions-log' plugins/ship-flow/lib/__tests__/` → 0 hits, 129 standalone +
-  28 integration files scanned) — T4 breaks zero existing tests.
-- Verified baseline this session: `bash scripts/check-no-dangling.sh` → `PASS: no dangling
-  references found (8 patterns checked)`; `CI=true timeout 90 bash
-  plugins/ship-flow/lib/__tests__/test-check-no-dangling.sh` → 10/10 PASS (pre-T1 baseline).
+- **No other `test-*.sh` asserts the de-referenced prose** (`grep -rl
+  'architecture-canon\|decisions-log' plugins/ship-flow/lib/__tests__/` → 0 hits) — T4 breaks
+  zero existing tests.
+- Verified baseline this session: `check-no-dangling.sh` PASS (8 patterns); `test-check-no-dangling.sh` 10/10 PASS (pre-T1).
+
+</details>
 
 ---
 
@@ -363,6 +353,9 @@ branch (AC-2)` — pathspec `scripts/check-no-dangling.sh`.
 Root canonical docs only (per this stage's checklist scope): PRODUCT.md, ARCHITECTURE.md,
 ROADMAP.md. `plugins/ship-flow/INVARIANTS.md` (touched by T4/Δ4) is a plugin-level doc, not a root
 canonical doc — no invariant *rule* changes, only a dangling-parenthetical removal.
+
+<details>
+<summary>Plugin-surface confirmation — file-by-file table</summary>
 
 ### Plugin-surface confirmation
 
@@ -382,6 +375,8 @@ Zero new `plugins/ship-flow/bin|lib` files — the guard lives at `scripts/` (ou
 surface), the only new file is the adopter-tier mod under `docs/`. Zero edits to any other
 `SKILL.md`. Zero edits to the other 154 pre-existing `test-*.sh`/`integration/test-*.sh` files
 (128 of 129 standalone + 26 of 28 integration, verified live, this session).
+
+</details>
 
 ### Plan Report
 
