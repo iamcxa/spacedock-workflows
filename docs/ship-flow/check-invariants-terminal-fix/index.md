@@ -8,7 +8,7 @@ verdict:
 score:
 worktree: .worktrees/spacedock-ensign-check-invariants-terminal-fix
 issue: "#76"
-pr:
+pr: "#80"
 ---
 
 Time budget: 1h15m. check-invariants.sh's _entity_is_terminal() misclassifies any entity with an
