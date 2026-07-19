@@ -80,6 +80,28 @@ run_tick_id_marker_case() {
   assert_contains "tick-id: TICK_ID_SEEN=T-42 in receipt" 'TICK_ID_SEEN=T-42' "$receipt_body"
 }
 
+run_print_spawn_prompt_case() {
+  # AC-1b: --print-spawn is a hermetic mode -- prints the resolved
+  # prompt/spawn as JSON and execs nothing (no receipt file created).
+  local receipt_dir before_count after_count
+  receipt_dir="${WORKDIR}/.ship-flow-scheduler-receipts"
+  before_count="$(find "$receipt_dir" -name '*.txt' 2>/dev/null | wc -l | tr -d ' ')"
+  run_capture "$HELPER" run --entity fixture-print-spawn --workdir "$WORKDIR" --timeout 30 --print-spawn
+  after_count="$(find "$receipt_dir" -name '*.txt' 2>/dev/null | wc -l | tr -d ' ')"
+  assert_exit "print-spawn: exit 0" 0 "$EXIT_CODE"
+  assert_contains "print-spawn: prompt field present" '"prompt":"/ship fixture-print-spawn"' "$OUT"
+  if [ "$before_count" = "$after_count" ]; then record_pass "print-spawn: no receipt file created"
+  else record_fail "print-spawn: no receipt file created (count went ${before_count} -> ${after_count})"; fi
+}
+
+run_print_spawn_delegation_case() {
+  # AC-1b: delegation line + tick_id echoed when --tick-id present.
+  run_capture "$HELPER" run --entity fixture-print-spawn --workdir "$WORKDIR" --timeout 30 --print-spawn --tick-id T-9
+  assert_exit "print-spawn delegation: exit 0" 0 "$EXIT_CODE"
+  assert_contains "print-spawn delegation: tick_id=T-9 present" 'tick_id=T-9' "$OUT"
+  assert_contains "print-spawn delegation: delegation marker text present" 'ship-flow-scheduler tick delegation' "$OUT"
+}
+
 run_tick_surfaces_timeout_as_blocked_case() {
   # AC-3's "timeout -> blocked, no retry" is a tick-level contract; exercise it
   # end to end through the real tick with --runner gh so it actually calls this
@@ -110,6 +132,8 @@ else
   run_error_case
   run_timeout_case
   run_tick_id_marker_case
+  run_print_spawn_prompt_case
+  run_print_spawn_delegation_case
   if [ -x "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" ]; then
     run_tick_surfaces_timeout_as_blocked_case
   else
