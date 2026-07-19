@@ -117,7 +117,7 @@ set_frontmatter_field() {
 }
 
 run_fullcycle_case() {
-  local wf status_bin parent_path
+  local wf status_bin parent_path child_path
   wf="$(mktemp -d)"
   cp -R "${FIXTURE_ROOT}/fullcycle/fullcycle-parent-entity" "${wf}/fullcycle-parent-entity"
   cp -R "${FIXTURE_ROOT}/fullcycle/fullcycle-child-entity" "${wf}/fullcycle-child-entity"
@@ -154,6 +154,19 @@ run_fullcycle_case() {
   assert_exit "leg 2 (reconcile+advance): tick exit 0" 0 "$EXIT_CODE"
   assert_contains "leg 2: reconcile event, terminal_state=reconciled" '"event":"reconcile".*"terminal_state":"reconciled"' "$OUT"
   assert_contains "leg 2: advance names the next-ready child" '"event":"advance".*"dispatched":"fullcycle-child-entity"' "$OUT"
+
+  # --- Simulate the child becoming genuinely ready (F3, feedback cycle 1,
+  # BLOCKING): the tick itself never authors shape.md or approves gh issues
+  # (design.md §3/Rule 3) — a captain/agent does that once dag-waves marks
+  # the child ready (leg 2's `advance` event above). This models that real
+  # "shape it, get the linked issue sd:approved" step; the committed
+  # gh/issue-fullcycle-child-entity.env fixture (state OPEN + sd:approved)
+  # only starts counting once `issue:` is non-empty, matching a real shape
+  # pass writing both facts together.
+  child_path="${wf}/fullcycle-child-entity/index.md"
+  set_frontmatter_field "$child_path" status shape
+  set_frontmatter_field "$child_path" issue 902
+  cp "${FIXTURE_ROOT}/fullcycle/fullcycle-parent-entity/shape.md" "${wf}/fullcycle-child-entity/shape.md"
 
   # --- Leg 3 (F3, feedback cycle 1, BLOCKING): a THIRD tick, with the parent
   # now archived (no PR-bearing active entity left), must actually DISPATCH
