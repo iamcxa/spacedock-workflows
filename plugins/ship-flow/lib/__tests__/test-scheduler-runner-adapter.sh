@@ -123,6 +123,11 @@ run_tick_surfaces_timeout_as_blocked_case() {
   assert_exit "tick surfaces timeout: exit 0 (blocked is a recorded outcome)" 0 "$EXIT_CODE"
   assert_contains "tick surfaces timeout: blocked event" '"event":"blocked"' "$OUT"
   assert_contains "tick surfaces timeout: source=run-timeout" '"source":"run-timeout"' "$OUT"
+  # AC-3b: a timeout-blocked detail names a resume target (the entity's
+  # current status -- eligible-entity's fixture frontmatter is status: shape)
+  # so a later resume knows which stage to re-enter.
+  assert_contains "tick surfaces timeout: checkpoint present" '"checkpoint"' "$OUT"
+  assert_contains "tick surfaces timeout: resume_stage=shape" '"resume_stage":"shape"' "$OUT"
 }
 
 run_tick_threads_tick_id_case() {

@@ -468,12 +468,25 @@ run_dispatch_action() {
   pr_from_sentinel="$(printf '%s' "$sentinel" | sed -n 's/.* pr=\([0-9]*\).*/\1/p')"
 
   if [ "$exit_class" != "success" ]; then
-    local source
+    local source blocked_detail
     case "$exit_class" in
-      timeout) source="run-timeout" ;;
-      *) source="run-error" ;;
+      timeout)
+        source="run-timeout"
+        # AC-3b: name a resume target. Rides the existing `blocked` event's
+        # detail (DC-4: NOT a new event value) so the tick's
+        # exactly-one-event-per-tick contract + the rollup's
+        # blocked-counts-as-failure parser both stay intact.
+        local resume_stage
+        resume_stage="$(read_frontmatter_field "$path" status)"
+        blocked_detail="$(printf '{"source":"%s","receipt":%s,"checkpoint":{"resume_stage":%s}}' \
+          "$source" "$(json_str_or_null "$receipt")" "$(json_str_or_null "$resume_stage")")"
+        ;;
+      *)
+        source="run-error"
+        blocked_detail="$(printf '{"source":"%s","receipt":%s}' "$source" "$(json_str_or_null "$receipt")")"
+        ;;
     esac
-    emit_event blocked "$slug" blocked "$source" "$(printf '{"source":"%s","receipt":%s}' "$source" "$(json_str_or_null "$receipt")")"
+    emit_event blocked "$slug" blocked "$source" "$blocked_detail"
     return 0
   fi
 
