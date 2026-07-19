@@ -128,8 +128,8 @@ Invoke `Skill: superpowers:subagent-driven-development` for dispatch philosophy.
 - **Runtime detection** — invoke `ship-flow:ship-runtime-detect` before any quality check to populate `{commands.test/build/typecheck/lint/dev}`.
 - **TDD evidence** — invoke `ship-flow:test-driven-development` unconditionally and apply its fallback contract. `superpowers:test-driven-development` is optional local discipline only. Every non-exempt task must emit RED-before-GREEN evidence from `tdd_contract`; missing expected RED failure is BLOCKING feedback to the worker or a bounce to plan if the contract itself is absent.
 - **Dispatch discipline** — default path: every task gets dispatched via Agent tool per plan's `model:`. "Agent tool not available" is a false claim in ensign context unless probe (`Agent(subagent_type: general-purpose, model: haiku, prompt: "return OK")`) returns runtime error. Inline exception requires ALL THREE: pure file-string replace + verbatim spec + single file <20 LOC; plus recorded verbatim probe error.
-- **Parallelism within wave** — derive an `execute-dispatch-manifest` from plan's `plan-parallelization-manifest` / task metadata. Tasks with satisfied `depends_on` and no `owned_paths` overlap → dispatch in parallel (multiple Agent calls in one tool-call block). Overlap, missing `owned_paths`, missing `integration_owner`, or `parallel_group: serial` → sequential within wave. Never start wave N+1 until wave N fully committed. The executer is the single integrator and writes the final execute artifact.
-- **Self-drive (anti-idle)** — no idle between tasks. After DONE + commit + review, immediately proceed. Entire execute stage = single continuous run.
+- **Parallelism within wave** — derive an `execute-dispatch-manifest` from plan's `plan-parallelization-manifest` / task metadata. Tasks with satisfied `depends_on` and no `owned_paths` overlap → dispatch in parallel (multiple Agent calls in one tool-call block). This parallel boundary covers each eligible task's implementation and review/fix loop: dispatch all eligible task reviewers in one parallel tool-call block. Do not wait for one task's review/fix loop before starting an eligible sibling's reviewer. Overlap, missing `owned_paths`, missing `integration_owner`, or `parallel_group: serial` → sequential within wave. Never start wave N+1 until wave N fully committed. The executer is the single integrator and writes the final execute artifact.
+- **Self-drive (anti-idle)** — no idle between tasks. As soon as a task reaches DONE, make its reviewer eligible; when the dispatch surface returns a parallel batch together, launch every eligible sibling reviewer together. Review loops may run concurrently; commit integration remains serial and pathspec-locked. Entire execute stage = single continuous run.
 - **`/goal` evidence (when a Claude Code `/goal` is active)** — the FO's turn-ending summary surfaces goal-condition evidence as ACTUAL command output run this turn (quoted test counts / exit codes / `gh` PR-merge state), NEVER a worker's "all green" relay nor confabulated results. The transcript-judged `/goal` evaluator cannot run checks and never sees subagent internals, so it both rejects vague relays (→ wasted turns) and is fooled by fabricated concrete-looking results (→ false completion). See INVARIANTS "Evidence discipline under an active `/goal`".
 
 Before dispatching a wave, write `execute-dispatch-manifest` into `execute.md` draft or the stage working notes with columns: `Task`, `Parallel Group`, `Depends On`, `Owned Paths`, `Integration Owner`, `Dispatch Mode`. A `parallel` dispatch mode is allowed only when dependencies are satisfied and `owned_paths` are disjoint. If the plan lacks this metadata on a new non-trivial entity, bounce to plan; for legacy plans, proceed serially and record the fallback.
@@ -208,7 +208,7 @@ Rationale: lets verify panel trust self-check on these classes and focus on subs
 
 ### Step 3 — Handle task returns
 
-- **DONE** → schedule commit (Step 3.5) + dispatch review (Step 4).
+- **DONE** → mark the task reviewer-eligible (Step 4); schedule its commit only after that task's review/fix loop is terminal (Step 3.5).
 - **DONE_WITH_CONCERNS** → correctness/scope concerns → re-dispatch with clarification; observation concerns → log in `## Issues Found`, proceed as DONE.
 - **NEEDS_CONTEXT** → gather missing info + re-dispatch (same model) with extra context. Cap 2 rounds; round 3 → reclassify as BLOCKED.
 - **BLOCKED** → benign-drift pre-check first; else escalation ladder.
@@ -244,7 +244,7 @@ No match → escalation ladder.
 
 ### Step 3.5 — Serial commits after each wave (pathspec-lock)
 
-After all tasks in wave reach terminal state, commit DONE tasks serially — one commit per task (preserves `git bisect` + PR decomposition):
+After all task review/fix loops in the wave reach terminal state, commit DONE tasks serially — one commit per task (preserves `git bisect` + PR decomposition):
 
 ```bash
 git add -- {task.files_modified}
@@ -262,13 +262,13 @@ git commit -m "feat(execute): {slug} task-{N} — {one-line action}" -- {task.fi
 
 Pre-commit hook fires per commit. Do NOT override with `--no-verify`. Hook fail → revert + reclassify as BLOCKED.
 
-### Step 4 — Review each task (immediate, haiku)
+### Step 4 — Review each task (parallel within eligible wave set, haiku)
 
-Dispatch review subagent right after each DONE report (loop = implement → review → fix → re-review → next task). Model = haiku (reviews are mechanical). Prompt reviews: diff matches task? obvious bugs / missing handling / broken imports? tests exist? T1/T2 passed?
+Dispatch review subagents as soon as tasks are DONE. For a parallel wave batch, dispatch all eligible task reviewers in one parallel tool-call block; if streaming task returns are available, start each reviewer immediately without waiting for unfinished siblings. Do not wait for one task's review/fix loop before starting an eligible sibling's reviewer. Each task keeps an isolated loop (`implement → review → fix → re-review`) over its own `owned_paths`; dependent waves still wait for the whole current wave to be reviewed and committed. Model = haiku (reviews are mechanical). Prompt reviews: diff matches task? obvious bugs / missing handling / broken imports? tests exist? T1/T2 passed?
 
 Verdict: APPROVED | NEEDS_FIX (BLOCKING only) + Non-Blocking notes.
 
-**Review loop** — NEEDS_FIX → dispatch fix agent (same model as original) with specific issues → fix commits → re-review. Max 3 rounds; round 3 still NEEDS_FIX → log failed + create auto-issue entity.
+**Review loop** — NEEDS_FIX → dispatch fix agent (same model as original) with specific issues → fix → re-review. Independent sibling review/fix loops continue concurrently because their `owned_paths` are disjoint. Max 3 rounds; round 3 still NEEDS_FIX → log failed + create auto-issue entity. Review loops may run concurrently; commit integration remains serial and pathspec-locked.
 
 **Non-blocking findings → auto entity**: `{slug}-improve-task-{N}` with `source: "auto:ship-flow review"`, status: draft.
 

@@ -1,0 +1,323 @@
+<!-- section:plan-report -->
+# Make debrief a native post-merge ship closeout — Implementation Plan
+
+> **Goal:** Turn the existing merged-PR reconciler into one resumable, proof-backed ship closeout that emits the debrief/receipt/archive/ROADMAP terminal bundle and cannot recurse.
+>
+> **Architecture:** Two hermetic helpers own landing-proof and receipt validation; the existing reconciler remains the L1 decider/orchestrator, while the startup/idle mod delegates to it. Repository projections are rendered and validated before one authoritative Git commit; optional PR mode uses the same receipt as checkpoint and sentinel.
+>
+> **Tech stack:** Bash 3.2+, Python 3.8 stdlib, Git, GitHub CLI adapter, Markdown/YAML/JSON, existing ship-flow shell test harness.
+
+## Research Summary
+
+<details>
+<summary>Repository and lens findings</summary>
+
+- Baseline reconciler is a 458-line sequential terminalizer with 82/82 focused tests; it reads only `mergedAt` and mutates status before archive failure can roll back (`merged-pr-closeout-reconciler.sh:139-175,370-457`).
+- D1-D5 and all 12 structured design constraints imported cleanly; readiness, handoff schema, and D-reference gates pass with `open_decisions: []`.
+- Repository research and the event-saga/recovery lens returned bounded FLAGs: startup/idle bypasses the reconciler, owner identity is implicit, merge intent lacks a pre-merge source, and the current status/archive helpers cannot provide one atomic bundle. Integrated below as sentinel-first mod delegation, additive `closeout_owner`, a compact pre-merge `ship.md` intent field, and one explicit-path bundle primitive.
+- Confirmed missing before planning: `resolve-landing-envelope.sh`, `validate-closeout-receipt.py`, the closeout receipt schema, their focused tests, and frozen closeout dogfood fixtures. These are intended greenfield paths, not recovered files.
+- No contradiction or appetite blocker. Existing design citations still match current source; ROADMAP remains Now until ship-review terminal closeout.
+
+</details>
+
+## Size Re-evaluation
+
+Medium-batch remains correct: four code-bearing serial waves plus one docs/compatibility wave, all inside the shaped 1–2 week appetite. GitHub-only scope, seven stage skills, C14/C15 semantics, todo accounting, and tracker neutrality remain unchanged.
+
+### Canonical Doc Actions
+
+<details>
+<summary>Canonical synchronization contract</summary>
+
+| Doc | Action | Source | Rationale |
+|---|---|---|---|
+| `PRODUCT.md` | update | plan | Add native post-merge closeout to `capabilities` only after verified behavior exists. |
+| `ARCHITECTURE.md` | update | plan | Record landing proof, receipt boundary, sentinel-first routing, and atomic projection in `components`, `constraints`, and `decisions`. |
+| `ROADMAP.md` | update | plan | Keep Now during execute, then move one identity to Shipped during ship closeout to avoid claiming terminal value early. |
+| `plugins/ship-flow/README.md` | update | touched-files | T5 replaces the stale claim that ship-flow ends at PR creation with the native closeout lifecycle. |
+
+</details>
+
+## Verification Spec
+
+| DC | Verify Procedure | Expected |
+|---|---|---|
+| DC-1 (`shape.md` AC-1) | `bash plugins/ship-flow/lib/__tests__/test-landing-envelope-resolver.sh` | Three strategies plus moving-main/ambiguity fixtures emit exact full-SHA envelope or canonical `landing-*` reason. |
+| DC-2 (`shape.md` AC-2) | `bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh` | One merged invocation produces one coherent direct bundle; PR mode visibly awaits merge. |
+| DC-3 (`shape.md` AC-3) | `bash plugins/ship-flow/lib/__tests__/test-debrief-schema.sh && bash plugins/ship-flow/lib/__tests__/test-check-invariants-c15.sh` | Generated debrief remains schema v1 and compact ship/details accounting stays green. |
+| DC-4 (`shape.md` AC-4) | `bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh` | Crash matrix and two reruns preserve one proof hash and no duplicate projection/PR. |
+| DC-5 (`shape.md` AC-5) | `bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh` | Valid landed sentinel is classified before entity resolution; tampered/multiple sentinels fail closed. |
+| DC-6 (`shape.md` AC-6) | `bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh` | Missing/incoherent/shared states resume or return exact stable reason with no destructive cleanup. |
+| DC-7 (`shape.md` AC-7) | Run T5 compatibility command | PR binding, metadata, C14/C15, todo, map CAS, scope, and cleanup suites all pass. |
+| DC-8 (`shape.md` AC-8) | `SHIP_FLOW_CLOSEOUT_CASE=pr40-pr41 bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh` | Frozen rewritten landing/manual closeout reaches terminal once; second run is byte/hash no-op. |
+
+<details>
+<summary>Mechanically imported design constraints</summary>
+
+## Plan Imported Design DCs
+
+<!-- section:plan-imported-design-dcs -->
+<!-- Generated by plugins/ship-flow/lib/import-design-dcs.sh from entity's ### Hand-off to Plan block. Do not hand-edit; rerun the script if the source hand-off changes. -->
+
+### Imported design_constraints
+
+| # | Type | Assertion | Rationale (D{N}) | Source artifact |
+|---|---|---|---|---|
+| 1 | schema-contract | "landing envelope requires provider_merged_at, landing_anchor, base_before, strategy, pr_commit_count, ordered landing_commits, first/last landing commits, and source/landing patch proof" | D1 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 2 | contract | "rebase, squash, and merge_commit candidates pass only their exact topology/count/ordered-patch/aggregate-patch grammar; zero candidates or unresolved multi-candidate proof returns a stable landing reason" | D1 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 3 | domain-contract | "closeout_id equals sha256(v1 NUL github NUL repository NUL workflow NUL entity_slug NUL implementation_pr), and exactly one owner is required for shared PRs" | D2 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 4 | filter-contract | "indirect landing or shared PR ownership with zero/multiple owners cannot enter terminal closeout" | D2 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 5 | data-contract | "direct mode changes final ship.md, schema-valid debrief, terminal archived entity, _closeouts receipt, and exactly one ROADMAP Shipped row in one Git commit" | D3 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 6 | contract | "optional PR mode reports closeout-pr-awaiting-merge and withholds done/PASSED on authoritative main until the sentinel PR is MERGED" | D3 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 7 | data-contract | "every durable external or Git side effect has an identity+hash already-applied predicate, and two success reruns are no-ops with the same proof_hash" | D3 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 8 | schema-contract | "docs/ship-flow/_closeouts/<closeout_id>.json binds kind, schema_version, path-derived identity, ownership/source hashes, implementation PR, deterministic closeout head, transaction phase, landing proof, output hashes, and proof hash" | D4 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 9 | contract | "startup/idle classifies a merged PR before ordinary owner resolution and returns closeout-pr-terminal-noop only when exactly one landed _closeouts receipt validates head, path-derived identity, implementation PR, output manifest, and proof hash; title/body never classify it" | D4 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 10 | contract | "manual-UI method uses proof-valid topology/patch candidates plus pre-merge intent only as a discriminator; absent multi-match intent returns landing-method-ambiguous and conflicting intent returns landing-method-intent-mismatch" | D5 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 11 | data-contract | "generated debrief preserves schema-v1 required sections, full reconciliation/todo digest, and first/last commits derived only from the landing envelope" | D1 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+| 12 | contract | "ship.md remains within C15 60 body lines and balanced standalone details exclusion semantics are unchanged" | D3 | docs/ship-flow/ship-stage-debrief-closeout/design.md |
+
+### Imported visible_surface_map
+
+| # | ID | Type | Route | Selector Hint | Visible When | Coverage | Mapped By | Rationale (D{N}) | N/A Rationale |
+|---|---|---|---|---|---|---|---|---|---|
+
+### Imported render_fidelity_targets
+
+| # | Selector | CSS Property | Expected Value | Rationale (D{N}) |
+|---|---|---|---|---|
+
+
+### Imported whole_page_visual_targets
+
+| # | Route | Reference Artifact | Capture | Threshold | Rationale (D{N}) |
+|---|---|---|---|---|---|
+
+**Wave assignment**: each constraint anchored to the task wave touching the affected component;
+render-fidelity targets default to W0 for token-level checks, task wave for component-level;
+whole-page visual targets default to the integration wave or affected route wave.
+
+**Verify backend**: ship-verify Step 3.6 dispatches `Skill: ship-flow:ui-verify` with the render_fidelity_targets[]
+section above as input YAML; ship-verify Step 3.6.1 captures full-page screenshots for whole_page_visual_targets[] — no manual transcription required.
+
+<!-- /section:plan-imported-design-dcs -->
+
+</details>
+
+<!-- section:plan -->
+## Plan
+
+### T1 — Prove the landing envelope before any closeout write
+
+```yaml
+task_id: T1
+wave: W1
+layer: L1
+model_hint: sonnet
+parallel_group: serial
+depends_on: []
+owned_paths: [plugins/ship-flow/lib/resolve-landing-envelope.sh, plugins/ship-flow/lib/__tests__/test-landing-envelope-resolver.sh, plugins/ship-flow/lib/__tests__/fixtures/landing-envelope/**]
+integration_owner: executer
+skills_needed: [ship-flow:test-driven-development, test, best-practices]
+reviewer_questions: [{lens: landing-proof, question: "Can later main, PR head, reordered patches, count drift, or invalid intent produce a valid envelope?", affected_path_family: "landing helper and Git fixtures", evidence_required: "three-strategy RED/GREEN matrix and exact stable reasons"}]
+tdd_contract:
+  red_command: "bash plugins/ship-flow/lib/__tests__/test-landing-envelope-resolver.sh"
+  expected_red_failure: "new rebase/squash/merge-commit fixtures fail because the resolver is CONFIRMED-MISSING"
+  green_command: "bash plugins/ship-flow/lib/__tests__/test-landing-envelope-resolver.sh"
+  refactor_check: "bash -n plugins/ship-flow/lib/resolve-landing-envelope.sh plugins/ship-flow/lib/__tests__/test-landing-envelope-resolver.sh && bash plugins/ship-flow/lib/__tests__/test-landing-envelope-resolver.sh"
+```
+
+Create the confirmed-missing helper/test/fixtures test-first. Accept repository, base ref, provider time, full anchor, ordered source SHAs, count, and optional intent; compute stable patch IDs/aggregate digest and emit the D1/D5 envelope only for one proof-valid topology. Pin all canonical `landing-*` stops, concurrent-main commits before/after landing, one-commit multi-match, unreachable anchor, count/order/patch mismatch, and truthful `method_source`.
+
+### T2 — Freeze receipt, ownership, and sentinel schema
+
+```yaml
+task_id: T2
+wave: W2
+layer: L1
+model_hint: sonnet
+parallel_group: serial
+depends_on: [T1]
+owned_paths: [plugins/ship-flow/references/closeout-receipt-schema.yaml, plugins/ship-flow/lib/validate-closeout-receipt.py, plugins/ship-flow/lib/persist-closeout-intent.sh, plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh, plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh, plugins/ship-flow/lib/__tests__/fixtures/closeout-receipt/**, plugins/ship-flow/references/entity-body-schema.yaml, plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh, plugins/ship-flow/skills/ship/SKILL.md, plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh]
+integration_owner: executer
+skills_needed: [ship-flow:test-driven-development, superpowers:writing-skills, test, best-practices, api-design]
+reviewer_questions: [{lens: schema, question: "Are identity, owner selection, phase monotonicity, canonical hash, sentinel bindings, and output hashes closed and additive?", affected_path_family: "receipt/entity schemas and validator", evidence_required: "golden NUL ID/hash vectors plus invalid owner/phase/path fixtures"}]
+tdd_contract:
+  red_command: "bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
+  expected_red_failure: "receipt validator/schema, CAS intent producer, and intent contract test are CONFIRMED-MISSING; entity schema lacks closeout_owner"
+  green_command: "bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
+  refactor_check: "python3 -m py_compile plugins/ship-flow/lib/validate-closeout-receipt.py && bash -n plugins/ship-flow/lib/persist-closeout-intent.sh && bash plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh && bash plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh && bash plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh && bash plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh"
+```
+
+Define the D2-D4 JSON receipt contract and stdlib validator with canonical JSON hashing, path-derived ID, exact artifact hashes, and monotonic phases. Add optional boolean `closeout_owner`: one PR match owns implicitly; shared PRs require exactly one `true`, with all other matches recorded as participants; zero/multiple owners stop. The new CAS helper is the sole pre-merge producer: ship/FO calls it before merge to persist `closeout_owner` in active/main entity mirrors and optional `ship.md -> ### Verdict -> merge_method_intent`; tests cover shared-PR zero/one/multiple owner declarations, stale hashes, and idempotent replay. Absence of intent remains legal and ambiguous proof still stops. Validate sentinel identity/head/payload from landed bytes before ordinary entity resolution.
+
+### T3 — Apply the direct closeout as one recoverable Git transaction
+
+```yaml
+task_id: T3
+wave: W3
+layer: L1
+model_hint: sonnet
+parallel_group: serial
+depends_on: [T1, T2]
+owned_paths: [plugins/ship-flow/lib/apply-closeout-bundle.sh, plugins/ship-flow/lib/__tests__/test-apply-closeout-bundle.sh, plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-enforce-advance-stage.sh, plugins/ship-flow/lib/__tests__/fixtures/merged-pr-closeout-reconciler/**]
+integration_owner: executer
+skills_needed: [ship-flow:test-driven-development, test, best-practices]
+reviewer_questions: [{lens: recovery, question: "Can any failure expose done/PASSED without matching debrief, ship, archive, receipt, and ROADMAP bytes on authoritative main?", affected_path_family: "reconciler direct mode", evidence_required: "pre/post-commit fault matrix, tree hashes, same proof_hash reruns"}]
+tdd_contract:
+  red_command: "bash plugins/ship-flow/lib/__tests__/test-apply-closeout-bundle.sh && SHIP_FLOW_CLOSEOUT_CASE=direct-transaction bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh"
+  expected_red_failure: "bundle helper is CONFIRMED-MISSING; archive-failure changes the tree and merged success lacks debrief, ship receipt, closeout receipt, and ROADMAP projection"
+  green_command: "bash plugins/ship-flow/lib/__tests__/test-apply-closeout-bundle.sh && SHIP_FLOW_CLOSEOUT_CASE=direct-transaction bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh"
+  refactor_check: "bash -n plugins/ship-flow/lib/apply-closeout-bundle.sh plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh plugins/ship-flow/lib/__tests__/test-apply-closeout-bundle.sh plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh && bash plugins/ship-flow/lib/__tests__/test-apply-closeout-bundle.sh && bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh && bash plugins/ship-flow/lib/__tests__/test-enforce-advance-stage.sh"
+```
+
+Enrich fixture/`gh pr view` inputs with anchor and ordered source commits, resolve unique owner/stage artifacts, call T1/T2, render the schema-v1 debrief, compact `ship.md`, archived index, receipt, and one Shipped row in temp. The confirmed-missing bundle helper validates content/C15/todo and ROADMAP CAS, requires authoritative main, stages explicit paths, and commits once with the sanctioned `: advance status to done` C14 receipt; its tests prove index/tree restoration on conflict. After commit, cleanup retries independently; matching projections/no-op receipts resume, hash/source conflicts return exact D3 recovery reasons.
+
+### T4 — Make optional PR and startup/idle sentinel-first, including PR #40/#41 dogfood
+
+```yaml
+task_id: T4
+wave: W4
+layer: L1
+model_hint: sonnet
+parallel_group: serial
+depends_on: [T3]
+owned_paths: [plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/fixtures/merged-pr-closeout-reconciler/**, docs/ship-flow/_mods/pr-merge.md]
+integration_owner: executer
+skills_needed: [ship-flow:test-driven-development, test, best-practices, write-docs]
+reviewer_questions: [{lens: recursion-and-value, question: "Do awaiting and landed receipts resolve before entity lookup, does exact-head reuse survive every checkpoint, and does every terminal path invoke apply-closeout-bundle exactly once?", affected_path_family: "reconciler, startup mod, frozen PR40/41 fixtures", evidence_required: "receipt-discovery and bundle call logs, crash/rerun matrix, terminal-noop classification, two-run dogfood"}]
+tdd_contract:
+  red_command: "bash -c 'SHIP_FLOW_CLOSEOUT_CASE=optional-pr,recursion,pr40-pr41 bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh'"
+  expected_red_failure: "current scope guard rejects PR creation, entity-first flow misses awaiting and landed receipt-only PRs, optional terminalization bypasses the sole bundle owner, and frozen PR40/41 fixture needs manual closeout"
+  green_command: "bash -c 'SHIP_FLOW_CLOSEOUT_CASE=optional-pr,recursion,pr40-pr41 bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh'"
+  refactor_check: "bash -n plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh && bash plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh"
+```
+
+Add explicit `--closeout-mode direct|pull-request` (default direct). Before ordinary entity lookup, startup/idle scans validated `_closeouts` records in `awaiting_closeout_pr` or landed/applied phase, resolves the deterministic head/PR, and routes receipt-only crash recovery. PR mode checkpoints before external creation, searches/reuses only exact head, and withholds terminal state until merged sentinel bytes validate. Both direct and optional terminal projections must invoke `apply-closeout-bundle.sh` exactly once; legacy sequential setters may only prepare or clean up, and tests assert one C14 receipt/call plus unchanged trees on injected stops. Freeze PR #40 rewritten landing plus PR #41 manual outcome as hermetic fixtures; first invocation closes once, second is byte/hash no-op.
+
+### T5 — Sync operator docs and lock compatibility envelope
+
+```yaml
+task_id: T5
+wave: W5
+layer: meta
+model_hint: sonnet
+parallel_group: serial
+depends_on: [T4]
+owned_paths: [plugins/ship-flow/README.md, plugins/ship-flow/references/doc-sync-context.md]
+integration_owner: executer
+skills_needed: [write-docs, verify-before-complete]
+reviewer_questions: [{lens: compatibility, question: "Do docs state direct/PR authority correctly while every pre-existing PR, C14/C15, todo, map, provider-scope, and cleanup guard stays green?", affected_path_family: "README plus unchanged compatibility consumers", evidence_required: "focused suites, full invariant, README/canonical action comparison"}]
+TDD: skip -- user-facing documentation plus command-only regression verification after code-bearing RED/GREEN tasks.
+```
+
+Update the README closeout lifecycle and register schema/helper coupling in `doc-sync-context.md`; then run: `bash plugins/ship-flow/lib/__tests__/test-debrief-schema.sh && bash plugins/ship-flow/lib/__tests__/test-check-invariants-c15.sh && bash plugins/ship-flow/lib/__tests__/test-todo-lifecycle-closeout.sh && bash plugins/ship-flow/lib/__tests__/test-pr-metadata-backfill.sh && bash plugins/ship-flow/lib/__tests__/test-check-pr-mergeable.sh && bash plugins/ship-flow/lib/__tests__/test-map-layer.sh && bash plugins/ship-flow/bin/check-invariants.sh`. Record no canonical PRODUCT/ARCHITECTURE/ROADMAP edits in execute; those stay review-owned above.
+
+<!-- /section:plan -->
+
+## Context Manifest
+
+<details>
+<summary>Required context fields</summary>
+
+- **Skills loaded**: `spacedock:ensign`, `ship-flow:ship-plan`, `ship-flow:test-driven-development`, `superpowers:writing-plans`, `verify-before-complete`.
+- **INVARIANTS sections read**: Principle 5 (`plugins/ship-flow/INVARIANTS.md:96-115`), Principle 6 (`:119-270`), Principle 8 (`:288-314`), Principle 12 (`:481-505`).
+- **Architecture docs consulted**: `PRODUCT.md` capabilities, `ARCHITECTURE.md` containers/components/constraints/decisions, `ROADMAP.md` Now/Shipped, design D1-D5, schema knowledge module.
+- **Domains touched**: schema registry plus event-saga/recovery trigger.
+- **Lens dispatched**: event-saga/recovery (FLAG integrated: sentinel-first mod and explicit owner schema).
+- **Lens findings integrated**: 2 integrated, 0 deferred-with-rationale, 0 ignored.
+- **Folder guidance**: files=T1-T5 owned paths -> `folder_guidance_files=`, `folder_guidance_skills=` because no non-root guidance matched; `codex_context_boundary=root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files`.
+
+</details>
+
+<details>
+<summary>Context routing manifest and receipt</summary>
+
+<!-- section:context-routing-manifest -->
+```yaml
+context-routing-manifest:
+  schema_version: 1
+  domain_matches: [{domain: schema, match_type: local-registry, required: true}]
+  knowledge_modules: [{domain: schema, path: plugins/ship-flow/references/domain-knowledge/schema.md, load_required: false, missing_behavior: warn}]
+  required_skills: []
+  stage_hints: {plan: [], execute: [], verify: []}
+  consumer_obligations:
+    plan: [map manifest rows to task skills, reviewer questions, and domain acceptance]
+    verify: [extract context-routing-manifest before accepting routed obligations]
+  future_provider_boundary:
+    status: optional_append_only
+    provider_hints: []
+    context_sources: [{source_type: local-registry, source_ref: plugins/ship-flow/registry/defaults.yaml, authoritative_for_routing: true}]
+    invariants: [local registry remains authoritative]
+```
+<!-- /section:context-routing-manifest -->
+
+## Context Routing Receipt
+
+| Manifest row | Task skill mapping | Reviewer questions | Checklist row |
+|---|---|---|---|
+| `domain_matches: schema` | T2 `api-design,superpowers:writing-skills,test,best-practices`; T1/T3/T4 file-backed L1 contracts | schema/landing/recovery questions | DAC-1..3 |
+| `knowledge_modules: schema` | T2 receipt and owner schema; T3 terminal projection | schema and recovery questions | DAC-1..2 |
+| empty registry skills/hints | task-local shell/test/docs skills selected from file classes | no invented adopter skill | DAC-1..4 |
+| consumer obligations | every task has skills/questions; verify extracts this block | all rows | DAC-1..4 |
+| future provider boundary | no task obligation; GitHub remains shaped scope | provider scope in T5 | DAC-4 |
+
+</details>
+
+## Plan Report
+
+status: passed
+stage_cost: one planner, one schema/repository producer, one event-saga/recovery lens, two independent reviewers over four passes
+iterations: 1 self-review + 4 reviewer passes
+dimensions: requirement coverage PASS; task completeness PASS; dependency safety PASS; zero-placeholder PASS; signatures PASS; minimality PASS; TDD PASS; stale anchors PASS; design compliance PASS; context routing PASS
+research_reviewer_verdict: FLAG integrated, no blocker
+cross_review_verdict: PROCEED after correcting T2 skill-authoring coverage and converting recovery assumptions into a CAS producer, receipt-first discovery, and exact bundle call-count invariants
+cross_review_coaching: Empty render targets prevent silent UI assumptions; explicit producers/discovery order/call counts make file-backed recovery observable.
+scope_anchoring: 5/5 tasks map AC-1..AC-8 and imported constraints 1..12
+skill-coverage: PASS
+open_decisions: []
+
+### Stub Flags
+
+None.
+
+### Metrics
+
+- status: passed
+- duration_minutes: 60
+- iteration_count: 5
+- task_count: 5
+- verification_spec_count: 8
+- model_split: four sonnet code-bearing dispatches; one sonnet docs/verification dispatch; read-only producer, lens, and two reviewers
+
+<!-- section:hand-off-to-execute -->
+### Hand-off to Execute
+
+- `tdd-ledger`: `tdd-ledger.jsonl`; validate with `python3 plugins/ship-flow/lib/validate-tdd-ledger.py --plan docs/ship-flow/ship-stage-debrief-closeout/plan.md --require-ledger-jsonl docs/ship-flow/ship-stage-debrief-closeout/tdd-ledger.jsonl` (must PASS before execute).
+- `wave_order`: W1 T1 -> W2 T2 -> W3 T3 -> W4 T4 -> W5 T5.
+- `critical_assumptions`: provider anchor/source commits are available; known pre-merge method is recorded only in compact `ship.md`; closeout runs against authoritative main; one-owner default applies only to a unique PR match; stage artifacts remain coherent; exact-head lookup is available before PR create.
+- `architecture_context`: T2 schema refs first; T3/T4 runtime; T5 README; review patches PRODUCT/ARCHITECTURE and terminal ROADMAP.
+- `stub_flags`: none.
+- `skills_needed_summary`: T1/T3 shell TDD; T2 schema/API TDD plus skill authoring; T4 shell TDD + docs; T5 docs/verification; four distinct lists satisfy heterogeneous routing.
+
+```yaml
+plan-parallelization-manifest:
+  - {task_id: T1, parallel_group: serial, depends_on: [], owned_paths: [plugins/ship-flow/lib/resolve-landing-envelope.sh, plugins/ship-flow/lib/__tests__/test-landing-envelope-resolver.sh, plugins/ship-flow/lib/__tests__/fixtures/landing-envelope/**], integration_owner: executer}
+  - {task_id: T2, parallel_group: serial, depends_on: [T1], owned_paths: [plugins/ship-flow/references/closeout-receipt-schema.yaml, plugins/ship-flow/lib/validate-closeout-receipt.py, plugins/ship-flow/lib/persist-closeout-intent.sh, plugins/ship-flow/lib/__tests__/test-closeout-receipt.sh, plugins/ship-flow/lib/__tests__/test-persist-closeout-intent.sh, plugins/ship-flow/lib/__tests__/fixtures/closeout-receipt/**, plugins/ship-flow/references/entity-body-schema.yaml, plugins/ship-flow/lib/__tests__/test-entity-body-schema.sh, plugins/ship-flow/skills/ship/SKILL.md, plugins/ship-flow/lib/__tests__/test-ship-closeout-intent-contract.sh], integration_owner: executer}
+  - {task_id: T3, parallel_group: serial, depends_on: [T1, T2], owned_paths: [plugins/ship-flow/lib/apply-closeout-bundle.sh, plugins/ship-flow/lib/__tests__/test-apply-closeout-bundle.sh, plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-enforce-advance-stage.sh, plugins/ship-flow/lib/__tests__/fixtures/merged-pr-closeout-reconciler/**], integration_owner: executer}
+  - {task_id: T4, parallel_group: serial, depends_on: [T3], owned_paths: [plugins/ship-flow/bin/merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/test-merged-pr-closeout-reconciler.sh, plugins/ship-flow/lib/__tests__/fixtures/merged-pr-closeout-reconciler/**, docs/ship-flow/_mods/pr-merge.md], integration_owner: executer}
+  - {task_id: T5, parallel_group: serial, depends_on: [T4], owned_paths: [plugins/ship-flow/README.md, plugins/ship-flow/references/doc-sync-context.md], integration_owner: executer}
+```
+
+#### domain_acceptance_checklist
+
+| Task ID | Verify Lens | Reviewer Question | Affected Path Family | Required Skills | Evidence Required |
+|---|---|---|---|---|---|
+| T1 | landing-proof | Can unrelated main/head/reordered patches validate? | landing helper/fixtures | TDD,test,best-practices | three strategies plus negative matrix |
+| T2 | schema | Does one CAS producer durably persist exactly one shared-PR owner and optional method intent before merge? | receipt/entity schema, intent helper, ship skill | TDD,superpowers:writing-skills,test,api-design | golden/invalid schema plus zero/one/multiple-owner and stale-CAS fixtures |
+| T3 | recovery | Can partial state expose terminal claims? | direct reconciler | TDD,test,best-practices | fault matrix and tree hashes |
+| T4 | recursion/value | Are awaiting/landed receipts discovered first and all terminal paths bundle-owned exactly once? | PR mode/mod/dogfood | TDD,test,write-docs | discovery/bundle call logs, reruns, PR40/41 |
+| T5 | compatibility | Are established guards green and docs truthful? | README/compatibility | write-docs,verification | focused plus full gates |
+
+<!-- /section:hand-off-to-execute -->
+
+<!-- /section:plan-report -->
