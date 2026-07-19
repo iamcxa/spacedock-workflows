@@ -30,6 +30,7 @@
 | reverse-recovery-audit-dangling-path | S | ship-shape/SKILL.md:585 and ship-plan/SKILL.md:502 reference a nonexistent docs/ship-flow/_mods/reverse-recovery-audit.md; check-no-dangling.sh does not catch it. Pre-existing dangling reference, separate from this pitch. | pitch 5 |
 | issue-anchor-guard-remaining-triggers | S | Extend the guard to the other two trigger points: feedback-rejection-flow cycle-3 escalation (lives in the spacedock core plugin repo, needs a companion change there) and child/prerequisite creation (necessity proof against a named parent AC). | pitch 5 |
 | issue-anchor-guard-resolver-shell-parser-robustness | S | Three named shell-parser-robustness residuals in the issue-anchor-guard resolver: emit's tombstone rm -f does not check its own exit status before fetch; validate's top-level scalar reads are a line-oriented awk scan, not structural yq (unlike the per-AC rows); the AC-block parser is not Markdown-aware (fenced code / quoted examples could be mis-parsed as ACs). | pitch 5 |
+| scheduler-tick-delegation-marker | S | Tick spawn needs explicit delegation marker (env+prompt) vs hand-dispatch | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
