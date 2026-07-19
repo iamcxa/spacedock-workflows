@@ -143,3 +143,52 @@ RED commit.
   Flagging to the FO/captain rather than silently declaring the gate green or
   unilaterally editing verify.md/rewriting a commit outside this stage's
   remit.
+
+## Feedback Cycle 2 fixes
+Round-2 bounce scoped to exactly W1 + W2 (verify.md `## Deferred to TODO`); fix ONLY these two, no other item touched, full local gate re-run green below.
+
+<details>
+<summary>W1 + W2 — RED→GREEN evidence, doc-contract update</summary>
+
+- **W1 — `pr_exists_for_slug`'s real-gh branch fails OPEN on a gh error.**
+  RED `f655f34`: `write_gh_error_stub` (PATH-stub `gh`; `issue view` OK,
+  `pr list` exits 1) + `run_gh_error_fail_closed_case`, reusing
+  `pr-live-only-entity` without `--gh-provider fixture` to hit the real-gh
+  branch. Observed RED: tick emitted `dispatch` instead of refusing (2/34
+  eligibility assertions failed). Fix `eafa77b`
+  (`ship-flow-scheduler.sh:165-168`): the `gh pr list` call's own exit
+  status now decides UNKNOWN vs. NONE — no more `|| true` swallowing —
+  mirroring `gh_pr_state`'s existing `2>/dev/null || printf 'UNKNOWN\n'`
+  pattern. GREEN: eligibility 34/34. Hand-verified: the identical stub now
+  emits `"event":"refusal" … "reason":"pr-exists"` instead of
+  `"event":"dispatch"`.
+- **W2 — live-PR dedup case-arm omitted CLOSED.** RED `f655f34`: new fixture
+  `pr-closed-live-only-entity` (shaped, issue OPEN + `sd:approved`, empty
+  frontmatter `worktree:`/`pr:`, live PR state `CLOSED`) +
+  `run_closed_pr_live_dedup_case`. Observed RED: dispatched instead of
+  dedup-excluding — `CLOSED` fell through the `OPEN|MERGED|UNKNOWN)` case
+  arm unmatched (2/34 assertions failed). Fix `eafa77b`
+  (`ship-flow-scheduler.sh:271-275`): added `CLOSED` to the case arm. GREEN:
+  eligibility 34/34. **Documented-contract update:** design.md §3's
+  `eligible` row and §4's idempotence prose both said "no open/merged PR" —
+  stale given this fix, so both now read "no open/merged/closed PR" (§4
+  also gained a one-line W2 cross-reference). §2's reason-code list
+  (`pr-exists`) is unaffected — no new/removed code, so no §2 edit.
+
+</details>
+
+<details>
+<summary>Full local gate raw results (feedback cycle 2 re-run, pre-handoff self-check)</summary>
+
+- Shell suite: full `lib/__tests__/test-*.sh` loop, 119 files (`CI=true
+  timeout 90 bash` per file) → **119/119 pass**.
+- Node: `node --test plugins/ship-flow/bin/*.test.mjs` → 79/79 pass.
+- `CI=true bash plugins/ship-flow/bin/check-invariants.sh` → **exit 0** (18
+  OK, 2 pre-existing grandfathered WARNs). The cycle-1 addendum's
+  C11/C12/C14/C15 FAILs were verify.md-side and already resolved by verify
+  cycle 2's rewrite (`a5aac90`, prior to this dispatch) — re-confirmed clean
+  here, not touched by W1/W2.
+- `bash scripts/check-no-dangling.sh` PASS; `bash
+  scripts/check-version-triple.sh` PASS; `git diff --check` clean.
+
+</details>

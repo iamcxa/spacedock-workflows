@@ -118,7 +118,7 @@ fresh every invocation; there is no writable ledger:
 
 | Projected state | Derivation (all reads, no tick-owned write) |
 | --- | --- |
-| `eligible` | frontmatter `status` ∈ post-shape/pre-terminal **AND** gh issue OPEN + label `sd:approved` **AND** DoR mechanical pass **AND** no live worktree **AND** no open/merged PR (§4 dedup) |
+| `eligible` | frontmatter `status` ∈ post-shape/pre-terminal **AND** gh issue OPEN + label `sd:approved` **AND** DoR mechanical pass **AND** no live worktree **AND** no open/merged/closed PR (§4 dedup) |
 | `leased` | controller lease record names this entity (pre-run, transient) |
 | `running` | lease record names this entity **AND** run child alive / run-receipt open |
 | `awaiting_merge` | frontmatter `pr:` set **AND** gh PR state OPEN **AND** frontmatter `verdict: PASSED` |
@@ -150,8 +150,10 @@ cache participates.** The events log (§2) is audit-only and is never read to de
 4. Execute exactly that action; emit its event; release the lease; exit.
 
 **Dispatch idempotence (AC-1) is guaranteed by making dispatch-eligibility exclude any half-run
-artifact:** an entity is dispatched **only if** it has **no live worktree** *and* **no open/merged
-PR** (the `worktree-exists` / `pr-exists` dedup keys, §2). Consequences:
+artifact:** an entity is dispatched **only if** it has **no live worktree** *and* **no open/merged/
+closed PR** (the `worktree-exists` / `pr-exists` dedup keys, §2 — a closed-unmerged PR is still
+dedup ground truth: a prior run already dispatched, so it excludes rather than allows a fresh
+dispatch; feedback cycle 2, W2 fix). Consequences:
 - A prior run that reached worktree/PR creation flips those keys ⇒ the entity is no longer
   `eligible` ⇒ a replay **cannot** re-dispatch it (no double-ship, no second PR).
 - The only replay window is a crash **between spawn and worktree creation**, where the prior
