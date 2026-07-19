@@ -499,6 +499,6 @@ After this feature ships, re-read the `## Captain Bet` block in the entity body.
 - Layer A: `superpowers:writing-plans` (plan authoring discipline).
 - Utility: `ship-flow:ship-runtime-detect` (13-ecosystem runtime detection).
 - Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
-- Reverse-recovery audit mod (every task creating a new file/domain/route needs a confirmed-MISSING classification line; reviewers reject greenfield tasks without it): `docs/ship-flow/_mods/reverse-recovery-audit.md`; plugin-canonical copy at `plugins/ship-flow/_mods/reverse-recovery-audit.md`.
+- Reverse-recovery audit mod (every task creating a new file/domain/route needs a confirmed-MISSING classification line; reviewers reject greenfield tasks without it): `plugins/ship-flow/_mods/reverse-recovery-audit.md` (plugin-canonical); adopter override `docs/ship-flow/_mods/reverse-recovery-audit.md` when present.
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
 - MEMORY: #5 (--next-id atomicity), #14/#25 (explicit pathspec / staging), #35 (dispatch discipline amended by Principle 6), #073 (Next.js 16 `-sfN`), opus-4.7-naturally-does (2026-04-23 harness diet).
