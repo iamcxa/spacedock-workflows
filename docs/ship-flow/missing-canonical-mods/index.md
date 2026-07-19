@@ -253,3 +253,45 @@ own test file to rule out hardcoding. Proportionality declared visibly: scoped p
 S/mechanical entity with zero UI/API/security/migration flags; Codex cross-model converged clean
 this time (contrast: the sibling entity's DEGRADED run). Zero BLOCKING/WARNING findings; 2
 pre-existing out-of-scope items deferred to TODO. Verdict: PASS (PROCEED). Full evidence in verify.md.
+
+## Stage Report: ship
+
+- DONE: PR discipline — compose the PR body ONCE from canonical artifacts (shape problem, verify
+  verdict + per-AC evidence, execute commits) into a body file; privacy grep; push branch; `gh pr
+  create --base main --body-file`; `Closes #77` in body; `pr:` persisted only after `gh pr view`
+  confirms
+  Body composed once to `/tmp/pr-body-missing-canonical-mods.md`; privacy grep 0 hits; branch pushed
+  (`spacedock-ensign/missing-canonical-mods` -> origin); PR #79 created (`gh pr create --base main
+  --head spacedock-ensign/missing-canonical-mods --body-file`); `gh pr view 79` confirmed
+  `mergeable=MERGEABLE` + `closingIssuesReferences` includes #77; `persist-pr-metadata.sh
+  --expect-body-file` returned `verdict=OK reason=written pr=#79` before `pr: "#79"` landed in
+  frontmatter (commit `20ac5a3`).
+- DONE: AUTO-MERGE LANE — arm native auto-merge, do not wait for checks, report armed state
+  `gh pr merge 79 --auto --merge` succeeded (silent success = armed); `gh pr view 79` confirmed
+  `autoMergeRequest.mergeMethod=MERGE`, `enabledBy=iamcxa`; `mergeStateStatus=BLOCKED` (expected —
+  required checks `invariants`/`doc_impact` have not run yet); not awaited per checklist.
+- DONE: ship.md ≤60 lines with Todo Closeout Digest + Canonical Doc Actions consumption
+  `ship.md` is 56 body lines. Todo Closeout Digest lists verify.md's 2 pre-existing residuals
+  (REPO_ROOT pattern in 9 other integration tests; README.md wording gap) as named follow-up
+  candidates, plus ROADMAP row cleanup deferred to FO closeout on canonical root (no todo files
+  written here). Canonical Docs Update: PRODUCT.md skip, ARCHITECTURE.md skip (both per plan.md's
+  Canonical Doc Actions table, consumed as-is), ROADMAP.md deferred to FO closeout (no existing
+  row to move).
+- DONE: note entity dispatch provenance
+  This entity was dispatched under hackathon-2 Wave 2c (issue #77), FO-driven — NOT tick-dispatched
+  (contrast with the sibling `reverse-recovery-audit-dangling-path` entity, which was the L3
+  scheduler tick's own real-proof case).
+
+### Summary
+
+Opened PR #79 (`gh pr create --base main --head spacedock-ensign/missing-canonical-mods`) with a
+privacy-clean body composed once from shape/verify/execute, `Closes #77`. Merge-tree dry-run against
+origin/main confirmed clean (no conflicts) despite 4 unrelated commits landing on main since this
+entity's baseline. `persist-pr-metadata.sh` confirmed both PR number and body via `gh pr view` before
+`pr: "#79"` was written to frontmatter (commit `20ac5a3`). Per captain's auto-merge policy, armed
+native auto-merge (`gh pr merge 79 --auto --merge`) — required checks `invariants` + `doc_impact`
+will execute the merge; not awaited here. `ship.md` captures the Todo Closeout Digest (2 verify
+residuals + ROADMAP row deferred to FO canonical-root closeout) and Canonical Doc Actions consumption
+(PRODUCT/ARCHITECTURE skip per plan.md, ROADMAP deferred). Repo branch-protection confirmed
+(`allow_auto_merge=true`, required contexts = `["invariants","doc_impact"]`) before arming, matching
+the checklist's own named checks exactly.
