@@ -82,3 +82,29 @@ Shaped as EXISTS_BROKEN seam-hardening (reverse-recovery layer-trace: all five s
 
 Contract-bearing design (not trivial-pass): schema field (`checkpoint.resume_stage`), adapter CLI surface (`--tick-id`, `--print-spawn`), and plist template all change. The one shape-residual open decision (AC-2 version-gate mode) is resolved in design against verified `spacedock claude --help` evidence — `--plugin-dir` beats `--skip-compat-check` because it loads the controller-worktree's own plugin checkout. DC-4 (checkpoint) decided in-place (extend `blocked` detail) to hold the one-event-per-tick + rollup-forward-compat contracts. Four items parked as tunables/execute-probes; zero new captain decisions.
 
+## Stage Report: plan
+
+- DONE: plan.md decomposes design.md into serial atomic-commit TDD tasks (RED fixture first per AC, fix, green cited) with exact-command DCs; runtime commands from the repo's existing shell-test harness; every deliverable inside plugins/ship-flow/{bin,lib,references} + the launchd template — no SKILL edits
+  `plan.md` written; 9 atomic tasks (AC-1a/1b/1c, AC-2, AC-3a/3b, AC-4, AC-5, canonical-docs) each with named RED test case, GREEN implementation sketch grounded in real `origin/main` line numbers, and an exact `bash plugins/ship-flow/lib/__tests__/test-*.sh` DC.
+- DONE: Budget realism — entity time_budget 2h30m, ~50m spent through design — size the plan to ~1h execute + ~40m verify/ship; anything over goes to the cut-list as a named follow-up, never silently included
+  9 tasks × ~6-7m ≈ 60m execute; 2 items explicitly named to the cut-list (AC-4 precedence-2 dispatch-repeat test coverage; ROADMAP Later-row fold, cross-branch/FO-owned) rather than silently included or excluded.
+- DONE: Terminal DCs — dual-env green (normal + CI-sim no-identity no-claude-on-PATH) for the three CI-sensitive tests + new backoff test; the LIVE proof is FO-owned post-merge, planned as a documented handoff not an execute task
+  `plan.md` "Terminal DCs" section gives the exact dual-env command pair (`bash` normal + `env -i PATH=/usr/bin:/bin ... CI=true bash`, matching `.github/workflows/ship-flow-invariants.yml:110-118`'s shape) plus a full-suite regression sweep; "Post-merge FO handoff" section names the live-proof target (`no-dangling-guard-qualifier-precision`) without turning it into an execute task.
+
+### Summary
+
+Plan grounded directly against the live `origin/main` code (not just design.md's prose): read the
+actual `scheduler-runner-adapter.sh` (93 lines), `ship-flow-scheduler.sh` (760 lines), the tick
+plist, and every existing test file + fixture the plan's new tests reuse or extend. Found and
+resolved one real regression risk design.md's prose would have introduced — AC-3's
+`derive_timeout_sec` override, read literally, breaks the existing
+`run_tick_surfaces_timeout_as_blocked_case` test (its `--timeout 1` would get silently overridden
+to a 5400s default, turning a forced-timeout assertion into a false pass/fail); resolved by making
+the entity's `time_budget` an override ONLY when present, with the CLI-supplied timeout_sec as the
+unconditional fallback default. Also resolved: the ROADMAP.md "fold two Later rows" instruction
+from shape.md turned out to reference rows that exist only on the separate `iamcxa/muscat-v1`
+branch (not in this worktree's history) — documented as a cross-branch cut-list item rather than
+fabricated-then-removed. All 6 ACs are covered by named, atomic, RED-before-GREEN tasks with exact
+verification commands; AC-6 and the live proof are correctly kept out of execute/verify scope per
+the dispatch checklist.
+
