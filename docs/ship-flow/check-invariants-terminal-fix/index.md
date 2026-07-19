@@ -1,13 +1,13 @@
 ---
 title: check-invariants terminal misclassification fix
-status: draft
+status: shape
 source: hackathon-2 Wave 2b (todo check-invariants-terminal-misclassification; #71 verify finding)
-started:
+started: 2026-07-19T16:04:46Z
 completed:
 verdict:
 score:
 worktree:
-issue:
+issue: "#76"
 pr:
 ---
 
