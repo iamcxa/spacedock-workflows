@@ -1,13 +1,13 @@
 ---
 title: Guard qualifier precision — W1-W5 robustness follow-ups
-status: draft
+status: shape
 source: hackathon-2 Wave 2a (todo no-dangling-guard-qualifier-precision; #71 verify Deferred to TODO)
-started:
+started: 2026-07-19T16:04:46Z
 completed:
 verdict:
 score:
 worktree:
-issue:
+issue: "#75"
 pr:
 ---
 
