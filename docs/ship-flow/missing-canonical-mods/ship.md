@@ -15,6 +15,11 @@ reason=written`). Auto-merge lane armed: `gh pr merge 79 --auto --merge`
 succeeded, `autoMergeRequest.mergeMethod=MERGE` confirmed; required checks
 (`invariants`, `doc_impact`) will execute the merge — not awaited here.
 
+**CI-only finding**: first `doc_impact` run FAILed — T4's SKILL.md deletions
+mechanically tripped 2 doc-coupling rows (no content relation). Fixed via
+`doc-impact: none` / `contribution-impact: none [...]` waivers added to the
+PR body, verified locally against `doc-impact-gate.sh` before re-push.
+
 ## Todo Closeout Digest
 
 - (follow-up) 9 other `lib/__tests__/integration/*.sh` files share the same
@@ -41,10 +46,9 @@ succeeded, `autoMergeRequest.mergeMethod=MERGE` confirmed; required checks
 
 ### Token + Release
 
-Token: not tracked (no `size`/`token_budget` stamped on this entity; no
-fabricated figures). Version: no plugin version bump this ship — repo
-convention batches bumps into separate `chore(ship-flow): release X.Y.Z`
-commits; this S-mechanical fix + additive guard does not warrant one alone.
+Token: not tracked (no `size`/`token_budget` stamped). Version: no plugin
+bump this ship — batched separately per repo convention; this S-mechanical
+fix + additive guard does not warrant one alone.
 
 ### Verdict
 

@@ -295,3 +295,18 @@ residuals + ROADMAP row deferred to FO canonical-root closeout) and Canonical Do
 (PRODUCT/ARCHITECTURE skip per plan.md, ROADMAP deferred). Repo branch-protection confirmed
 (`allow_auto_merge=true`, required contexts = `["invariants","doc_impact"]`) before arming, matching
 the checklist's own named checks exactly.
+
+**CI-only finding (not local-suite-visible)**: the first `doc_impact` run FAILed —
+T4's one-line bibliographic deletions in `ship-shape/SKILL.md` and
+`ship-plan/SKILL.md` mechanically tripped the repo's `stage-skill-readme`
+(coupled to README.md) and `issue-anchor-guard` (coupled bidirectionally)
+doc-coupling rows; no content-level relation to either coupled file. This
+class of gate only runs in CI (`ship-flow-doc-impact.yml`, reads
+`github.event.pull_request.body` as `--declaration`), so it was invisible to
+every local-suite run in execute/verify. Fixed by adding the gate's own
+required `doc-impact: none — <reason>` and `contribution-impact: none
+[issue-anchor-guard:doc-to-source] — <reason>` waiver lines to the PR body
+(`gh pr edit 79`); verified the exact fix locally first by invoking
+`plugins/ship-flow/bin/doc-impact-gate.sh` directly against the merge-base
+diff with the updated body text — both rows resolved to PASS, exit 0 —
+before re-pushing to trigger a fresh CI run against the corrected body.
