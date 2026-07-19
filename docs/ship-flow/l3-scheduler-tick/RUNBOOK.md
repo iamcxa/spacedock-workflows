@@ -30,7 +30,11 @@ Substitute throughout:
   means a run is in flight; every interval tick meanwhile no-ops
   (`reason=lease-held`), which is normal.
 - **Run receipts:** `ls <ctrl>/.ship-flow-scheduler-receipts/` — one file per
-  adapter spawn (the `receipt` path cited in dispatch/blocked events).
+  adapter spawn (the `receipt` path cited in dispatch/blocked events). A
+  dispatch's receipt now also carries `SHIP_FLOW_SCHEDULER_TICK_ID` / a
+  delegation prompt line (tick-hardening AC-1) — the spawned `/ship` run's
+  mechanical proof of tick-delegation, retiring the prior 30-min-receipt
+  heuristic clause in an entity's `decisions.md`.
 
 ## Unlock
 
@@ -63,6 +67,13 @@ Exit 0 = healthy tick (including refusal/blocked/no-op outcomes — read the
 emitted event). Exit 2 usage, 3 environment fault (missing dir/tool), 4 lease
 subsystem fault. Re-running after a crash is always safe: dispatch eligibility
 excludes any entity with a live worktree or PR, so a replay cannot double-ship.
+
+**Resume from checkpoint (tick-hardening AC-3):** a timeout-blocked entity's
+`blocked` event carries `detail.checkpoint.resume_stage` — the entity's
+frontmatter `status` at kill time. `tail` its latest `run-timeout` event in
+the events log to see which stage to re-enter by hand (or let the next real
+tick's own eligibility re-derivation pick it back up); this is a read of an
+existing event, not a new store (Rule 3).
 
 ## launchd install / uninstall (manual, v0)
 

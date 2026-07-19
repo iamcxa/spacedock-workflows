@@ -97,7 +97,7 @@ emit).
 | `reconcile` | `pr`, `reconciler_verdict:"<PROCEED\|PROMPT_CAPTAIN\|REJECT>"`, `terminal_state:"<reconciled\|blocked>"` |
 | `no-op` | `reason:"<idle\|lease-held\|nothing-ready\|nothing-eligible\|gh-state-unknown>"` |
 | `refusal` | `keys:{shaped,issue_open,sd_approved,dor}` (each bool), `reason:"<code>"` |
-| `blocked` | `source:"<run-timeout\|run-error\|reconciler-prompt-captain>"`, `receipt` |
+| `blocked` | `source:"<run-timeout\|run-error\|reconciler-prompt-captain>"`, `receipt`, optional `checkpoint:{resume_stage}` on `source:"run-timeout"` (tick-hardening AC-3, `../tick-hardening/design.md`) |
 
 **Refusal reason codes (machine-readable — the dual-key + DoR set, Rule 1 + input-quality gate).**
 Fail-closed: any single failed key ⇒ `refusal`, zero worker tokens (AC-2):
@@ -231,6 +231,11 @@ scheduler-runner-adapter.sh run --entity <ref> --workdir <path> --timeout <sec> 
 - **Boundary (Rule 10):** the tick calls the adapter through this interface only. The tick NEVER
   reads transcripts, parks/resumes, scavenges, or manages container lifecycle. Failure/timeout ⇒ the
   tick writes a terminal `blocked` receipt and does **not** retry / substitute a fresh team (Rule 4).
+- **Hardened (tick-hardening, `../tick-hardening/design.md` AC-1/AC-2):** an optional `--tick-id <id>`
+  arg sets a mechanical delegation marker (env + prompt line) on the spawned child; the launchd/v0
+  spawn now goes through the spacedock launcher (`${SPACEDOCK_BIN:-spacedock} claude … --plugin-dir
+  … -- -p --output-format text`) rather than raw `claude -p`, with raw `claude -p` documented as the
+  fallback. The CLI + JSON contract above is unchanged.
 
 ---
 
