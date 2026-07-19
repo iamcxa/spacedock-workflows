@@ -193,3 +193,35 @@ REPO_ROOT bug and its fix, the authored mod content reaching 14/14, and the inte
 "suite green" claim needs to read as 14/14 + 8/10 (2 residual, pre-existing, out-of-scope failures),
 not full green on both tests — recommend the gate ratify this narrower reading rather than block on
 literal AC-3 wording.
+
+## Stage Report: execute
+
+- DONE: T1 — guard-extension RED fixture (missing-everywhere class + case9 self-red guard)
+  `cdc7852`; OBSERVED RED: case 9 FAIL (expected exit 1, got 0), 11/12 otherwise PASS.
+- DONE: T2 — REPO_ROOT off-by-one precondition fix
+  `8822249`; OBSERVED: 0/14→5/14, 0/10→7/10 (wrong-directory masking removed).
+- DONE: T3 — author canonical-doc-sync.md in adopter tier
+  `590b1e6`; OBSERVED GREEN: 5/14→14/14, 7/10→8/10 (Silent omission check flips).
+- DONE: T4 — de-reference architecture-canon (3 sites) + decisions-log (1 site, F1 fold)
+  `785e391`; AC-1 grep proof 0 hits across all 4 files; zero test regressions.
+- DONE: T5 — missing-everywhere-canonical-mod classify-by-twin guard (F2 exclude-dir, F3 adopter-tree guard)
+  `5a08112`; OBSERVED GREEN: test-check-no-dangling.sh 12/12; check-no-dangling.sh + --self-test both PASS on real repo.
+- DONE: full local gate both envs — target = ratified narrowed claim (14/14 + 8/10 + full shell suite + check-* green)
+  129/129 standalone suite; 14/14 + 8/10 dogfood (2 residual documented); check-no-dangling/check-invariants/check-version-triple all PASS; `git diff --check` clean.
+- DONE: gate discipline — foreground bounded calls, sequential, no background zombie-wait
+  full suite run in 3 sequential ≤550s batches; one 90s-per-file timeout false-alarm (test-merged-pr-closeout-reconciler.sh) confirmed 198/198 PASS at 240s, not a real regression.
+- FAILED (then fixed): pre-existing C15 artifact-verbosity gap discovered live, not in plan.md's own scope list
+  plan.md was 405 body lines (cap 200) since the plan-stage commit, blocking check-invariants.sh green at handoff; fixed via `<details>` collapse (`91d4231`) — same remedy the sibling `reverse-recovery-audit-dangling-path/execute.md` applied for the identical gate; content trimmed only where narratively redundant, no cited fact dropped.
+
+### Summary
+
+All 5 plan.md tasks executed serially (T1→T2→T3→T4→T5), each RED-before-GREEN per its own TDD
+contract, matching the plan's live-verified counts exactly. AC-1: architecture-canon (3 sites) +
+decisions-log (1 site) de-referenced, canonical-doc-sync.md authored at the adopter tier — 0
+dangling refs remain. AC-2: check-no-dangling.sh's new missing-everywhere-canonical-mod class
+guards the gap, 12/12 fixture PASS, real-repo green. AC-3 (narrowed, plan-ratified): 129/129
+standalone + 14/14 + 8/10 dogfood (2 pre-existing README-wording failures, documented not fixed).
+One execute-stage finding not anticipated by shape/design/plan: this entity's own plan.md violated
+the C15 artifact-verbosity cap (pre-existing since the plan-stage commit) — fixed as a separate
+commit using the exact remedy a sibling entity already established for this same gate, so
+check-invariants.sh is green at handoff. Full detail and commit citations in execute.md.
