@@ -87,3 +87,66 @@ Nine atomic, serially-committed TDD tasks per plan.md, one worktree
   index.md EOF, occupied by the appended report).
 
 </details>
+
+## Feedback Cycle 1 fixes
+
+Verify cycle 1 VETO'd on three findings, all AUTO-FIX-class (verify.md
+Bounce Tasks 1–3). Each fixed as its own atomic commit, RED reproduced
+against the pre-fix code before applying the GREEN fix, per-fix evidence
+below. W2/W3 and the `decisions.md`/ROADMAP carryovers are untouched per the
+dispatch's boundary (FO-owned).
+
+- **B2/B3 — `derive_timeout_sec` base-10 + zero-reject (`9f8957c`).**
+  `ship-flow-scheduler.sh:97-115`. RED (pre-fix, reproduced live): `time_budget:
+  08m`/`09h`/`2h09m` crashed bash arithmetic (`08: value too great for base`),
+  emitting `"timeout_sec":` (empty/malformed JSON) plus a stray stderr line;
+  `0m`/`0h` silently returned `0`, and GNU `timeout 0` disables enforcement
+  entirely — the opposite of AC-3's intent. Fix: force base-10 (`10#$h`,
+  `10#$m`) before arithmetic, and fall back to `<default>` when the computed
+  total is `0`. GREEN: 5 new fixture cases (0m/0h/08m/09h/2h09m) all resolve
+  to the correct `timeout_sec` (5400/5400/480/32400/7740), 10 new assertions,
+  43/43 adapter-suite total. Stale comment (N1) fixed alongside.
+- **B1 — `SPAWN_ARGV` argv-array exec (`3a29309`).** `scheduler-runner-adapter.sh:89-142`.
+  RED (pre-fix, reproduced live): `--entity 'fixture$(touch <marker>)'`
+  through the real adapter (via a stub `$SPACEDOCK_BIN`, no real spawn
+  needed) created the marker file — confirmed command injection through the
+  old `SPAWN_LINE` string built by interpolation then re-parsed via
+  `bash -c "$SPAWN_LINE"`. Fix: resolve `SPAWN_ARGV` once and exec it
+  directly (never through a shell); `SPAWN_LINE` is now a display-only `%q`
+  rendering for `--print-spawn` only. GREEN: same PoC through the fixed
+  adapter creates no marker file, 2 new assertions, 45/45 total. All 33
+  pre-existing assertions (incl. `--print-spawn`'s `--plugin-dir`/`-p`/
+  `spacedock` pattern checks against the `%q`-rendered string) still pass.
+- **W1 (companion) — preflight requires `spacedock` specifically (`6ee6867`).**
+  `ship-flow-scheduler.sh:371-382`. RED (pre-fix, reproduced live): a PATH
+  with only a stub `claude` (no `spacedock`) passed the `--runner gh`
+  preflight (exit 0), even though `SPAWN_ARGV` (post-B1 fix) never execs
+  `claude` — no such fallback is wired. Fix: preflight now checks
+  `${SPACEDOCK_BIN:-spacedock}` only. GREEN: the same claude-only-PATH case
+  now fails closed (exit 3), 1 new assertion, 46/46 total. The existing
+  spacedock-only-PATH acceptance case is unaffected.
+
+### Full local gate re-run (cycle 1, post-fix)
+
+- `test-scheduler-runner-adapter.sh`: 46/46, normal env; CI-sim (isolated
+  `timeout`-only PATH, no `claude`/`spacedock`, empty `HOME`, `CI=true`):
+  46/46 — matches normal env exactly (no fixture in the 13 new assertions
+  depends on PATH).
+- Scheduler set (9 files), NORMAL env: adapter 46/46, backoff 8/8,
+  reconcile 16/16, fullcycle 8/8, eligibility 34/34, idempotence 11/11,
+  plist 11/11, report 10/10, rollup 8/8 — all exit 0.
+- CI-SIM env, the four CI-sensitive files: adapter 46/46, backoff 8/8,
+  reconcile 16/16, fullcycle 8/8 — all exit 0.
+- `shellcheck` (v0.11.0) on all changed `.sh` files (the two production
+  files, the test file, the new stub fixture) → zero findings.
+- `git diff --check` → clean.
+- Full shell suite sweep (`CI=true timeout 90 bash` per file, 130 files,
+  NORMAL env, foreground): 129/130 within the CI cap;
+  `test-merged-pr-closeout-reconciler.sh` again exceeds 90s wall-clock on
+  this machine only (same pre-existing, diff-untouched file execute.md's
+  original gate and verify.md's re-run both hit) — re-run at 300s → exit 0,
+  198/198 assertions, confirmed untouched via `git diff --stat`.
+- `node --test plugins/ship-flow/bin/*.test.mjs` → 79/79 pass, exit 0.
+- `CI=true bash plugins/ship-flow/bin/check-invariants.sh` → exit 0, all OK.
+- `bash scripts/check-no-dangling.sh` → PASS (8 patterns).
+- `bash scripts/check-version-triple.sh` → PASS (0.9.0 triple).
