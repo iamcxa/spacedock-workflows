@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ship-flow-scheduler daily rollup carrier (design.md §8) — 23:55 local,
+  deterministic counting only (Rule 7: semantic lessons route through
+  harvest-decide, never this daemon). TEMPLATE — substitute
+  @CONTROLLER_WORKTREE@ / @SPACEDOCK_BIN@ / @WORKFLOW_DIR@ before
+  `launchctl load`. The wrapping sh -c computes "today" at fire time so the
+  rollup date is the day being closed out.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.spacedock.ship-flow-scheduler.rollup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>@CONTROLLER_WORKTREE@/plugins/ship-flow/bin/ship-flow-scheduler.sh rollup --events-log @CONTROLLER_WORKTREE@/.ship-flow-scheduler-events.jsonl --date "$(date -u +%Y-%m-%d)" &gt;&gt; @CONTROLLER_WORKTREE@/.ship-flow-scheduler-rollups.md</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>@CONTROLLER_WORKTREE@</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>SPACEDOCK_BIN</key>
+    <string>@SPACEDOCK_BIN@</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>23</integer>
+    <key>Minute</key>
+    <integer>55</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>@CONTROLLER_WORKTREE@/.ship-flow-scheduler-rollup.log</string>
+  <key>StandardErrorPath</key>
+  <string>@CONTROLLER_WORKTREE@/.ship-flow-scheduler-rollup.err.log</string>
+</dict>
+</plist>

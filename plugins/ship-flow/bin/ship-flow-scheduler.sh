@@ -578,6 +578,98 @@ cmd_report() {
 }
 
 # ---------------------------------------------------------------------------
+# rollup subcommand (design.md §8, AC-6) — deterministic daily counts from a
+# day's JSONL events. No wall-clock in the body (only the echoed --date), no
+# semantic synthesis (Rule 7 — lessons route through harvest-decide), sorted
+# keys, byte-identical across runs on the same input.
+# ---------------------------------------------------------------------------
+
+cmd_rollup() {
+  local events_log="" date_arg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --events-log) events_log="${2:-}"; shift 2 ;;
+      --date) date_arg="${2:-}"; shift 2 ;;
+      *) usage; return 2 ;;
+    esac
+  done
+  [ -n "$events_log" ] && [ -n "$date_arg" ] || { usage; return 2; }
+  [ -f "$events_log" ] || { echo "ship-flow-scheduler: no such events log: $events_log" >&2; return 3; }
+
+  local day_events
+  day_events="$(grep "\"ts\":\"${date_arg}T" "$events_log" || true)"
+  if [ -z "$day_events" ]; then
+    echo "ship-flow-scheduler: no events for date ${date_arg} in ${events_log}" >&2
+    return 3
+  fi
+
+  printf '%s\n' "$day_events" | awk -v date="$date_arg" '
+    function get(line, key,   v) {
+      # first match of "key":"value" (string values only)
+      if (match(line, "\"" key "\":\"[^\"]*\"") == 0) return ""
+      v = substr(line, RSTART, RLENGTH)
+      sub("^\"" key "\":\"", "", v); sub("\"$", "", v)
+      return v
+    }
+    function ts_seconds(ts,   h, m, s) {
+      # HH:MM:SS from RFC3339 -> seconds-of-day (same-day deltas only)
+      h = substr(ts, 12, 2); m = substr(ts, 15, 2); s = substr(ts, 18, 2)
+      return h * 3600 + m * 60 + s
+    }
+    {
+      event = get($0, "event")
+      entity = get($0, "entity")
+      ts = get($0, "ts")
+      counts[event]++
+      total++
+      if (event == "dispatch") {
+        dispatches++
+        # duration: detail.runner.timeout_sec is the bound, not the actual —
+        # actual per-run duration needs receipt telemetry (cost/duration both
+        # deferred with the cut-list rollup-cost follow-up). Record dispatch ts
+        # for gate-wait computation instead.
+        dispatch_ts[entity] = ts
+      }
+      if (event == "reconcile") {
+        if (entity in dispatch_ts) {
+          waits = waits sprintf("- %s: %ds dispatch->reconcile\n", entity, ts_seconds(ts) - ts_seconds(dispatch_ts[entity]))
+          nwaits++
+        }
+      }
+      if (event == "blocked") { failures++ ; interventions++ }
+      if (event == "refusal") { interventions++ }
+      reason = get($0, "reason")
+      if (event == "blocked" && reason == "reconciler-prompt-captain") prompt_captains++
+    }
+    END {
+      printf "# ship-flow-scheduler daily rollup — %s\n\n", date
+      printf "## Counts\n\n"
+      printf "- total events: %d\n", total
+      n = asorti_portable(counts, keys)
+      for (i = 1; i <= n; i++) printf "- %s: %d\n", keys[i], counts[keys[i]]
+      printf "\n## Dispatches\n\n- dispatches: %d\n", dispatches
+      printf "\n## Durations\n\n- per-dispatch runtime: n/a (receipt telemetry deferred)\n"
+      printf "\n## Gate waits\n\n"
+      if (nwaits > 0) printf "%s", waits
+      else printf "- none observed\n"
+      printf "\n## Failures\n\n- blocked: %d\n", failures
+      printf "\n## Costs\n\n- costs: n/a (receipt cost extraction deferred)\n"
+      printf "\n## Interventions\n\n- interventions (blocked + refusal): %d\n- reconciler PROMPT_CAPTAIN: %d\n", interventions, prompt_captains
+    }
+    # POSIX awk has no asorti; insertion-sort the keys (same portability rule
+    # as dag-waves.sh).
+    function asorti_portable(arr, out,   k, n, i, j, key) {
+      n = 0
+      for (k in arr) out[++n] = k
+      for (i = 2; i <= n; i++) { key = out[i]; j = i - 1
+        while (j >= 1 && out[j] > key) { out[j+1] = out[j]; j-- } out[j+1] = key }
+      return n
+    }
+  '
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -587,6 +679,6 @@ ACTION="${1:-}"
 case "$ACTION" in
   tick) cmd_tick "$@"; exit $? ;;
   report) cmd_report "$@"; exit $? ;;
-  rollup) echo "ship-flow-scheduler: rollup not yet implemented" >&2; exit 2 ;;
+  rollup) cmd_rollup "$@"; exit $? ;;
   *) usage; exit 2 ;;
 esac
