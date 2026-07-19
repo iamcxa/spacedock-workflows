@@ -50,3 +50,16 @@ Verified by: test suite run output.
 
 Chose fix (b) — reconcile the two SKILL references to the plugin-canonical path (adopter path demoted to "when present") — over (a) materialize-in-adopter, because the mod header itself designates this repo the source (not an adopter), no sync-manifest exists to drift-check a materialized copy, and sibling canonical mods already follow the two-tier convention. Specified a twin-exists + qualifier-aware resolver as the regress-guard, scoped so it reds the reverse-recovery-audit class today, greens after the fix, and does not over-reach onto the out-of-scope missing-everywhere mods (architecture-canon, canonical-doc-sync) discovered during shaping and flagged for a follow-up todo.
 
+## Stage Report: design
+
+- DONE: Confirm trivial-pass eligibility — S mechanical (re-point 2 SKILL refs to plugin-canonical path + adopter 'when present' override per shape fix (b)); no schema/API/contract redesign. Emit minimal design.md + PROCEED, or escalate if a real contract delta surfaces.
+  Trivial-pass PROCEED — additive-only, no `references/*.yaml`/CLI/template contract touched; design.md written with the eligibility table. No escalation-worthy contract delta; guard direction fully pre-shaped.
+- DONE: Name exact contract deltas — the two SKILL reference lines (ship-shape SKILL.md:597, ship-plan SKILL.md:502) + the regress-guard code surface (twin-exists + qualifier-aware resolver in check-no-dangling.sh or wired CI).
+  design.md §Contract deltas: Δ1 ship-shape:597, Δ2 ship-plan:502 (before/after intent), Δ3 additive resolver pass in `scripts/check-no-dangling.sh` (script is at scripts/, not lib/; resolve targets against REPO_ROOT).
+- DONE: Name the test surfaces that must move — which of the 110+ shell tests assert the reference strings / dangling-check behavior.
+  New `plugins/ship-flow/lib/__tests__/test-check-no-dangling.sh` (CI-loop auto-discovered, ship-flow-invariants.yml:110); gate runs at ship-flow-invariants.yml:136. `grep -rl reverse-recovery-audit lib/__tests__/` = 0 hits → Δ1/Δ2 break none of the 120 tests.
+
+### Summary
+
+Trivial-pass PROCEED for an S mechanical ticket: two 1-line reference rewrites (Δ1/Δ2) plus one additive twin-exists+qualifier-aware resolver pass (Δ3) in `scripts/check-no-dangling.sh`. Exercising shape's guard against the real repo surfaced three load-bearing refinements the executer must not drop — (a) backtick-fenced scoping excludes `ship-flow-lint.md` JSON, (b) full-logical-unit unwrap excludes the soft-wrapped science-officer-em SKILL qualifier, and (c) the qualifier vocabulary must cover the agents-file "If the repo has … override" form, which is BEYOND shape's literal qualifier list and would otherwise false-positive `agents/science-officer-em.md:16-18` — plus the resolver must be drivable against a scratch root for the RED/GREEN fixtures. The design.md green-set table enumerates all eight `_mods` references proving only reverse-recovery-audit reds before the fix and nothing reds after (AC-2/AC-3).
+
