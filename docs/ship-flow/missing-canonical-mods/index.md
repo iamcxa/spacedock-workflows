@@ -268,10 +268,13 @@ pre-existing out-of-scope items deferred to TODO. Verdict: PASS (PROCEED). Full 
   frontmatter (commit `20ac5a3`).
 - DONE: AUTO-MERGE LANE — arm native auto-merge, do not wait for checks, report armed state
   `gh pr merge 79 --auto --merge` succeeded (silent success = armed); `gh pr view 79` confirmed
-  `autoMergeRequest.mergeMethod=MERGE`, `enabledBy=iamcxa`; `mergeStateStatus=BLOCKED` (expected —
-  required checks `invariants`/`doc_impact` have not run yet); not awaited per checklist.
+  `autoMergeRequest.mergeMethod=MERGE`, `enabledBy=iamcxa`. Final state at handoff:
+  `mergeable=MERGEABLE`, `doc_impact=success` (on `cbe15c6`, after the fix below),
+  `invariants` still in-progress (long-running local suite, not awaited) — `mergeStateStatus=BLOCKED`
+  pending that one check, expected per branch protection, not an error.
 - DONE: ship.md ≤60 lines with Todo Closeout Digest + Canonical Doc Actions consumption
-  `ship.md` is 56 body lines. Todo Closeout Digest lists verify.md's 2 pre-existing residuals
+  `ship.md` is 60 body lines (at cap, `check-invariants.sh` C15 re-confirmed OK after the
+  CI-finding addendum below). Todo Closeout Digest lists verify.md's 2 pre-existing residuals
   (REPO_ROOT pattern in 9 other integration tests; README.md wording gap) as named follow-up
   candidates, plus ROADMAP row cleanup deferred to FO closeout on canonical root (no todo files
   written here). Canonical Docs Update: PRODUCT.md skip, ARCHITECTURE.md skip (both per plan.md's
