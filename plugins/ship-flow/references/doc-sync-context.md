@@ -44,6 +44,7 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `bin/ship-capture.sh` | `README.md` (artifact capture helper) | `references/doc-format.md` |
 | `bin/debrief-boundary-resolver.sh` | `README.md` (debrief flow) | `references/debrief-schema.yaml` |
 | `bin/merged-pr-closeout-reconciler.sh` | `README.md` (post-merge direct/PR authority and recovery) | `references/closeout-receipt-schema.yaml` |
+| `bin/ship-flow-scheduler.sh` | `README.md` (stateless scheduler `tick`/`report`/`rollup` CLI, dual-key eligibility, one-bounded-action-per-invocation) | `references/launchd/*.plist` (carrier interval + daily rollup wiring) |
 | `bin/pr-feedback-rollback.sh` | `README.md` (PR feedback recovery) | `INVARIANTS.md` (rollback safety, if promoted) |
 | `bin/stale-worktree-cleanup-planner.sh` | `README.md` (cleanup planning) | `INVARIANTS.md` (non-destructive cleanup principle) |
 | `bin/semantic-review-policy.mjs` | `README.md` (semantic review policy boundary) | `workflow-template.yaml` (adopter policy example, if scaffolded) |
@@ -68,6 +69,8 @@ Resolve `PLUGIN_ROOT` before using this map. Prefer `${CLAUDE_PLUGIN_ROOT}`, the
 | `lib/persist-closeout-intent.sh` | `README.md` (owner and merge-method intent) | `references/entity-body-schema.yaml` |
 | `lib/apply-closeout-bundle.sh` | `README.md` (atomic terminal bundle) | `references/closeout-receipt-schema.yaml` |
 | `lib/validate-closeout-receipt.py` | `README.md` (receipt-first recovery and no-op rules) | `references/closeout-receipt-schema.yaml` |
+| `lib/scheduler-lease.sh` | `README.md` (mkdir-atomic controller lease, concurrency=1) | `INVARIANTS.md` (lease liveness-only reclaim, no age-based steal, if promoted) |
+| `lib/scheduler-runner-adapter.sh` | `README.md` (carrier-swap seam for the `claude -p` spawn: exit-class mapping, receipt path) | `INVARIANTS.md` (bounded spawn, terminal blocked on timeout/error, no retry, if promoted) |
 | `lib/*.sh` validators and resolvers | `README.md` (tooling reference) | Matching `references/*.yaml` schema |
 
 ### Closeout Contract Suites -> Doc Targets
