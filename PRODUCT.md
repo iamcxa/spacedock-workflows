@@ -16,4 +16,5 @@ a Claude Code plugin from this marketplace repo (`plugins/ship-flow/`).
 | Staged pipeline stage skills (shape / design / plan / execute / verify / review / ship) | pipeline |
 | Mechanical CI gates: check-invariants, check-no-dangling, check-version-triple, shell + node test suites | quality |
 | Adopter sync and drift detection (`bin/sync-drift-check.mjs` + sync-manifest) | adoption |
+| Approved shaped work reaches a trustworthy PR-ready merge queue unattended via an idempotent scheduler tick (dispatch/advance/reconcile/no-op); human retained as sole merge authority (no auto-merge); audit-by-exception via a deterministic daily rollup | pipeline |
 <!-- /section:capabilities -->
