@@ -50,7 +50,7 @@ batches bumps into separate `chore(ship-flow): release X.Y.Z` commits
 
 ### Verdict
 status: awaiting_merge
-pr: (see index.md frontmatter, written after PR confirmed)
+pr: "#71"
 tasks: 3/3 (T1/T2/T3, plan.md)
 verify: PASS (PROCEED) — verify.md, independent re-run
 dependency: supersets PR #70 (l3-scheduler-tick); merge #70 first
