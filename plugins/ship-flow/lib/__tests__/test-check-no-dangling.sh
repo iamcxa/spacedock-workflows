@@ -2,7 +2,7 @@
 # test-check-no-dangling.sh - mislocated-canonical-mod resolver contract (AC-2)
 #
 # Drives run_mislocated_canonical_mods() — the twin-exists + qualifier-aware
-# resolver added to scripts/check-no-dangling.sh — against 9 fixture cases
+# resolver added to scripts/check-no-dangling.sh — against 11 fixture cases
 # covering the RED detection case plus every load-bearing scoping constraint
 # (a: backtick-fenced only, b: full-logical-unit unwrap, c: qualifier
 # vocabulary, d: same-file self-reference exclusion) and a final green-on-the-
@@ -117,6 +117,22 @@ build_case8_self_reference() {
 MDEOF
 }
 
+build_case9_missing_everywhere_red() {
+  local root="$1"
+  mkdir -p "${root}/plugins/ship-flow" "${root}/docs/ship-flow/_mods"
+  cat > "${root}/plugins/ship-flow/scanned.md" <<'MDEOF'
+See the reference at `docs/ship-flow/_mods/baz.md` for details.
+MDEOF
+}
+
+build_case10_missing_everywhere_qualified() {
+  local root="$1"
+  mkdir -p "${root}/plugins/ship-flow" "${root}/docs/ship-flow/_mods"
+  cat > "${root}/plugins/ship-flow/scanned.md" <<'MDEOF'
+If the repo has `docs/ship-flow/_mods/baz.md`, read that override first.
+MDEOF
+}
+
 # ---------------------------------------------------------------------------
 # Case runner — one uniform PASS/FAIL per case (RED-skip and GREEN paths
 # must record the same number of assertions; only the verdict flips).
@@ -141,7 +157,7 @@ assert_case() {
   fi
 
   local actual_violations
-  actual_violations=$(printf '%s\n' "$actual_output" | grep -c '^  VIOLATION \[mislocated-canonical-mod\]' || true)
+  actual_violations=$(printf '%s\n' "$actual_output" | grep -cE '^  VIOLATION \[(mislocated|missing-everywhere)-canonical-mod\]' || true)
 
   rm -rf "$root"
 
@@ -156,7 +172,7 @@ assert_case() {
   record_pass "case ${case_num} (${desc})"
 }
 
-assert_case9_real_repo() {
+assert_case11_real_repo() {
   local actual_output="" actual_exit=0
   if actual_output="$(run_mislocated_canonical_mods "$REPO_ROOT" 2>&1)"; then
     actual_exit=0
@@ -164,9 +180,9 @@ assert_case9_real_repo() {
     actual_exit=$?
   fi
   if [[ "$actual_exit" == "0" ]]; then
-    record_pass "case 9 (green-on-real-repo-after-fix)"
+    record_pass "case 11 (green-on-real-repo-after-fix)"
   else
-    record_fail "case 9 (green-on-real-repo-after-fix): expected exit 0, got ${actual_exit} (output: ${actual_output})"
+    record_fail "case 11 (green-on-real-repo-after-fix): expected exit 0, got ${actual_exit} (output: ${actual_output})"
   fi
 }
 
@@ -189,7 +205,9 @@ if grep -q '^run_mislocated_canonical_mods()' "$HELPER" 2>/dev/null; then
   assert_case 6 "GREEN-agents-override" build_case6_agents_override 0 ""
   assert_case 7 "GREEN-json-noise" build_case7_json_noise 0 ""
   assert_case 8 "GREEN-self-reference" build_case8_self_reference 0 ""
-  assert_case9_real_repo
+  assert_case 9 "RED-missing-everywhere-unqualified" build_case9_missing_everywhere_red 1 1
+  assert_case 10 "GREEN-missing-everywhere-qualified" build_case10_missing_everywhere_qualified 0 ""
+  assert_case11_real_repo
 else
   record_fail "$EXISTENCE_DESC"
   for case_desc in \
@@ -201,7 +219,9 @@ else
     "6 (GREEN-agents-override)" \
     "7 (GREEN-json-noise)" \
     "8 (GREEN-self-reference)" \
-    "9 (green-on-real-repo-after-fix)"; do
+    "9 (RED-missing-everywhere-unqualified)" \
+    "10 (GREEN-missing-everywhere-qualified)" \
+    "11 (green-on-real-repo-after-fix)"; do
     record_fail "case ${case_desc}: resolver function not yet defined"
   done
 fi
