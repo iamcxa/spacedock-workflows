@@ -93,9 +93,15 @@ read_frontmatter_field() {
 # returns <default> UNCHANGED (never invents its own number), so an explicit
 # --timeout the caller passed is preserved when the entity has no
 # time_budget; only the caller's own default (bumped separately in cmd_tick)
-# actually changes behavior for time_budget-less entities.
+# actually changes behavior for time_budget-less entities. h/m are forced
+# base-10 (`10#`) before arithmetic: a leading-zero component (e.g. "08m")
+# is otherwise read by bash as an octal literal, and "08"/"09" are not valid
+# octal digits, which crashes the arithmetic (empty stdout, caller usage-
+# errors on `--timeout ""`). A zero total (e.g. "0m", "0h") also falls back
+# to <default> rather than propagating 0 — GNU `timeout 0` DISABLES
+# enforcement entirely, the opposite of a "tiny/zero budget" author's intent.
 derive_timeout_sec() {
-  local path="$1" default="$2" tb h=0 m=0
+  local path="$1" default="$2" tb h=0 m=0 total
   tb="$(read_frontmatter_field "$path" time_budget)"
   [ -n "$tb" ] || { printf '%s' "$default"; return 0; }
   if [[ "$tb" =~ ^([0-9]+)h([0-9]+)m$ ]]; then
@@ -107,7 +113,9 @@ derive_timeout_sec() {
   else
     printf '%s' "$default"; return 0
   fi
-  printf '%s' $(( h * 3600 + m * 60 ))
+  total=$(( 10#$h * 3600 + 10#$m * 60 ))
+  [ "$total" -gt 0 ] || { printf '%s' "$default"; return 0; }
+  printf '%s' "$total"
 }
 
 # entity_in_backoff <slug> <events-log> <window-sec> — AC-4: returns 0 (in

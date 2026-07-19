@@ -209,6 +209,32 @@ run_tick_defaults_timeout_without_time_budget_case() {
   assert_contains "default timeout without time_budget: timeout_sec=5400" '"timeout_sec":5400' "$OUT"
 }
 
+run_tick_derives_timeout_edge_cases_case() {
+  # B2/B3 regression: derive_timeout_sec must not crash on a leading-zero
+  # time_budget component ("08m"/"09h"/"2h09m" -- bash arithmetic otherwise
+  # misparses the leading zero as an invalid octal literal) and must not
+  # silently propagate a zero total ("0m"/"0h" -- GNU `timeout 0` DISABLES
+  # enforcement entirely, the opposite of a tiny/zero-budget author's
+  # intent). Reuses the time-budget-entity gh fixture (same slug), mutating
+  # only the frontmatter time_budget value per case.
+  local pair tb expected wf
+  for pair in "0m:5400" "0h:5400" "08m:480" "09h:32400" "2h09m:7740"; do
+    tb="${pair%%:*}"
+    expected="${pair##*:}"
+    wf="$(mktemp -d)"
+    cp -R "${FIXTURE_ROOT}/workflow/time-budget-entity" "${wf}/time-budget-entity"
+    sed -i.bak "s/^time_budget: .*/time_budget: ${tb}/" "${wf}/time-budget-entity/index.md"
+    run_capture "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" tick \
+      --workflow-dir "$wf" --controller-worktree "$wf" \
+      --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+      --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+      --events-log "${wf}/events.jsonl"
+    rm -rf "$wf"
+    assert_exit "time_budget ${tb}: exit 0 (no octal crash)" 0 "$EXIT_CODE"
+    assert_contains "time_budget ${tb}: timeout_sec=${expected}" "\"timeout_sec\":${expected}" "$OUT"
+  done
+}
+
 echo "=== test-scheduler-runner-adapter.sh ==="
 echo ""
 
@@ -228,6 +254,7 @@ else
     run_tick_preflight_accepts_spacedock_bin_case
     run_tick_derives_timeout_from_time_budget_case
     run_tick_defaults_timeout_without_time_budget_case
+    run_tick_derives_timeout_edge_cases_case
   else
     echo "  NOTE: bin/ship-flow-scheduler.sh not yet built — skipping tick-level blocked surfacing (covered again once T2 lands)"
   fi
