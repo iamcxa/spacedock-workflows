@@ -199,3 +199,23 @@ attempt with a stricter no-bash prompt succeeded and surfaced 2 informational fi
 pre-existing/zero-hit and deferred rather than blocking. Verdict: PASSED. Flag for FO: C13
 (fo-receipt-on-proceed) will now fail on this entity until Step 6.0 writes fo-receipts.md — expected,
 FO-owned, out of this stage's scope.
+
+## Stage Report: ship
+
+- DONE: PR discipline (body from canonical artifacts incl. AC-2 framing, privacy grep, push, gh pr create, Closes #76, pr: persisted)
+  PR #80 (https://github.com/iamcxa/spacedock-workflows/pull/80); body composed once to /tmp/pr-body-check-invariants-terminal-fix.md; privacy grep clean (0 hits); pushed spacedock-ensign/check-invariants-terminal-fix; pr: "#80" persisted commit 099ee7e after gh pr view confirmed.
+- DONE: AUTO-MERGE CAVEAT — check actual CI result once, arm only if green, report+stop if reds only on designed findings, never force
+  invariants reds ONLY on designed AC-2 outcome (FAIL C1 roborev + FAIL C15 this-entity plan.md, run 29699024005 rerun) after resolving a concurrent-merge doc_impact false-positive (PR #79 race, see ship.md); NOT armed — reported for FO/captain route per caveat.
+- DONE: ship.md ≤60 lines with Todo Closeout Digest + canonical docs per plan
+  docs/ship-flow/check-invariants-terminal-fix/ship.md, 58 lines; 3 named candidates (roborev follow-up, 2 verify informational deferrals); PRODUCT/ARCHITECTURE/ROADMAP all skip per plan.md rationale, unchanged.
+
+### Summary
+
+PR #80 opened against main with a body composed once from shape/execute/verify artifacts, including
+the AC-2 corpus-honesty framing and surfacing table. A sibling PR (#79) merged to main mid-flight,
+causing a stale-base-sha false positive on the doc_impact gate (resolved via a doc-impact:none
+declaration + merging origin/main into this branch, re-verified 66/66 local + DC-18 4/4 clean). The
+invariants job now reds only on the two designed/pre-existing findings (roborev C1, this entity's own
+C15) — matching execute.md/verify.md exactly, confirmed by re-running the job once to rule out an
+observed transient unrelated-test flake. Auto-merge NOT armed per the stage-def caveat; ship.md
+reports the state for FO/captain to route the roborev-red vs merge decision.
