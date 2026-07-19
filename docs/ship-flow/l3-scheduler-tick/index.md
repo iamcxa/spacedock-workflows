@@ -1,6 +1,6 @@
 ---
 title: L3 scheduler tick — stateless SD scheduler (Step-3 wedge v0)
-status: verify
+status: execute
 source: captain hackathon contract (.context/l3-hackathon-contract.md, GO 2026-07-19; converged Claude FO + SO-EM + codex/sol panel)
 started: 2026-07-19T02:22:05Z
 completed:
@@ -128,6 +128,12 @@ Independent re-run confirms execute's quality-gate numbers exactly (118/118 shel
   captain_decision: fix
   routed_at: 2026-07-19T09:05:55Z
   verify_artifact: verify.md@07b726c
+- cycle: 2
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-19T10:02:05Z
+  verify_artifact: verify.md@a5aac90
 
 ## Stage Report: execute (cycle 2)
 
