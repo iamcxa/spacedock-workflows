@@ -140,6 +140,27 @@ gh_issue_state() {
   printf 'state=%s labels=%s\n' "$state" "$labels"
 }
 
+pr_exists_for_slug() {
+  # F1 fix (feedback cycle 1, BLOCKING, AC-1): prints OPEN|MERGED|NONE|UNKNOWN
+  # for any PR on this entity's conventional branch, looked up by SLUG alone —
+  # independent of frontmatter `pr:`. This closes the crash-before-frontmatter-
+  # write window: a real PR opened by a prior run is dedup ground truth even
+  # when the run crashed before recording it. UNKNOWN (gh unavailable/lookup
+  # failure) is treated as "exists" by the caller — fail-closed.
+  local slug="$1" branch="spacedock-ensign/${slug}"
+  if [ "$GH_PROVIDER" = "fixture" ]; then
+    local f="${GH_FIXTURE_DIR}/pr-${slug}.env"
+    [ -f "$f" ] || { printf 'NONE\n'; return 0; }
+    awk -F= '$1=="state"{print $2; exit}' "$f"
+    return 0
+  fi
+  command -v gh >/dev/null 2>&1 || { printf 'UNKNOWN\n'; return 0; }
+  local out
+  out="$(gh pr list --head "$branch" --state all --json state --jq '.[0].state' 2>/dev/null || true)"
+  [ -n "$out" ] || { printf 'NONE\n'; return 0; }
+  printf '%s\n' "$out"
+}
+
 gh_pr_state() {
   # prints the PR state (OPEN|MERGED|CLOSED|UNKNOWN|NONE) for an entity that
   # has a `pr:` frontmatter field. --pr-fixture, when given, overrides
@@ -184,13 +205,15 @@ dor_pass() {
   [ -s "$shape_md" ]
 }
 
-# evaluate_entity <path> — sets EVAL_* globals. Returns 0 for eligible,
-# 1 for refused (EVAL_REASON set, EVAL_KEYS set), 2 for dedup-excluded
-# (EVAL_REASON set to worktree-exists|pr-exists).
+# evaluate_entity <path> [controller-worktree] — sets EVAL_* globals. Returns 0
+# for eligible, 1 for refused (EVAL_REASON set, EVAL_KEYS set), 2 for
+# dedup-excluded (EVAL_REASON set to worktree-exists|pr-exists). The optional
+# controller-worktree enables the F1 live-filesystem worktree check (§ below);
+# omitting it just skips that one check (frontmatter + live-gh still apply).
 EVAL_REASON=""
 EVAL_KEYS=""
 evaluate_entity() {
-  local path="$1" dir slug status worktree issue pr issue_info issue_state issue_labels
+  local path="$1" controller_worktree="${2:-}" dir slug status worktree issue pr issue_info issue_state issue_labels
   dir="$(dirname "$path")"
   slug="$(entity_slug_from_path "$path")"
   status="$(read_frontmatter_field "$path" status)"
@@ -223,6 +246,21 @@ evaluate_entity() {
 
   if [ -n "$worktree" ]; then EVAL_REASON="worktree-exists"; return 2; fi
   if [ -n "$pr" ]; then EVAL_REASON="pr-exists"; return 2; fi
+
+  # F1 fix (feedback cycle 1, BLOCKING, AC-1): the two checks above only see a
+  # PRIOR run's write to frontmatter. A crash between creating the real
+  # worktree/PR and writing that field leaves both empty, so also check live
+  # ground truth: the conventional worktree path on disk, and a live gh lookup
+  # by branch (independent of any recorded PR number). Fail-closed: an
+  # unresolvable gh lookup (UNKNOWN) excludes rather than proceeds.
+  if [ -n "$controller_worktree" ] && [ -d "${controller_worktree}/.worktrees/spacedock-ensign-${slug}" ]; then
+    EVAL_REASON="worktree-exists"; return 2
+  fi
+  local live_pr_state
+  live_pr_state="$(pr_exists_for_slug "$slug")"
+  case "$live_pr_state" in
+    OPEN|MERGED|UNKNOWN) EVAL_REASON="pr-exists"; return 2 ;;
+  esac
 
   EVAL_REASON=""
   return 0
@@ -293,7 +331,7 @@ cmd_tick() {
   # --- Precedence 2: dispatch (an eligible entity exists), else refusal ---
   local first_refusal_path="" first_refusal_reason="" first_refusal_keys=""
   for path in $(list_entities "$workflow_dir"); do
-    evaluate_entity "$path"
+    evaluate_entity "$path" "$controller_worktree"
     case $? in
       0)
         run_dispatch_action "$path" "$(entity_slug_from_path "$path")" "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run"
