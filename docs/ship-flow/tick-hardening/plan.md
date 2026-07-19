@@ -4,16 +4,24 @@
 
 Nine atomic, serially-committed TDD tasks against the REAL `origin/main` files design.md names,
 plus a canonical-doc task and a dual-env verify handoff. Every code task is RED-before-GREEN with
-an exact-command DC. One regression risk not visible in design.md was found while grounding this
-plan against the live test suite (AC-3's timeout override) and is resolved below — it would have
-silently broken an existing passing test (`run_tick_surfaces_timeout_as_blocked_case`) had
-`derive_timeout_sec` been wired the way design.md's prose reads literally. Budget: ~50m spent
-shape+design; this plan sizes to ~60m execute (9 tasks × ~6-7m) + ~40m verify/ship = within the
-2h30m entity budget. Two items are named to the cut-list rather than silently included.
+an exact-command DC. Budget: ~50m spent shape+design; this plan sizes to ~60m execute (9 tasks ×
+~6-7m) + ~40m verify/ship = within the 2h30m entity budget. Two items are named to the cut-list
+rather than silently included. Full task-by-task RED/GREEN mechanics are in the collapsed sections
+below (Principle 8: plan structure is the tabular consumable; verbose research collapses).
 
 ---
 
 ### Regression risk found + resolved (AC-3 timeout derivation)
+
+**Found while grounding this plan against the live test suite:** design.md's literal reading of
+`derive_timeout_sec` would have broken the existing `run_tick_surfaces_timeout_as_blocked_case`
+(silently overriding an explicit `--timeout 1` test assertion). **Resolved:** the entity's
+`time_budget` overrides ONLY when present; the CLI-supplied `timeout_sec` is the unconditional
+fallback default; `cmd_tick`'s own compiled default (only used when `--timeout` is omitted
+entirely) is separately bumped 900s→5400s.
+
+<details>
+<summary>Full risk analysis + resolution (verbatim)</summary>
 
 **Risk:** design.md AC-3 says `derive_timeout_sec` "override[s] the incoming `timeout_sec` for the
 adapter call." Read literally (a hardcoded 5400s default baked into the call site, ignoring
@@ -39,20 +47,27 @@ fixture line consumed by `cmd_rollup`, never a live tick run), so the bump is sa
 `time_budget` overrides everything; explicit `--timeout` is preserved when no `time_budget`;
 omitted `--timeout` now defaults to 5400s instead of 900s.
 
+</details>
+
 ---
 
 ## Task 1 — AC-1a: adapter `--tick-id` arg + env propagation
 
 **Files:** `plugins/ship-flow/lib/scheduler-runner-adapter.sh`,
 `plugins/ship-flow/lib/__tests__/test-scheduler-runner-adapter.sh`, NEW
-`plugins/ship-flow/lib/__tests__/fixtures/ship-flow-scheduler/runner/stub-runner-echo-tick-id.sh`.
+`.../fixtures/ship-flow-scheduler/runner/stub-runner-echo-tick-id.sh`.
+
+An optional `--tick-id` arg appends `SHIP_FLOW_SCHEDULER_TICK_ID=<id>` to the adapter's `ENV_PAIRS`
+so it reaches the spawned child identically in both the hermetic and production branches.
+
+<details>
+<summary>RED / GREEN mechanics</summary>
 
 **RED:** new stub script echoes `TICK_ID_SEEN=${SHIP_FLOW_SCHEDULER_TICK_ID:-}` + the existing
-`SHIP_FLOW_TERMINAL` sentinel line. New test case `run_tick_id_marker_case`: invoke the adapter
-with `--tick-id T-42`, extract the `receipt` path from the JSON output (same `sed -n
-'s/.*"receipt":"\([^"]*\)".*/\1/p'` pattern already used for `pr_from_sentinel`-style extraction),
-`cat` the receipt, assert it contains `TICK_ID_SEEN=T-42`. Run against current adapter (no
-`--tick-id` support) → fails with usage error (exit 2, unrecognized arg).
+`SHIP_FLOW_TERMINAL` sentinel line. New test case `run_tick_id_marker_case`: invoke the adapter with
+`--tick-id T-42`, extract the `receipt` path from the JSON output, `cat` it, assert it contains
+`TICK_ID_SEEN=T-42`. Run against current adapter (no `--tick-id` support) → fails with usage error
+(exit 2, unrecognized arg).
 
 **GREEN:** add `--tick-id) TICK_ID="${2:-}"; shift 2 ;;` to the adapter's arg-parsing loop
 (`scheduler-runner-adapter.sh:35-43`); when `TICK_ID` is non-empty, append
@@ -60,6 +75,8 @@ with `--tick-id T-42`, extract the `receipt` path from the JSON output (same `se
 `run_cmd`'s `env "${ENV_PAIRS[@]}"` wrapper at `:53-59`) BEFORE the `if
 [SHIP_FLOW_SCHEDULER_RUNNER_CMD]` branch at `:61`, so the env var reaches the child in BOTH the
 hermetic and production branches identically.
+
+</details>
 
 **DC:** `bash plugins/ship-flow/lib/__tests__/test-scheduler-runner-adapter.sh`
 
@@ -69,6 +86,13 @@ hermetic and production branches identically.
 
 **Files:** same adapter + test file as Task 1.
 
+Builds `SHIP_PROMPT` (`/ship <entity>` + a delegation line when `--tick-id` present) and a
+single-source-of-truth `SPAWN_LINE` string, plus a hermetic `--print-spawn` mode reused by both the
+inspection path and the real exec branch.
+
+<details>
+<summary>RED / GREEN mechanics</summary>
+
 **RED:** new test case `run_print_spawn_prompt_case`: invoke `"$HELPER" run --entity fixture-x
 --workdir "$WORKDIR" --timeout 30 --print-spawn` (no `--tick-id`) → assert `"prompt":"/ship
 fixture-x"` present, exit 0, and no receipt file created (print-spawn never execs). Second case
@@ -76,24 +100,15 @@ fixture-x"` present, exit 0, and no receipt file created (print-spawn never exec
 `tick_id=T-9` and the literal delegation text `ship-flow-scheduler tick delegation`. Run against
 current adapter (no `--print-spawn`) → fails (usage error).
 
-**GREEN:** build `SHIP_PROMPT="/ship ${ENTITY}"`; when `TICK_ID` non-empty, append a newline +
-`[ship-flow-scheduler tick delegation — tick_id=${TICK_ID} receipt=$(basename "$RECEIPT");
-autonomous per Rule 1/10, not a manual hand-dispatch]` (verbatim text from design.md's AC-1 delta).
-Build `SPAWN_LINE` as a single source-of-truth string reused by both `--print-spawn` and the real
-exec branch (Task 4 rewrites what `SPAWN_LINE` contains, not two separate code paths). Add
-`--print-spawn) PRINT_SPAWN=yes; shift ;;` to arg parsing; right before the
-`if [SHIP_FLOW_SCHEDULER_RUNNER_CMD]` branch, add:
-```
-if [ "${PRINT_SPAWN:-no}" = "yes" ]; then
-  printf '{"prompt":%s,"spawn":%s}\n' "$(json_str_or_null "$SHIP_PROMPT")" "$(json_str_or_null "$SPAWN_LINE")"
-  exit 0
-fi
-```
-(uses the adapter's own existing `json_str_or_null` helper at `:81-83`, so multi-line prompts stay
-one valid JSON line — `\n` gets escaped by `sed` same as today's sentinel/receipt fields... note:
-current `json_str_or_null` only escapes `\` and `"`, not raw newlines; Task 2's GREEN must add a
-`s/$/\\n/` fold or `tr '\n' ' '` before JSON-encoding `SHIP_PROMPT` so the printed line stays valid
-JSONL — call this out explicitly since it's a real gap in the existing helper, not a new one.)
+**GREEN:** build `SHIP_PROMPT="/ship ${ENTITY}"`; when `TICK_ID` non-empty, append the verbatim
+design.md AC-1 delegation line naming `tick_id`/receipt basename. Build `SPAWN_LINE` as a single
+source-of-truth string reused by both `--print-spawn` and the real exec branch (Task 4 rewrites
+what it contains, not two code paths). Add `--print-spawn`; before the
+`SHIP_FLOW_SCHEDULER_RUNNER_CMD` branch, print `{"prompt":...,"spawn":...}` and exit 0 — folding
+embedded newlines to spaces via `tr '\n' ' '` first, since `json_str_or_null` only escapes
+backslash/quote (a real pre-existing gap the GREEN accounts for).
+
+</details>
 
 **DC:** `bash plugins/ship-flow/lib/__tests__/test-scheduler-runner-adapter.sh`
 
@@ -102,6 +117,12 @@ JSONL — call this out explicitly since it's a real gap in the existing helper,
 ## Task 3 — AC-1c: thread tick_id from the tick into the adapter call
 
 **Files:** `plugins/ship-flow/bin/ship-flow-scheduler.sh`, `test-scheduler-runner-adapter.sh`.
+
+`run_dispatch_action` takes a trailing `tick_id` param; `cmd_tick` passes its own computed
+`tick_id` at the call site; the real-adapter branch forwards it as `--tick-id`.
+
+<details>
+<summary>RED / GREEN mechanics</summary>
 
 **RED:** new test case `run_tick_threads_tick_id_case`: one-entity workflow (copy
 `eligible-entity`), `--runner gh` + `SHIP_FLOW_SCHEDULER_RUNNER_CMD=bash
@@ -116,6 +137,8 @@ call site (`:367`) append `"$tick_id"` (already in scope in `cmd_tick`, computed
 the real-adapter branch (`:419`, `else`), add `--tick-id "$tick_id"` to the invocation. The
 `--runner fixture` branch (`:410-414`) ignores the new param (fixture mode never calls the adapter).
 
+</details>
+
 **DC:** `bash plugins/ship-flow/lib/__tests__/test-scheduler-runner-adapter.sh`
 
 ---
@@ -123,6 +146,12 @@ the real-adapter branch (`:419`, `else`), add `--tick-id "$tick_id"` to the invo
 ## Task 4 — AC-2: launcher spawn rewrite + preflight widen
 
 **Files:** `scheduler-runner-adapter.sh`, `ship-flow-scheduler.sh`, `test-scheduler-runner-adapter.sh`.
+
+Rewrites the adapter's production branch to spawn via the spacedock launcher and widens the
+`--runner gh` preflight to accept `spacedock` on PATH (not just `claude`).
+
+<details>
+<summary>RED / GREEN mechanics</summary>
 
 **RED (a):** extend Task 2's print-spawn assertions: add checks for `--plugin-dir`, `-- -p
 --output-format text`, and `${SPACEDOCK_BIN:-spacedock}`/literal `spacedock` in the `spawn` field.
@@ -141,15 +170,16 @@ tries a real spawn — this isolates the preflight check itself). Assert exit 0 
 
 **GREEN:** rewrite the adapter's production branch (`scheduler-runner-adapter.sh:64`) to build
 `SPAWN_LINE="${SPACEDOCK_BIN:-spacedock} claude \"${SHIP_PROMPT}\" --plugin-dir
-\"${WORKDIR}/plugins/ship-flow\" -- -p --output-format text"` and exec via that same resolved form
-(not a second hand-written command); widen the preflight at `ship-flow-scheduler.sh:318` from
-`! command -v claude` to `! command -v claude >/dev/null 2>&1 && ! command -v
-"${SPACEDOCK_BIN:-spacedock}" >/dev/null 2>&1` (both must be absent to fail-closed).
+\"${WORKDIR}/plugins/ship-flow\" -- -p --output-format text"` and exec via that resolved form (not a
+second hand-written command); widen the preflight at `:318` to also accept
+`command -v "${SPACEDOCK_BIN:-spacedock}"` (both binaries absent = fail-closed).
 
 **Execute-time non-blocking probe (per design.md, not a captain decision):** confirm
 `--plugin-dir "$WORKDIR/plugins/ship-flow"` (vs bare `$WORKDIR`) is the correct level with one
 `spacedock claude --help` read + a real one-shot manual run before trusting the hermetic test
 alone — the hermetic test only proves the STRING is right, not that the launcher accepts it.
+
+</details>
 
 **DC:** `bash plugins/ship-flow/lib/__tests__/test-scheduler-runner-adapter.sh`
 
@@ -159,6 +189,13 @@ alone — the hermetic test only proves the STRING is right, not that the launch
 
 **Files:** `ship-flow-scheduler.sh`, `test-scheduler-runner-adapter.sh`, NEW fixture entity
 `plugins/ship-flow/lib/__tests__/fixtures/ship-flow-scheduler/workflow/time-budget-entity/{index.md,shape.md}`.
+
+Parses frontmatter `time_budget` (`<N>h<M>m`/`<N>h`/`<M>m`) → seconds, falling back to the passed
+default unchanged when absent/unparseable — see the regression-risk resolution above for why the
+fallback (not an invented number) matters.
+
+<details>
+<summary>RED / GREEN mechanics</summary>
 
 **RED:** new fixture entity = a copy of `eligible-entity`'s shape (status: shape, sd:approved OPEN
 issue, no worktree/pr) + `time_budget: 2h30m` in frontmatter + matching
@@ -171,18 +208,16 @@ issue, no worktree/pr) + `time_budget: 2h30m` in frontmatter + matching
 `eligible-entity` case actually already emits `900` pre-fix, `time-budget-entity` doesn't exist
 pre-fix either).
 
-**GREEN:** add `derive_timeout_sec() { local path="$1" default="$2" tb h=0 m=0; tb="$(read_frontmatter_field
-"$path" time_budget)"; [ -n "$tb" ] || { printf '%s' "$default"; return 0; }; if [[ "$tb" =~
-^([0-9]+)h([0-9]+)m$ ]]; then h="${BASH_REMATCH[1]}"; m="${BASH_REMATCH[2]}"; elif [[ "$tb" =~
-^([0-9]+)h$ ]]; then h="${BASH_REMATCH[1]}"; elif [[ "$tb" =~ ^([0-9]+)m$ ]]; then
-m="${BASH_REMATCH[1]}"; else printf '%s' "$default"; return 0; fi; printf '%s' $(( h * 3600 + m *
-60 )); }` near `read_frontmatter_field` (`:72`). In `run_dispatch_action`, compute `local
-dispatch_timeout_sec; dispatch_timeout_sec="$(derive_timeout_sec "$path" "$timeout_sec")"` and use
-`$dispatch_timeout_sec` (not `$timeout_sec`) for both the real adapter's `--timeout` arg and the
+**GREEN:** add `derive_timeout_sec <path> <default>` near `read_frontmatter_field` — parses
+`time_budget` (`<N>h<M>m`/`<N>h`/`<M>m`) to seconds, returning `<default>` unchanged when
+absent/unparseable (implemented as committed — see `ship-flow-scheduler.sh`). In
+`run_dispatch_action`, compute `dispatch_timeout_sec="$(derive_timeout_sec "$path" "$timeout_sec")"`
+and use it (not `$timeout_sec`) for both the real adapter's `--timeout` arg and the
 `detail.runner.timeout_sec` JSON field. Bump `cmd_tick`'s compiled default at `:288` from `local
-timeout_sec=900` to `local timeout_sec=5400` (per the regression-risk resolution above — this does
-NOT touch the reconcile bound at `:467`, which keeps using whatever `$timeout_sec` already is,
-lease-bound per the F2 fix, unchanged).
+timeout_sec=900` to `local timeout_sec=5400` (regression-risk resolution above — does NOT touch the
+reconcile bound at `:467`, lease-bound per the F2 fix, unchanged).
+
+</details>
 
 **DC:** `bash plugins/ship-flow/lib/__tests__/test-scheduler-runner-adapter.sh`
 
@@ -192,28 +227,25 @@ lease-bound per the F2 fix, unchanged).
 
 **Files:** `ship-flow-scheduler.sh`, `test-scheduler-runner-adapter.sh` (extend existing case).
 
+The `timeout` branch of `run_dispatch_action`'s failure path reads the entity's current status and
+adds a `checkpoint` object to the existing `blocked` event's detail (DC-4: not a new event value).
+
+<details>
+<summary>RED / GREEN mechanics</summary>
+
 **RED:** extend `run_tick_surfaces_timeout_as_blocked_case` (`:69-86`) with two new assertions:
-`'"checkpoint"'` and `'"resume_stage":"shape"'` present in `$OUT` (the fixture entity
-`eligible-entity` has `status: shape` in its frontmatter — confirmed by reading the fixture). Fails
-today (no `checkpoint` key emitted).
+`'"checkpoint"'` and `'"resume_stage":"shape"'` present in `$OUT` (fixture `eligible-entity` has
+`status: shape`). Fails today (no `checkpoint` key emitted).
 
 **GREEN:** in `run_dispatch_action`'s failure branch (`:427-434`), scope the new field to the
-`timeout` case only (matches design.md's explicit scoping — `run-error` stays unchanged):
-```
-timeout)
-  source="run-timeout"
-  local resume_stage
-  resume_stage="$(read_frontmatter_field "$path" status)"
-  detail="$(printf '{"source":"%s","receipt":%s,"checkpoint":{"resume_stage":%s}}' \
-    "$source" "$(json_str_or_null "$receipt")" "$(json_str_or_null "$resume_stage")")"
-  ;;
-*)
-  source="run-error"
-  detail="$(printf '{"source":"%s","receipt":%s}' "$source" "$(json_str_or_null "$receipt")")"
-  ;;
-```
-(replaces the single shared `emit_event` detail line at `:433` with a `case`-scoped `detail` var,
-then one `emit_event blocked "$slug" blocked "$source" "$detail"` call).
+`timeout` case only (matches design.md's explicit scoping — `run-error` stays unchanged): read
+`resume_stage="$(read_frontmatter_field "$path" status)"` and build
+`detail="$(printf '{"source":"%s","receipt":%s,"checkpoint":{"resume_stage":%s}}' ...)"` for the
+`timeout` case (replaces the single shared `emit_event` detail line at `:433` with a `case`-scoped
+`detail` var, then one `emit_event blocked "$slug" blocked "$source" "$detail"` call); the `*`
+(run-error) case keeps the original 2-field detail unchanged.
+
+</details>
 
 **DC:** `bash plugins/ship-flow/lib/__tests__/test-scheduler-runner-adapter.sh`
 
@@ -222,10 +254,15 @@ then one `emit_event blocked "$slug" blocked "$source" "$detail"` call).
 ## Task 7 — AC-4: `entity_in_backoff` + precedence-1/2 skip-continue
 
 **Files:** `ship-flow-scheduler.sh`, NEW
-`plugins/ship-flow/lib/__tests__/test-ship-flow-scheduler-backoff.sh`. No new fixtures needed — both
-cases reuse `prompt-captain-entity` + `eligible-entity` verbatim (mirrors
-`test-ship-flow-scheduler-reconcile.sh`'s `run_prompt_captain_case` fixture shape, per design.md's
-own pointer).
+`plugins/ship-flow/lib/__tests__/test-ship-flow-scheduler-backoff.sh`. No new fixtures needed (both
+cases reuse `prompt-captain-entity` + `eligible-entity` verbatim, mirroring
+`test-ship-flow-scheduler-reconcile.sh`'s fixture shape).
+
+`entity_in_backoff` derives "blocked within the last N seconds" purely from `--events-log`; both
+precedence loops `continue` past an in-backoff entity instead of ending the tick there.
+
+<details>
+<summary>RED / GREEN mechanics</summary>
 
 **RED — case 1 (head-block, the cited Wave-0 incident):** new `two_entity_workflow` helper (copies
 BOTH `prompt-captain-entity` and `eligible-entity` into one tmp dir, `git init -q`, mirrors
@@ -250,33 +287,16 @@ pre-fix (there's no regression to prove here yet) — its job is to prove the fi
 OVER-suppress once the window elapses; write it RED-relative-to-a-strawman-always-skip
 implementation, not RED-relative-to-today's-code.
 
-**GREEN:** add
-```
-entity_in_backoff() {
-  local slug="$1" events_log="$2" window="$3"
-  [ -n "$events_log" ] && [ -f "$events_log" ] || return 1
-  local line event ts ts_epoch now_epoch
-  line="$(grep "\"entity\":\"${slug}\"" "$events_log" | tail -1)"
-  [ -n "$line" ] || return 1
-  event="$(printf '%s' "$line" | sed -n 's/.*"event":"\([^"]*\)".*/\1/p')"
-  [ "$event" = "blocked" ] || return 1
-  ts="$(printf '%s' "$line" | sed -n 's/.*"ts":"\([^"]*\)".*/\1/p')"
-  ts_epoch="$(scheduler_lease_epoch "$ts")"
-  now_epoch="$(date -u +%s)"
-  [ $(( now_epoch - ts_epoch )) -lt "$window" ]
-}
-```
-near `read_frontmatter_field` (reuses `scheduler_lease_epoch` from the already-sourced
-`scheduler-lease.sh`, per DC-2/Rule 3 — no new store). In `cmd_tick`, add `local
-BACKOFF_WINDOW_SEC=3600`. In precedence-1's loop (`:340`), right after computing `slug`, add:
-```
-if [ -n "${EVENTS_LOG:-}" ] && entity_in_backoff "$slug" "$EVENTS_LOG" "$BACKOFF_WINDOW_SEC"; then
-  continue
-fi
-```
-before the `pr_val` read. In precedence-2's loop (`:363`), add a `slug="$(entity_slug_from_path
-"$path")"` line at the top (currently computed inline only at the `run_dispatch_action` call site)
+**GREEN:** add `entity_in_backoff <slug> <events-log> <window>` near `read_frontmatter_field` —
+tails the log for `<slug>`'s most recent event, returns true iff it's `blocked` and within
+`<window>`s of now (reuses `scheduler_lease_epoch` from the already-sourced `scheduler-lease.sh`,
+per DC-2/Rule 3 — no new store; implemented as committed — see `ship-flow-scheduler.sh`). In
+`cmd_tick`, add `local BACKOFF_WINDOW_SEC=3600`. In precedence-1's loop (`:340`), right after
+computing `slug`, add the `entity_in_backoff` guard (`continue` if true) before the `pr_val` read.
+In precedence-2's loop (`:363`), add a `slug="$(entity_slug_from_path "$path")"` line at the top
 and the same backoff-continue guard before `evaluate_entity`.
+
+</details>
 
 **DC:** `bash plugins/ship-flow/lib/__tests__/test-ship-flow-scheduler-backoff.sh`
 
@@ -286,6 +306,12 @@ and the same backoff-continue guard before `evaluate_entity`.
 
 **Files:** `com.spacedock.ship-flow-scheduler.tick.plist`, `test-ship-flow-scheduler-plist.sh`,
 `docs/ship-flow/l3-scheduler-tick/RUNBOOK.md`.
+
+Adds an `@USER_LOCAL_BIN@` placeholder to the tick plist's PATH, an install-time substitution step
+in RUNBOOK.md, and the matching test coverage.
+
+<details>
+<summary>RED / GREEN mechanics</summary>
 
 **RED:** add `assert_contains "tick plist: has @USER_LOCAL_BIN@ placeholder" '@USER_LOCAL_BIN@'
 "$TICK_PLIST"` (mirrors the existing `@CONTROLLER_WORKTREE@` assertion at `:77`). Add
@@ -301,6 +327,8 @@ RUNBOOK.md's install-step sed block (`RUNBOOK.md:73-76`) a fourth `-e` line:
 sentence noting `claude`/`spacedock` must resolve on this PATH for `--runner gh` to work
 (cross-refs AC-5's Wave-0 incident).
 
+</details>
+
 **DC:** `bash plugins/ship-flow/lib/__tests__/test-ship-flow-scheduler-plist.sh`
 
 ---
@@ -312,16 +340,16 @@ sentence noting `claude`/`spacedock` must resolve on this PATH for `--runner gh`
 | `docs/ship-flow/l3-scheduler-tick/design.md` §2 | UPDATE (one line) | `blocked` detail-fields table row gains optional `checkpoint:{resume_stage}` — cross-ref `../tick-hardening/design.md` AC-3, no prose duplication |
 | same, §6 | UPDATE (one line) | note optional `--tick-id` + launcher-spawn form on the adapter interface, cross-ref AC-1/AC-2 |
 | `docs/ship-flow/l3-scheduler-tick/RUNBOOK.md` | UPDATE | Task 8's substitution step; one-line note on AC-3 resume-from-checkpoint (`tail` the latest `run-timeout` event's `detail.checkpoint.resume_stage`); one-line note that the AC-1 delegation marker retires the old 30-min-receipt `decisions.md` heuristic |
-| `ROADMAP.md` (this worktree's copy) | UPDATE (Now-row only) | add `| tick-hardening | Tick hardening — delegation marker, launcher spawn, time-budget, blocked-backoff | plan |` to the Now section — this entity is committed, active work |
-| `ROADMAP.md` — fold of `scheduler-tick-delegation-marker` / `pipeline-timeout-checkpoint-event` Later rows | **SKIP here** | Those two rows exist ONLY on the separate `iamcxa/muscat-v1` branch's `ROADMAP.md` (confirmed: grepped this worktree's `ROADMAP.md`, zero matches for either todo name — the worktree branched off `origin/main`, which never had them). Fabricating them here just to immediately mark-folded would be pure churn against a history that never had them, and this worktree's branch cannot commit to `iamcxa/muscat-v1`. The fold is a cross-branch action — see Cut-list. |
-| `ARCHITECTURE.md` | SKIP | existing `l3-scheduler-tick` row (`ARCHITECTURE.md:144`) — D1/D2/D3/D4 invariants it states (carrier-swap boundary, no state of record, concurrency=1 lease, reverse-recovery reuse) all stay true after this hardening; no new architectural primitive added |
-| `INVARIANTS.md` | SKIP | shape.md parked a candidate invariant ("carrier-swap seam MUST stamp the delegation marker") without committing to it; design.md confirms no change; not re-opened here |
-| `PRODUCT.md` | SKIP | line 19's scheduler value proposition (unattended dispatch, human merge authority, deterministic rollup) is unchanged — this hardens reliability of an already-stated capability, adds no new one |
+| `ROADMAP.md` (this worktree's copy) | UPDATE (Now-row only) | add the tick-hardening row to the Now section — this entity is committed, active work |
+| `ROADMAP.md` — fold of `scheduler-tick-delegation-marker` / `pipeline-timeout-checkpoint-event` Later rows | **SKIP here** | Those two rows exist ONLY on the separate `iamcxa/muscat-v1` branch's `ROADMAP.md` (confirmed: grepped this worktree's `ROADMAP.md`, zero matches for either todo name). Cross-branch action — see Cut-list. |
+| `ARCHITECTURE.md` | SKIP | existing `l3-scheduler-tick` row invariants (carrier-swap boundary, no state of record, concurrency=1 lease, reverse-recovery reuse) all stay true after this hardening |
+| `INVARIANTS.md` | SKIP | shape.md parked a candidate invariant without committing to it; design.md confirms no change |
+| `PRODUCT.md` | SKIP | scheduler value proposition unchanged — this hardens reliability of an already-stated capability |
 | `README.md` (root) | SKIP | grepped: zero scheduler/launchd mentions; not a documented end-user surface |
 
-**DC:** `git diff` on the four touched doc files shows only the additions named above (no
-unrelated edits); `bash scripts/check-no-dangling.sh` and `bash scripts/check-version-triple.sh`
-both still pass (neither touches a version file or introduces a path reference).
+**DC:** `git diff` on the touched doc files shows only the additions named above (no unrelated
+edits); `bash scripts/check-no-dangling.sh` and `bash scripts/check-version-triple.sh` both still
+pass.
 
 ---
 
@@ -329,16 +357,14 @@ both still pass (neither touches a version file or introduces a path reference).
 
 - **AC-4 precedence-2 dispatch-repeat protection — implemented, not independently tested this
   round.** Task 7's GREEN wires `entity_in_backoff` into BOTH precedence-1 and precedence-2 per
-  design.md, but the two RED cases only exercise precedence-1 (the actual cited Wave-0 incident).
-  A dedicated precedence-2 case (a dispatch-eligible, no-`pr:` entity that was just blocked via
-  `run-error`, proving it's skipped in favor of a second eligible entity) needs one more new fixture
-  entity + gh-issue-env pair and is deferred as a follow-up test-only task — no cited live incident
+  design.md, but the two RED cases only exercise precedence-1 (the actual cited Wave-0 incident). A
+  dedicated precedence-2 case is deferred as a follow-up test-only task — no cited live incident
   makes it non-blocking for this entity's appetite.
 - **Exact `--plugin-dir` level** — design.md's own residual; Task 4 carries a one-line execute-time
-  probe, not a plan-time decision (needs a real `spacedock claude --help` + one-shot manual run).
+  probe, not a plan-time decision.
 - **`decisions.md` 30-min-receipt clause physical removal** — lives on `iamcxa/muscat-v1`, a
   different branch this worktree cannot commit to. FO-owned cleanup after this PR merges and AC-1
-  ships (design.md's own note).
+  ships.
 - **ROADMAP.md Later-row fold** (`scheduler-tick-delegation-marker`,
   `pipeline-timeout-checkpoint-event`) — same cross-branch reason as above; FO marks them folded on
   `iamcxa/muscat-v1` directly once this PR's AC-1/AC-3 land.
