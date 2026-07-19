@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# test-ship-flow-scheduler-eligibility.sh - fail-closed dual-key eligibility (AC-2)
+#
+# design.md §2/§3: an entity is `eligible` iff frontmatter status is shaped (not
+# draft, not terminal) AND the linked gh issue is OPEN with label `sd:approved`
+# AND a DoR mechanical pass AND no live worktree AND no open/merged PR. Any single
+# failed key fails closed: a `refusal` event, matching reason code, zero adapter
+# spawn (AC-2's "zero worker tokens").
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
+HELPER="${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh"
+FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/ship-flow-scheduler"
+
+PASS=0
+FAIL=0
+ERRORS=()
+
+record_pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
+record_fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); ERRORS+=("$1"); }
+
+assert_exit() {
+  local desc="$1" expected="$2" actual="$3"
+  if [ "$actual" = "$expected" ]; then record_pass "$desc"
+  else record_fail "$desc (expected exit ${expected}, got ${actual})"; fi
+}
+
+assert_contains() {
+  local desc="$1" pattern="$2" haystack="$3"
+  if printf '%s' "$haystack" | grep -qE "$pattern"; then record_pass "$desc"
+  else record_fail "$desc (missing pattern: ${pattern})"; fi
+}
+
+# run_capture <cmd...> — sets OUT / EXIT_CODE without tripping this file's own
+# error handling (nonzero exits are data here, not script failures).
+OUT=""
+EXIT_CODE=0
+run_capture() {
+  OUT="$("$@" 2>&1)"
+  EXIT_CODE=$?
+}
+
+# one_entity_workflow <entity-name> — copies a single fixture entity folder into
+# an isolated TMP workflow dir so each case scans exactly one candidate.
+one_entity_workflow() {
+  local entity="$1" dir
+  dir="$(mktemp -d)"
+  cp -R "${FIXTURE_ROOT}/workflow/${entity}" "${dir}/${entity}"
+  printf '%s\n' "$dir"
+}
+
+run_refusal_case() {
+  local desc="$1" entity="$2" expected_reason="$3"
+  local wf
+  wf="$(one_entity_workflow "$entity")"
+  run_capture "$HELPER" tick --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  rm -rf "$wf"
+  assert_exit "${desc}: tick exit 0 (refusal is a recorded outcome, not a fault)" 0 "$EXIT_CODE"
+  assert_contains "${desc}: emits refusal event" '"event":"refusal"' "$OUT"
+  assert_contains "${desc}: reason=${expected_reason}" "\"reason\":\"${expected_reason}\"" "$OUT"
+  assert_contains "${desc}: outcome=refused" '"outcome":"refused"' "$OUT"
+}
+
+run_dedup_case() {
+  local desc="$1" entity="$2" expected_reason="$3"
+  local wf
+  wf="$(one_entity_workflow "$entity")"
+  run_capture "$HELPER" tick --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  rm -rf "$wf"
+  assert_exit "${desc}: tick exit 0" 0 "$EXIT_CODE"
+  assert_contains "${desc}: no dispatch event" '"event":"(refusal|no-op)"' "$OUT"
+  assert_contains "${desc}: reason names the dedup key" "\"reason\":\"${expected_reason}\"" "$OUT"
+}
+
+run_eligible_case() {
+  local wf
+  wf="$(one_entity_workflow eligible-entity)"
+  run_capture "$HELPER" tick --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  rm -rf "$wf"
+  assert_exit "eligible entity: tick exit 0" 0 "$EXIT_CODE"
+  assert_contains "eligible entity: dispatch event emitted" '"event":"dispatch"' "$OUT"
+  assert_contains "eligible entity: names the entity" '"entity":"eligible-entity"' "$OUT"
+}
+
+echo "=== test-ship-flow-scheduler-eligibility.sh ==="
+echo ""
+
+if [ ! -x "$HELPER" ]; then
+  record_fail "helper exists and is executable (${HELPER})"
+else
+  record_pass "helper exists and is executable"
+  run_refusal_case "not-shaped" not-shaped-entity "not-shaped"
+  run_refusal_case "issue-closed" issue-closed-entity "issue-closed"
+  run_refusal_case "not-sd-approved" not-approved-entity "not-sd-approved"
+  run_dedup_case "worktree-exists dedup" worktree-exists-entity "worktree-exists"
+  run_dedup_case "pr-exists dedup" pr-exists-entity "pr-exists"
+  run_eligible_case
+fi
+
+echo ""
+echo "Results: ${PASS} passed, ${FAIL} failed"
+if [ ${FAIL} -gt 0 ]; then
+  echo "Failed assertions:"
+  for err in "${ERRORS[@]}"; do echo "  - $err"; done
+  echo ""
+  echo "Not all assertions passed"
+  exit 1
+fi
+echo "All assertions passed"
+exit 0
