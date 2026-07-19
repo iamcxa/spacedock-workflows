@@ -1,13 +1,13 @@
 ---
 title: Missing canonical mods — author or de-reference (both tiers)
-status: draft
+status: shape
 source: hackathon-2 Wave 2c (todo missing-canonical-mods-both-tiers; rra shape discovery)
-started:
+started: 2026-07-19T16:04:46Z
 completed:
 verdict:
 score:
 worktree:
-issue:
+issue: "#77"
 pr:
 ---
 
