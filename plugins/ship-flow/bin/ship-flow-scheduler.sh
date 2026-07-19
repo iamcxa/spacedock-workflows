@@ -87,6 +87,29 @@ read_frontmatter_field() {
   ' "$file"
 }
 
+# derive_timeout_sec <entity-path> <default> — AC-3a: an entity may declare a
+# generous <N>h<M>m / <N>h / <M>m appetite via frontmatter `time_budget`
+# (Rule-3 clean: canonical entity state, no new store). Absent/unparseable ->
+# returns <default> UNCHANGED (never invents its own number), so an explicit
+# --timeout the caller passed is preserved when the entity has no
+# time_budget; only the caller's own default (bumped separately in cmd_tick)
+# actually changes behavior for time_budget-less entities.
+derive_timeout_sec() {
+  local path="$1" default="$2" tb h=0 m=0
+  tb="$(read_frontmatter_field "$path" time_budget)"
+  [ -n "$tb" ] || { printf '%s' "$default"; return 0; }
+  if [[ "$tb" =~ ^([0-9]+)h([0-9]+)m$ ]]; then
+    h="${BASH_REMATCH[1]}"; m="${BASH_REMATCH[2]}"
+  elif [[ "$tb" =~ ^([0-9]+)h$ ]]; then
+    h="${BASH_REMATCH[1]}"
+  elif [[ "$tb" =~ ^([0-9]+)m$ ]]; then
+    m="${BASH_REMATCH[1]}"
+  else
+    printf '%s' "$default"; return 0
+  fi
+  printf '%s' $(( h * 3600 + m * 60 ))
+}
+
 # list_entities <workflow-dir> — one path per line, sorted by slug, folder-based
 # entities only (docs/ship-flow/<slug>/index.md — this plan's entity shape).
 list_entities() {
@@ -285,7 +308,13 @@ evaluate_entity() {
 
 cmd_tick() {
   local workflow_dir="" controller_worktree="" epic="" runner="fixture" runner_fixture=""
-  local timeout_sec=900 dry_run=no
+  # AC-3a: bumped from 900s -- this is the default ONLY for invocations that
+  # omit --timeout entirely (the production launchd plist's case; its
+  # ProgramArguments never pass --timeout). An explicit --timeout is
+  # unaffected; no test asserts the literal 900 (the only other
+  # "timeout_sec":900 in the repo is a static rollup fixture line, never a
+  # live tick run).
+  local timeout_sec=5400 dry_run=no
   GH_PROVIDER="gh"; GH_FIXTURE_DIR=""
   EVENTS_LOG=""
   PR_FIXTURE=""
@@ -412,6 +441,12 @@ run_dispatch_action() {
     return 0
   fi
 
+  # AC-3a: the entity's own declared time_budget (if any) overrides the
+  # incoming timeout_sec; absent/unparseable falls back to $timeout_sec
+  # UNCHANGED (so an explicit --timeout the caller passed is preserved).
+  local dispatch_timeout_sec
+  dispatch_timeout_sec="$(derive_timeout_sec "$path" "$timeout_sec")"
+
   if [ "$runner" = "fixture" ]; then
     local json
     json="$(cat "$runner_fixture")"
@@ -424,7 +459,7 @@ run_dispatch_action() {
     # already maps 0/124/1 -> success/timeout/error in its own JSON output.
     local tick_id_args=()
     [ -n "$tick_id" ] && tick_id_args=(--tick-id "$tick_id")
-    out="$("$RUNNER_ADAPTER" run --entity "$slug" --workdir "$controller_worktree" --timeout "$timeout_sec" "${tick_id_args[@]}" 2>&1)"
+    out="$("$RUNNER_ADAPTER" run --entity "$slug" --workdir "$controller_worktree" --timeout "$dispatch_timeout_sec" "${tick_id_args[@]}" 2>&1)"
     exit_class="$(printf '%s' "$out" | sed -n 's/.*"exit_class":"\([^"]*\)".*/\1/p')"
     sentinel="$(printf '%s' "$out" | sed -n 's/.*"sentinel":"\([^"]*\)".*/\1/p')"
     receipt="$(printf '%s' "$out" | sed -n 's/.*"receipt":"\([^"]*\)".*/\1/p')"
@@ -444,7 +479,7 @@ run_dispatch_action() {
 
   local detail
   detail="$(printf '{"runner":{"workdir":"%s","timeout_sec":%s,"exit_class":"%s","sentinel":%s,"receipt":%s},"pr":%s}' \
-    "$(json_escape "$controller_worktree")" "$timeout_sec" "$exit_class" "$(json_str_or_null "$sentinel")" "$(json_str_or_null "$receipt")" "$(json_str_or_null "$pr_from_sentinel")")"
+    "$(json_escape "$controller_worktree")" "$dispatch_timeout_sec" "$exit_class" "$(json_str_or_null "$sentinel")" "$(json_str_or_null "$receipt")" "$(json_str_or_null "$pr_from_sentinel")")"
   emit_event dispatch "$slug" ok "" "$detail"
 }
 

@@ -171,6 +171,39 @@ STUB
   assert_exit "preflight accepts spacedock-only PATH: exit 0 (not 3)" 0 "$EXIT_CODE"
 }
 
+run_tick_derives_timeout_from_time_budget_case() {
+  # AC-3a: an entity's declared time_budget (frontmatter) overrides the
+  # timeout used for its own dispatch. 2h30m -> 9000s.
+  local wf
+  wf="$(mktemp -d)"
+  cp -R "${FIXTURE_ROOT}/workflow/time-budget-entity" "${wf}/time-budget-entity"
+  run_capture "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" tick \
+    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  rm -rf "$wf"
+  assert_exit "derive timeout from time_budget: exit 0" 0 "$EXIT_CODE"
+  assert_contains "derive timeout from time_budget: timeout_sec=9000" '"timeout_sec":9000' "$OUT"
+}
+
+run_tick_defaults_timeout_without_time_budget_case() {
+  # AC-3a: no time_budget declared + no --timeout flag passed -> the
+  # generous 5400s default (cmd_tick's own compiled default, bumped from
+  # the prior 900s so omitted-flag production ticks get real headroom).
+  local wf
+  wf="$(mktemp -d)"
+  cp -R "${FIXTURE_ROOT}/workflow/eligible-entity" "${wf}/eligible-entity"
+  run_capture "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" tick \
+    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  rm -rf "$wf"
+  assert_exit "default timeout without time_budget: exit 0" 0 "$EXIT_CODE"
+  assert_contains "default timeout without time_budget: timeout_sec=5400" '"timeout_sec":5400' "$OUT"
+}
+
 echo "=== test-scheduler-runner-adapter.sh ==="
 echo ""
 
@@ -188,6 +221,8 @@ else
     run_tick_surfaces_timeout_as_blocked_case
     run_tick_threads_tick_id_case
     run_tick_preflight_accepts_spacedock_bin_case
+    run_tick_derives_timeout_from_time_budget_case
+    run_tick_defaults_timeout_without_time_budget_case
   else
     echo "  NOTE: bin/ship-flow-scheduler.sh not yet built — skipping tick-level blocked surfacing (covered again once T2 lands)"
   fi
