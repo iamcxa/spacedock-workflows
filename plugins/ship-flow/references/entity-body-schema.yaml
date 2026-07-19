@@ -466,7 +466,7 @@ stages:
         - name: design-skipped
           type: boolean
           default: false
-          description: "G14 (2026-04-29): set true by ship-shape Phase 8 only when affects_ui=false, domain is unset, design_required=false, contract_decision_required=false, and open_contract_decisions is empty — design intentionally bypassed, plan Step 1.6 short-circuits. When false (or absent), design-emitted fields below are required."
+          description: "G14 (2026-04-29; INVARIANTS Principle 11): set true by ship-design's Phase 0 trivial-pass only when affects_ui=false, domain is unset, design_required=false, contract_decision_required=false, and open_contract_decisions is empty — design ran a trivial-pass (NOT bypassed; the design stage always runs), plan Step 1.6 skips design-DC import. When false (or absent), design-emitted fields below are required."
           required: true
           mutually_exclusive_with: "design_constraints, render_fidelity_targets (when design-skipped=true, these MUST be empty/omitted)"
         - name: design_constraints
