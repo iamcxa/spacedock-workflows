@@ -45,6 +45,7 @@ substitution_smoke() {
   sed -e 's|@CONTROLLER_WORKTREE@|/tmp/ctrl|g' \
       -e 's|@SPACEDOCK_BIN@|/usr/local/bin/spacedock|g' \
       -e 's|@WORKFLOW_DIR@|/tmp/ctrl/docs/ship-flow|g' \
+      -e 's|@USER_LOCAL_BIN@|/Users/testuser/.local/bin|g' \
       "$file" > "$out"
   if grep -q '@[A-Z_]*@' "$out"; then
     record_fail "$desc (unsubstituted placeholder remains)"
@@ -75,6 +76,7 @@ else
   assert_contains "tick plist: StartInterval present" 'StartInterval' "$TICK_PLIST"
   assert_contains "tick plist: RunAtLoad present" 'RunAtLoad' "$TICK_PLIST"
   assert_contains "tick plist: has @CONTROLLER_WORKTREE@ placeholder" '@CONTROLLER_WORKTREE@' "$TICK_PLIST"
+  assert_contains "tick plist: has @USER_LOCAL_BIN@ placeholder" '@USER_LOCAL_BIN@' "$TICK_PLIST"
   assert_contains "rollup plist: StartCalendarInterval present" 'StartCalendarInterval' "$ROLLUP_PLIST"
   assert_contains "rollup plist: Hour 23 / Minute 55" '<integer>23</integer>' "$ROLLUP_PLIST"
   substitution_smoke "tick plist: placeholder substitution smoke" "$TICK_PLIST"
