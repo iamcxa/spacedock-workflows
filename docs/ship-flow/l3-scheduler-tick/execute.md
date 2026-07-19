@@ -115,6 +115,9 @@ RED commit.
 
 ## Full local gate (pre-handoff self-check)
 
+<details>
+<summary>Gate run outputs (raw)</summary>
+
 - Shell suite: full `lib/__tests__/test-*.sh` loop (119 files, `CI=true
   timeout 90 bash` per file, matching `.github/workflows/ship-flow-invariants.yml`)
   → 118/119 files pass. The one failure
@@ -143,6 +146,8 @@ RED commit.
   Flagging to the FO/captain rather than silently declaring the gate green or
   unilaterally editing verify.md/rewriting a commit outside this stage's
   remit.
+
+</details>
 
 ## Feedback Cycle 2 fixes
 Round-2 bounce scoped to exactly W1 + W2 (verify.md `## Deferred to TODO`); fix ONLY these two, no other item touched, full local gate re-run green below.
@@ -201,6 +206,9 @@ hypothesis handed in ("all 3 fail from missing git identity in `git init`
 fixture repos, CI-only") held for none of the three as originally framed —
 each had a distinct, directly-diagnosed root cause, confirmed by reproducing
 RED first (all 3 failed in a plain local shell too, not just CI):
+
+<details>
+<summary>Per-test root causes, RED reproductions, and fix evidence (raw)</summary>
 
 - **`test-scheduler-runner-adapter.sh` — CI-env cause, not git identity.**
   `cmd_tick`'s `--runner gh` preflight (`command -v claude`) fired even when
@@ -279,3 +287,6 @@ global git identity, and `claude` stripped from `PATH` — both green); full
 2 pre-existing grandfathered WARNs, no new FAILs); `check-no-dangling.sh`
 PASS; `check-version-triple.sh` PASS; `git diff --check` clean; shellcheck
 clean on all touched/added files.
+
+
+</details>
