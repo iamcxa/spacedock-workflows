@@ -162,3 +162,40 @@ orphan-header ERRORs + C1 pre-mortem FAIL), nothing silently fixed. Two deviatio
 bad-news-early: corpus exit measured 1→1 (not 0→1) because this entity's own plan.md already trips
 C15; and the archived-corpus suite test embeds that corpus run, so it is RED by design — verify
 should read both as the documented AC-2 end-state, not regressions.
+
+## Stage Report: verify
+
+- DONE: Independent re-run, not relay — DC-18 fixture + full local gate (foreground, bounded)
+  DC-18 4/4 GREEN re-run fresh; dual-env gate re-run (Env1 128/129 shell+79/79 node+2 exit0; Env2
+  127/129 shell+79/79 node) — see verify.md ## Independent Quality Gate Re-Run.
+- DONE: Per-AC evidence citations
+  AC-1/2/3 all VERIFIED with file:line citations in verify.md ## Per-AC Evidence.
+- DONE: Verify AC-2 surfacing table matches actual run output; confirm nothing silently fixed
+  Independently reverted+reran the before/after diff (not trusted from execute.md) — 25 ERRORs/1
+  FAIL C1/2 WARN/5 grandfather WARNs all reproduced exactly; git status/diff --check clean throughout.
+- DONE: verify.md C11/C12/C15 conformant from the start
+  `## Panel Coverage` (C11) + `## Deferred to TODO` (C12) present exactly once each (confirmed via
+  live check-invariants.sh run: `OK C11`/`OK C12`); body 120 lines (C15 cap 120, confirmed `OK` — not
+  flagged in the live run's FAIL list).
+- DONE: Proportional review — panel_coverage declared honestly, cross-model challenge scoped to diff
+  `panel_coverage: minimal` (DIFF_LINES=136, all SCOPE_* false, STACK=unknown — no Claude subagent
+  panel dispatched). Codex cross-model: 2 attempts DEGRADED (bootstrap self-direction, exit 124), 3rd
+  attempt scoped correctly succeeded (exit 0, NOT degraded) — see verify.md ## Review Findings.
+- DONE: BLOCKING findings route_to execute; NITs per auto-fix rules
+  0 BLOCKING found. 2 informational findings (predicate not frontmatter-scoped; duplicate-status-line
+  first-match-wins) — both pre-existing/unchanged-behavior, empirically zero-hit today, deferred to
+  TODO, not routed to execute.
+
+### Summary
+
+Independently re-ran everything execute.md claimed rather than relaying it: DC-18 fixture (4/4 green),
+dual-env full gate, and the AC-2 before/after corpus diff (reverted-and-restored the predicate,
+confirmed the 25-ERROR/1-FAIL-C1/2-WARN/5-grandfather-WARN surfacing line-for-line, tree clean
+throughout). A live check-invariants.sh run confirms verify.md itself passes C11/C12/C15. Proportional
+review for this S-size, bash-only, 1-line-predicate diff: no multi-specialist Claude panel (scope
+flags all false), but a real scoped cross-model challenge via codex — first two attempts degraded
+(codex's own bootstrap self-directed into full-repo exploration instead of the scoped review), third
+attempt with a stricter no-bash prompt succeeded and surfaced 2 informational findings, both confirmed
+pre-existing/zero-hit and deferred rather than blocking. Verdict: PASSED. Flag for FO: C13
+(fo-receipt-on-proceed) will now fail on this entity until Step 6.0 writes fo-receipts.md — expected,
+FO-owned, out of this stage's scope.
