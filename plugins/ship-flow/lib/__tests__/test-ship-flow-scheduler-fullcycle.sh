@@ -48,11 +48,12 @@ write_fixture_status_bin() {
   cat > "$bin" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-workflow_dir=""; cmd=""; ref=""; slug=""
+workflow_dir=""; include_archived=no; cmd=""; ref=""; slug=""
 [ "${1:-}" = status ] && shift
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --workflow-dir) workflow_dir="$2"; shift 2 ;;
+    --archived) include_archived=yes; shift ;;
     --resolve) cmd=resolve; ref="$2"; shift 2 ;;
     --set) cmd=set; slug="$2"; shift 2; break ;;
     --archive) cmd=archive; slug="$2"; shift 2 ;;
@@ -71,9 +72,14 @@ update_frontmatter_field() {
 }
 case "$cmd" in
   resolve)
-    path="${workflow_dir}/${ref}/index.md"
+    raw="${ref#archive:}"
+    if [ "$include_archived" = yes ]; then
+      path="${workflow_dir}/_archive/${raw}/index.md"
+    else
+      path="${workflow_dir}/${raw}/index.md"
+    fi
     [ -f "$path" ] || exit 1
-    printf 'slug=%s path=%s\n' "$ref" "$path"
+    printf 'slug=%s path=%s\n' "$raw" "$path"
     ;;
   set)
     path="${workflow_dir}/${slug}/index.md"

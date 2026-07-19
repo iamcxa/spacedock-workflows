@@ -1,6 +1,6 @@
 ---
 title: Fullcycle child fixture entity (next-ready target)
-status:
+status: draft
 source: fixture
 started:
 completed:

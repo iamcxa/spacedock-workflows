@@ -165,13 +165,13 @@ gh_pr_state() {
 # Eligibility (design.md §2/§3, dual-key + DoR + dedup, fail-closed)
 # ---------------------------------------------------------------------------
 
-TERMINAL_STATUSES=" done "
-
+# Whitelist, fail-closed (AC-2): empty/draft (pre-shape) and done (terminal)
+# are not shaped, and neither is any unrecognized status value.
 is_shaped() {
-  local status="$1"
-  [ -n "$status" ] || return 1
-  case "$TERMINAL_STATUSES" in *" ${status} "*) return 1 ;; esac
-  return 0
+  case "$1" in
+    shape|design|plan|execute|verify|review|ship) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # dor_pass <entity-dir> — narrowed mechanical check (design.md leaves the exact
@@ -273,7 +273,10 @@ cmd_tick() {
   # shellcheck disable=SC2064
   trap "scheduler_lease_release '$controller_worktree'" EXIT
 
-  # --- Precedence 1: reconcile (a merged PR exists) ---
+  # --- Precedence 1: reconcile (a merged PR exists, or a PR that closed
+  # without merging needs a captain prompt — anything OTHER than "still
+  # legitimately open" is reconcile-worthy; an OPEN PR is skipped here, it is
+  # not yet actionable) ---
   local path slug pr_val pr_state
   for path in $(list_entities "$workflow_dir"); do
     slug="$(entity_slug_from_path "$path")"
@@ -281,7 +284,7 @@ cmd_tick() {
     [ -n "$pr_val" ] || continue
     [ "$(read_frontmatter_field "$path" status)" != "done" ] || continue
     pr_state="$(gh_pr_state "$slug" "$pr_val")"
-    if [ "$pr_state" = "MERGED" ]; then
+    if [ "$pr_state" != "OPEN" ]; then
       run_reconcile_action "$path" "$slug" "$dry_run" "$workflow_dir"
       return 0
     fi
@@ -318,7 +321,7 @@ cmd_tick() {
   fi
 
   # --- Precedence 3: advance (recompute readiness), else no-op ---
-  if [ -n "$epic" ] && [ -x "$DAG_WAVES" ]; then
+  if [ -n "$epic" ] && [ -f "$DAG_WAVES" ]; then
     run_advance_action "$workflow_dir" "$epic"
     return 0
   fi
@@ -374,8 +377,19 @@ run_reconcile_action() {
   local path="$1" slug="$2" dry_run="$3" workflow_dir="$4"
   local out reconciler_exit verdict reason detail_str
 
+  # Pre-read: on PROCEED the reconciler archives the entity (the folder moves
+  # to _archive/), so any frontmatter needed after the call must be read now.
+  local pr_val parent_pitch
+  pr_val="$(read_frontmatter_field "$path" pr)"
+  parent_pitch="$(read_frontmatter_field "$path" parent_pitch)"
+
+  local provider_args=(--pr-provider gh)
+  if [ -n "${PR_FIXTURE:-}" ]; then
+    provider_args=(--pr-provider fixture --pr-fixture "$PR_FIXTURE")
+  fi
+
   out="$(STATUS_BIN="${STATUS_BIN:-}" "$RECONCILER" --workflow-dir "$workflow_dir" --entity "$slug" \
-    --pr-provider fixture --pr-fixture "${PR_FIXTURE}" 2>&1)"
+    "${provider_args[@]}" 2>&1)"
   reconciler_exit=$?
   verdict="$(printf '%s\n' "$out" | awk -F= '$1=="verdict"{print $2; exit}')"
   reason="$(printf '%s\n' "$out" | awk -F= '$1=="reason"{print $2; exit}')"
@@ -386,25 +400,84 @@ run_reconcile_action() {
     return 0
   fi
 
-  local pr_val
-  pr_val="$(read_frontmatter_field "$path" pr)"
-  detail_str="$(printf '{"pr":%s,"reconciler_verdict":"%s","terminal_state":"reconciled"}' "$(json_str_or_null "$pr_val")" "${verdict:-PROCEED}")"
+  if [ "$reconciler_exit" != "0" ] || [ "$verdict" != "PROCEED" ]; then
+    # Fail closed: REJECT (exit 2) or a crashed/partial reconciler run is
+    # never treated as a successful reconcile (Rule 4: no retry — terminal
+    # blocked, visible in the morning report).
+    detail_str="$(printf '{"source":"reconciler-error","receipt":null,"reconciler_reason":%s}' "$(json_str_or_null "${reason:-exit-${reconciler_exit}}")")"
+    emit_event blocked "$slug" blocked reconciler-error "$detail_str"
+    return 0
+  fi
+
+  detail_str="$(printf '{"pr":%s,"reconciler_verdict":"PROCEED","terminal_state":"reconciled"}' "$(json_str_or_null "$pr_val")")"
   emit_event reconcile "$slug" ok "" "$detail_str"
 
-  local parent_pitch
-  parent_pitch="$(read_frontmatter_field "$path" parent_pitch)"
-  if [ -n "$parent_pitch" ] && [ -x "$DAG_WAVES" ]; then
+  if [ -n "$parent_pitch" ] && [ -f "$DAG_WAVES" ]; then
     run_advance_action "$workflow_dir" "$parent_pitch"
   fi
 }
 
+# emit_epic_tsv_line <file> <epic> — one "id<TAB>status<TAB>deps" line if the
+# file's entity belongs to the epic. The frontmatter parse is copied VERBATIM
+# from dag-waves.sh emit_from_workflow (same keys, both depends-on/depends_on,
+# inline + block + scalar forms) — duplicated rather than patched in because
+# the plan pins dag-waves.sh itself unchanged, and its --from-workflow mode
+# cannot see _archive/: a just-reconciled parent has moved there, and without
+# its done row the child's depends-on fails dag-waves' fail-closed closure
+# check (exit 3). The readiness COMPUTATION still runs inside dag-waves via
+# its documented --stdin mode; only the corpus read lives here.
+emit_epic_tsv_line() {
+  local f="$1" epic="$2"
+  awk -v epic="$epic" '
+    BEGIN { infm=0; id=""; st=""; deps=""; parent=""; indep=0 }
+    /^---[[:space:]]*$/ { infm++; if (infm==2) exit; next }
+    infm!=1 { next }
+    /^id:/                { v=$0; sub(/^id:[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); id=v; next }
+    /^status:/            { v=$0; sub(/^status:[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); st=v; next }
+    /^(parent_pitch|parent):/ { v=$0; sub(/^[a-z_]+:[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); parent=v; next }
+    /^depends[-_]on:[[:space:]]*\[/ { v=$0; sub(/^depends[-_]on:[[:space:]]*\[/,"",v); sub(/\].*$/,"",v); gsub(/["'\'' ]/,"",v); deps=v; next }
+    /^depends[-_]on:[[:space:]]*$/  { indep=1; next }
+    /^depends[-_]on:[[:space:]]*[^[:space:]]/ {
+      v=$0; sub(/^depends[-_]on:[[:space:]]*/,"",v); sub(/[[:space:]]*$/,"",v)
+      if (v=="none" || v=="[]" || v=="null" || v=="~") { deps=""; next }
+      gsub(/["'\'' ]/,"",v); deps=v; next
+    }
+    indep==1 && /^[[:space:]]*-[[:space:]]*/ { v=$0; sub(/^[[:space:]]*-[[:space:]]*/,"",v); gsub(/["'\'' ]/,"",v); deps=(deps=="")?v:(deps","v); next }
+    indep==1 { indep=0 }
+    END {
+      if (parent==epic && id!="") printf "%s\t%s\t%s\n", id, st, deps
+    }
+  ' "$f"
+}
+
 run_advance_action() {
   local workflow_dir="$1" epic_id="$2"
-  local ready_line next detail
-  ready_line="$("$DAG_WAVES" --ready --from-workflow "$workflow_dir" --epic "$epic_id" 2>/dev/null || true)"
-  next="$(printf '%s\n' "$ready_line" | awk '{print $1}')"
-  local ready_json
-  ready_json="$(printf '%s' "$ready_line" | awk '{ for (i=1;i<=NF;i++) printf "%s\"%s\"", (i>1?",":""), $i }')"
+  local f line tsv="" map=""
+  for f in "$workflow_dir"/*/index.md "$workflow_dir"/_archive/*/index.md; do
+    [ -f "$f" ] || continue
+    line="$(emit_epic_tsv_line "$f" "$epic_id")"
+    [ -n "$line" ] || continue
+    tsv="${tsv}${line}
+"
+    map="${map}${line%%$'\t'*} $(entity_slug_from_path "$f")
+"
+  done
+
+  local ready_line=""
+  if [ -n "$tsv" ]; then
+    ready_line="$(printf '%s' "$tsv" | bash "$DAG_WAVES" --ready --stdin 2>/dev/null || true)"
+  fi
+
+  # dag-waves speaks entity ids; the event schema (design.md §2) speaks slugs.
+  local ready_slugs="" rid slug
+  for rid in $ready_line; do
+    slug="$(printf '%s' "$map" | awk -v id="$rid" '$1==id{print $2; exit}')"
+    ready_slugs="${ready_slugs}${ready_slugs:+ }${slug:-$rid}"
+  done
+
+  local next ready_json detail
+  next="$(printf '%s\n' "$ready_slugs" | awk '{print $1}')"
+  ready_json="$(printf '%s' "$ready_slugs" | awk '{ for (i=1;i<=NF;i++) printf "%s\"%s\"", (i>1?",":""), $i }')"
   detail="$(printf '{"ready_set":[%s],"dispatched":%s}' "$ready_json" "$(json_str_or_null "$next")")"
   emit_event advance "${next:-}" ok "" "$detail"
 }
