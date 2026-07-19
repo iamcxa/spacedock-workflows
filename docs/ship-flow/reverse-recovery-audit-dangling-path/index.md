@@ -1,6 +1,6 @@
 ---
 title: Fix dangling reverse-recovery-audit adopter-local mod reference + regress-guard
-status: plan
+status: execute
 source: todo reverse-recovery-audit-dangling-path (pitch 5) + captain 票ok 2026-07-19 (L3 tick real-proof ticket)
 started: 2026-07-19T02:37:40Z
 completed:
