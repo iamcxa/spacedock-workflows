@@ -39,6 +39,9 @@ script (see T3's fixture-drivability note — sourcing today's `check-no-danglin
 would hit its unconditional bottom-of-file `exit 0/1` and corrupt the test run, not just fail
 one assertion).
 
+<details>
+<summary>T1 fixture spec — harness structure, 9-case table, constraint (d) derivation (raw evidence; collapsed per Principle 8 / C15)</summary>
+
 **Structure** (matches `test-merged-pr-closeout-reconciler.sh` conventions — `PASS`/`FAIL`/`ERRORS`,
 `record_pass`/`record_fail`, `assert_exit`):
 
@@ -83,6 +86,8 @@ file itself). Exclusion rule: skip a match when the scanning file's repo-relativ
 `plugins/ship-flow/_mods/<name>.md` for the very `<name>` captured in that match. Verified via case 8
 above and required for case 9 (real-repo green) to hold — dropping it leaves one violation on the
 real repo even after Δ1/Δ2/Δ3, breaking AC-2.
+
+</details>
 
 **TDD contract**:
 - `red_command`: `CI=true timeout 90 bash plugins/ship-flow/lib/__tests__/test-check-no-dangling.sh`
@@ -131,6 +136,9 @@ reverse-recovery-audit mod ref to plugin-canonical path (AC-1)` — pathspec bot
 **File**: `scripts/check-no-dangling.sh` only (extends the existing 177-line script; the 8 existing
 denylist patterns and `--self-test` mode are untouched).
 
+<details>
+<summary>T3 fixture-drivability infra + resolver logic spec (raw evidence; collapsed per Principle 8 / C15)</summary>
+
 **Fixture-drivability infra (resolves design's open "must either…or…" choice):**
 1. Wrap the existing "Normal run" section (current lines 159-177: the `for label in
    "${PATTERN_ORDER[@]}"; do run_pattern_check …; done` loop through the final `exit`) in
@@ -166,6 +174,8 @@ denylist patterns and `--self-test` mode are untouched).
   workflow override exists`, `if the repo has`, `otherwise the plugin copy`, `adopter override`, or
   the bare token `override`.
 - VIOLATION iff cond1 AND cond2 AND cond3 all hold (cond-d already short-circuited self-refs).
+
+</details>
 
 **TDD contract**:
 - `red_command`: `CI=true timeout 90 bash plugins/ship-flow/lib/__tests__/test-check-no-dangling.sh`
