@@ -1,12 +1,12 @@
 ---
 title: Design-taste learning loop — captain UAT verdicts to ratified per-repo canon
-status: shape
+status: design
 source: hackathon-2 Wave 3 (todo design-taste-learning-loop; captain distill-not-depend constraint)
 started: 2026-07-19T17:31:46Z
 completed:
 verdict:
 score:
-worktree:
+worktree: .worktrees/spacedock-ensign-design-taste-learning-loop
 issue: "#78"
 pr:
 ---
