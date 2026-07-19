@@ -594,7 +594,7 @@ Use grep-friendly `key: value` lines:
 - Atomic writer: `plugins/ship-flow/lib/shape-confirm.sh` (`--layout=folder` lands Wave 5 of #085).
 - Rabbit-hole capture: `plugins/ship-flow/skills/add-todos/SKILL.md`.
 - Architecture-canon mod: `docs/ship-flow/_mods/architecture-canon.md`.
-- Reverse-recovery audit mod (brownfield: assume the abstraction exists, classify with evidence, only greenfield confirmed MISSING): `docs/ship-flow/_mods/reverse-recovery-audit.md`; plugin-canonical copy at `plugins/ship-flow/_mods/reverse-recovery-audit.md`.
+- Reverse-recovery audit mod (brownfield: assume the abstraction exists, classify with evidence, only greenfield confirmed MISSING): `plugins/ship-flow/_mods/reverse-recovery-audit.md` (plugin-canonical); adopter override `docs/ship-flow/_mods/reverse-recovery-audit.md` when present.
 - Issue-anchor guard mod: `plugins/ship-flow/_mods/issue-anchor-guard.md`.
 - Layer A: `superpowers:brainstorming` (Mode B), `superpowers:writing-skills` (Mode C).
 - Principle 6: `plugins/ship-flow/INVARIANTS.md` (context continuity + 3-layer architecture + cross-review).
