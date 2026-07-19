@@ -128,3 +128,17 @@ Independent re-run confirms execute's quality-gate numbers exactly (118/118 shel
   captain_decision: fix
   routed_at: 2026-07-19T09:05:55Z
   verify_artifact: verify.md@07b726c
+
+## Stage Report: execute (cycle 2)
+
+- DONE: TDD evidence discipline: T1 RED fixture suite is committed with OBSERVED red output before any implementation commit; every T2-T6 commit cites its green run in execute.md; deviations from plan.md get a one-line rationale, never silent.
+  Each of F1-F4 got its own RED commit (observed failing) before its fix commit: F1 825bf62→11d4ce0, F2 a61cbd8→c8b70e6, F4 22e1145→cf83300, F3 abbe540→b2dbb66 (F3's "fix" was fixture-only — no production code changed, see execute.md). Green runs + shellcheck cleanliness cited in execute.md's "Feedback Cycle 1 fixes" section.
+- DONE: Full local gate before handoff: shell suite + node tests + check-invariants + check-no-dangling + check-version-triple all green in the worktree, git diff --check clean — the execute stage def's pre-handoff self-check is the handoff blocker.
+  Shell suite 118/119 (full 119-file loop, CI=true timeout 90 bash per file); node 79/79; check-no-dangling PASS; check-version-triple PASS; git diff --check clean. check-invariants exits 1 (C11/C12/C14/C15) — verified byte-identical at commit 0a053ec (the pre-cycle-2 dispatch point, before any F1-F4 work), so pre-existing and out of this stage's scope: C11/C12/C15 need verify.md edits (off-limits per this dispatch's own instructions), C14 flags the FO's own dispatch commit grammar (not authored by this ensign). Surfaced explicitly in execute.md rather than silently claimed green.
+- DONE: T7 boundary: the fixture full-cycle proof runs inside execute; the LIVE single-entity proof (tick dispatches the reverse-recovery-audit-dangling-path entity, issue #69) is FO-owned at H7 from the project root — do NOT hand-run /ship on that entity from inside execute.
+  Unchanged from cycle 1: no /ship run on #69 from this worktree; LIVE proof remains FO-owned.
+
+### Summary
+
+Fixed all 4 verify findings with RED-before-fix TDD evidence per finding: F1 (dedup now also checks a live worktree directory + a live gh lookup keyed by branch, closing the crash-before-frontmatter-write window), F2 (lease reclaim is now liveness-only — never age alone — plus an ownership token on release, and the previously-unbounded reconciler call is now wrapped in `timeout`), F3 (the fullcycle test's leg 3 now proves a real dispatch event for a genuinely-shaped child, fixture-only — no production code needed since the existing dispatch-precedence scan already handles a truly-eligible entity), F4 (an UNKNOWN gh state now short-circuits to a `no-op reason=gh-state-unknown` warning instead of funneling into the reconciler as a spurious PROMPT_CAPTAIN). design.md and RUNBOOK.md updated where the fixes changed a documented contract (lease semantics, no-op reason vocabulary). Full local gate is green except one pre-existing, out-of-my-scope check-invariants gap (verify.md content + an FO dispatch-commit grammar issue) — verified present before this cycle's work started and reported transparently rather than fixed by crossing an explicit boundary or silently declared clean.
+
