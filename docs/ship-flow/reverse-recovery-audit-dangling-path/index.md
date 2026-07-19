@@ -8,7 +8,7 @@ verdict:
 score:
 worktree:
 issue: "#69"
-pr:
+pr: "#71"
 ---
 
 ship-shape/SKILL.md:597 and ship-plan/SKILL.md:502 reference adopter-local
