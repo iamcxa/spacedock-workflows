@@ -58,3 +58,27 @@ Verified by: dual-env run output cited.
 ### Summary
 
 Shaped as EXISTS_BROKEN seam-hardening (reverse-recovery layer-trace: all five seams exist, none MISSING → no greenfield, no new canonical store). AC-2 probe run live during shape resolved the one open design decision — the spacedock launcher supports headless `-p` passthrough with a parseable exit, so AC-2 takes the launcher path and design is trivial-pass. Each mechanism AC is paired to the specific Wave-0 incident it prevents; typed DCs, ROADMAP now-row intent (fold two Later todos), and canonical-doc impact (RUNBOOK + scheduler design authority; no new ARCHITECTURE section) are handed off to design.
+
+## Stage Report: design
+
+- DONE: design.md fixes the concrete deltas for all 6 ACs against the REAL origin/main files (adapter, tick, tick plist, l3 events schema)
+  `design.md` written; every delta cites file:line — AC-1 delegation marker (`scheduler-runner-adapter.sh:64` prompt + `:40,54-58` `--env`; tick `--tick-id` from `:322`), AC-2 launcher spawn, AC-3 timeout+checkpoint, AC-4 backoff (`ship-flow-scheduler.sh:355-357` root), AC-5 plist PATH (`…tick.plist:31`).
+- DONE: delegation marker env+prompt shape
+  Optional `--tick-id` → `SHIP_FLOW_SCHEDULER_TICK_ID` on child (both branches, testable) + a `/ship <entity>` delegation prompt line naming tick_id/receipt; consumer = spawned FO stamps its stage-entry receipt, retiring the 30-min heuristic.
+- DONE: launcher spawn command line + raw fallback
+  Decided `--plugin-dir` over `--skip-compat-check` — `spacedock claude --help` (v0.25.0, verified) says `--plugin-dir` relaxes the version gate AND loads the worktree's own plugin checkout; resolves shape residual (a) without deferral. Command: `${SPACEDOCK_BIN:-spacedock} claude "$SHIP_PROMPT" --plugin-dir "$WORKDIR/plugins/ship-flow" -- -p --output-format text`. Raw `claude -p` documented as fallback (never silent).
+- DONE: timeout derivation from time_budget (default when absent)
+  `derive_timeout_sec` reads optional frontmatter `time_budget` (`<N>h<M>m`→sec), generous default 5400s; DC-4 checkpoint = extend `blocked` detail with `checkpoint.resume_stage` (keeps one-event-per-tick + rollup forward-compat), NOT a new event value.
+- DONE: blocked-backoff derivation (from events/receipts — NO new canonical store, Rule 3)
+  `entity_in_backoff` reads `events.jsonl` only (reuses `scheduler_lease_epoch`); precedence-1 `continue` instead of `return 0` fixes the head-block; DC-3 skip-past ≠ retry held; window default 3600s.
+- DONE: plist PATH fix
+  `@USER_LOCAL_BIN@` placeholder prepended to tick plist PATH + install-time substitution (DC-5: no hardcoded `/Users/kent`; launchd cannot expand `$HOME`).
+- DONE: Name the test surfaces per AC (existing test-*.sh extended vs new fixtures)
+  AC-1/2/3 → extend `test-scheduler-runner-adapter.sh` (+ hermetic `--print-spawn` mode); AC-4 → NEW `test-ship-flow-scheduler-backoff.sh`; AC-5 → extend `test-ship-flow-scheduler-plist.sh`; AC-6 → three CI-sensitive tests named (adapter, backoff/tick-spawn, reconcile/fullcycle git-identity).
+- DONE: respect the ten hardening hard rules from the l3 shape
+  Rule 3 (no new store — backoff/checkpoint event-derived), Rule 4 (no retry — skip-past), Rule 10 (dumb invoker — DC-1 held, tick passes opaque id only) all preserved; DC resolution table in design.md.
+
+### Summary
+
+Contract-bearing design (not trivial-pass): schema field (`checkpoint.resume_stage`), adapter CLI surface (`--tick-id`, `--print-spawn`), and plist template all change. The one shape-residual open decision (AC-2 version-gate mode) is resolved in design against verified `spacedock claude --help` evidence — `--plugin-dir` beats `--skip-compat-check` because it loads the controller-worktree's own plugin checkout. DC-4 (checkpoint) decided in-place (extend `blocked` detail) to hold the one-event-per-tick + rollup-forward-compat contracts. Four items parked as tunables/execute-probes; zero new captain decisions.
+
