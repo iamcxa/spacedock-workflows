@@ -1,148 +1,130 @@
-# Tick hardening — Verify (cycle 1)
+# Tick hardening — Verify (cycle 2, final)
 
-Independent re-verification of execute.md's 9-task diff (`97cb9b5..64ae2f6` +
-`9a28831` fix + `9312242`/report commits). Re-ran every gate fresh in this
-worktree rather than trusting execute.md's self-report; found real regressions
-execute.md's own dual-env-green claim did not surface.
+Cycle 1 (verify.md@856b4cf) VETO'd on three BLOCKING findings routed to
+execute. Feedback cycle 1 landed three atomic fixes (`9f8957c` B2/B3,
+`3a29309` B1, `6ee6867` W1) + docs (`379c8b3`/`019e723`). This cycle
+independently re-verifies each fix firsthand — RED re-proven against the
+pre-fix source, GREEN confirmed, live PoC re-run — not taken on the worker's
+self-report. All three BLOCKING findings are genuinely fixed. **Round cap
+spent**: no new cycles; anything new beyond bounce scope would go
+PROMPT_CAPTAIN (nothing did).
 
-## Independent Quality Gate Re-Run
+## Independent Re-Verification
 
 <details>
-<summary>Full re-run detail</summary>
+<summary>Firsthand fix re-proof detail</summary>
 
-- 9 scheduler files, NORMAL env: adapter 33/33, backoff 8/8, reconcile 16/16,
-  fullcycle 8/8, eligibility 34/34, idempotence 11/11, plist 11/11, report
-  10/10, rollup 8/8 — 139/139, all exit 0.
-- CI-sim (4 CI-sensitive files): plan.md's literal `PATH=/usr/bin:/bin` recipe
-  is NOT reproducible on this macOS box — `timeout` (GNU coreutils) lives
-  under `/opt/homebrew/bin`, absent from `/usr/bin:/bin`, so the literal
-  recipe false-fails 22/33+ across all four files (pre-existing repo-wide
-  property, not introduced by this diff — real CI is `ubuntu-latest`, which
-  ships `/usr/bin/timeout` natively). Rebuilt a faithful sim: an isolated
-  PATH dir holding only a `timeout` symlink + `/usr/bin:/bin`, confirmed
-  `claude`/`spacedock` both absent — adapter 33/33, backoff 8/8, reconcile
-  16/16, fullcycle 8/8, matching execute.md's claim exactly.
-- Full suite: 130/130 files, 129 within the 90s CI cap;
-  `test-merged-pr-closeout-reconciler.sh` re-run at 300s → 198/198 (untouched
-  by this diff, confirmed via `git diff --stat`). node 79/79.
-  `check-invariants.sh` exit 0 (C15 OK post-fix). `check-no-dangling.sh` PASS
-  (8 patterns). `check-version-triple.sh` PASS. `shellcheck` 0.11.0 clean on
-  all 6 changed `.sh` files + the fixture stub. `git diff --check` clean.
-- Deviation #1 (plan.md C15 collapse) spot-checked: Task/DC/exact-command
-  heading count identical before/after (19=19) — reformat only, no content
-  dropped. Deviation #2 (ROADMAP wording) spot-checked: entity has since
-  advanced past `execute` to `verify`, so the row is one stage stale again —
-  same staleness pattern `7-review-surface-shape-not-plan`'s row already
-  shows; FO-owned hygiene, not this diff's contract.
+- **B1 injection PoC re-run** (the cycle-1 catch): `--entity
+  'foo$(touch /tmp/PWNED_VERIFY)'` through the real adapter via a stub
+  `$SPACEDOCK_BIN` → file NOT created; the metacharacter string reached the
+  stub as a single literal argv element (echoed verbatim). Four more vectors
+  (`;`, backtick, `&&`, `|`) all neutralized. Root cause gone: `SPAWN_ARGV`
+  array exec'd directly (adapter.sh:110,142), `bash -c` only on the
+  test-author-controlled `SHIP_FLOW_SCHEDULER_RUNNER_CMD` seam.
+- **B2/B3 edge cases re-run firsthand** (default 5400): `0m`→5400, `0h`→5400
+  (fallback, no `timeout 0` disable), `08m`→480, `09h`→32400, `2h09m`→7740
+  (base-10, no octal crash), regression `2h30m`→9000, absent→5400. Root
+  cause gone: `10#` forced base-10 + zero-total falls back to default
+  (ship-flow-scheduler.sh:110-118); stale N1 comment corrected.
+- **W1 re-run firsthand**: claude-only PATH (no spacedock) now fails the
+  `--runner gh` preflight closed (exit 3), matching `SPAWN_ARGV`'s
+  spacedock-only exec (ship-flow-scheduler.sh:371-382).
+- **RED genuinely red pre-fix**: ran the NEW test file against the cycle-1
+  (856b4cf) source → exactly 7 failures (1 injection + 1 preflight + 5
+  timeout edges), all green post-fix. Legitimate RED-before-GREEN.
+- **Gate re-run**: full scheduler suite 10 files 159/159 (NORMAL); adapter
+  46/46 + backoff 8/8 + fullcycle 8/8 green in BOTH normal AND CI-sim
+  (isolated-timeout-only PATH, `claude`/`spacedock` confirmed absent).
+  check-invariants exit 0 (C11/C12/C15 OK), no-dangling PASS, version-triple
+  PASS, shellcheck clean on both changed prod files + the test.
 
 </details>
 
 ## Per-AC Evidence
 
-- **AC-1 — VERIFIED.** `--tick-id` sets `SHIP_FLOW_SCHEDULER_TICK_ID` +
-  appends the delegation prompt line (adapter.sh:61-67,79-87); re-run
-  `run_tick_id_marker_case`, `run_print_spawn_delegation_case`,
-  `run_tick_threads_tick_id_case` — all pass.
-- **AC-2 — VERIFIED mechanically, WARNING on safety (see Review Findings
-  #1).** Launcher spawn confirmed live: `spacedock claude "<prompt>"
-  --plugin-dir <worktree>/plugins/ship-flow -- -p --output-format text` run
-  twice, both exit 0 with real FO responses (the actual launcher, not the
-  adapter's hermetic path). Probe content was refused by the spawned FO's
-  own judgment (unrelated to this diff — see Runtime UAT); the spawn
-  mechanism itself is proven live.
-- **AC-3 — NOT VERIFIED (BLOCKING, see Review Findings #2/#3).**
-  `derive_timeout_sec` (ship-flow-scheduler.sh:97-111) has two reproduced
-  boundary bugs untested by Task 5.
-- **AC-4 — VERIFIED with a narrower WARNING.** Head-block fix reproduced
-  (`run_head_block_skip_past_case`, `run_window_expiry_case` both pass,
-  8/8); `entity_in_backoff`'s slug-matching is a WARNING (Review Findings
-  #5).
-- **AC-5 — VERIFIED.** `@USER_LOCAL_BIN@` placeholder present in the tick
-  plist (plist.sh:11/11); RUNBOOK updated.
-- **AC-6 — VERIFIED** (with the CI-sim reproducibility caveat above).
+- **AC-1 — VERIFIED** (unchanged): `--tick-id` env + delegation prompt line;
+  `--print-spawn` now renders the display string via `%q` (adapter.sh:111),
+  its `--plugin-dir`/`-p`/`spacedock` assertions still pass.
+- **AC-2 — VERIFIED** (B1 resolved): launcher spawn via `SPAWN_ARGV`
+  argv-array exec; the cycle-1 injection regression is fixed and
+  re-verified. Live launcher probe from cycle 1 stands (mechanism proven).
+- **AC-3 — VERIFIED** (B2/B3 resolved): `derive_timeout_sec` base-10 + zero
+  fallback; all five cycle-1 boundary inputs re-run correct firsthand.
+- **AC-4 — VERIFIED** (unchanged): head-block fix, backoff 8/8;
+  `entity_in_backoff` slug-BRE fragility stays a deferred WARNING (W2, not
+  triggered).
+- **AC-5 — VERIFIED** (unchanged): `@USER_LOCAL_BIN@` plist pin, RUNBOOK.
+- **AC-6 — VERIFIED**: dual-env green (with the documented CI-sim caveat —
+  plan.md's literal `/usr/bin:/bin` recipe needs a `timeout` symlink on this
+  macOS box; real CI is `ubuntu-latest` with native `/usr/bin/timeout`).
 
 ## Review Findings
 
-Cross-model challenge (REQUIRED, host-opposite): `codex exec` (codex-cli
-0.144.1, gpt-5.6-sol), read-only sandbox, against `97cb9b5..HEAD`. NOT
-degraded. General-external-reviewer baseline: `pr-review-toolkit:code-reviewer`
-(sonnet), same diff. Both independently found the same two `derive_timeout_sec`
-bugs; the reviewer additionally proved #1 with a live PoC. All three below are
-**verifier-reproduced firsthand**, not taken on citation alone.
+Cycle 2 is a scoped re-review of the bounce fixes (round cap reached), not a
+fresh full panel — no new cross-model run by design (the cycle-1
+`codex exec` + `pr-review-toolkit:code-reviewer` challenge produced these
+findings; this cycle verifies their fixes). All dispositions below are
+**verifier-reproduced firsthand**.
 
-| # | Finding (file:line) | Source | Severity | route_to |
-| --- | --- | --- | --- | --- |
-| B1 | `SPAWN_LINE` built via string interpolation then re-parsed by `bash -c` (adapter.sh:99,123) — a real regression vs. the prior direct-argv `claude -p "/ship ${ENTITY}"` call. PoC: `--entity 'foo$(touch /tmp/PWNED_VERIFY)'` through the real adapter → file created. `ENTITY` is an unsanitized folder `basename` (ship-flow-scheduler.sh:144-146) | codex + code-reviewer, PoC verifier-reproduced | **BLOCKING** | execute |
-| B2 | `derive_timeout_sec`: `time_budget: 08m`/`08h`/`2h09m` (leading-zero component) → bash arithmetic treats it as octal → crash, empty stdout, exit 1 (ship-flow-scheduler.sh:110). Verifier-reproduced: `bash: 08: value too great for base`. Empty result flows into `--timeout ""`, adapter usage-errors, entity blocked with a generic `run-error` — root cause never surfaces | codex + code-reviewer, verifier-reproduced | **BLOCKING** | execute |
-| B3 | `derive_timeout_sec`: `time_budget: 0m`/`0h` returns `0`; GNU `timeout 0` **disables** the timeout entirely (verifier-confirmed: `timeout 0 sleep 3` ran to completion). A "zero budget" typo produces an *unbounded* run — the exact opposite of AC-3's intent, and untested | codex + code-reviewer, verifier-reproduced | **BLOCKING** | execute |
-| W1 | Preflight (`ship-flow-scheduler.sh:371-374`) accepts `claude` OR `spacedock`, but `SPAWN_LINE` unconditionally uses `spacedock` (no wired fallback despite the comment claiming one). Verifier-reproduced: claude-only PATH passes preflight, then dispatch fails with `spacedock: command not found` misclassified as generic `run-error`. Mitigated in real launchd deployment by AC-5's `$SPACEDOCK_BIN` pin | codex, verifier-reproduced | WARNING | execute |
-| W2 | `entity_in_backoff`'s `grep "\"entity\":\"${slug}\""` (ship-flow-scheduler.sh:124) treats slug as a BRE, not literal — a slug with regex metachars could false-match another entity's line. Not currently triggered by any real slug in this repo | code-reviewer | WARNING | follow-up |
-| W3 | `timeout` has no `--kill-after` (adapter.sh:123) — pre-existing pattern, but the 900s→5400s bump (Task 5) materially raises the blast radius of a TERM-resistant descendant holding the lease | codex | WARNING | follow-up |
-| N1 | Stale comment (ship-flow-scheduler.sh:90-96): "returns default UNCHANGED... never invents its own number" is false on the B2 crash path and misleading for B3's `0m` | code-reviewer | NIT | execute (fix alongside B2/B3) |
+| # | Finding (file:line @cycle1) | Cycle-1 sev | Cycle-2 disposition |
+| --- | --- | --- | --- |
+| B1 | `SPAWN_LINE`/`bash -c` command injection (adapter.sh:99,123) | BLOCKING | **FIXED** `3a29309` — `SPAWN_ARGV` argv exec (adapter.sh:110,142); PoC + 4 vectors re-run, no file created |
+| B2 | `derive_timeout_sec` octal crash `08m`/`09h`/`2h09m` (scheduler.sh:110) | BLOCKING | **FIXED** `9f8957c` — `10#` base-10 (scheduler.sh:116); 480/32400/7740 correct firsthand |
+| B3 | `derive_timeout_sec` `0m`/`0h`→`timeout 0` disables enforcement | BLOCKING | **FIXED** `9f8957c` — zero-total falls back to default (scheduler.sh:117); 5400 firsthand |
+| W1 | preflight accepts `claude` but exec is spacedock-only | WARNING | **FIXED** `6ee6867` — preflight spacedock-only (scheduler.sh:379); claude-only PATH → exit 3 firsthand |
+| N1 | stale `derive_timeout_sec` comment | NIT | **FIXED** `9f8957c` — comment now describes base-10 + zero-fallback |
+| W2 | `entity_in_backoff` slug-as-BRE (scheduler.sh:124) | WARNING | deferred (not triggered by any real slug) |
+| W3 | `timeout` lacks `--kill-after` (adapter.sh) | WARNING | deferred (pre-existing repo-wide pattern) |
 
 ## Runtime UAT
 
-`runtime_uat`: fixture-level (139/139 scheduler assertions, both envs, cited
-above) + a real launcher probe receipt — `spacedock claude` run twice live
-against this worktree's own `--plugin-dir`, both exit 0. Both probes were
-declined by the spawned FO on content grounds (my ad-hoc smoke-test prompt
-read as injection-shaped); one response referenced an "I love you" framing
-and an unresolved `{workflow_dir}` placeholder that were never in my actual
-prompt — likely model confabulation, possibly a `spacedock claude` boot-prompt
-quirk, but the upstream spacedock binary is explicitly out-of-scope
-(shape.md) so this is a NIT observation for the FO, not a tick-hardening
-finding. **LIVE proof** (hardened tick dispatches the held guard-precision
-entity) remains **deferred — FO-owned post-merge**, unchanged from plan.md's
-handoff — not attempted here (would require a real `/ship` on live state).
+`runtime_uat`: fixture-level (159/159 scheduler assertions both envs, cited
+above) + the cycle-1 real launcher probe receipt (`spacedock claude
+--plugin-dir` run live, exit 0, mechanism proven — content declined by the
+spawned FO on unrelated grounds, an out-of-scope upstream-binary NIT). The
+cycle-2 fixes are pure logic/quoting corrections with no new runtime surface
+beyond the fixture + PoC evidence above. **LIVE proof** (hardened tick
+dispatches the held guard-precision entity under launchd) remains **deferred
+— FO-owned post-merge**, unchanged from plan.md's handoff.
 
 ## Verdict
 
-**NOT PASS (VETO) — route_to: execute.** Three BLOCKING findings,
-independently reproduced by both a cross-model challenge and a from-scratch
-Claude reviewer, converge on two root causes: Task 5's `derive_timeout_sec`
-has zero test coverage for zero-value/leading-zero `time_budget` input
-(B2/B3), and Task 4's `SPAWN_LINE` rewrite is a confirmed command-injection
-regression (B1). All three are mechanical AUTO-FIX-class fixes: (a) validate
-`h`/`m` as non-negative base-10 before arithmetic, reject a zero total back
-to default; (b) stop re-parsing unsanitized `ENTITY`/`WORKDIR` via `bash -c`
-(argv-array exec or sanitize first). W1/N1 are recommended companion fixes
-this round; W2/W3 deferred (not required to unblock).
-
-## Bounce Tasks
-
-1. Fix `derive_timeout_sec` (ship-flow-scheduler.sh:97-111): reject/normalize
-   leading-zero and zero-total `time_budget` values; add RED cases for
-   `0m`, `0h`, `08m`, `09h`, `2h09m` to `test-scheduler-runner-adapter.sh`
-   or a scheduler-tick fixture test; fix the stale comment (N1).
-2. Fix `SPAWN_LINE` construction (adapter.sh:83-99,123) to not re-parse
-   unsanitized `ENTITY`/`WORKDIR` via `bash -c`; add a RED case with a
-   shell-metacharacter-bearing entity slug.
-3. Recommended alongside (not separately blocking): tighten the preflight
-   check (W1) to require `spacedock`/`$SPACEDOCK_BIN` specifically, since no
-   raw-`claude` fallback is actually wired.
+**PASS (PROCEED) — cycle 2, final.** All three cycle-1 BLOCKING findings
+(B1 injection, B2 octal crash, B3 timeout-disable) plus the W1 companion and
+N1 NIT are genuinely fixed and independently re-verified firsthand: the exact
+cycle-1 injection PoC no longer creates a file, all five `time_budget`
+boundary inputs resolve correctly, the claude-only preflight now fails closed,
+and the new test assertions were re-proven RED against the pre-fix source
+(7/7). Fix scope was tight (2 prod files + 1 test + 1 fixture stub + docs),
+nothing beyond bounce scope, W2/W3/carryovers untouched per boundary. Full
+gate green: scheduler suite 159/159 dual-env, check-invariants/no-dangling/
+version-triple exit 0, shellcheck clean. Nothing new surfaced; no
+PROMPT_CAPTAIN needed. Ready for review/ship.
 
 ## Panel Coverage
 
-- Tier: B (host-opposite cross-model ran via `codex exec` directly — not the
-  full ship-verify Phase A-H orchestration; `panel_coverage: reduced` for an
-  M-sized hardening entity, deepened past a typical Tier-B scan because the
-  verifier directly reproduced every load-bearing finding, not just cited
-  reviewer output)
-- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS (full
-  re-run above); cross_model_challenge PASS (codex, NOT degraded);
-  silent_failure PASS (B2/B3 are exactly this class, verifier-reproduced);
-  security WARNING (B1, verifier-reproduced PoC); test_adequacy WARNING (no
-  RED case for any of B1-B3's inputs); runtime_uat PASS (fixture + live
-  probe); type_design NO_FINDINGS; api_contract not_triggered (no API
-  surface); ui_design not_triggered (no UI); domain_intent not_triggered
+- Tier: B (cycle-1 host-opposite `codex exec` cross-model challenge, NOT
+  degraded, produced the findings now fixed; cycle 2 is a scoped
+  fix-verification inside the round cap — no new cross-model run by design).
+  `panel_coverage: reduced`, deepened past a typical Tier-B scan: the verifier
+  directly reproduced every fix (RED-against-old, PoC re-run, edge-case
+  re-run), not just cited the worker's report.
+- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS
+  (159/159 dual-env + invariant/dangling/version gates); cross_model_challenge
+  PASS (cycle-1 codex, findings fixed); silent_failure PASS (B2/B3 were this
+  class, now fixed + firsthand re-verified); security PASS (B1 injection
+  fixed, PoC + 4 vectors re-run clean); test_adequacy PASS (13 new assertions
+  covering exactly B1-B3/W1's inputs, RED-proven); runtime_uat PASS (fixture +
+  cycle-1 live probe); type_design NO_FINDINGS; api_contract not_triggered;
+  ui_design not_triggered; domain_intent not_triggered
 
 ## Deferred to TODO
 
-- W2: `entity_in_backoff` slug-as-BRE fragility — harden to literal-match
-  (`grep -F` or anchor+escape) when convenient, not currently triggered.
-- W3: `timeout` lacking `--kill-after` — pre-existing pattern across the
-  whole adapter, worth a repo-wide follow-up given Task 5's default bump
-  raises the blast radius; not scoped to this entity alone.
-- Carryover (unchanged from execute.md): AC-4 precedence-2 dispatch-repeat
-  test coverage; `decisions.md` 30-min clause physical removal + ROADMAP
-  Later-row fold (both `iamcxa/muscat-v1`, cross-branch, FO-owned).
+- W2: `entity_in_backoff` slug-as-BRE — harden to literal-match (`grep -F` or
+  anchor+escape); not currently triggered by any real slug.
+- W3: `timeout` lacking `--kill-after` — pre-existing repo-wide adapter
+  pattern; Task 5's 900→5400s default bump raises the blast radius, worth a
+  repo-wide follow-up.
+- Carryover (unchanged): AC-4 precedence-2 dispatch-repeat test coverage;
+  `decisions.md` 30-min clause removal + ROADMAP Later-row fold (both
+  `iamcxa/muscat-v1`, cross-branch, FO-owned).

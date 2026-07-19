@@ -155,3 +155,20 @@ Independent re-verification found real regressions execute.md's dual-env-green s
 ### Summary
 
 Verify cycle 1 VETO'd on three findings (all AUTO-FIX-class): a confirmed command-injection PoC in the adapter's `SPAWN_LINE`/`bash -c` spawn path (B1), and two `derive_timeout_sec` boundary bugs — a leading-zero `time_budget` crashing bash's octal-literal arithmetic (B2) and a zero-total silently disabling the timeout via GNU `timeout 0` (B3) — plus a recommended companion (W1: preflight accepted `claude` though no such fallback is wired). Each fixed as an isolated, atomic commit with RED reproduced live against the pre-fix code (not asserted from memory) before applying the GREEN fix: B1 now execs a single `SPAWN_ARGV` directly, never re-parsed by a shell; B2/B3 force base-10 arithmetic and reject a zero total back to the caller's default; W1's preflight now requires `spacedock`/`$SPACEDOCK_BIN` specifically. 13 new assertions added to `test-scheduler-runner-adapter.sh` (46/46 total, dual-env-identical). Full local gate re-run FOREGROUND in both normal and CI-sim environments matches cycle 1's clean baseline exactly, with the one pre-existing >90s file reconfirmed untouched and green. `verify.md` left untouched per the dispatch's explicit instruction; the LIVE proof and ROADMAP fold remain FO-owned, unchanged from cycle 1's handoff.
+
+## Stage Report: verify (cycle 2)
+
+- DONE: Re-run the B1 injection PoC against the fixed adapter — the metacharacter slug must NOT create the file
+  `--entity 'foo$(touch /tmp/PWNED_VERIFY)'` through the real adapter (stub `$SPACEDOCK_BIN`) → file NOT created; the `$(…)` reached the stub as a single literal argv element (echoed verbatim). Four more vectors (`;`, backtick, `&&`, `|`) also neutralized. Root cause gone: `SPAWN_ARGV` array exec'd directly (adapter.sh:110,142), `bash -c` only on the test-author-controlled seam.
+- DONE: Re-run the B2/B3 edge cases (0m, 0h, 08m, 09h, 2h09m) first-hand
+  `derive_timeout_sec` firsthand (default 5400): `0m`→5400, `0h`→5400 (fallback, no `timeout 0` disable), `08m`→480, `09h`→32400, `2h09m`→7740 (base-10, no octal crash), regression `2h30m`→9000, absent→5400. Also re-proved the new test file RED against the cycle-1 (856b4cf) source → exactly 7 failures (injection + preflight + 5 timeout edges), all green post-fix.
+- DONE: Re-run the adapter + backoff + fullcycle tests both envs
+  adapter 46/46, backoff 8/8, fullcycle 8/8 — green in BOTH normal AND CI-sim (isolated-timeout-only PATH, `claude`/`spacedock` confirmed absent). Full scheduler suite 10 files 159/159 (NORMAL). check-invariants exit 0 (C11/C12/C15 OK), no-dangling PASS, version-triple PASS, shellcheck clean on both changed prod files + test.
+- DONE: Update verify.md as the cycle-2 final verdict (keep C11/C12/C15 conformance; move B1-B3+W1 to fixed with citations; W2/W3 stay deferred)
+  `verify.md` rewritten as cycle 2 final: **PASS (PROCEED)**; body 102 lines (≤120 cap), both mandatory H2 headers present; B1/B2/B3/W1/N1 all marked FIXED with commit + file:line citations; W2/W3 + carryovers stay in Deferred to TODO.
+- DONE: Append verify (cycle 2) stage report
+  This section.
+
+### Summary
+
+Cycle-2 re-review independently re-verified — firsthand, not on the worker's self-report — that all three cycle-1 BLOCKING findings are genuinely fixed: the exact injection PoC (plus four more metacharacter vectors) creates no file, all five `time_budget` boundary inputs resolve correctly, and the claude-only preflight now fails closed. RED-before-GREEN was independently re-proven by running the new test file against the pre-fix source (7/7 expected failures). Fix scope was tight (2 prod files + 1 test + 1 fixture stub + docs) with nothing beyond bounce scope; W2/W3 and cross-branch carryovers stay deferred per boundary. Full gate green (scheduler 159/159 dual-env, invariant/dangling/version/shellcheck all clean). Round cap spent, nothing new surfaced, no PROMPT_CAPTAIN. Verdict: PASS (PROCEED) — ready for review/ship.
