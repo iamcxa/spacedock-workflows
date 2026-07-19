@@ -44,8 +44,13 @@ Then: `rm -rf <ctrl>/.ship-flow-scheduler.lease`
 
 Never remove a live holder's lease — that re-opens the double-dispatch window
 the lease exists to close. Note the tick self-heals stale leases on its next
-invocation (dead-pid or aged-out reclaim), so manual unlock is only needed when
-you want an immediate rerun and can prove the two conditions above.
+invocation, but ONLY on a provably-dead holder (feedback cycle 1, F2: age
+alone is never sufficient — a still-alive holder is never auto-reclaimed, no
+matter how old its record). A slow reconcile is itself now bounded by
+`--timeout`, so a holder that overruns is forcibly ended rather than merely
+outliving the timeout window — it becomes reclaimable via the dead-pid path
+above, not a separate age heuristic. Manual unlock is only needed when you
+want an immediate rerun and can independently prove the two conditions above.
 
 ## Rerun
 

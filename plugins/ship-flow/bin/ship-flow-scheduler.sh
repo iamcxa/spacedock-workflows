@@ -308,8 +308,11 @@ cmd_tick() {
     emit_event no-op "" ok lease-held '{"reason":"lease-held"}'
     return 0
   fi
+  # F2 fix: pass this acquisition's own ownership token to release, so a
+  # release after a timeout-forced end can never delete a successor's lease.
+  local lease_token="$SCHEDULER_LEASE_TOKEN"
   # shellcheck disable=SC2064
-  trap "scheduler_lease_release '$controller_worktree'" EXIT
+  trap "scheduler_lease_release '$controller_worktree' '$lease_token'" EXIT
 
   # --- Precedence 1: reconcile (a merged PR exists, or a PR that closed
   # without merging needs a captain prompt — anything OTHER than "still
@@ -323,7 +326,7 @@ cmd_tick() {
     [ "$(read_frontmatter_field "$path" status)" != "done" ] || continue
     pr_state="$(gh_pr_state "$slug" "$pr_val")"
     if [ "$pr_state" != "OPEN" ]; then
-      run_reconcile_action "$path" "$slug" "$dry_run" "$workflow_dir"
+      run_reconcile_action "$path" "$slug" "$dry_run" "$workflow_dir" "$timeout_sec"
       return 0
     fi
   done
@@ -412,7 +415,7 @@ run_dispatch_action() {
 }
 
 run_reconcile_action() {
-  local path="$1" slug="$2" dry_run="$3" workflow_dir="$4"
+  local path="$1" slug="$2" dry_run="$3" workflow_dir="$4" timeout_sec="${5:-900}"
   local out reconciler_exit verdict reason detail_str
 
   # Pre-read: on PROCEED the reconciler archives the entity (the folder moves
@@ -426,7 +429,15 @@ run_reconcile_action() {
     provider_args=(--pr-provider fixture --pr-fixture "$PR_FIXTURE")
   fi
 
-  out="$(STATUS_BIN="${STATUS_BIN:-}" "$RECONCILER" --workflow-dir "$workflow_dir" --entity "$slug" \
+  # F2 fix (feedback cycle 1, BLOCKING, concurrency=1): bound this invocation
+  # with the tick's own --timeout. Previously unbounded, so a slow reconcile
+  # could hold the controller lease indefinitely, and the lease's own
+  # age-based reclaim (now removed, see scheduler-lease.sh) would let a
+  # second tick steal the lease out from under a still-running holder. With
+  # this bound, a holder that overruns is forcibly ended by `timeout`, so it
+  # legitimately frees the lease (dead-pid reclaim) instead of being stolen
+  # from while still alive.
+  out="$(STATUS_BIN="${STATUS_BIN:-}" timeout "$timeout_sec" "$RECONCILER" --workflow-dir "$workflow_dir" --entity "$slug" \
     "${provider_args[@]}" 2>&1)"
   reconciler_exit=$?
   verdict="$(printf '%s\n' "$out" | awk -F= '$1=="verdict"{print $2; exit}')"

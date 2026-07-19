@@ -183,14 +183,20 @@ completion-handoff-specific) in a small new `lib/scheduler-lease.sh` sourced by 
 
 - **Acquire:** `mkdir "$CONTROLLER_WORKTREE/.ship-flow-scheduler.lease" 2>/dev/null` — atomic; on
   failure the lease is held → caller emits `no-op reason=lease-held`, exit 0. Record file writes
-  `pid=<n> start_ts=<RFC3339> tick_id=<…> entity=<slug|null>`.
+  `pid=<n> start_ts=<RFC3339> tick_id=<…> entity=<slug|null> token=<per-acquisition ownership token>`.
 - **Concurrency=1 refusal (AC-1 duplicate-dispatch):** a second invocation's `mkdir` fails → it does
   nothing and exits 0. This is the exact "second invocation detects and refuses" mechanism.
-- **Stale reclaim (crash-replay):** if the lease exists but `kill -0 $pid` fails **or**
-  `now - start_ts > max_run_timeout`, the holder is dead → the new tick reclaims (removes + re-mkdir)
-  and proceeds. This bounds a crashed dispatch's lock to the timeout window.
-- **Release:** `rmdir` the lease dir in a bash `trap … EXIT` so a killed tick still releases on
-  normal signals; the stale-reclaim path covers hard kills.
+- **Stale reclaim (crash-replay) — liveness-only (feedback cycle 1, F2 fix):** if the lease exists but
+  `kill -0 $pid` fails, the holder is dead → the new tick reclaims (removes + re-mkdir) and proceeds.
+  Age is **never** an independent reclaim trigger — a still-alive holder is never stolen from, however
+  old its record (the original `now - start_ts > max_run_timeout` OR-branch let a live holder's lease
+  be stolen out from under it, violating Rule 9's concurrency=1). Instead, `bin/ship-flow-scheduler.sh`
+  bounds the one previously-unbounded holder action (the reconcile call) with `timeout
+  <max_run_timeout>`, so an overrunning holder is forcibly ended and reclaims via the same dead-pid
+  path, not a separate age heuristic.
+- **Release:** `rmdir` the lease dir in a bash `trap … EXIT`, guarded by the acquisition's own
+  ownership token — release refuses (no-ops, record untouched) if the record's `token` doesn't match
+  the caller's, so a release racing a legitimate reclaim can never delete the successor's lease.
 - Lives in the **dedicated controller worktree** (Rule 9), never a shared Conductor tree; the lease
   dir path is derived from `--controller-worktree`, so the daemon's control plane is isolated.
 

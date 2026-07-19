@@ -23,54 +23,92 @@ scheduler_lease_epoch() {
 }
 
 scheduler_lease_write_record() {
-  local record="$1" tick_id="$2" entity="$3"
-  printf 'pid=%s\nstart_ts=%s\ntick_id=%s\nentity=%s\n' \
-    "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$tick_id" "$entity" > "$record"
+  local record="$1" tick_id="$2" entity="$3" token="$4"
+  printf 'pid=%s\nstart_ts=%s\ntick_id=%s\nentity=%s\ntoken=%s\n' \
+    "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$tick_id" "$entity" "$token" > "$record"
+}
+
+# scheduler_lease_new_token — a per-acquisition ownership token (pid + epoch +
+# $RANDOM composite; uniqueness within one machine's concurrency=1 lease is all
+# this needs, not cryptographic strength).
+scheduler_lease_new_token() {
+  printf '%s-%s-%s\n' "$$" "$(date -u +%s)" "$RANDOM"
 }
 
 # scheduler_lease_acquire <controller-worktree> <tick_id> <max_run_timeout_sec> [entity]
-# Exit 0 = acquired (fresh or reclaimed from a dead/aged-out holder).
-# Exit 1 = held by a live holder within the timeout window (caller emits
-#          no-op reason=lease-held).
+# Exit 0 = acquired (fresh or reclaimed from a provably-dead holder); on
+#          success also sets SCHEDULER_LEASE_TOKEN to this acquisition's
+#          ownership token (pass it to scheduler_lease_release).
+# Exit 1 = held by a live holder (caller emits no-op reason=lease-held).
+#
+# F2 fix (feedback cycle 1, BLOCKING, concurrency=1): reclaim is gated on
+# holder LIVENESS ONLY — `max_timeout` no longer participates in the reclaim
+# decision (age is not proof of death; a still-alive holder is never stolen
+# from, however old its record). A slow/unbounded reconcile is instead bounded
+# at its call site (bin/ship-flow-scheduler.sh wraps it in `timeout`), so a
+# holder that overruns is forcibly ended — it becomes reclaimable via the
+# SAME dead-pid path, not a separate age heuristic. `max_timeout` is kept as a
+# parameter for call-site compatibility (and documents the intended bound)
+# but is otherwise unused here now.
 scheduler_lease_acquire() {
-  local worktree="$1" tick_id="$2" max_timeout="$3" entity="${4:-}"
-  local dir record pid start_ts now age
+  local worktree="$1" tick_id="$2" max_timeout="${3:-}" entity="${4:-}"
+  local dir record pid token
 
   dir="$(scheduler_lease_dir "$worktree")"
   record="${dir}/record"
+  token="$(scheduler_lease_new_token)"
 
   if mkdir "$dir" 2>/dev/null; then
-    scheduler_lease_write_record "$record" "$tick_id" "$entity"
+    scheduler_lease_write_record "$record" "$tick_id" "$entity" "$token"
+    SCHEDULER_LEASE_TOKEN="$token"
     printf '%s\n' "$dir"
     return 0
   fi
 
   if [ ! -f "$record" ]; then
     # Torn lease (dir with no record, e.g. a hard kill mid-write) — reclaim.
-    scheduler_lease_write_record "$record" "$tick_id" "$entity"
+    scheduler_lease_write_record "$record" "$tick_id" "$entity" "$token"
+    SCHEDULER_LEASE_TOKEN="$token"
     printf '%s\n' "$dir"
     return 0
   fi
 
   pid="$(scheduler_lease_field "$record" pid)"
-  start_ts="$(scheduler_lease_field "$record" start_ts)"
-  now="$(date -u +%s)"
-  age=$(( now - $(scheduler_lease_epoch "$start_ts") ))
 
-  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && [ "$age" -le "$max_timeout" ]; then
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
     return 1
   fi
 
   rm -f "$record"
-  scheduler_lease_write_record "$record" "$tick_id" "$entity"
+  scheduler_lease_write_record "$record" "$tick_id" "$entity" "$token"
+  SCHEDULER_LEASE_TOKEN="$token"
   printf '%s\n' "$dir"
   return 0
 }
 
-# scheduler_lease_release <controller-worktree>
+# scheduler_lease_release <controller-worktree> [token]
+# F2 fix: with a token, refuse (exit 1, record untouched) unless it matches
+# the record's own token — an unconditional release could otherwise delete a
+# successor's lease out from under it (e.g. this holder's own timeout wrapper
+# fired, a peer reclaimed as dead, and this process's EXIT trap then runs).
+# No token (or no matching `token=` field, e.g. a pre-fix record) falls back
+# to the old unconditional release — callers not yet passing a token, or a
+# genuinely ownerless torn record, are not blocked from cleaning up.
 scheduler_lease_release() {
-  local dir
-  dir="$(scheduler_lease_dir "$1")"
-  rm -f "${dir}/record"
+  local worktree="$1" token="${2:-}"
+  local dir record held_token
+
+  dir="$(scheduler_lease_dir "$worktree")"
+  record="${dir}/record"
+
+  if [ -n "$token" ] && [ -f "$record" ]; then
+    held_token="$(scheduler_lease_field "$record" token)"
+    if [ -n "$held_token" ] && [ "$held_token" != "$token" ]; then
+      return 1
+    fi
+  fi
+
+  rm -f "$record"
   rmdir "$dir" 2>/dev/null || true
+  return 0
 }
