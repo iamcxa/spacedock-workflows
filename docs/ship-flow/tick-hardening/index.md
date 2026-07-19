@@ -1,6 +1,6 @@
 ---
 title: Tick hardening — delegation marker, launcher spawn, time-budget, blocked-backoff
-status: verify
+status: execute
 source: hackathon-2 contract Wave 1 (todos scheduler-tick-delegation-marker + pipeline-timeout-checkpoint-event merged; +2 Wave-0 live findings)
 started: 2026-07-19T15:52:48Z
 completed:
@@ -133,3 +133,12 @@ All 9 plan tasks landed as atomic TDD commits on `spacedock-ensign/tick-hardenin
 ### Summary
 
 Independent re-verification found real regressions execute.md's dual-env-green self-report did not surface: a confirmed shell-command-injection PoC in the new `SPAWN_LINE`/`bash -c` spawn path (Task 4), and two untested `derive_timeout_sec` boundary bugs (Task 5) — a `0m` time_budget silently disables the timeout entirely (GNU `timeout 0` = no enforcement), and a leading-zero value (`08m`) crashes the function via bash's octal-literal arithmetic. All three were independently reproduced by a live `codex exec` cross-model challenge AND a from-scratch `pr-review-toolkit:code-reviewer` dispatch before being confirmed firsthand by direct exercising (not taken on citation). Verdict is NOT PASS, routing back to execute with two required, mechanical AUTO-FIX-class fixes plus one recommended companion fix (preflight/spawn mismatch). All quality-gate re-runs (139 scheduler assertions, 130-file full suite, node, three check-* scripts) matched execute.md's claims exactly once the CI-sim methodology was corrected for this machine's missing GNU `timeout` binary.
+
+### Feedback Cycles
+
+- cycle: 1
+  rejected_stage: verify
+  feedback_to: execute
+  captain_decision: fix
+  routed_at: 2026-07-19T18:39:16Z
+  verify_artifact: verify.md@856b4cf
