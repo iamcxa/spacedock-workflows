@@ -8,7 +8,7 @@ verdict:
 score:
 worktree: .worktrees/spacedock-ensign-l3-scheduler-tick
 issue:
-pr:
+pr: "#70"
 ---
 
 Land the L3 Step-3 wedge: a stateless, idempotent scheduler tick that removes the human as
