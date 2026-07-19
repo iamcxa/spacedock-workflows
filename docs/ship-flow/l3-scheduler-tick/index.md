@@ -52,3 +52,16 @@ a recovery runbook documents inspect/unlock/rerun; the daemon owns no canonical 
 never mutates prompts, routing, budgets, or policy.
 Verified by: plist present + rollup generated from fixture events + runbook file + grep
 proving tick state is derived-cache only.
+
+## Stage Report: shape
+
+- DONE: shape.md absorbs the full hackathon contract from .context/l3-hackathon-contract.md (GCD, 10 hard rules, refusals list, EM-drive profile, input-quality DoR, hour plan) as the durable in-repo spec — .context is gitignored, so the content must be materialized, not pointed at.
+  shape.md materializes all six sections verbatim (GCD, Hard Rules 1-10, Deferred-without-loss refusals, EM-drive profile, input-quality DoR, hour-by-hour); no pointer to the gitignored source.
+- DONE: Captain articulation is ALREADY GIVEN (his "1 go" on the converged contract + this session's transcript); preserve his decisions verbatim — do NOT re-ask Q1/Q2/Q3; record the archived-entity #1 Y-mode un-defer as a captain decision with his quote: "如果這是必要的，且可以建立足夠信任邊界，我不在意重開 y-mode".
+  shape.md "Captain Articulation and Ownership Trail" records GO (source: frontmatter) + the Y-mode un-defer quote verbatim; no Musk audit re-run, Q1/Q2/Q3 not re-asked.
+- DONE: Acceptance outcomes map 1:1 to the entity's AC-1..AC-6, stay mechanically testable (fixture commands), appetite = one night (8h), out-of-scope = the contract's "Deferred without loss" refusals (no auto-merge, no raw intake, no repair-until-pass, no auto codex-gate, no helm dependency, no crewdock integration, no semantic nightly learning).
+  shape.md "Acceptance Outcomes" table pairs each AC-1..AC-6 with value+mechanism+fixture proof (1:1, no restatement); Appetite = one night (8h); Out-of-Scope lists all nine refusals.
+
+### Summary
+
+Freeze stage: materialized the converged L3 hackathon contract into a durable, repo-visible shape.md (the .context source is gitignored). Captain articulation was already given (GO + Y-mode un-defer), so no interactive Musk audit — decisions preserved verbatim. AC-1..AC-6 mapped 1:1 to value/mechanism outcomes with reproducible fixture proofs; appetite one night; out-of-scope pinned to the contract's refusals. Hand-off to design flags design_required (contract-bearing CLI/JSON/plist surfaces, non-UI) with four open design questions and zero unresolved contract decisions.
