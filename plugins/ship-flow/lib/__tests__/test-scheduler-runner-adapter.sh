@@ -257,6 +257,30 @@ run_tick_derives_timeout_edge_cases_case() {
   done
 }
 
+run_tick_preflight_rejects_claude_only_case() {
+  # W1: the adapter's SPAWN_ARGV unconditionally execs
+  # ${SPACEDOCK_BIN:-spacedock} -- no raw `claude` fallback is actually
+  # wired despite the old preflight accepting `claude` alone. A PATH with
+  # only a stub `claude` (no spacedock) must now fail preflight (exit 3)
+  # rather than silently pass and fail later inside the adapter.
+  local fake_bin_dir wf
+  fake_bin_dir="$(mktemp -d)"
+  cat > "${fake_bin_dir}/claude" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+  chmod +x "${fake_bin_dir}/claude"
+  wf="$(mktemp -d)"
+  PATH="${fake_bin_dir}:/usr/bin:/bin" \
+    run_capture "${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh" tick \
+      --workflow-dir "$wf" --controller-worktree "$wf" \
+      --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+      --runner gh --timeout 30 \
+      --events-log "${wf}/events.jsonl"
+  rm -rf "$fake_bin_dir" "$wf"
+  assert_exit "preflight rejects claude-only PATH: exit 3 (no wired fallback)" 3 "$EXIT_CODE"
+}
+
 echo "=== test-scheduler-runner-adapter.sh ==="
 echo ""
 
@@ -275,6 +299,7 @@ else
     run_tick_surfaces_timeout_as_blocked_case
     run_tick_threads_tick_id_case
     run_tick_preflight_accepts_spacedock_bin_case
+    run_tick_preflight_rejects_claude_only_case
     run_tick_derives_timeout_from_time_budget_case
     run_tick_defaults_timeout_without_time_budget_case
     run_tick_derives_timeout_edge_cases_case
