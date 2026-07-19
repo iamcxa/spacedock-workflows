@@ -8,7 +8,7 @@ verdict:
 score:
 worktree: .worktrees/spacedock-ensign-tick-hardening
 issue: "#74"
-pr:
+pr: "#81"
 ---
 
 Harden the scheduler tick's spawn seam and scheduling loop. Time budget: 2h30m (hackathon-2
