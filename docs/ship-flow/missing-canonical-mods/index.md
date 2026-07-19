@@ -159,3 +159,37 @@ origin/main or it edits a phantom (177-line) resolver.
 ### Summary
 
 Full design (contract-bearing). Contract deltas: author canonical-doc-sync.md at the adopter path (13 grep-pinned tokens = the two integration tests' spec) and de-reference the bibliographic architecture-canon refs. Guard: a `missing-everywhere-canonical-mod` branch classifying by twin-presence, with `--exclude-dir=__tests__` (F2, required — else case9 self-reds on its foo/bar fixtures) and an adopter-tree-present guard (F3, preserves plugins-only clone-green). Two scope findings flagged for the gate: **F1** — a class-wide guard mechanically surfaces a third missing-everywhere peer, `decisions-log.md`, folded in as a one-line de-ref (gate may defer); **F2/F3** as above. Baseline risk from shape is resolved by the seeded worktree (312-line resolver, 0 behind origin/main).
+
+## Stage Report: plan
+
+- DONE: guard-extension RED fixture (missing-everywhere class + case9 self-red guard per F2)
+  plan.md T1 (test-only, live-verified new fixtures RED/GREEN against the current unmodified resolver) + T5 (classify-by-twin implementation + `--exclude-dir=__tests__` F2 + F3 guard, turns T1's RED fixture GREEN).
+- DONE: author canonical-doc-sync.md in adopter tier (content recovered from the two integration tests' spec — cite them)
+  plan.md T3 — 9 grep-pinned assertion groups from `test-canonical-doc-sync-mod.sh` Blocks 1-3 + `test-canonical-context-lifecycle.sh`'s `Silent omission` check; content live-verified 14/14 PASS in a disposable scratch copy.
+- DONE: de-reference architecture-canon (3 sites) + decisions-log (1 site)
+  plan.md T4 — ship-shape:596, ship-plan:501, migrate-debrief template:33 (architecture-canon) + INVARIANTS.md:199 (decisions-log, F1 fold); all four are prose-only deletions, zero test pins (`grep -rl` verified 0 hits).
+- FAILED: dual-env full gate incl. the two previously-RED integration tests now GREEN (as literally worded)
+  test-canonical-doc-sync-mod.sh reaches 14/14 (fully green, as scoped); test-canonical-context-lifecycle.sh reaches only 8/10 — 2 residual failures are a pre-existing `docs/ship-flow/README.md` wording gap unrelated to this entity's 3 ACs (see plan.md's "Plan finding" + narrowed AC-3). Not a shortfall in execution — a scope correction to the checklist's literal wording, surfaced for the gate.
+
+### Plan finding (new, not in shape/design)
+
+Live-verified, not re-read: `test-canonical-doc-sync-mod.sh` and `test-canonical-context-lifecycle.sh`
+both carry an independent `REPO_ROOT` off-by-one (`../../../..` should be `../../../../..` from
+`plugins/ship-flow/lib/__tests__/integration/`) that would have permanently blocked AC-3 even with a
+perfectly-authored mod — reproduced live (0/14 → 14/14 and 0/10 → 8/10 in a disposable scratch
+copy). plan.md's T2 fixes only the two files this entity's AC-3 names; 9 other integration tests
+share the same bug pattern and are flagged as a follow-up todo, not fixed here. Full detail in
+plan.md's "Plan finding" section.
+
+### Summary
+
+Five-task TDD plan (T1 RED test-fixture → T2 REPO_ROOT precondition fix → T3 author mod → T4
+de-reference 4 sites → T5 implement classify-by-twin guard), ordered so `check-no-dangling.sh` is
+never live against an unfixed repo. All evidence live-verified this session (not re-read): current
+baselines (`check-no-dangling.sh` PASS/8-patterns, `test-check-no-dangling.sh` 10/10,
+`test-canonical-doc-sync-mod.sh` 0/14, `test-canonical-context-lifecycle.sh` 0/10), the new
+REPO_ROOT bug and its fix, the authored mod content reaching 14/14, and the intermediate T2-only
+(5/14, 7/10) and T2+T3 (14/14, 8/10) states. One narrowing finding for the gate: AC-3's dogfood-tier
+"suite green" claim needs to read as 14/14 + 8/10 (2 residual, pre-existing, out-of-scope failures),
+not full green on both tests — recommend the gate ratify this narrower reading rather than block on
+literal AC-3 wording.
