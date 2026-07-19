@@ -38,6 +38,18 @@ assert_contains() {
   else record_fail "$desc (missing pattern: ${pattern})"; fi
 }
 
+assert_not_contains() {
+  local desc="$1" pattern="$2" haystack="$3"
+  if printf '%s' "$haystack" | grep -qE "$pattern"; then record_fail "$desc (unexpected pattern: ${pattern})"
+  else record_pass "$desc"; fi
+}
+
+assert_eq() {
+  local desc="$1" expected="$2" actual="$3"
+  if [ "$actual" = "$expected" ]; then record_pass "$desc"
+  else record_fail "$desc (expected '${expected}', got '${actual}')"; fi
+}
+
 OUT=""
 EXIT_CODE=0
 run_capture() { OUT="$("$@" 2>&1)"; EXIT_CODE=$?; }
@@ -176,6 +188,38 @@ run_reconcile_then_advance_case() {
   assert_contains "reconcile+advance: advance names the ready sibling" '"dispatched":"epic-child-entity"' "$OUT"
 }
 
+run_unknown_gh_state_case() {
+  # F4 (feedback cycle 1, WARNING): a transient gh lookup failure (modeled by
+  # the fixture provider reporting UNKNOWN for a slug with no matching
+  # pr-<slug>.env) must surface as a warning no-op, never escalate through
+  # the reconciler into a spurious PROMPT_CAPTAIN, and must leave the
+  # entity's frontmatter untouched (nothing to unwind on the next tick).
+  local wf status_bin status_before status_after
+  wf="$(one_entity_workflow unknown-pr-state-entity)"
+  status_bin="$(mktemp -d)/status-fixture"
+  write_fixture_status_bin "$status_bin"
+  status_before="$(grep '^status:' "${wf}/unknown-pr-state-entity/index.md")"
+
+  # --pr-fixture keeps this hermetic even in the pre-fix (RED) path, where the
+  # tick still funnels UNKNOWN into run_reconcile_action -> the REAL
+  # merged-pr-closeout-reconciler.sh, which would otherwise fall back to a
+  # live (real, non-hermetic) `gh pr view` call.
+  STATUS_BIN="$status_bin" run_capture "$HELPER" tick \
+    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --pr-fixture "${RECONCILER_FIXTURE_ROOT}/pr-unknown.env" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "${wf}/events.jsonl"
+  status_after="$(grep '^status:' "${wf}/unknown-pr-state-entity/index.md")"
+  rm -rf "$wf"
+
+  assert_exit "UNKNOWN gh state: tick exit 0" 0 "$EXIT_CODE"
+  assert_contains "UNKNOWN gh state: no-op event" '"event":"no-op"' "$OUT"
+  assert_contains "UNKNOWN gh state: reason=gh-state-unknown" '"reason":"gh-state-unknown"' "$OUT"
+  assert_not_contains "UNKNOWN gh state: never escalates to blocked" '"event":"blocked"' "$OUT"
+  assert_eq "UNKNOWN gh state: entity status unchanged (no mutation)" "$status_before" "$status_after"
+}
+
 echo "=== test-ship-flow-scheduler-reconcile.sh ==="
 echo ""
 
@@ -186,6 +230,7 @@ else
   run_prompt_captain_case
   run_proceed_case
   run_reconcile_then_advance_case
+  run_unknown_gh_state_case
 fi
 
 echo ""
