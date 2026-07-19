@@ -410,6 +410,101 @@ run_advance_action() {
 }
 
 # ---------------------------------------------------------------------------
+# report subcommand (design.md §7, AC-4) — read-only, no writable gate ledger.
+# Rows limited to non-terminal projections this CLI signature can actually
+# derive without a controller-worktree/lease input (design's `report` CLI
+# takes only --workflow-dir [--json]): awaiting_merge and merged. `running`/
+# `blocked` need lease/receipt state this subcommand's signature doesn't
+# accept — a v0 narrowing, recorded rather than silently dropped.
+# ---------------------------------------------------------------------------
+
+entity_age_days() {
+  local started="$1" started_epoch now_epoch
+  [ -n "$started" ] || { printf 'n/a\n'; return 0; }
+  started_epoch="$(scheduler_lease_epoch "$started")"
+  [ "$started_epoch" != "0" ] || { printf 'n/a\n'; return 0; }
+  now_epoch="$(date -u +%s)"
+  printf '%s\n' "$(( (now_epoch - started_epoch) / 86400 ))"
+}
+
+pr_head_sha() {
+  local slug="$1" pr="$2"
+  [ -n "$pr" ] || { printf 'n/a\n'; return 0; }
+  if [ "$GH_PROVIDER" = "fixture" ]; then
+    local f="${GH_FIXTURE_DIR}/pr-${slug}.env"
+    [ -f "$f" ] || { printf 'n/a\n'; return 0; }
+    local sha
+    sha="$(awk -F= '$1=="head_sha"{print $2; exit}' "$f")"
+    printf '%s\n' "${sha:-n/a}"
+    return 0
+  fi
+  command -v gh >/dev/null 2>&1 || { printf 'n/a\n'; return 0; }
+  gh pr view "$pr" --json headRefOid --jq .headRefOid 2>/dev/null || printf 'n/a\n'
+}
+
+cmd_report() {
+  local workflow_dir="" json_out=no
+  GH_PROVIDER="gh"; GH_FIXTURE_DIR=""
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --workflow-dir) workflow_dir="${2:-}"; shift 2 ;;
+      --json) json_out=yes; shift ;;
+      --gh-provider) GH_PROVIDER="${2:-}"; shift 2 ;;
+      --gh-fixture-dir) GH_FIXTURE_DIR="${2:-}"; shift 2 ;;
+      *) usage; return 2 ;;
+    esac
+  done
+  [ -n "$workflow_dir" ] || { usage; return 2; }
+  [ -d "$workflow_dir" ] || { echo "ship-flow-scheduler: no such workflow-dir: $workflow_dir" >&2; return 3; }
+
+  local path slug pr_val status verdict pr_state state age head gh_checks cross_model
+  local rows_md="" rows_json="" first=yes
+
+  for path in $(list_entities "$workflow_dir"); do
+    slug="$(entity_slug_from_path "$path")"
+    pr_val="$(read_frontmatter_field "$path" pr)"
+    [ -n "$pr_val" ] || continue
+    status="$(read_frontmatter_field "$path" status)"
+    [ "$status" != "done" ] || continue
+    verdict="$(read_frontmatter_field "$path" verdict)"
+    pr_state="$(gh_pr_state "$slug" "$pr_val")"
+
+    state=""
+    if [ "$pr_state" = "MERGED" ]; then
+      state="merged"
+    elif [ "$pr_state" = "OPEN" ] && [ "$verdict" = "PASSED" ]; then
+      state="awaiting_merge"
+    fi
+    [ -n "$state" ] || continue
+
+    age="$(entity_age_days "$(read_frontmatter_field "$path" started)")"
+    head="$(pr_head_sha "$slug" "$pr_val")"
+    gh_checks="n/a"
+    cross_model="n/a"
+
+    if [ "$json_out" = "yes" ]; then
+      [ "$first" = yes ] || rows_json="${rows_json},"
+      rows_json="${rows_json}$(printf '{"entity":"%s","state":"%s","pr_head":"%s","verify_verdict":%s,"gh_checks":"%s","cross_model":"%s","age":"%s"}' \
+        "$(json_escape "$slug")" "$state" "$(json_escape "$head")" "$(json_str_or_null "$verdict")" "$gh_checks" "$cross_model" "$age")"
+    else
+      rows_md="${rows_md}| ${slug} | ${state} | ${head} | ${verdict:-n/a} | ${gh_checks} | ${cross_model} | ${age} |
+"
+    fi
+    first=no
+  done
+
+  if [ "$json_out" = "yes" ]; then
+    printf '[%s]\n' "$rows_json"
+  else
+    printf '| entity | state | pr_head | verify_verdict | gh_checks | cross_model | age |\n'
+    printf '| --- | --- | --- | --- | --- | --- | --- |\n'
+    printf '%s' "$rows_md"
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -418,7 +513,7 @@ ACTION="${1:-}"
 
 case "$ACTION" in
   tick) cmd_tick "$@"; exit $? ;;
-  report) echo "ship-flow-scheduler: report not yet implemented" >&2; exit 2 ;;
+  report) cmd_report "$@"; exit $? ;;
   rollup) echo "ship-flow-scheduler: rollup not yet implemented" >&2; exit 2 ;;
   *) usage; exit 2 ;;
 esac
