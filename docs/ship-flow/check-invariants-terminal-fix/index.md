@@ -122,3 +122,25 @@ carried to the gate: (1) the predicate reduces to `status: done` only, which for
 `verdict: PASSED` branch beyond shape's literal enumeration — taxonomically required, empirically
 zero-hit today, flagged for veto; (2) execute must surface the un-masked roborev findings in
 execute.md, not silently fix them (captain attestation covers surfacing).
+
+## Stage Report: plan
+
+- DONE: write plan.md with TDD contracts per code-bearing task (RED-before-GREEN), explicit test files
+  docs/ship-flow/check-invariants-terminal-fix/plan.md — Task 1 (DC-18 fixture, 4 cases) → Task 2 (predicate fix) → Task 3 (AC-2 surfacing) → Task 4 (dual-env full gate), exact commands per task.
+- DONE: live-verify the 4-case fixture table against current HEAD before committing it to the plan
+  Patched check-invariants.sh:61 to the design's exact new text, ran all 4 fixture cases, reverted; `git status --short` confirmed clean. RED/GREEN columns in plan.md Task 1 are measured, not copied from design.md.
+- DONE: Canonical Doc Actions section (update/skip + rationale per root canonical doc)
+  PRODUCT.md/ARCHITECTURE.md/ROADMAP.md all skip — rationale table in plan.md (existing capability row covers this; no roadmap/architecture item exists for it).
+- DONE: name existing tests that could break (stage-def "Bad")
+  `grep -iE 'entity_is_terminal|terminal historical' plugins/ship-flow/lib/__tests__/*.sh` = 0 hits outside two unrelated strings (force-push var name, git-fixture commit message) — 0 of ~120 tests pin the changed text.
+- DONE: self-review loop (max 3 iterations)
+  1 iteration sufficed — design.md fully pinned and gate-approved (verdict-branch drop CONFIRMED), no open design questions remained; plan cross-checked against design's tables and re-verified live rather than re-derived.
+
+### Summary
+Plan is 4 serial TDD tasks built directly on the gate-approved design, with zero remaining ambiguity:
+RED fixture (DC-18, 4 cases) → one-line predicate fix (GREEN) → AC-2 surfacing in a new execute.md
+(roborev findings listed, not fixed) → dual-env full gate. The fixture's RED/GREEN behavior was
+live-verified this session (patch/run/revert cycle, working tree confirmed clean afterward) rather
+than trusted from design.md. Task 4 carries an explicit scope note that "suite green" means the test
+suite, not the real-corpus `check-invariants.sh` run, which is expected to flip RED — this is called
+out to prevent execute/verify from misreading the designed AC-2 outcome as a regression.
