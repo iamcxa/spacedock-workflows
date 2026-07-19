@@ -3,13 +3,21 @@
 #
 # design.md §4/§10: precedence puts `reconcile` first ("a merged PR exists"). The
 # tick's reconcile action shells out to the EXISTING
-# merged-pr-closeout-reconciler.sh unmodified (reuse, not reimplementation) —
-# this file reuses that script's OWN `fixtures/merged-pr-closeout-reconciler/*.env`
-# PR fixtures directly, per plan.md T1 ("no duplication"). A `PROMPT_CAPTAIN`
-# verdict (exit 1) must surface as a terminal `blocked` event
+# merged-pr-closeout-reconciler.sh unmodified (reuse, not reimplementation). A
+# `PROMPT_CAPTAIN` verdict (exit 1) must surface as a terminal `blocked` event
 # (source=reconciler-prompt-captain), never a crash, never a retry. A `PROCEED`
 # verdict must emit `reconcile` (terminal_state=reconciled) followed by `advance`
 # naming the next ready entity from a fixture DAG.
+#
+# The PROCEED cases build a real, hermetic git repo via build-landing-fixture.sh
+# rather than reusing fixtures/merged-pr-closeout-reconciler/pr-merged.env: that
+# exact file is the reconciler's OWN suite's deliberately-incomplete negative
+# fixture (missing landing_anchor/source_commits/pr_commit_count) — its own
+# test-merged-pr-closeout-reconciler.sh asserts THIS file must REJECT with
+# reason=landing-anchor-missing, so it can never produce a real PROCEED verdict.
+# The PROMPT_CAPTAIN/UNKNOWN cases below still reuse the reconciler's plain
+# CLOSED/UNKNOWN state fixtures directly — those paths short-circuit before
+# require_landing_contract, so the bare fixtures are genuinely sufficient there.
 
 set -uo pipefail
 
@@ -18,6 +26,8 @@ PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
 HELPER="${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh"
 FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/ship-flow-scheduler"
 RECONCILER_FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/merged-pr-closeout-reconciler"
+# shellcheck disable=SC1091
+source "${FIXTURE_ROOT}/build-landing-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -148,18 +158,38 @@ run_prompt_captain_case() {
 }
 
 run_proceed_case() {
-  local wf status_bin
-  wf="$(one_entity_workflow merged-entity)"
+  local repo fixture_env status_bin
+  repo="$(mktemp -d)"
+  fixture_env="$(mktemp -d)/pr-merged-complete.env"
+  scaffold_landing_repo "$repo"
+  write_entity_index "$repo" merged-entity "$(cat <<'EOF'
+---
+title: Merged fixture entity (reconcile target)
+status: ship
+source: fixture
+started: 2026-07-01T00:00:00Z
+completed:
+verdict: PASSED
+score:
+worktree:
+issue: 508
+pr: 131
+---
+
+Fixture entity: a merged PR is on record (`pr: 131`).
+EOF
+)"
+  land_entity "$repo" merged-entity 131 "Merged fixture entity (reconcile target)" "$fixture_env"
   status_bin="$(mktemp -d)/status-fixture"
   write_fixture_status_bin "$status_bin"
 
   STATUS_BIN="$status_bin" run_capture "$HELPER" tick \
-    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --workflow-dir "${repo}/docs/ship-flow" --controller-worktree "${repo}/docs/ship-flow" \
     --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
-    --pr-fixture "${RECONCILER_FIXTURE_ROOT}/pr-merged.env" \
+    --pr-fixture "$fixture_env" \
     --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
-    --events-log "${wf}/events.jsonl"
-  rm -rf "$wf"
+    --events-log "$(mktemp -d)/events.jsonl"
+  rm -rf "$repo"
 
   assert_exit "PROCEED: tick exit 0" 0 "$EXIT_CODE"
   assert_contains "PROCEED: reconcile event" '"event":"reconcile"' "$OUT"
@@ -167,20 +197,43 @@ run_proceed_case() {
 }
 
 run_reconcile_then_advance_case() {
-  local wf status_bin
-  wf="$(mktemp -d)"
-  cp -R "${FIXTURE_ROOT}/workflow/advance-epic/." "${wf}/"
-  git -C "$wf" init -q 2>/dev/null || true
+  local repo fixture_env status_bin
+  repo="$(mktemp -d)"
+  fixture_env="$(mktemp -d)/pr-epic-merged.env"
+  scaffold_landing_repo "$repo"
+  write_entity_index "$repo" epic-parent-entity "$(cat <<'EOF'
+---
+title: Advance-epic parent fixture entity (reconcile target)
+status: ship
+source: fixture
+started: 2026-07-01T00:00:00Z
+completed:
+verdict: PASSED
+score:
+worktree:
+issue: 510
+pr: 131
+id: "900.1"
+parent_pitch: "900"
+---
+
+Fixture entity: a merged PR is on record (`pr: 131`). Belongs to epic `900`;
+reconciling it should surface its sibling as newly ready via
+`dag-waves.sh --ready --epic 900`.
+EOF
+)"
+  land_entity "$repo" epic-parent-entity 131 "Advance-epic parent fixture entity (reconcile target)" "$fixture_env"
+  commit_entity_dir "$repo" epic-child-entity "${FIXTURE_ROOT}/workflow/advance-epic/epic-child-entity"
   status_bin="$(mktemp -d)/status-fixture"
   write_fixture_status_bin "$status_bin"
 
   STATUS_BIN="$status_bin" run_capture "$HELPER" tick \
-    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --workflow-dir "${repo}/docs/ship-flow" --controller-worktree "${repo}/docs/ship-flow" \
     --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
-    --pr-fixture "${RECONCILER_FIXTURE_ROOT}/pr-merged.env" \
+    --pr-fixture "$fixture_env" \
     --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
-    --events-log "${wf}/events.jsonl"
-  rm -rf "$wf"
+    --events-log "$(mktemp -d)/events.jsonl"
+  rm -rf "$repo"
 
   assert_exit "reconcile+advance: tick exit 0" 0 "$EXIT_CODE"
   assert_contains "reconcile+advance: reconcile event present" '"event":"reconcile"' "$OUT"

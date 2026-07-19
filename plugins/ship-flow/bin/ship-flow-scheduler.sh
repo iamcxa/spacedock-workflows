@@ -310,7 +310,12 @@ cmd_tick() {
   [ -n "$workflow_dir" ] && [ -n "$controller_worktree" ] || { usage; return 2; }
   [ -d "$workflow_dir" ] || { echo "ship-flow-scheduler: no such workflow-dir: $workflow_dir" >&2; return 3; }
   [ -d "$controller_worktree" ] || { echo "ship-flow-scheduler: no such controller-worktree: $controller_worktree" >&2; return 3; }
-  if [ "$runner" = "gh" ] && ! command -v claude >/dev/null 2>&1; then
+  # SHIP_FLOW_SCHEDULER_RUNNER_CMD is the runner adapter's own test-only seam
+  # (scheduler-runner-adapter.sh) that replaces the real `claude -p` spawn —
+  # when it's set, this preflight must not require the real binary to be on
+  # PATH, or CI (which has no `claude` CLI installed) fails this guard before
+  # the hermetic seam ever gets a chance to run.
+  if [ "$runner" = "gh" ] && [ -z "${SHIP_FLOW_SCHEDULER_RUNNER_CMD:-}" ] && ! command -v claude >/dev/null 2>&1; then
     echo "ship-flow-scheduler: claude CLI not available for --runner gh" >&2; return 3
   fi
 

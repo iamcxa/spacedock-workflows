@@ -3,7 +3,7 @@
 #
 # design.md §10 "full-cycle" row: dispatch -> PR-ready -> merged -> reconcile ->
 # dag-waves --ready next-ready, exercised end to end via T2/T3/T4/T5's landed
-# pieces. Two tick invocations against one evolving fixture workflow dir:
+# pieces. Three tick invocations against one evolving fixture git repo:
 #   1. dispatch fires on the eligible parent entity.
 #   2. (the test manually applies the "PR opened + verdict PASSED" mutation a
 #      real /ship run would have written — the tick itself never writes
@@ -11,6 +11,14 @@
 #      fixture reports MERGED, and — because the entity carries parent_pitch —
 #      the SAME invocation's follow-through recomputes readiness and names the
 #      newly-ready sibling (the "advance" half of AC-5).
+#   3. a third tick actually dispatches the now-ready child.
+#
+# Leg 2 drives a REAL merged-pr-closeout-reconciler.sh PROCEED (not a stub):
+# via build-landing-fixture.sh, mirroring test-merged-pr-closeout-
+# reconciler.sh's own proven prepare_full_d1_repo recipe. A bare fixture PR
+# env (missing landing_anchor/source_commits/pr_commit_count) can never reach
+# PROCEED — that shape is the reconciler's OWN suite's deliberately-incomplete
+# negative fixture, asserted elsewhere to REJECT.
 
 set -uo pipefail
 
@@ -18,7 +26,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &> /dev/null && pwd)"
 HELPER="${PLUGIN_ROOT}/bin/ship-flow-scheduler.sh"
 FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/ship-flow-scheduler"
-RECONCILER_FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/merged-pr-closeout-reconciler"
+# shellcheck disable=SC1091
+source "${FIXTURE_ROOT}/build-landing-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -117,40 +126,44 @@ set_frontmatter_field() {
 }
 
 run_fullcycle_case() {
-  local wf status_bin parent_path child_path
-  wf="$(mktemp -d)"
-  cp -R "${FIXTURE_ROOT}/fullcycle/fullcycle-parent-entity" "${wf}/fullcycle-parent-entity"
-  cp -R "${FIXTURE_ROOT}/fullcycle/fullcycle-child-entity" "${wf}/fullcycle-child-entity"
-  git -C "$wf" init -q
+  local repo status_bin parent_path child_path fixture_env events_log
+  repo="$(mktemp -d)"
+  scaffold_landing_repo "$repo"
+  commit_entity_dir "$repo" fullcycle-parent-entity "${FIXTURE_ROOT}/fullcycle/fullcycle-parent-entity"
+  commit_entity_dir "$repo" fullcycle-child-entity "${FIXTURE_ROOT}/fullcycle/fullcycle-child-entity"
   status_bin="$(mktemp -d)/status-fixture"
   write_fixture_status_bin "$status_bin"
+  events_log="$(mktemp -d)/events.jsonl"
 
   # --- Leg 1: dispatch ---
   STATUS_BIN="$status_bin" run_capture "$HELPER" tick \
-    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --workflow-dir "${repo}/docs/ship-flow" --controller-worktree "${repo}/docs/ship-flow" \
     --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
     --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
-    --events-log "${wf}/events.jsonl"
+    --events-log "$events_log"
   assert_exit "leg 1 (dispatch): tick exit 0" 0 "$EXIT_CODE"
   assert_contains "leg 1 (dispatch): dispatch event for the parent" '"event":"dispatch".*"entity":"fullcycle-parent-entity"' "$OUT"
 
   # --- Simulate what a completed /ship run writes (the tick itself never
-  # writes entity frontmatter — design.md §3/Rule 3). Reuses the EXISTING
-  # merged-pr-closeout-reconciler pr-merged.env fixture's PR number (131) so
-  # leg 2 can reuse that fixture directly, matching plan.md T1's "no
-  # duplication" instruction.
-  parent_path="${wf}/fullcycle-parent-entity/index.md"
+  # writes entity frontmatter — design.md §3/Rule 3): pr/worktree/verdict.
+  # land_entity below stages+commits this edit along with review.md/ship.md,
+  # producing a REAL merged-PR fixture (landing_anchor/source_commits/
+  # pr_commit_count) via build-landing-fixture.sh — a bare fixture env
+  # (missing those fields) can never reach a real reconcile PROCEED.
+  parent_path="${repo}/docs/ship-flow/fullcycle-parent-entity/index.md"
   set_frontmatter_field "$parent_path" pr 131
   set_frontmatter_field "$parent_path" worktree ".worktrees/fullcycle-parent-entity"
   set_frontmatter_field "$parent_path" verdict PASSED
+  fixture_env="$(mktemp -d)/pr-fullcycle-parent-merged.env"
+  land_entity "$repo" fullcycle-parent-entity 131 "Fullcycle parent fixture entity (dispatch target)" "$fixture_env"
 
   # --- Leg 2: reconcile (merged) + advance (next-ready) ---
   STATUS_BIN="$status_bin" run_capture "$HELPER" tick \
-    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --workflow-dir "${repo}/docs/ship-flow" --controller-worktree "${repo}/docs/ship-flow" \
     --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
-    --pr-fixture "${RECONCILER_FIXTURE_ROOT}/pr-merged.env" \
+    --pr-fixture "$fixture_env" \
     --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
-    --events-log "${wf}/events.jsonl"
+    --events-log "$events_log"
   assert_exit "leg 2 (reconcile+advance): tick exit 0" 0 "$EXIT_CODE"
   assert_contains "leg 2: reconcile event, terminal_state=reconciled" '"event":"reconcile".*"terminal_state":"reconciled"' "$OUT"
   assert_contains "leg 2: advance names the next-ready child" '"event":"advance".*"dispatched":"fullcycle-child-entity"' "$OUT"
@@ -162,25 +175,27 @@ run_fullcycle_case() {
   # "shape it, get the linked issue sd:approved" step; the committed
   # gh/issue-fullcycle-child-entity.env fixture (state OPEN + sd:approved)
   # only starts counting once `issue:` is non-empty, matching a real shape
-  # pass writing both facts together.
-  child_path="${wf}/fullcycle-child-entity/index.md"
+  # pass writing both facts together. Left uncommitted (a dirty working tree
+  # is harmless here — dispatch never touches the reconciler's dirty-tree
+  # guard, unlike reconcile).
+  child_path="${repo}/docs/ship-flow/fullcycle-child-entity/index.md"
   set_frontmatter_field "$child_path" status shape
   set_frontmatter_field "$child_path" issue 902
-  cp "${FIXTURE_ROOT}/fullcycle/fullcycle-parent-entity/shape.md" "${wf}/fullcycle-child-entity/shape.md"
+  cp "${FIXTURE_ROOT}/fullcycle/fullcycle-parent-entity/shape.md" "${repo}/docs/ship-flow/fullcycle-child-entity/shape.md"
 
   # --- Leg 3 (F3, feedback cycle 1, BLOCKING): a THIRD tick, with the parent
   # now archived (no PR-bearing active entity left), must actually DISPATCH
   # the child — the real "NEXT tick dispatches the next entity" half of AC-5
   # that leg 2's `advance` event alone only NAMES, never proves.
   STATUS_BIN="$status_bin" run_capture "$HELPER" tick \
-    --workflow-dir "$wf" --controller-worktree "$wf" \
+    --workflow-dir "${repo}/docs/ship-flow" --controller-worktree "${repo}/docs/ship-flow" \
     --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
     --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
-    --events-log "${wf}/events.jsonl"
+    --events-log "$events_log"
   assert_exit "leg 3 (dispatch the next entity): tick exit 0" 0 "$EXIT_CODE"
   assert_contains "leg 3: dispatch event for the child" '"event":"dispatch".*"entity":"fullcycle-child-entity"' "$OUT"
 
-  rm -rf "$wf"
+  rm -rf "$repo"
 }
 
 echo "=== test-ship-flow-scheduler-fullcycle.sh ==="

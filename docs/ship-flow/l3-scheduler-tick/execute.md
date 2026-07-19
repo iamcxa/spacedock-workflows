@@ -115,6 +115,9 @@ RED commit.
 
 ## Full local gate (pre-handoff self-check)
 
+<details>
+<summary>Gate run outputs (raw)</summary>
+
 - Shell suite: full `lib/__tests__/test-*.sh` loop (119 files, `CI=true
   timeout 90 bash` per file, matching `.github/workflows/ship-flow-invariants.yml`)
   → 118/119 files pass. The one failure
@@ -143,6 +146,8 @@ RED commit.
   Flagging to the FO/captain rather than silently declaring the gate green or
   unilaterally editing verify.md/rewriting a commit outside this stage's
   remit.
+
+</details>
 
 ## Feedback Cycle 2 fixes
 Round-2 bounce scoped to exactly W1 + W2 (verify.md `## Deferred to TODO`); fix ONLY these two, no other item touched, full local gate re-run green below.
@@ -190,5 +195,98 @@ Round-2 bounce scoped to exactly W1 + W2 (verify.md `## Deferred to TODO`); fix 
   here, not touched by W1/W2.
 - `bash scripts/check-no-dangling.sh` PASS; `bash
   scripts/check-version-triple.sh` PASS; `git diff --check` clean.
+
+</details>
+
+## CI-fix addendum
+
+PR #70's `invariants` and `doc_impact` CI checks failed post-ship (all 3
+scheduler tests + the doc-coupling gate). Dispatched as a scoped CI-fix; the
+hypothesis handed in ("all 3 fail from missing git identity in `git init`
+fixture repos, CI-only") held for none of the three as originally framed —
+each had a distinct, directly-diagnosed root cause, confirmed by reproducing
+RED first (all 3 failed in a plain local shell too, not just CI):
+
+<details>
+<summary>Per-test root causes, RED reproductions, and fix evidence (raw)</summary>
+
+- **`test-scheduler-runner-adapter.sh` — CI-env cause, not git identity.**
+  `cmd_tick`'s `--runner gh` preflight (`command -v claude`) fired even when
+  the test-only `SHIP_FLOW_SCHEDULER_RUNNER_CMD` seam is set — a seam that
+  never calls the real `claude` binary. CI runners have no `claude` CLI
+  installed; this machine does, so the guard only ever fired there. RED
+  reproduced by stripping `claude` from `PATH` (`command -v claude` →
+  NOTFOUND) → exit 3, matching CI exactly. Fix (`ship-flow-scheduler.sh:313`):
+  skip the guard when the seam is active. GREEN with `claude` present AND
+  absent from `PATH`.
+- **`test-ship-flow-scheduler-fullcycle.sh` +
+  `test-ship-flow-scheduler-reconcile.sh` — NOT a CI-environment issue; both
+  failed identically in a normal local shell.** Both tests' PROCEED-reconcile
+  assertions reused `fixtures/merged-pr-closeout-reconciler/pr-merged.env`
+  directly. That exact file is the reconciler's OWN suite's
+  deliberately-incomplete negative fixture (missing `landing_anchor`/
+  `source_commits`/`pr_commit_count`) — `test-merged-pr-closeout-
+  reconciler.sh`'s `run_incomplete_landing_contract_case` asserts THIS SAME
+  FILE must REJECT with `reason=landing-anchor-missing`. A reconcile PROCEED
+  was structurally unreachable this way, in any environment; the prior
+  execute/verify cycles' "9/9 scheduler files green" claims for these two
+  files' PROCEED cases do not hold up under direct reproduction (every
+  other assertion in both files — PROMPT_CAPTAIN, UNKNOWN-gh-state, dispatch
+  legs — genuinely passed; only the PROCEED-dependent assertions were
+  affected).
+  - Fix: added `plugins/ship-flow/lib/__tests__/fixtures/ship-flow-scheduler/build-landing-fixture.sh`,
+    a sourced helper mirroring `test-merged-pr-closeout-reconciler.sh`'s own
+    proven `prepare_full_d1_repo` recipe (real git repo + identity + a single
+    "landing" commit with review.md/ship.md/ROADMAP Now-row, computing a
+    genuinely valid `landing_anchor`/`source_commits`/`pr_commit_count`
+    against `resolve-landing-envelope.sh`'s rebase/squash-candidate
+    tie-break via `merge_method_intent: rebase`). Rewired both test files'
+    PROCEED cases (`run_proceed_case`, `run_reconcile_then_advance_case`,
+    `run_fullcycle_case` leg 2) to build a real repo instead of reusing the
+    reconciler's negative fixture.
+  - **Second, deeper finding surfaced only once the fixture reached the real
+    commit-applying code path (a genuine production gap, not a test
+    artifact):** the scheduler's own mkdir-atomic controller lease
+    (`scheduler-lease.sh`'s `.ship-flow-scheduler.lease/`, created directly
+    inside `controller_worktree`) and the runner adapter's
+    `.ship-flow-scheduler-receipts/` directory are both untracked and
+    un-ignored. In the realistic same-repo topology (`controller_worktree`
+    = the project's own checkout, matching design.md), either directory
+    existing during a `--closeout-mode direct` reconcile makes
+    `merged-pr-closeout-reconciler.sh`'s dirty-worktree guard
+    (`git status --porcelain --untracked-files=all`) fail closed with
+    `closeout-checkpoint-conflict — authoritative main worktree is not
+    clean` — meaning AC-5's reconcile action would never succeed against a
+    real repo running its own tick. RED reproduced by pointing
+    `--controller-worktree` at the same git repo the entity lives in
+    (deterministic, not a PID/timing race — repeated 3x, same failure each
+    time). Fix: added `.ship-flow-scheduler.lease/` and
+    `.ship-flow-scheduler-receipts/` to the plugin repo's root `.gitignore`
+    (and to the new test fixture's own generated `.gitignore`, so the test
+    repo matches real-repo behavior).
+  - RED→GREEN evidence: reconcile file went from 11/16 → 16/16; fullcycle
+    went from 5/8 → 8/8, reproduced independently via a standalone
+    `merged-pr-closeout-reconciler.sh` invocation before wiring the fix into
+    the tests.
+- **`doc_impact` — coupled-doc BLOCKER, resolved honestly (doc updated, not
+  declared `none`).** `references/doc-sync-context.md` genuinely lacked
+  Source-Map rows for the three new plugin surfaces this ticket added.
+  Added rows for `bin/ship-flow-scheduler.sh`, `lib/scheduler-lease.sh`, and
+  `lib/scheduler-runner-adapter.sh` (one line each, matching the file's
+  existing table format and tone). Verified locally against the actual
+  `checker-source-map` rule in `doc-coupling-map.yaml` by reconstructing the
+  PR's exact changed-file list from the failing CI run and running
+  `bin/doc-impact-gate.sh` directly: BLOCKER before the doc edit, `PASS
+  checker-source-map: coupled doc touched` after.
+
+**Full local gate re-run after all fixes (this dispatch):** all 9 scheduler
+fixture test files green (independently re-run, plus under two adversarial
+environments: `HOME`/`XDG_CONFIG_HOME` pointed at fresh empty dirs with no
+global git identity, and `claude` stripped from `PATH` — both green); full
+119-file shell suite green; node 79/79; `check-invariants.sh` exit 0 (same
+2 pre-existing grandfathered WARNs, no new FAILs); `check-no-dangling.sh`
+PASS; `check-version-triple.sh` PASS; `git diff --check` clean; shellcheck
+clean on all touched/added files.
+
 
 </details>
