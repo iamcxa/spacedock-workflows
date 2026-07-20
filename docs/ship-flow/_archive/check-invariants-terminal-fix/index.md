@@ -1,14 +1,15 @@
 ---
 title: check-invariants terminal misclassification fix
-status: design
+status: done
 source: hackathon-2 Wave 2b (todo check-invariants-terminal-misclassification; #71 verify finding)
 started: 2026-07-19T16:04:46Z
-completed:
-verdict:
+completed: 2026-07-20T06:44:06Z
+verdict: passed
 score:
 worktree: .worktrees/spacedock-ensign-check-invariants-terminal-fix
 issue: "#76"
-pr:
+pr: pr-merge:80
+archived: 2026-07-20T06:44:06Z
 ---
 
 Time budget: 1h15m. check-invariants.sh's _entity_is_terminal() misclassifies any entity with an
