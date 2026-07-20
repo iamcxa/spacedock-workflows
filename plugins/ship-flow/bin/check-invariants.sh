@@ -58,7 +58,7 @@ FAIL=0
 
 _entity_is_terminal() {
   local f="$1"
-  grep -qE '^(status:[[:space:]]*(done|ship|shipped)|completed:|shipped:|verdict:[[:space:]]*PASSED)' "$f" 2>/dev/null
+  grep -qE '^status:[[:space:]]*done[[:space:]]*$' "$f" 2>/dev/null
 }
 
 # ---- Check functions (stubs in T3; bodies filled in T6/T7/T8) ----

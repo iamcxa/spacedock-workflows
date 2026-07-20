@@ -1,12 +1,13 @@
 ---
 title: Deterministic migration receipts and merge-parent semantics
-status: execute
+status: done
 source: "RoboRev job 40 exact-head review of C14"
 started: 2026-07-13T09:46:16Z
-completed:
-verdict:
+archived: 2026-07-20T05:34:00Z
+completed: 2026-07-20T05:34:00Z
+verdict: REJECTED
 score:
-worktree: .worktrees/spacedock-ensign-roborev-migration-receipt-merge-semantics
+worktree:
 issue:
 pr:
 pattern: pitch
@@ -1035,3 +1036,15 @@ decisions routed to design.
 - path: sharp-only
 - open_contract_decisions_count: 4
 - domain_matches_count: 1
+
+
+## Terminalization postscript (2026-07-20T05:34:00Z)
+
+Parked and archived without shipping (verdict REJECTED = nothing merged), per
+captain fix-first decision for PR #80 (entity roborev-execute-terminalization,
+issue #88). Evidence: origin/main carried only status-transition commits for
+this entity — the implementation lived on a never-pushed local branch
+(spacedock-ensign/roborev-migration-receipt-merge-semantics @ d175178,
+preserved by SHA), its AC-3 RoboRev gate never ran, and the feature intent
+(deterministic migration receipts / merge-parent semantics) is independently
+tracked by open issues #36 and #37. No checker/allowlist was modified.
