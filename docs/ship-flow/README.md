@@ -101,6 +101,7 @@ Every feature file has YAML frontmatter. Fields are documented below; see
 | `completed` | ISO 8601 | When the feature reached terminal status |
 | `verdict` | enum | PASSED or REJECTED — set at final stage |
 | `score` | number | Priority score, 0.0–1.0 (optional) |
+| `time_budget` | string | Budget in `<N>h<N>m` format (e.g. `2h30m`). At 75% consumed the FO warns in-channel; at 100% the brake fires: park + surface + cut scope. Verification is NEVER compressed to fit a budget. Parsed by `scheduler-runner-adapter.sh` `derive_timeout_sec`. |
 | `worktree` | string | Worktree path while a dispatched agent is active, empty otherwise |
 | `issue` | string | GitHub issue reference (optional cross-reference) |
 | `pr` | string | GitHub PR reference — set when the entity's branch opens a PR |
@@ -257,6 +258,7 @@ started:
 completed:
 verdict:
 score:
+time_budget:
 worktree:
 issue:
 pr:
