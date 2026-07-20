@@ -64,3 +64,15 @@ Implemented the two plan.md doc edits: inserted `### Time-Box Discipline` subsec
 ### Summary
 
 All three ACs pass. AC-1 confirmed by grep: `time_budget`, `75%`, and `brake` all hit INVARIANTS.md lines 413–438 with park+surface+cut-scope semantics and explicit never-compress wording. AC-2 confirmed by grep: `time_budget:` at line 261 (Feature Template) and a full Field Reference row at line 104 with `<N>h<N>m` format and semantics pointer. AC-3 confirmed by diff and git status: only existing canon files modified, no orphan docs, full gate suite clean with zero new regressions. runtime_uat not-applicable (docs-only change).
+
+## Stage Report: ship
+
+- DONE: Appended Panel Coverage + Deferred to TODO sections to verify.md (C11+C12 invariants satisfied)
+- DONE: git pull --rebase origin mini/hackathon-spirit-canonicalization (branch current)
+- DONE: Committed and pushed verify.md fix
+- DONE: gh pr merge 90 --auto --merge — PR 90 auto-merge armed
+- DONE: status set to done in frontmatter
+
+### Summary
+
+PR 90 (hackathon-spirit-canonicalization) auto-merge armed. verify.md now includes required Panel Coverage and Deferred to TODO sections. Entity complete.
