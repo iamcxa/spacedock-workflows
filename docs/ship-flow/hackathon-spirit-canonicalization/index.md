@@ -1,6 +1,6 @@
 ---
 title: Document hackathon #2 process and learnings
-status: design
+status: plan
 appetite: small
 issue: "#86"
 started: 2026-07-20T02:56:25Z
