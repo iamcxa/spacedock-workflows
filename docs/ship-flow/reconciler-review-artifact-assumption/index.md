@@ -1,6 +1,6 @@
 ---
 title: Fix reconciler review-artifact validation
-status: plan
+status: execute
 issue: "#83"
 worktree: .worktrees/spacedock-ensign-reconciler-review-artifact-assumption
 started: 2026-07-20T02:00:03Z
