@@ -400,6 +400,45 @@ prepare_full_d1_repo() {
     'pr_commit_count=2' >"$fixture"
 }
 
+# Same as prepare_full_d1_repo, but the reviewed-entity commit adds index.md
+# alone — no review.md is ever created or committed (AC-1 review-absent fixture).
+prepare_full_d1_repo_review_absent() {
+  local repo="$1" fixture="$2" worktree_value="${3:-}"
+  local base source_one source_two anchor
+  setup_repo "$repo"
+  printf '%s\n' '.worktrees/' >"$repo/.gitignore"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' \
+    '| Entity | Title |' '| --- | --- |' \
+    '| merged-fixture-entity | Merged fixture entity |' \
+    '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' \
+    '| Entity | Title | Shipped |' '| --- | --- | --- |' \
+    '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  git -C "$repo" add -- .gitignore ROADMAP.md
+  git -C "$repo" commit -qm 'fixture: add roadmap'
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb ship-merged-fixture-entity "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' "$worktree_value"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$repo" commit -qm 'implementation: add entity without review'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' \
+    '- Preserve cleanup safety evidence.' '' '### Verdict' \
+    'merge_method_intent: rebase' 'pr: "#131"' \
+    >"$repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$repo" commit -qm 'implementation: add ship evidence'
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" "$source_two" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' \
+    'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=ship-merged-fixture-entity' 'base_ref=main' \
+    'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_one,$source_two" \
+    'pr_commit_count=2' >"$fixture"
+}
+
 prepare_full_d1_squash_repo() {
   local repo="$1" fixture="$2"
   local base source_one source_two anchor
