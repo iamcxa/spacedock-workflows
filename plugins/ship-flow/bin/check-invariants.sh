@@ -1156,8 +1156,18 @@ check_refusal_observability_record() {
   # observability record, not the tick's action" rule text so it stays
   # discoverable and cannot silently regress. Tier B per Principle 16 (text
   # presence, NOT behavior). Fixture override: FIXTURE_INVARIANTS=path.
+  #
+  # F3 fix (verify feedback cycle 1, codex adversarial): a missing target
+  # file is a verification FAILURE, not "nothing to check" — the pre-existing
+  # `[ -f ... ] || return 0` skip (shared by C9/C16, out of this entity's
+  # DC-1 scope) is a fail-open false negative: it reports success while
+  # never having read a single rule sentence. C18 (introduced by this
+  # entity) fails closed instead.
   local invariants_file="${FIXTURE_INVARIANTS:-${ROOT}/plugins/ship-flow/INVARIANTS.md}"
-  [ -f "$invariants_file" ] || return 0
+  if [ ! -f "$invariants_file" ]; then
+    echo "ERROR [Principle 18/refusal-observability-record]: target file missing: ${invariants_file} — cannot verify the Principle 18 rule text is present." >&2
+    return 1
+  fi
   local s1="A scheduler tick's single bounded action is reconcile > dispatch > advance > no-op; a Precedence-2 dispatch-scan beat's \`refusal\` events are scan-time observability records emitted BEFORE the beat's action, never the action itself."
   local s2="The events log (\`.ship-flow-scheduler-events.jsonl\`) is read only to derive skip-past / dedup windows (blocked-backoff, refusal-dedup); it is never read to compute entity eligibility or to mutate canonical state, and it remains the rollup's only input."
   local rule_missing=0
