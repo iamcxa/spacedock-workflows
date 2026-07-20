@@ -400,6 +400,129 @@ prepare_full_d1_repo() {
     'pr_commit_count=2' >"$fixture"
 }
 
+# Same as prepare_full_d1_repo, but the reviewed-entity commit adds index.md
+# alone — no review.md is ever created or committed (AC-1 review-absent fixture).
+prepare_full_d1_repo_review_absent() {
+  local repo="$1" fixture="$2" worktree_value="${3:-}"
+  local base source_one source_two anchor
+  setup_repo "$repo"
+  printf '%s\n' '.worktrees/' >"$repo/.gitignore"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' \
+    '| Entity | Title |' '| --- | --- |' \
+    '| merged-fixture-entity | Merged fixture entity |' \
+    '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' \
+    '| Entity | Title | Shipped |' '| --- | --- | --- |' \
+    '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  git -C "$repo" add -- .gitignore ROADMAP.md
+  git -C "$repo" commit -qm 'fixture: add roadmap'
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb ship-merged-fixture-entity "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' "$worktree_value"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$repo" commit -qm 'implementation: add entity without review'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' \
+    '- Preserve cleanup safety evidence.' '' '### Verdict' \
+    'merge_method_intent: rebase' 'pr: "#131"' \
+    >"$repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$repo" commit -qm 'implementation: add ship evidence'
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" "$source_two" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' \
+    'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=ship-merged-fixture-entity' 'base_ref=main' \
+    'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_one,$source_two" \
+    'pr_commit_count=2' >"$fixture"
+}
+
+# Pull-request-mode counterpart to prepare_full_d1_repo_review_absent (AC-1
+# item 2, independent code path from the direct-mode predicate). Builds an
+# implementation-topic branch cherry-picked onto main, no review.md at any
+# point, plus a pre-seeded closeout PR checkpoint (number/state/head) so the
+# fixture provider can resolve past the deterministic-head identity check on
+# first reconcile. The closeout_pr_head value below is the fixed
+# ship-closeout/<cid> for identity={provider:github, repository:example/repo,
+# workflow:docs/ship-flow, entity_slug:merged-fixture-entity,
+# implementation_pr:131} — the same identity every other fixture in this file
+# uses, so this hash is stable and reproducible via:
+#   python3 -c 'import hashlib; print(hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"merged-fixture-entity",b"131"))).hexdigest())'
+prepare_full_d1_repo_pull_request_review_absent() {
+  local repo="$1" fixture="$2"
+  local base source_one source_two anchor
+  setup_repo "$repo"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' \
+    '| Entity | Title |' '| --- | --- |' \
+    '| merged-fixture-entity | Merged fixture entity |' \
+    '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' \
+    '| Entity | Title | Shipped |' '| --- | --- | --- |' \
+    '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  git -C "$repo" add -- ROADMAP.md
+  git -C "$repo" commit -qm 'fixture: add roadmap'
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb implementation-topic "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' ''
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md
+  git -C "$repo" commit -qm 'implementation: add entity without review'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' '# Ship' '' '## Todo Closeout Digest' '' \
+    '- Pull-request review-absent proof.' '' '### Verdict' \
+    'merge_method_intent: rebase' 'pr: "#131"' \
+    >"$repo/docs/ship-flow/merged-fixture-entity/ship.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/ship.md
+  git -C "$repo" commit -qm 'implementation: add ship evidence'
+  source_two="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" "$source_two" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' \
+    'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=implementation-topic' 'base_ref=main' \
+    'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_one,$source_two" \
+    'pr_commit_count=2' 'closeout_pr_number=141' 'closeout_pr_state=OPEN' \
+    'closeout_pr_head=ship-closeout/36aaf21913c429d600e5bfe9d92eb6ea5de59162e26a5fcc192237d5592cd4fb' \
+    >"$fixture"
+}
+
+# AC-3 characterization fixture: review.md present, ship.md never created —
+# a complete landing envelope (real anchor commit) is required so the
+# predicate reject is actually reached; pr-merged.env has no landing_anchor
+# and would reject landing-anchor-missing before the review/ship predicate
+# ever runs.
+prepare_full_d1_repo_ship_absent() {
+  local repo="$1" fixture="$2"
+  local base source_one anchor
+  setup_repo "$repo"
+  printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' \
+    '| Entity | Title |' '| --- | --- |' \
+    '| merged-fixture-entity | Merged fixture entity |' \
+    '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' \
+    '| Entity | Title | Shipped |' '| --- | --- | --- |' \
+    '<!-- /section:shipped -->' >"$repo/ROADMAP.md"
+  git -C "$repo" add -- ROADMAP.md
+  git -C "$repo" commit -qm 'fixture: add roadmap'
+  base="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -qb ship-merged-fixture-entity "$base"
+  write_entity "$repo/docs/ship-flow" merged-fixture-entity ship '#131' ''
+  printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$repo/docs/ship-flow/merged-fixture-entity/review.md"
+  git -C "$repo" add -- docs/ship-flow/merged-fixture-entity/index.md docs/ship-flow/merged-fixture-entity/review.md
+  git -C "$repo" commit -qm 'implementation: add reviewed entity without ship.md'
+  source_one="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" checkout -q main
+  git -C "$repo" cherry-pick "$source_one" >/dev/null
+  anchor="$(git -C "$repo" rev-parse HEAD)"
+  printf '%s\n' 'provider=fixture' 'number=131' 'state=MERGED' \
+    'merged_at=2026-07-15T00:00:00Z' \
+    'head_ref=ship-merged-fixture-entity' 'base_ref=main' \
+    'url=https://github.com/example/repo/pull/131' 'repository=example/repo' \
+    "landing_anchor=$anchor" "source_commits=$source_one" \
+    'pr_commit_count=1' >"$fixture"
+}
+
 prepare_full_d1_squash_repo() {
   local repo="$1" fixture="$2"
   local base source_one source_two anchor
@@ -4089,6 +4212,64 @@ run_pull_request_roadmap_validation_case() {
   fi
 }
 
+# reconciler-review-artifact-assumption (AC-1, AC-2, AC-3): review.md is
+# presence-driven, not mandatory. Each predicate is exercised on its own,
+# independent fixture-construction path (direct vs pull-request) so a fix
+# touching only one site cannot accidentally flip the other test green too.
+run_review_artifact_assumption_cases() {
+  local repo="$TMP_DIR/review-absent-direct-repo" fixture="$TMP_DIR/review-absent-direct.env" output="$TMP_DIR/review-absent-direct.out"
+  local rc receipt
+
+  # AC-1(a) — direct mode, review.md absent, index.md + ship.md present.
+  prepare_full_d1_repo_review_absent "$repo" "$fixture"
+  rc="$(run_helper "$repo" "$output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$fixture")"
+  assert_exit 'direct closeout proceeds without review.md (AC-1)' 0 "$rc"
+
+  # AC-2 — receipt-shape determinism, modeled on the golden-receipt assertion
+  # above (:4956's ownership_proof.source_hashes pattern): the applied
+  # receipt's source_hashes carries {index,ship} only, no review key, and the
+  # recomputed proof_hash matches — pins presence/absence AND determinism.
+  receipt="$(find "$repo/docs/ship-flow/_closeouts" -name '*.json' -maxdepth 1 -print -quit 2>/dev/null || true)"
+  if [ -z "$receipt" ]; then
+    record_fail 'review-absent direct receipt source_hashes omits review key and stays proof-hash deterministic (no receipt found)'
+  elif python3 - "$receipt" <<'PY'
+import json,hashlib,sys
+r=json.load(open(sys.argv[1]))
+keys=sorted(r["ownership_proof"]["source_hashes"].keys())
+if keys!=["index","ship"]:
+    raise SystemExit("unexpected source_hashes keys: "+repr(keys))
+payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}
+expected=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+if expected!=r["proof_hash"]:
+    raise SystemExit("proof_hash mismatch")
+PY
+  then
+    record_pass 'review-absent direct receipt source_hashes omits review key and stays proof-hash deterministic'
+  else
+    record_fail 'review-absent direct receipt source_hashes omits review key and stays proof-hash deterministic'
+  fi
+
+  # AC-1(b) — pull-request mode, review.md absent, independent fixture path
+  # from AC-1(a) (own repo construction, own predicate at :1880). A fix
+  # touching only the direct-mode predicate must leave this RED.
+  local pr_repo="$TMP_DIR/review-absent-pr-repo" pr_fixture="$TMP_DIR/review-absent-pr.env" pr_output="$TMP_DIR/review-absent-pr.out"
+  local pr_registry="$TMP_DIR/review-absent-pr.registry"
+  prepare_full_d1_repo_pull_request_review_absent "$pr_repo" "$pr_fixture"
+  rc="$(SHIP_FLOW_CLOSEOUT_FIXTURE_REGISTRY="$pr_registry" run_helper "$pr_repo" "$pr_output" \
+    --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$pr_fixture" --closeout-mode pull-request)"
+  assert_exit 'pull-request closeout proceeds without review.md (AC-1)' 0 "$rc"
+  assert_contains 'pull-request review-absent closeout awaits its bound closeout PR' '^reason=closeout-pr-awaiting-merge$' "$pr_output"
+
+  # AC-3 characterization (NOT a RED-then-GREEN pair) — review.md present,
+  # ship.md absent must still reject closeout-ship-missing, unchanged by this
+  # fix. Locks the baseline: this passes identically before and after T2/T3.
+  local ship_missing_repo="$TMP_DIR/ship-missing-repo" ship_missing_fixture="$TMP_DIR/ship-missing.env" ship_missing_output="$TMP_DIR/ship-missing.out"
+  prepare_full_d1_repo_ship_absent "$ship_missing_repo" "$ship_missing_fixture"
+  rc="$(run_helper "$ship_missing_repo" "$ship_missing_output" --entity merged-fixture-entity --pr-provider fixture --pr-fixture "$ship_missing_fixture")"
+  assert_exit 'ship.md absent still rejects regardless of review.md (AC-3)' 2 "$rc"
+  assert_contains 'ship.md absent reports stable reason (AC-3)' '^reason=closeout-ship-missing$' "$ship_missing_output"
+}
+
 run_refusal_cases() {
   local repo="$TMP_DIR/refusal-repo"
   setup_repo "$repo"
@@ -5305,6 +5486,9 @@ else
     run_pr40_pr41_red_case
     run_frozen_dogfood_case pr40 dogfood-pr40 "${FIXTURE_ROOT}/pr40-rewritten-landing.env"
     run_frozen_dogfood_case pr41 dogfood-pr41 "${FIXTURE_ROOT}/pr41-manual-outcome.env"
+  fi
+  if case_selected review-artifact-assumption; then
+    run_review_artifact_assumption_cases
   fi
   run_scope_guard
   run_doc_scope_cases

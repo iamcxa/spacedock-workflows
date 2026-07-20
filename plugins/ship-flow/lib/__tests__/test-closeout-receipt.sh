@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PLUGIN_ROOT="$(cd -- "${SCRIPT_DIR}/../.." &>/dev/null && pwd)"
 VALIDATOR="${PLUGIN_ROOT}/lib/validate-closeout-receipt.py"
+APPLIER="${PLUGIN_ROOT}/lib/apply-closeout-bundle.sh"
 SCHEMA="${PLUGIN_ROOT}/references/closeout-receipt-schema.yaml"
 LANDING_RESOLVER="${PLUGIN_ROOT}/lib/resolve-landing-envelope.sh"
 FIXTURE_ROOT="${SCRIPT_DIR}/fixtures/closeout-receipt"
@@ -654,6 +655,170 @@ json.dump(r,open(sys.argv[2],"w"),sort_keys=True,indent=2); open(sys.argv[2],"a"
 PY
 transition_receipt "$TMP/pr-applied.json" "$TMP/pr-complete.json" complete 4 88 "$(printf 'b%.0s' {1..40})"
 expect_reason "legacy applied checkpoint cannot first bind endpoint while advancing to complete" closeout-checkpoint-conflict python3 "$VALIDATOR" --receipt "$TMP/pr-complete.json" --previous "$TMP/pr-legacy-applied.json" --allow-any-path
+
+echo ""
+echo "=== review.md presence-driven source_hashes (reconciler-review-artifact-assumption, AC-1/AC-2) ==="
+
+# Same shape as make_receipt, but source_hashes omits the "review" key
+# entirely (design.md §1: OMIT-when-absent, not substitute) — the receipt
+# writer's post-fix contract for an entity whose review.md was never
+# produced.
+make_receipt_review_absent() {
+  local path="$1" phase="${2:-prepared}" mode="${3:-direct}"
+  python3 - "$path" "$phase" "$mode" <<'PY'
+import hashlib,json,pathlib,sys
+path, phase, mode = sys.argv[1:]
+ident={"provider":"github","repository":"acme/widgets","workflow":"docs/ship-flow","entity_slug":"widget-closeout","implementation_pr":40}
+raw=b"\0".join([b"v1",b"github",b"acme/widgets",b"docs/ship-flow",b"widget-closeout",b"40"])
+cid=hashlib.sha256(raw).hexdigest(); h="a"*64
+r={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":ident,
+ "ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{"index":h,"ship":h}},
+ "mode":mode,"merge_method_intent":None,"deterministic_closeout_head":"ship-closeout/"+cid,
+ "landing_proof":{"schema_version":1,"repository":"acme/widgets","base_ref":"main","implementation_pr":40,
+  "provider_merged_at":"2026-07-15T00:00:00Z","landing_anchor":"b"*40,"base_before":"c"*40,
+  "strategy":"squash","strategy_evidence":"topology+ordered-patch-ids+aggregate-patch-digest",
+  "pr_commit_count":2,"source_commit_patch_ids":["1"*40,"2"*40],"source_patch_digest":"d"*64,
+  "landing_commits":["b"*40],"landing_commit_patch_ids":["3"*40],"landing_patch_digest":"d"*64,
+  "first_landing_commit":"b"*40,"last_landing_commit":"b"*40,"method_source":"topology"},
+ "transaction":{"phase":phase,"generation":1,"closeout_pr":None,"main_commit":None},
+ "outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-07-15-01.md","sha256":h},"ship":{"path":"docs/ship-flow/_archive/widget-closeout/ship.md","sha256":h},"archived_entity":{"path":"docs/ship-flow/_archive/widget-closeout/index.md","sha256":h},"roadmap_row":{"identity":"widget-closeout","sha256":h}}}
+payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}
+r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+pathlib.Path(path).parent.mkdir(parents=True,exist_ok=True); pathlib.Path(path).write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+}
+
+# Same shape as bind_repo_bytes, but does not hash or set a "review" key and
+# does not require review.md to exist under root.
+bind_repo_bytes_review_absent() {
+  local receipt="$1" root="$2"
+  python3 - "$receipt" "$root" <<'PY'
+import hashlib,json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); root=pathlib.Path(sys.argv[2]); r=json.loads(p.read_text())
+for key in ("debrief","ship","archived_entity"):
+    r["outputs"][key]["sha256"]=hashlib.sha256((root/r["outputs"][key]["path"]).read_bytes()).hexdigest()
+identity=r["outputs"]["roadmap_row"]["identity"]
+rows=[line for line in (root/"ROADMAP.md").read_text().splitlines() if line.strip().startswith("|") and identity in [cell.strip() for cell in line.strip()[1:-1].split("|")]]
+assert len(rows)==1; r["outputs"]["roadmap_row"]["sha256"]=hashlib.sha256(rows[0].encode()).hexdigest()
+base=root/r["identity"]["workflow"]/r["identity"]["entity_slug"]
+for key,name in (("index","index.md"),("ship","ship.md")):
+    r["ownership_proof"]["source_hashes"][key]=hashlib.sha256((base/name).read_bytes()).hexdigest()
+payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}
+r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+}
+
+RA_ROOT="$TMP/review-absent-tree"
+mkdir -p "$RA_ROOT/docs/ship-flow/_debriefs" "$RA_ROOT/docs/ship-flow/_archive/widget-closeout" "$RA_ROOT/docs/ship-flow/widget-closeout"
+echo "landed debrief" >"$RA_ROOT/docs/ship-flow/_debriefs/2026-07-15-01.md"
+echo "landed ship" >"$RA_ROOT/docs/ship-flow/_archive/widget-closeout/ship.md"
+echo "landed entity" >"$RA_ROOT/docs/ship-flow/_archive/widget-closeout/index.md"
+printf '%s\n' '# Roadmap' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |' '<!-- /section:shipped -->' >"$RA_ROOT/ROADMAP.md"
+echo "source index" >"$RA_ROOT/docs/ship-flow/widget-closeout/index.md"
+echo "source ship" >"$RA_ROOT/docs/ship-flow/widget-closeout/ship.md"
+RA_CID_STAGE="$TMP/review-absent-receipt.json"
+make_receipt_review_absent "$RA_CID_STAGE"
+RA_CID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["closeout_id"])' "$RA_CID_STAGE")"
+mkdir -p "$RA_ROOT/docs/ship-flow/_closeouts"
+RA_RECEIPT="$RA_ROOT/docs/ship-flow/_closeouts/$RA_CID.json"
+cp "$RA_CID_STAGE" "$RA_RECEIPT"
+bind_repo_bytes_review_absent "$RA_RECEIPT" "$RA_ROOT"
+
+# AC-2: review-absent receipt round-trips in BOTH validator modes — the
+# --verify-sources leg is mandatory (design.md rev 2) because
+# verify_source_bytes only runs under --verify-sources; an --verify-outputs-
+# only round-trip would never execute the changed source-verify path.
+expect_ok "review-absent receipt validates via --verify-outputs" python3 "$VALIDATOR" --receipt "$RA_RECEIPT" --repo-root "$RA_ROOT" --allow-any-path --verify-outputs
+expect_ok "review-absent receipt validates via --verify-sources" python3 "$VALIDATOR" --receipt "$RA_RECEIPT" --repo-root "$RA_ROOT" --allow-any-path --verify-sources
+
+# Direction-A tamper (design.md §1 bidirectional iff, rev 2): review.md
+# EXISTS on disk but the receipt's source_hashes key is self-rehashed to omit
+# it. Bare key-presence-only enforcement would let this receipt through and
+# archive an unhashed review.md via copy_tracked_entity_tree — both the
+# validator (--verify-sources) and the applier below must reject it.
+RA_TAMPER_ROOT="$TMP/review-absent-tamper-tree"
+mkdir -p "$RA_TAMPER_ROOT/docs/ship-flow/_closeouts"
+cp -r "$RA_ROOT/docs" "$RA_TAMPER_ROOT/"
+cp "$RA_ROOT/ROADMAP.md" "$RA_TAMPER_ROOT/ROADMAP.md"
+echo "source review" >"$RA_TAMPER_ROOT/docs/ship-flow/widget-closeout/review.md"
+RA_TAMPER_RECEIPT="$RA_TAMPER_ROOT/docs/ship-flow/_closeouts/$RA_CID.json"
+expect_reason "file-exists-but-key-omitted rejects (--verify-sources)" closeout-stage-artifacts-incoherent \
+  python3 "$VALIDATOR" --receipt "$RA_TAMPER_RECEIPT" --repo-root "$RA_TAMPER_ROOT" --allow-any-path --verify-sources
+
+# Same tamper window, applier direction (AC-2, apply-closeout-bundle.sh sites
+# 5/6 — the critical path the reconciler actually invokes at apply time).
+RA_APPLY_REPO="$TMP/review-absent-apply-repo"
+git init -q -b main "$RA_APPLY_REPO"
+git -C "$RA_APPLY_REPO" config user.email receipt@example.test
+git -C "$RA_APPLY_REPO" config user.name 'Receipt Proof Fixture'
+mkdir -p "$RA_APPLY_REPO/docs/ship-flow/widget-closeout"
+printf '%s\n' '---' 'slug: widget-closeout' 'title: Widget closeout' 'status: ship' 'pr: "#40"' 'worktree:' 'completed:' 'verdict:' 'closeout_owner: true' '---' '' '# Widget closeout' >"$RA_APPLY_REPO/docs/ship-flow/widget-closeout/index.md"
+printf '%s\n' '# Review' '' '## Verdict' '' 'PASSED' >"$RA_APPLY_REPO/docs/ship-flow/widget-closeout/review.md"
+printf '%s\n' '# Ship' '' '### Verdict' 'merge_method_intent: rebase' 'pr: "#40"' >"$RA_APPLY_REPO/docs/ship-flow/widget-closeout/ship.md"
+printf '%s\n' '# Roadmap' '' '## Now' '<!-- section:now -->' '| Entity | Title |' '| --- | --- |' '<!-- /section:now -->' '' '## Shipped' '<!-- section:shipped -->' '| Entity | Title | Shipped |' '| --- | --- | --- |' '<!-- /section:shipped -->' >"$RA_APPLY_REPO/ROADMAP.md"
+git -C "$RA_APPLY_REPO" add -- ROADMAP.md docs/ship-flow/widget-closeout
+git -C "$RA_APPLY_REPO" commit -qm 'fixture: source entity'
+printf '%s\n' 'canonical landing proof fixture' >"$RA_APPLY_REPO/landing-proof-fixture.txt"
+git -C "$RA_APPLY_REPO" add -- landing-proof-fixture.txt
+git -C "$RA_APPLY_REPO" commit -qm 'fixture: canonical landing proof'
+RA_APPLY_ANCHOR="$(git -C "$RA_APPLY_REPO" rev-parse HEAD)"
+
+RA_APPLY_BUNDLE="$TMP/review-absent-apply-bundle"
+mkdir -p "$RA_APPLY_BUNDLE/docs/ship-flow/_debriefs" "$RA_APPLY_BUNDLE/docs/ship-flow/_archive/widget-closeout" "$RA_APPLY_BUNDLE/docs/ship-flow/_closeouts"
+printf '%s\n' '# Widget closeout debrief' '' '## Outcome' 'Merged and reconciled.' '' '## Reconciliation' 'First: 1111111' 'Last: 2222222' '' '## Todo Closure' 'No open todos.' >"$RA_APPLY_BUNDLE/docs/ship-flow/_debriefs/2026-07-15-01.md"
+printf '%s\n' '---' 'slug: widget-closeout' 'title: Widget closeout' 'status: done' 'pr: "#40"' 'worktree:' 'completed: 2026-07-15T00:00:00Z' 'verdict: PASSED' 'archived: 2026-07-15T00:00:00Z' 'closeout_owner: true' '---' '' '# Widget closeout' >"$RA_APPLY_BUNDLE/docs/ship-flow/_archive/widget-closeout/index.md"
+printf '%s\n' '# Ship' '' '### Verdict' 'merge_method_intent: rebase' 'pr: "#40"' 'closeout_id: pending' '' '### Closeout' 'status: applied' >"$RA_APPLY_BUNDLE/docs/ship-flow/_archive/widget-closeout/ship.md"
+awk '$0 == "<!-- /section:shipped -->" { print "| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |" } { print }' "$RA_APPLY_REPO/ROADMAP.md" >"$RA_APPLY_BUNDLE/ROADMAP.md"
+
+RA_APPLY_ENVELOPE="$TMP/review-absent-apply.landing-proof.env"
+"$LANDING_RESOLVER" --repo-dir "$RA_APPLY_REPO" --repository example/repo --base-ref main \
+  --implementation-pr 40 --provider-merged-at 2026-07-15T00:00:00Z \
+  --landing-anchor "$RA_APPLY_ANCHOR" --source-commits "$RA_APPLY_ANCHOR" --pr-commit-count 1 \
+  --merge-method-intent rebase >"$RA_APPLY_ENVELOPE"
+
+python3 - "$RA_APPLY_REPO" "$RA_APPLY_BUNDLE" "$RA_APPLY_ENVELOPE" <<'PY'
+import hashlib,json,pathlib,sys
+repo,bundle,envelope=map(pathlib.Path,sys.argv[1:4])
+ident={"provider":"github","repository":"example/repo","workflow":"docs/ship-flow","entity_slug":"widget-closeout","implementation_pr":40}
+cid=hashlib.sha256(b"\0".join((b"v1",b"github",b"example/repo",b"docs/ship-flow",b"widget-closeout",b"40"))).hexdigest()
+def h(path): return hashlib.sha256(path.read_bytes()).hexdigest()
+landing={}
+for line in envelope.read_text().splitlines():
+    key,value=line.split("=",1)
+    if key in {"schema_version","implementation_pr","pr_commit_count"}: landing[key]=int(value)
+    elif key in {"source_commit_patch_ids","landing_commits","landing_commit_patch_ids"}: landing[key]=value.split(",")
+    else: landing[key]=value
+row="| widget-closeout | Widget closeout | 2026-07-15 (PR #40) |"
+# Self-rehashed direction-A tamper receipt: review.md EXISTS in the repo
+# (hashed here) but the key is deliberately left out of source_hashes.
+r={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":ident,
+ "ownership_proof":{"unique_entity_matches":1,"participant_entities":[],"source_hashes":{
+   "index":h(repo/"docs/ship-flow/widget-closeout/index.md"),"ship":h(repo/"docs/ship-flow/widget-closeout/ship.md")}},
+ "mode":"direct","merge_method_intent":"rebase","deterministic_closeout_head":"ship-closeout/"+cid,
+ "landing_proof":landing,
+ "transaction":{"phase":"applied","generation":2,"closeout_pr":None,"main_commit":landing["landing_anchor"]},
+ "outputs":{"debrief":{"path":"docs/ship-flow/_debriefs/2026-07-15-01.md","sha256":h(bundle/"docs/ship-flow/_debriefs/2026-07-15-01.md")},
+  "ship":{"path":"docs/ship-flow/_archive/widget-closeout/ship.md","sha256":h(bundle/"docs/ship-flow/_archive/widget-closeout/ship.md")},
+  "archived_entity":{"path":"docs/ship-flow/_archive/widget-closeout/index.md","sha256":h(bundle/"docs/ship-flow/_archive/widget-closeout/index.md")},
+  "roadmap_row":{"identity":"widget-closeout","sha256":hashlib.sha256(row.encode()).hexdigest()}}}
+payload={k:r[k] for k in ("identity","ownership_proof","landing_proof","outputs")}
+r["proof_hash"]=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+p=bundle/f"docs/ship-flow/_closeouts/{cid}.json"; p.write_text(json.dumps(r,sort_keys=True,indent=2)+"\n")
+PY
+
+RA_APPLY_RECEIPT_REL="docs/ship-flow/_closeouts/$(basename "$(find "$RA_APPLY_BUNDLE/docs/ship-flow/_closeouts" -name '*.json' -print -quit)")"
+RA_APPLY_ROADMAP_HASH="$(shasum -a 256 "$RA_APPLY_REPO/ROADMAP.md" | awk '{print $1}')"
+expect_reason "file-exists-but-key-omitted rejects at apply (active source check)" closeout-stage-artifacts-incoherent \
+  "$APPLIER" --repo-root "$RA_APPLY_REPO" --bundle-root "$RA_APPLY_BUNDLE" \
+    --receipt-relative "$RA_APPLY_RECEIPT_REL" --active-entity-relative docs/ship-flow/widget-closeout \
+    --if-head "$RA_APPLY_ANCHOR" --if-roadmap-hash "$RA_APPLY_ROADMAP_HASH" \
+    --commit-as 'ship(widget-closeout): advance status to done'
+if [ -f "$RA_APPLY_REPO/docs/ship-flow/widget-closeout/review.md" ] && [ ! -e "$RA_APPLY_REPO/docs/ship-flow/_archive/widget-closeout" ]; then
+  ok "file-exists-but-key-omitted rejects before any archive I/O"
+else
+  bad "file-exists-but-key-omitted rejects before any archive I/O"
+fi
 
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

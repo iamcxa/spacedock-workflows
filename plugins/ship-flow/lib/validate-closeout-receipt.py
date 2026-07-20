@@ -527,10 +527,19 @@ def verify_source_bytes(receipt: dict[str, Any], repo_root: Path) -> None:
         "owning entity source path",
     )
     expected = receipt["ownership_proof"]["source_hashes"]
-    for key, filename in (("index", "index.md"), ("review", "review.md"), ("ship", "ship.md")):
+    for key, filename in (("index", "index.md"), ("ship", "ship.md")):
         actual = hash_file(base / filename, f"source {key}")
         if actual != expected[key]:
             fail("closeout-projection-source-drift", f"source bytes differ for {key}")
+    review_path = base / "review.md"
+    review_exists = review_path.is_file()
+    review_keyed = "review" in expected
+    if review_exists != review_keyed:
+        fail("closeout-stage-artifacts-incoherent", "review.md presence does not match receipt source_hashes")
+    if review_exists:
+        actual = hash_file(review_path, "source review")
+        if actual != expected["review"]:
+            fail("closeout-projection-source-drift", "source bytes differ for review")
 
 
 def validate(receipt: dict[str, Any], path: Path | None = None) -> None:
@@ -594,7 +603,13 @@ def validate(receipt: dict[str, Any], path: Path | None = None) -> None:
             fail("closeout-owner-not-unique", "participant slugs must be valid and unique")
         slugs.add(slug)
     hashes = require_object(ownership["source_hashes"], "source_hashes")
-    require_exact_keys(hashes, {"index", "review", "ship"}, "source_hashes")
+    _missing = {"index", "ship"} - hashes.keys()
+    _extra = hashes.keys() - {"index", "review", "ship"}
+    if _missing or _extra:
+        fail(
+            "closeout-sentinel-invalid",
+            f"source_hashes keys mismatch; missing={sorted(_missing)}, extra={sorted(_extra)}",
+        )
     for key, value in hashes.items():
         require_hash(value, f"source_hashes.{key}")
 

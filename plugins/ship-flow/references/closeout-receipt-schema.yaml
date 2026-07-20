@@ -30,7 +30,7 @@ ownership_proof:
       - "unique_entity_matches equals one owner plus participant count"
   source_hashes:
     index: { type: sha256 }
-    review: { type: sha256 }
+    review: { type: sha256, optional: true, note: "present iff an active review.md exists at receipt-prepare time" }
     ship: { type: sha256 }
     description: "Exact pre-merge bytes for the owning entity's required stage artifacts"
 mode: { type: enum, values: [direct, pull_request] }
@@ -145,6 +145,6 @@ sentinel_validation_order:
 validator_modes:
   normal: "requires --repo-root for canonical receipt/output bytes and repository-backed landing proof verification; --landing-proof-repo-root may explicitly name a separate authoritative Git worktree and otherwise defaults to --repo-root; squash additionally requires provider-ordered --source-commits so source patch IDs and aggregate digest are Git-rederived"
   allow_any_path: "fixture-only structural mode; skips canonical path and Git proof but not schema, payload, phase, or requested byte checks"
-  verify_sources: "hash <repo-root>/<workflow>/<entity_slug>/{index,review,ship}.md against ownership_proof.source_hashes before merge"
+  verify_sources: "hash <repo-root>/<workflow>/<entity_slug>/{index,review,ship}.md against ownership_proof.source_hashes before merge; review.md is hashed only when both the file and the source_hashes.review key are present (both absent is not a drift)"
   verify_outputs: "resolve safe repo-relative output paths, hash landed files, then parse exactly one Markdown table row inside the bounded Shipped section whose cells[0] equals roadmap_row.identity and hash the exact original selected line bytes excluding its line terminator"
   path_safety: "reject absolute paths, traversal, missing files, resolved paths outside repo root, and every symlink component including aliases that still resolve inside the repo"

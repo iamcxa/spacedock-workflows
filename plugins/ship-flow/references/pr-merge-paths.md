@@ -88,7 +88,8 @@ seconds and that child call is bounded to 90 seconds. Additional merged folder
 entities remain in Rule-A pending output for the next SessionStart.
 
 Flat legacy `.md` entities remain warning-only: they do not satisfy the
-reconciler's canonical `index.md` + `review.md` + `ship.md` artifact contract,
+reconciler's canonical `index.md` + `ship.md` artifact contract (`review.md`
+is presence-driven, not required — see `references/closeout-receipt-schema.yaml`),
 so the hook never delegates or restores raw mutation for them. The hook does
 not run status mutation, archive, staging, or commit commands itself. A
 provider race to `pr_open_noop`, a structured failure, timeout, or
