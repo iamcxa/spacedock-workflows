@@ -34,6 +34,8 @@
 | issue-anchor-guard-remaining-triggers | S | Extend the guard to the other two trigger points: feedback-rejection-flow cycle-3 escalation (lives in the spacedock core plugin repo, needs a companion change there) and child/prerequisite creation (necessity proof against a named parent AC). | pitch 5 |
 | issue-anchor-guard-resolver-shell-parser-robustness | S | Three named shell-parser-robustness residuals in the issue-anchor-guard resolver: emit's tombstone rm -f does not check its own exit status before fetch; validate's top-level scalar reads are a line-oriented awk scan, not structural yq (unlike the per-AC rows); the AC-block parser is not Markdown-aware (fenced code / quoted examples could be mis-parsed as ACs). | pitch 5 |
 | codex-gate-mandatory-cross-vendor-verify-pilot | S | Pilot promoting codex-gate from opt-in to a mandatory auto-fired cross-vendor verify gate with science-officer-em as the standing EM owner, IF a measurement pilot later justifies the behavioral wiring. | pitch 7 |
+| symlink-validation-receipt-gap | S | Pre-existing symlink-following gap in closeout receipt hash_file()/is_file() usage (index/ship/review alike) | (todo) |
+| applier-direction-b-tamper-test | S | apply-closeout-bundle.sh missing applier-level Direction-B tamper test (key-present, file-absent) | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
