@@ -1,6 +1,6 @@
 ---
 title: Document hackathon #2 process and learnings
-status: verify
+status: ship
 appetite: small
 issue: "#86"
 started: 2026-07-20T02:56:25Z
