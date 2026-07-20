@@ -45,6 +45,7 @@
 | fo-clock-quota-awareness | S | FO clock-and-quota awareness discipline (13:23 incident) | (todo) |
 | worktree-task-slug-resolution | S | spacedock task-by-slug resolution drifts to main checkout | (todo) |
 | mini-offload-completion-push-channel | S | mini one-shot legs: add completion push atop durable rendezvous | (todo) |
+| scheduler-gate-stop-misclassification | S | tick records gate-stop runs as run-error + backoff delay | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
