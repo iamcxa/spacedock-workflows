@@ -104,3 +104,18 @@ feedback: tick-refusal-scan-head-block verify cycle 1 to execute
 - captain_decision: fix (EM-drive routing — mechanical findings, zero-deviation from approved design)
 - routed_at: 2026-07-20T06:02:28Z
 - verify_artifact: verify.md @ aabca67 (verdict REJECTED; F-doc_impact blocking) + FO codex adversarial pass (2 code findings)
+
+## Stage Report: execute (cycle 2)
+
+- DONE: F1 (BLOCKING) — PR #91's `doc_impact` required check
+  PR body now carries a `## Doc Impact` section with a `doc-impact: none — <reason>` declaration; verified offline against `doc-impact-gate.sh` before editing the live PR (`PASS checker-source-map: doc-impact declaration accepted`); live check confirmed green after a fresh-payload retrigger (main had advanced past this PR's base SHA between push and body-edit — commit `7b9f492`, same precedented technique as `437bc0f` on this repo).
+- DONE: F2 (codex) — events-log append-failure path
+  Adjudicated pre-existing (confirmed via `git show 193196f` that `emit_event` was untouched by Task 1); documented via code comment + design.md §5 revision note + pinning test `run_events_log_append_failure_swallow_case` (no RED/GREEN pair, mirrors Task 2's rollup pin). Commit `f5398ca`.
+- DONE: F3 (codex) — check-invariants.sh C18 fail-open on missing target file
+  C18 now fails closed; new `test-check-invariants-c18.sh`, Case B is the RED case (confirmed FAIL pre-fix via `git stash`, GREEN post-fix). Commit `3465c3e`.
+- DONE (unassigned, discovered): check-invariants.sh C11 FAILED at cycle-2 baseline
+  `verify.md` predates C11/C18 landing on this branch and never carried a `## Panel Coverage` H2 — confirmed pre-existing via `git stash` (fails identically before any F1-F3 edit). Blocks this dispatch's own "full local gate green" bar; closed as a compliance backfill sourced only from `verify.md`'s own text + this file's Feedback Cycles record (no new specialist run claimed). Commit `77804b6`.
+
+### Summary
+
+Cycle 2 closed all 3 routed findings (F1 BLOCKING doc_impact, F2/F3 codex adversarial) plus one newly-discovered pre-existing gate failure (C11 on verify.md) found while re-running the full local gate. Full gate green: all 9 scheduler suites (refusal-batch 27/27, +4 new cases), `check-invariants.sh` C1-C18 exit 0, `check-no-dangling.sh`/`check-version-triple.sh` pass, no regressions, CI-sim spot-checks clean. Pushed to PR #91 (`spacedock-ensign/tick-refusal-scan-head-block` -> `main`); live `doc_impact`/`invariants` checks confirmed green after a fresh-payload retrigger. Auto-merge not armed — that decision stays with the FO/captain at verify. Time budget: well under the 1h15m allocation.
