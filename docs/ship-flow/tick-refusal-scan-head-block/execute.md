@@ -131,3 +131,46 @@ deliverable the FO forwards verbatim; the FO does not compose it.
 - **Residual risk:** none identified beyond the two named deviations above
   (both formatting/scope-boundary, not mechanism). Task 1's GREEN matches
   design.md §3's pseudocode exactly — no divergence to flag.
+
+## Cycle 2 — verify feedback cycle 1 (F1/F2/F3)
+
+- **F1 (BLOCKING, `doc_impact`).** PR #91 body now carries a `## Doc Impact`
+  section with a `doc-impact: none — <reason>` declaration (>=12 chars,
+  citing that both changed `bin/*.sh` files' `doc-sync-context.md`
+  Source-Map rows remain accurate; `check-invariants.sh`'s row target,
+  `INVARIANTS.md`, was already updated by this PR's own Task 4). Verified
+  offline against `doc-impact-gate.sh --changed=... --declaration=...`
+  before editing the live PR body: `PASS checker-source-map: doc-impact
+  declaration accepted`.
+- **F2 (codex, events-log append-failure swallow).** Adjudicated
+  pre-existing, not introduced: `git show 193196f -- ship-flow-scheduler.sh`
+  confirms `emit_event` (the sole `>> "$EVENTS_LOG"` append site) was
+  untouched by Task 1's two-phase rewrite. Empirically reproduced (broken
+  `--events-log` parent dir → exit 0, full batch still on stdout, log never
+  written) both pre- and post- this cycle's edits — behavior is identical.
+  Documented via a code comment at the append site + design.md §5 revision
+  note; pinning test `run_events_log_append_failure_swallow_case` added
+  (no RED→GREEN pair — mirrors Task 2's rollup pin, zero code-behavior
+  change).
+- **F3 (codex, C18 fail-open).** `check_refusal_observability_record`'s
+  `[ -f "$invariants_file" ] || return 0` skip now fails closed (`ERROR
+  ... ; return 1`) on a missing target file. New
+  `test-check-invariants-c18.sh`, Case B is the RED case: confirmed FAIL
+  (expected 1, got 0) against the pre-fix check via `git stash`, GREEN
+  after. C9/C16 share the identical pre-existing skip pattern but are
+  untouched by this entity (out of DC-1 scope, same disposition class as
+  F1's prior-cycle gh-CLI gap) — named here as a candidate follow-up, not
+  fixed.
+- **Newly discovered, not in F1-F3:** `check-invariants.sh` C11
+  (panel-coverage-header) FAILED on `verify.md` at cycle-2 baseline (before
+  any of my edits — confirmed via `git stash`), because `verify.md` predates
+  C18/C11 landing on this branch and never carried a `## Panel Coverage` H2.
+  Blocks this dispatch's own "full local gate green" bar, so closed as a
+  compliance backfill sourced only from `verify.md`'s own text + `index.md`'s
+  Feedback Cycles record (no new specialist run claimed) — see `verify.md`'s
+  new `## Panel Coverage` section for the explicit provenance note.
+- **Full local gate, cycle 2:** all 9 scheduler suites green (27/27 on
+  refusal-batch, +4 vs cycle 1's 23); `check-invariants.sh` C1-C18 exit 0
+  (incl. new `test-check-invariants-c18.sh` 6/6); `check-no-dangling.sh` +
+  `check-version-triple.sh` pass; `bash -n` clean on all touched `.sh`;
+  CI-sim spot-check on refusal-batch + c18 tests green. No suite regressed.
