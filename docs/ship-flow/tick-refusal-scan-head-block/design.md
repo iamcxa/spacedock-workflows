@@ -15,12 +15,24 @@ substring-based assertion and gains new multi-entity fixtures.
 ## §1 — Contract Decision 1: event cardinality vs one-event-per-tick
 
 **Decision: option (a)** — revise the contract to *"one tick performs exactly
-ONE bounded ACTION (reconcile > dispatch > advance > no-op) and emits exactly
-one primary ACTION event; a dispatch-scan beat additionally emits zero-or-more
-`refusal` observability records — one per non-eligible, non-deduped entity —
-BEFORE the primary event."* Refusal is reclassified from *"a dispatch-scan
-sub-outcome / one of the beat's events"* to *"an observability record that is
-not the beat's action."*
+ONE bounded ACTION (reconcile > dispatch > advance > no-op) and emits one
+primary event per action taken; a successful reconcile may chain an advance in
+the same tick (two action events — existing behavior); a Precedence-2
+dispatch-scan beat additionally emits zero-or-more `refusal` observability
+records — one per non-eligible, non-deduped entity — BEFORE the beat's primary
+event."* Refusal is reclassified from *"a dispatch-scan sub-outcome / one of
+the beat's events"* to *"an observability record that is not the beat's
+action."*
+
+**The literal "exactly one JSON Lines event" text is already false today
+(revision cycle 1):** `run_reconcile_action` emits `reconcile`
+(`ship-flow-scheduler.sh:591`) then chains `run_advance_action` (`:593-594`),
+which emits `advance` (`:660`) — two events in one tick — and
+`test-ship-flow-scheduler-fullcycle.sh:167-169` REQUIRES both in leg 2. The
+revised wording above is therefore both the refusal-batching accommodation AND
+the first header text true of the shipped reconcile→advance behavior. AC-1/
+AC-2/AC-3 are all Precedence-2 dispatch-scan beats with no reconcile leg, so
+their fixture assertions below stand unchanged under this rewording.
 
 Rejected (b) aggregate-into-single-event-detail and (c) log-only-batch. Both
 would force rewriting AC-1/AC-3 fixture assertions AND break existing tests
@@ -39,19 +51,32 @@ would force rewriting AC-1/AC-3 fixture assertions AND break existing tests
   refusal/`outcome=refused` assertion on `OUT` fails. (a) keeps refusals on
   stdout → those assertions stay green.
 
-### Contract-text delta (execute-stage edit, named here)
+### Contract-text delta (execute-stage edits, all sites named)
 
-`ship-flow-scheduler.sh` header lines **6–8**:
+Site 1 — `ship-flow-scheduler.sh` header lines **6–8**:
 
 - L6–8 today: *"One `tick` invocation performs exactly ONE bounded action
   (reconcile > dispatch > advance > no-op, with refusal as a dispatch-scan
   sub-outcome) and emits exactly one JSON Lines event to stdout + --events-log."*
 - Revised: *"One `tick` invocation performs exactly ONE bounded ACTION
-  (reconcile > dispatch > advance > no-op) and emits exactly one primary ACTION
-  event to stdout + --events-log. A Precedence-2 dispatch-scan beat additionally
+  (reconcile > dispatch > advance > no-op) and emits one primary event per
+  action taken to stdout + --events-log (a successful reconcile may chain an
+  advance in the same tick). A Precedence-2 dispatch-scan beat additionally
   emits zero-or-more `refusal` observability records (one per non-eligible,
-  non-deduped entity) BEFORE the primary event; refusals are records, not the
-  beat's action."*
+  non-deduped entity) BEFORE the beat's primary event; refusals are records,
+  not the beat's action."*
+
+Site 2 — `ship-flow-scheduler.sh` lines **522–525** (revision cycle 1): the
+AC-3b checkpoint comment's rationale cites *"the tick's exactly-one-event-
+per-tick contract"*. The DECISION it justifies (ride `blocked` detail, NOT a
+new event value) remains correct under the revised contract — checkpoint data
+is action detail, not a sanctioned observability record — but the cited
+contract name must be updated to the revised wording (e.g. *"the tick's
+one-primary-event-per-action contract"*); the rollup-parser half of the
+rationale is untouched.
+
+Historical repeats of the old contract text in prior entities'
+design.md/index.md are NOT edited — see §5 (historical references).
 
 No schema change: `refusal` and `no-op reason=refusal-deduped` are existing/
 additive event+reason strings under `schema: ship-flow-scheduler/v0` (DC-1).
@@ -221,10 +246,35 @@ header + archived l3 design), so Decision 1 moves prose, not a test assertion.
 - **DC-4 (`(slug, reason)` key, stop at reason):** accepted.
 - **DC-5 (two-phase preserves lease/EXIT trap):** honored — single `return 0`
   in Phase 2, EXIT trap unchanged.
+- **Contract supersession recorded (revision cycle 1) — "events log is
+  audit-only, never read to decide":** the l3 design authority states the
+  events log is *"never a decision input"* (`docs/ship-flow/l3-scheduler-tick/design.md:73-76`)
+  and *"audit-only and is never read to decide"* (`:139-150`). §3's refusal
+  dedup reads the log as a decision input, which contradicts that text — but
+  the contract was FIRST superseded by tick-hardening AC-4 (shipped, PR #81):
+  `entity_in_backoff` already reads `events.jsonl` to decide skip-past
+  (tick-hardening design.md DC-2 "backoff from events, no store" — HELD). This
+  design extends that same already-superseded reading to `refusal` events; the
+  narrowed surviving contract is *"the events log is the tick's only derived
+  cache; it is read solely for skip-past/dedup windows (never to compute
+  eligibility or mutate canonical state), and remains the rollup's only
+  input."* Recorded here as the design revision note; also folded into the
+  INVARIANTS candidate below. Not a mechanism change.
+- **Historical references (NOT edited — snapshots per repo precedent):** the
+  superseded one-event/audit-only contract text repeats in
+  `docs/ship-flow/l3-scheduler-tick/design.md:73-76,139-150`,
+  `docs/ship-flow/tick-hardening/design.md:108-115,203`, and
+  `docs/ship-flow/tick-hardening/index.md:70-83`; all are superseded by this
+  revision and stay as-is.
 - **INVARIANTS.md:** propose adding one invariant candidate — *"refusal is a
   scan-time observability record, not the tick's bounded action; a beat's ONE
-  action is reconcile|dispatch|advance|no-op."* Recommended (freezes Decision 1
-  against future drift); deferred to ship if the captain prefers design-doc-only.
+  action is reconcile|dispatch|advance|no-op; the events log is read only for
+  skip-past/dedup windows, never to compute eligibility."* Recommended
+  (freezes Decision 1 + the supersession above against future drift); deferred
+  to ship if the captain prefers design-doc-only.
 - **ARCHITECTURE.md / PRODUCT.md / RUNBOOK:** no change (dedup transparent,
-  schema stable).
+  schema stable). Canonical-doc delta is NOT zero, however: this design.md
+  carries two durable contract revisions (one-event-per-tick rewording §1;
+  audit-only supersession above) as the live scheduler design authority's
+  revision notes.
 - **ROADMAP.md:** Now-row add + Later-row remove per shape (ship-stage).
