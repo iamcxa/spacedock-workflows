@@ -258,14 +258,23 @@ left unresolved:
   contract (BLOCKING for design; do NOT trivial-pass this axis).**
   `ship-flow-scheduler.sh` L1-14 header (live authority) states one tick
   "performs exactly ONE bounded action... and emits exactly one JSON Lines
-  event"; the archived l3 design §2/§4 and tick-hardening DC-4 ("a separate
-  event would break the exactly-one-event-per-tick contract") reaffirm it.
+  event"; the archived l3 design §2/§4 states the same. (Citation
+  correction, SO-EM audit 2026-07-20: tick-hardening DC-4 does NOT reaffirm
+  it — the real DC-4 (archive tick-hardening/shape.md:115-118) concerns the
+  AC-3 checkpoint event value, explicitly leaves extension-vs-distinct-event
+  to design, and its rationale is rollup/report parser forward-compatibility.
+  An earlier L0 paraphrase fabricated the reaffirming quote and the FO
+  propagated it uncorrected; the contract's documented sources are the
+  script header and the archived l3 design only.)
   AC-1's fixture (3 refusal events + 1 no-op in one beat) contradicts that
   contract as written. Design must pick and record ONE: (a) revise the
   contract to "exactly one primary ACTION event; refusals are observability
   records" (matches AC-3's rationale; requires updating the script header
   contract text + design.md revision note), or (b) aggregate all refusals
-  into the single beat event's `detail` (tick-hardening DC-4 precedent), or
+  into the single beat event's `detail` (rejection, if chosen, must rest on
+  engineering grounds — e.g. the dedup mechanism's per-entity last-event
+  grep and rollup's per-entity signal need one line per refusal — not on a
+  precedent claim), or
   (c) batch-write refusal lines to `--events-log` only while stdout keeps the
   single primary event. The choice changes AC-1/AC-3's fixture assertions.
 - **Open contract decision 2 — rollup `interventions` semantics under new
