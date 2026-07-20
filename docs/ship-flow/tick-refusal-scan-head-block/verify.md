@@ -96,6 +96,20 @@ F1 (pre-existing gh-CLI gap) does not block this verdict; it is
 routed to follow-up. Runtime UAT is explicitly deferred with reason
 above, not diluting this verdict.
 
+## Panel Coverage
+
+Compliance backfill (execute cycle 2, C11) — sourced only from this file's
+own text + `index.md`'s Feedback Cycles record; no new specialist run.
+
+- Tier: B (single-model self-verification, no new dispatch this file).
+- Adversarial: Claude (this round) ✓; Codex not run here (FO-owned,
+  above) — ran at the FO layer per `index.md`, producing F2/F3 (fixed
+  execute cycle 2).
+- Pass ownership: verify_agent_worker_ownership/workflow_ci/
+  test_adequacy PASS; cross_model_challenge PASS (FO-layer); runtime_uat
+  deferred (see above); silent_failure/security/type_design/api_contract/
+  ui_design/domain_intent not_triggered.
+
 ## Deferred to TODO
 
 - F1: gh-CLI-absence gap — `merged-pr-closeout-reconciler.sh:264` fails
