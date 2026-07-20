@@ -51,3 +51,16 @@ Wrote plan.md for the docs-only ticket with two task blocks (INVARIANTS.md FO Di
 ### Summary
 
 Implemented the two plan.md doc edits: inserted `### Time-Box Discipline` subsection into `plugins/ship-flow/INVARIANTS.md` under `## FO Discipline` and added the `time_budget:` template field plus Field Reference table row to `docs/ship-flow/README.md`. Full gate suite passes with no regressions; 13 pre-existing scheduler-adapter failures are unchanged from main. All edits match plan.md verbatim with no deviations.
+
+## Stage Report: verify
+
+- DONE: AC-1 verified: `grep -n "time_budget\|75%\|brake" plugins/ship-flow/INVARIANTS.md` hits all three terms with brake semantics (park + surface + cut scope) and park-not-compress wording
+  Lines 413–438 in INVARIANTS.md; line 418 "park the entity", line 420 "NEVER compress or skip verification to fit a budget"; all three terms confirmed.
+- DONE: AC-2 verified: docs/ship-flow/README.md diff shows `time_budget:` in Feature Template (after `score:`) + Field Reference table row with `<N>h<N>m` format note and semantics pointer
+  Line 261 (template field) and line 104 (Field Reference row with full semantics); verified by grep + git diff against main.
+- DONE: AC-3 verified: git diff shows no new standalone doc files; changes only touch existing canon files (INVARIANTS.md + docs README); gate suite from execute.md confirmed clean (all suites pass, zero new regressions vs main)
+  `git diff main --name-only` touches only INVARIANTS.md + docs/ship-flow/README.md + entity stage files; gate suite 79/79 node, 12/12 no-dangling, 5/5 version-triple, C1-C17 check-invariants; 13 pre-existing scheduler-adapter failures unchanged from main.
+
+### Summary
+
+All three ACs pass. AC-1 confirmed by grep: `time_budget`, `75%`, and `brake` all hit INVARIANTS.md lines 413–438 with park+surface+cut-scope semantics and explicit never-compress wording. AC-2 confirmed by grep: `time_budget:` at line 261 (Feature Template) and a full Field Reference row at line 104 with `<N>h<N>m` format and semantics pointer. AC-3 confirmed by diff and git status: only existing canon files modified, no orphan docs, full gate suite clean with zero new regressions. runtime_uat not-applicable (docs-only change).
