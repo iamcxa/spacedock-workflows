@@ -94,3 +94,13 @@ Implemented plan.md's 5 tasks TDD-first on `spacedock-ensign/tick-refusal-scan-h
 ### Summary
 
 Re-ran the three decisive suites myself (refusal-batch 23/23, fullcycle 8/8, `check-invariants.sh` C1-C18 exit 0 incl. targeted C18/C15 checks) — all GREEN, matching execute.md's claims exactly; AC-1/AC-2/AC-3 each get fresh-evidence citations in verify.md. Triaged execute.md's known gh-CLI-absence finding as a pre-existing, out-of-scope follow-up (reproduced firsthand in both CI-sim and NORMAL env) and confirmed the C15 self-fix as resolved. While checking the PR's live gate results (an explicit verify-stage input), found PR #91's `doc_impact` required status check is currently FAILING — a genuine, previously-unsurfaced BLOCKING finding (this diff's own `bin/*.sh` changes trip a doc-coupling gate neither plan.md nor execute.md's Canonical Doc Actions task addressed). Verdict is **REJECTED** on that basis alone; the underlying fix mechanism and every AC are sound. Did not merge, arm auto-merge, or edit the PR — routed F2 to execute/FO per the "FO does not inline-fix BLOCKING findings" discipline, with the low-cost remediation path named for a fast re-check. Cross-model (codex) coverage is FO-owned and intentionally not run here.
+
+### Feedback Cycles
+
+feedback: tick-refusal-scan-head-block verify cycle 1 to execute
+- cycle: 1
+- rejected_stage: verify
+- feedback_to: execute
+- captain_decision: fix (EM-drive routing — mechanical findings, zero-deviation from approved design)
+- routed_at: 2026-07-20T06:02:28Z
+- verify_artifact: verify.md @ aabca67 (verdict REJECTED; F-doc_impact blocking) + FO codex adversarial pass (2 code findings)
