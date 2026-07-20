@@ -41,6 +41,7 @@
 | plist-installer-placeholder-validation | S | Installer must validate zero remaining @PLACEHOLDER@ tokens | (todo) |
 | check-invariants-ratchet-baseline | S | Ratchet baseline for checker-strengthening PRs (monotonic decrease, owned entries) | (todo) |
 | shipflow-docs-and-adoption-report | M | Docs reorg for outsiders + metrics-backed adoption report (draft in .context) | (todo) |
+| rollup-plist-spacedock-bin-leak | S | Fix live rollup.plist @SPACEDOCK_BIN@ leak (tick fixed 04:10, | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
