@@ -87,6 +87,58 @@ read_frontmatter_field() {
   ' "$file"
 }
 
+# derive_timeout_sec <entity-path> <default> — AC-3a: an entity may declare a
+# generous <N>h<M>m / <N>h / <M>m appetite via frontmatter `time_budget`
+# (Rule-3 clean: canonical entity state, no new store). Absent/unparseable ->
+# returns <default> UNCHANGED (never invents its own number), so an explicit
+# --timeout the caller passed is preserved when the entity has no
+# time_budget; only the caller's own default (bumped separately in cmd_tick)
+# actually changes behavior for time_budget-less entities. h/m are forced
+# base-10 (`10#`) before arithmetic: a leading-zero component (e.g. "08m")
+# is otherwise read by bash as an octal literal, and "08"/"09" are not valid
+# octal digits, which crashes the arithmetic (empty stdout, caller usage-
+# errors on `--timeout ""`). A zero total (e.g. "0m", "0h") also falls back
+# to <default> rather than propagating 0 — GNU `timeout 0` DISABLES
+# enforcement entirely, the opposite of a "tiny/zero budget" author's intent.
+derive_timeout_sec() {
+  local path="$1" default="$2" tb h=0 m=0 total
+  tb="$(read_frontmatter_field "$path" time_budget)"
+  [ -n "$tb" ] || { printf '%s' "$default"; return 0; }
+  if [[ "$tb" =~ ^([0-9]+)h([0-9]+)m$ ]]; then
+    h="${BASH_REMATCH[1]}"; m="${BASH_REMATCH[2]}"
+  elif [[ "$tb" =~ ^([0-9]+)h$ ]]; then
+    h="${BASH_REMATCH[1]}"
+  elif [[ "$tb" =~ ^([0-9]+)m$ ]]; then
+    m="${BASH_REMATCH[1]}"
+  else
+    printf '%s' "$default"; return 0
+  fi
+  total=$(( 10#$h * 3600 + 10#$m * 60 ))
+  [ "$total" -gt 0 ] || { printf '%s' "$default"; return 0; }
+  printf '%s' "$total"
+}
+
+# entity_in_backoff <slug> <events-log> <window-sec> — AC-4: returns 0 (in
+# backoff, skip it) iff <slug>'s MOST RECENT event in <events-log> is
+# `blocked` and its `ts` is within <window-sec> of now. Reads events.jsonl
+# only (Rule 3: no new store; reuses scheduler_lease_epoch for ts->epoch).
+# Skip-past, never retry (Rule 4, DC-3): callers `continue` past a
+# in-backoff entity to the next candidate, they never re-dispatch/re-
+# reconcile it within the window.
+entity_in_backoff() {
+  local slug="$1" events_log="$2" window="$3"
+  [ -n "$events_log" ] && [ -f "$events_log" ] || return 1
+  local line event ts ts_epoch now_epoch
+  line="$(grep "\"entity\":\"${slug}\"" "$events_log" | tail -1)"
+  [ -n "$line" ] || return 1
+  event="$(printf '%s' "$line" | sed -n 's/.*"event":"\([^"]*\)".*/\1/p')"
+  [ "$event" = "blocked" ] || return 1
+  ts="$(printf '%s' "$line" | sed -n 's/.*"ts":"\([^"]*\)".*/\1/p')"
+  ts_epoch="$(scheduler_lease_epoch "$ts")"
+  now_epoch="$(date -u +%s)"
+  [ $(( now_epoch - ts_epoch )) -lt "$window" ]
+}
+
 # list_entities <workflow-dir> — one path per line, sorted by slug, folder-based
 # entities only (docs/ship-flow/<slug>/index.md — this plan's entity shape).
 list_entities() {
@@ -285,7 +337,13 @@ evaluate_entity() {
 
 cmd_tick() {
   local workflow_dir="" controller_worktree="" epic="" runner="fixture" runner_fixture=""
-  local timeout_sec=900 dry_run=no
+  # AC-3a: bumped from 900s -- this is the default ONLY for invocations that
+  # omit --timeout entirely (the production launchd plist's case; its
+  # ProgramArguments never pass --timeout). An explicit --timeout is
+  # unaffected; no test asserts the literal 900 (the only other
+  # "timeout_sec":900 in the repo is a static rollup fixture line, never a
+  # live tick run).
+  local timeout_sec=5400 dry_run=no
   GH_PROVIDER="gh"; GH_FIXTURE_DIR=""
   EVENTS_LOG=""
   PR_FIXTURE=""
@@ -311,16 +369,25 @@ cmd_tick() {
   [ -d "$workflow_dir" ] || { echo "ship-flow-scheduler: no such workflow-dir: $workflow_dir" >&2; return 3; }
   [ -d "$controller_worktree" ] || { echo "ship-flow-scheduler: no such controller-worktree: $controller_worktree" >&2; return 3; }
   # SHIP_FLOW_SCHEDULER_RUNNER_CMD is the runner adapter's own test-only seam
-  # (scheduler-runner-adapter.sh) that replaces the real `claude -p` spawn —
-  # when it's set, this preflight must not require the real binary to be on
-  # PATH, or CI (which has no `claude` CLI installed) fails this guard before
-  # the hermetic seam ever gets a chance to run.
-  if [ "$runner" = "gh" ] && [ -z "${SHIP_FLOW_SCHEDULER_RUNNER_CMD:-}" ] && ! command -v claude >/dev/null 2>&1; then
-    echo "ship-flow-scheduler: claude CLI not available for --runner gh" >&2; return 3
+  # (scheduler-runner-adapter.sh) that replaces the real spawn -- when it's
+  # set, this preflight must not require the real binary to be on PATH, or
+  # CI (which has no `spacedock` CLI installed) fails this guard before the
+  # hermetic seam ever gets a chance to run.
+  # AC-2/W1: the adapter's SPAWN_ARGV unconditionally execs
+  # ${SPACEDOCK_BIN:-spacedock} (never raw `claude` -- no such fallback is
+  # actually wired), so this check must require that specific binary. A
+  # `claude`-only PATH used to pass this preflight and then fail inside the
+  # adapter with an unrelated-looking `spacedock: command not found`.
+  if [ "$runner" = "gh" ] && [ -z "${SHIP_FLOW_SCHEDULER_RUNNER_CMD:-}" ] \
+    && ! command -v "${SPACEDOCK_BIN:-spacedock}" >/dev/null 2>&1; then
+    echo "ship-flow-scheduler: ${SPACEDOCK_BIN:-spacedock} CLI not available for --runner gh" >&2; return 3
   fi
 
   local tick_id
   tick_id="$(date -u +%Y%m%dT%H%M%SZ)"
+  # AC-4: > the 300s tick interval, so a blocked entity is skipped for
+  # several ticks rather than re-acted-on next cycle; tunable.
+  local BACKOFF_WINDOW_SEC=3600
 
   if ! scheduler_lease_acquire "$controller_worktree" "$tick_id" "$timeout_sec" "" >/dev/null; then
     emit_event no-op "" ok lease-held '{"reason":"lease-held"}'
@@ -339,6 +406,14 @@ cmd_tick() {
   local path slug pr_val pr_state
   for path in $(list_entities "$workflow_dir"); do
     slug="$(entity_slug_from_path "$path")"
+    # AC-4: skip-past (Rule 4: never retry) an entity blocked within the
+    # backoff window -- this is the head-block fix (was: the loop's own
+    # `return 0` two lines below hit the FIRST non-OPEN-PR entity every
+    # cycle, so a perpetually-PROMPT_CAPTAIN/reconciler-error entity starved
+    # every entity behind it in list order).
+    if [ -n "${EVENTS_LOG:-}" ] && entity_in_backoff "$slug" "$EVENTS_LOG" "$BACKOFF_WINDOW_SEC"; then
+      continue
+    fi
     pr_val="$(read_frontmatter_field "$path" pr)"
     [ -n "$pr_val" ] || continue
     [ "$(read_frontmatter_field "$path" status)" != "done" ] || continue
@@ -361,10 +436,16 @@ cmd_tick() {
   # --- Precedence 2: dispatch (an eligible entity exists), else refusal ---
   local first_refusal_path="" first_refusal_reason="" first_refusal_keys=""
   for path in $(list_entities "$workflow_dir"); do
+    slug="$(entity_slug_from_path "$path")"
+    # AC-4: a recently run-error/run-timeout entity doesn't re-consume the
+    # tick's single action either.
+    if [ -n "${EVENTS_LOG:-}" ] && entity_in_backoff "$slug" "$EVENTS_LOG" "$BACKOFF_WINDOW_SEC"; then
+      continue
+    fi
     evaluate_entity "$path" "$controller_worktree"
     case $? in
       0)
-        run_dispatch_action "$path" "$(entity_slug_from_path "$path")" "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run"
+        run_dispatch_action "$path" "$slug" "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run" "$tick_id"
         return 0
         ;;
       1 | 2)
@@ -399,13 +480,19 @@ cmd_tick() {
 }
 
 run_dispatch_action() {
-  local path="$1" slug="$2" runner="$3" runner_fixture="$4" timeout_sec="$5" controller_worktree="$6" dry_run="$7"
+  local path="$1" slug="$2" runner="$3" runner_fixture="$4" timeout_sec="$5" controller_worktree="$6" dry_run="$7" tick_id="${8:-}"
   local exit_class sentinel receipt pr_from_sentinel
 
   if [ "$dry_run" = "yes" ]; then
     emit_event dispatch "$slug" ok "" '{"runner":{"exit_class":"dry-run"},"pr":null}'
     return 0
   fi
+
+  # AC-3a: the entity's own declared time_budget (if any) overrides the
+  # incoming timeout_sec; absent/unparseable falls back to $timeout_sec
+  # UNCHANGED (so an explicit --timeout the caller passed is preserved).
+  local dispatch_timeout_sec
+  dispatch_timeout_sec="$(derive_timeout_sec "$path" "$timeout_sec")"
 
   if [ "$runner" = "fixture" ]; then
     local json
@@ -417,7 +504,9 @@ run_dispatch_action() {
     local out
     # Exit code is redundant with exit_class (parsed below) — the adapter
     # already maps 0/124/1 -> success/timeout/error in its own JSON output.
-    out="$("$RUNNER_ADAPTER" run --entity "$slug" --workdir "$controller_worktree" --timeout "$timeout_sec" 2>&1)"
+    local tick_id_args=()
+    [ -n "$tick_id" ] && tick_id_args=(--tick-id "$tick_id")
+    out="$("$RUNNER_ADAPTER" run --entity "$slug" --workdir "$controller_worktree" --timeout "$dispatch_timeout_sec" "${tick_id_args[@]}" 2>&1)"
     exit_class="$(printf '%s' "$out" | sed -n 's/.*"exit_class":"\([^"]*\)".*/\1/p')"
     sentinel="$(printf '%s' "$out" | sed -n 's/.*"sentinel":"\([^"]*\)".*/\1/p')"
     receipt="$(printf '%s' "$out" | sed -n 's/.*"receipt":"\([^"]*\)".*/\1/p')"
@@ -426,18 +515,31 @@ run_dispatch_action() {
   pr_from_sentinel="$(printf '%s' "$sentinel" | sed -n 's/.* pr=\([0-9]*\).*/\1/p')"
 
   if [ "$exit_class" != "success" ]; then
-    local source
+    local source blocked_detail
     case "$exit_class" in
-      timeout) source="run-timeout" ;;
-      *) source="run-error" ;;
+      timeout)
+        source="run-timeout"
+        # AC-3b: name a resume target. Rides the existing `blocked` event's
+        # detail (DC-4: NOT a new event value) so the tick's
+        # exactly-one-event-per-tick contract + the rollup's
+        # blocked-counts-as-failure parser both stay intact.
+        local resume_stage
+        resume_stage="$(read_frontmatter_field "$path" status)"
+        blocked_detail="$(printf '{"source":"%s","receipt":%s,"checkpoint":{"resume_stage":%s}}' \
+          "$source" "$(json_str_or_null "$receipt")" "$(json_str_or_null "$resume_stage")")"
+        ;;
+      *)
+        source="run-error"
+        blocked_detail="$(printf '{"source":"%s","receipt":%s}' "$source" "$(json_str_or_null "$receipt")")"
+        ;;
     esac
-    emit_event blocked "$slug" blocked "$source" "$(printf '{"source":"%s","receipt":%s}' "$source" "$(json_str_or_null "$receipt")")"
+    emit_event blocked "$slug" blocked "$source" "$blocked_detail"
     return 0
   fi
 
   local detail
   detail="$(printf '{"runner":{"workdir":"%s","timeout_sec":%s,"exit_class":"%s","sentinel":%s,"receipt":%s},"pr":%s}' \
-    "$(json_escape "$controller_worktree")" "$timeout_sec" "$exit_class" "$(json_str_or_null "$sentinel")" "$(json_str_or_null "$receipt")" "$(json_str_or_null "$pr_from_sentinel")")"
+    "$(json_escape "$controller_worktree")" "$dispatch_timeout_sec" "$exit_class" "$(json_str_or_null "$sentinel")" "$(json_str_or_null "$receipt")" "$(json_str_or_null "$pr_from_sentinel")")"
   emit_event dispatch "$slug" ok "" "$detail"
 }
 

@@ -30,7 +30,11 @@ Substitute throughout:
   means a run is in flight; every interval tick meanwhile no-ops
   (`reason=lease-held`), which is normal.
 - **Run receipts:** `ls <ctrl>/.ship-flow-scheduler-receipts/` — one file per
-  adapter spawn (the `receipt` path cited in dispatch/blocked events).
+  adapter spawn (the `receipt` path cited in dispatch/blocked events). A
+  dispatch's receipt now also carries `SHIP_FLOW_SCHEDULER_TICK_ID` / a
+  delegation prompt line (tick-hardening AC-1) — the spawned `/ship` run's
+  mechanical proof of tick-delegation, retiring the prior 30-min-receipt
+  heuristic clause in an entity's `decisions.md`.
 
 ## Unlock
 
@@ -64,6 +68,13 @@ emitted event). Exit 2 usage, 3 environment fault (missing dir/tool), 4 lease
 subsystem fault. Re-running after a crash is always safe: dispatch eligibility
 excludes any entity with a live worktree or PR, so a replay cannot double-ship.
 
+**Resume from checkpoint (tick-hardening AC-3):** a timeout-blocked entity's
+`blocked` event carries `detail.checkpoint.resume_stage` — the entity's
+frontmatter `status` at kill time. `tail` its latest `run-timeout` event in
+the events log to see which stage to re-enter by hand (or let the next real
+tick's own eligibility re-derivation pick it back up); this is a read of an
+existing event, not a new store (Rule 3).
+
 ## launchd install / uninstall (manual, v0)
 
 Templates: `plugins/ship-flow/references/launchd/com.spacedock.ship-flow-scheduler.{tick,rollup}.plist`
@@ -73,11 +84,20 @@ Templates: `plugins/ship-flow/references/launchd/com.spacedock.ship-flow-schedul
        sed -e "s|@CONTROLLER_WORKTREE@|<ctrl>|g" \
            -e "s|@SPACEDOCK_BIN@|$(command -v spacedock)|g" \
            -e "s|@WORKFLOW_DIR@|<wf>|g" \
+           -e "s|@USER_LOCAL_BIN@|$HOME/.local/bin|g" \
            plugins/ship-flow/references/launchd/com.spacedock.ship-flow-scheduler.tick.plist \
            > ~/Library/LaunchAgents/com.spacedock.ship-flow-scheduler.tick.plist
        launchctl load ~/Library/LaunchAgents/com.spacedock.ship-flow-scheduler.tick.plist
 
-   (Same for the rollup plist.)
+   (Same for the rollup plist — it has no `@USER_LOCAL_BIN@` token since it
+   never spawns `claude`/`spacedock`; that `-e` line is simply a no-op for it.)
+
+   `@USER_LOCAL_BIN@` MUST resolve to wherever `claude`/`spacedock` actually
+   live for this machine's login shell (typically `$HOME/.local/bin` — never
+   a hardcoded `/Users/kent`; launchd does not expand `$HOME` itself in
+   `EnvironmentVariables`, so the substitution above must happen at install
+   time). This closes the "claude CLI not available" class that recurs when
+   the tick plist's PATH omits the directory the real binaries are on.
 
 2. Uninstall / pause:
 

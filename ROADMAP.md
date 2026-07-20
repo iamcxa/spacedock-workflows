@@ -12,6 +12,7 @@
 | 5-issue-anchor-scope-drift-guard | Issue-anchor scope-drift guard (route-back re-anchor) | ship |
 | l3-scheduler-tick | L3 scheduler tick — stateless SD scheduler (Step-3 wedge v0) | ship |
 | 7-review-surface-shape-not-plan | Ship-flow core: the human review surface is the shape/spec, not plan.md | execute |
+| tick-hardening | Tick hardening — delegation marker, launcher spawn, time-budget, blocked-backoff | execute |
 <!-- /section:now -->
 
 ## Next (shaped, ready to start when Now clears)

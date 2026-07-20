@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   ship-flow-scheduler tick carrier (design.md §8). TEMPLATE — substitute
-  @CONTROLLER_WORKTREE@ / @SPACEDOCK_BIN@ / @WORKFLOW_DIR@ before
-  `launchctl load` (see docs/ship-flow/l3-scheduler-tick/RUNBOOK.md).
+  @CONTROLLER_WORKTREE@ / @SPACEDOCK_BIN@ / @WORKFLOW_DIR@ / @USER_LOCAL_BIN@
+  before `launchctl load` (see docs/ship-flow/l3-scheduler-tick/RUNBOOK.md).
   The carrier owns scheduling only; all decisions live in the tick.
 -->
 <plist version="1.0">
@@ -28,7 +28,7 @@
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <string>@USER_LOCAL_BIN@:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>SPACEDOCK_BIN</key>
     <string>@SPACEDOCK_BIN@</string>
   </dict>
