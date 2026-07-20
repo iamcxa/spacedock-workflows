@@ -3,9 +3,13 @@
 #
 # design.md is the authority for this file's contract (§1 CLI, §2 JSON events,
 # §3 state projection, §4 idempotence, §5 lease, §6 adapter seam, §7 report,
-# §8 rollup). One `tick` invocation performs exactly ONE bounded action
-# (reconcile > dispatch > advance > no-op, with refusal as a dispatch-scan
-# sub-outcome) and emits exactly one JSON Lines event to stdout + --events-log.
+# §8 rollup). One `tick` invocation performs exactly ONE bounded ACTION
+# (reconcile > dispatch > advance > no-op) and emits one primary event per
+# action taken to stdout + --events-log (a successful reconcile may chain an
+# advance in the same tick). A Precedence-2 dispatch-scan beat additionally
+# emits zero-or-more `refusal` observability records (one per non-eligible,
+# non-deduped entity) BEFORE the beat's primary event; refusals are records,
+# not the beat's action.
 #
 # The tick owns no canonical state (Rule 3): every projection is a fresh read
 # of entity frontmatter + gh (or --gh-provider fixture). It never mutates
@@ -61,6 +65,22 @@ emit_event() {
     "$ts" "$tick_id" "$event" "$(json_str_or_null "$entity")" "$outcome" "$(json_str_or_null "$reason")" "$detail")"
   printf '%s\n' "$line"
   if [ -n "${EVENTS_LOG:-}" ]; then
+    # F2 adjudication (verify feedback cycle 1, codex adversarial, design.md
+    # §5 revision note): this append's exit status is intentionally
+    # unchecked. That is PRE-EXISTING, unchanged by the Precedence-2
+    # two-phase batching rewrite (commit 193196f touched only
+    # entity_in_backoff + the dispatch-scan loop body, never this
+    # function) -- so a failed append (e.g. --events-log's parent directory
+    # missing) silently drops the line from the persisted log while the
+    # tick still completes normally and the SAME line still reaches stdout.
+    # Batching now calls this per queued refusal instead of at most once,
+    # scaling the blast radius from "lose one line" to "lose the whole
+    # batch," but the failure MODE is identical to every other event type
+    # (dispatch/blocked/no-op) this function already emits -- not a new
+    # swallow introduced here. Deliberately left as documented parity
+    # rather than made fail-loud; see
+    # test-ship-flow-scheduler-refusal-batch.sh's
+    # run_events_log_append_failure_swallow_case for the pinning test.
     printf '%s\n' "$line" >> "$EVENTS_LOG"
   fi
 }
@@ -118,21 +138,29 @@ derive_timeout_sec() {
   printf '%s' "$total"
 }
 
-# entity_in_backoff <slug> <events-log> <window-sec> — AC-4: returns 0 (in
-# backoff, skip it) iff <slug>'s MOST RECENT event in <events-log> is
-# `blocked` and its `ts` is within <window-sec> of now. Reads events.jsonl
+# entity_in_backoff <slug> <events-log> <window-sec> [<match-event>
+# [<match-reason>]] — AC-4: returns 0 (in backoff, skip it) iff <slug>'s MOST
+# RECENT event in <events-log> is <match-event> (default `blocked`, backward
+# compatible) — and, when <match-reason> is given, also has the SAME
+# `reason` — and its `ts` is within <window-sec> of now. Reads events.jsonl
 # only (Rule 3: no new store; reuses scheduler_lease_epoch for ts->epoch).
-# Skip-past, never retry (Rule 4, DC-3): callers `continue` past a
-# in-backoff entity to the next candidate, they never re-dispatch/re-
-# reconcile it within the window.
+# Skip-past, never retry (Rule 4, DC-3): callers `continue`/dedup past an
+# in-backoff entity, they never re-dispatch/re-reconcile/re-emit it within
+# the window. The optional 4th/5th args extend this same primitive to
+# refusal-dedup (design.md §3): `refusal "$EVAL_REASON"` reason-scopes the
+# dedup so a reason CHANGE always re-emits (DC-4), never a blanket slug skip.
 entity_in_backoff() {
-  local slug="$1" events_log="$2" window="$3"
+  local slug="$1" events_log="$2" window="$3" match_event="${4:-blocked}" match_reason="${5:-}"
   [ -n "$events_log" ] && [ -f "$events_log" ] || return 1
-  local line event ts ts_epoch now_epoch
+  local line event reason ts ts_epoch now_epoch
   line="$(grep "\"entity\":\"${slug}\"" "$events_log" | tail -1)"
   [ -n "$line" ] || return 1
   event="$(printf '%s' "$line" | sed -n 's/.*"event":"\([^"]*\)".*/\1/p')"
-  [ "$event" = "blocked" ] || return 1
+  [ "$event" = "$match_event" ] || return 1
+  if [ -n "$match_reason" ]; then
+    reason="$(printf '%s' "$line" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')"
+    [ "$reason" = "$match_reason" ] || return 1
+  fi
   ts="$(printf '%s' "$line" | sed -n 's/.*"ts":"\([^"]*\)".*/\1/p')"
   ts_epoch="$(scheduler_lease_epoch "$ts")"
   now_epoch="$(date -u +%s)"
@@ -434,7 +462,17 @@ cmd_tick() {
   done
 
   # --- Precedence 2: dispatch (an eligible entity exists), else refusal ---
-  local first_refusal_path="" first_refusal_reason="" first_refusal_keys=""
+  # Two-phase collect-then-act (design.md §3, AC-1/AC-2/AC-3 — the head-block
+  # fix). Phase 1 scans EVERY entity with no side effects and no early
+  # return, queuing every non-deduped refusal. Phase 2 emits every queued
+  # refusal in scan order, THEN the beat's one primary action. The old code
+  # only ever remembered a single `first_refusal_*` AND discarded even that
+  # one whenever a later case-0 hit fired its own immediate `return 0` — this
+  # silently dropped every other entity's true refusal reason (the finale's
+  # 66/119 duplicate `not-shaped` beats masking a different entity's real
+  # `dor-stale-shape` block).
+  local first_eligible_path="" any_deduped=no
+  local refusal_slugs=() refusal_reasons=() refusal_details=()
   for path in $(list_entities "$workflow_dir"); do
     slug="$(entity_slug_from_path "$path")"
     # AC-4: a recently run-error/run-timeout entity doesn't re-consume the
@@ -445,27 +483,37 @@ cmd_tick() {
     evaluate_entity "$path" "$controller_worktree"
     case $? in
       0)
-        run_dispatch_action "$path" "$slug" "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run" "$tick_id"
-        return 0
+        [ -z "$first_eligible_path" ] && first_eligible_path="$path"
         ;;
       1 | 2)
         # Dedup exclusions (worktree-exists / pr-exists, case 2) are reported
         # via the same `refusal` event shape as dual-key/DoR failures (case 1)
         # — design.md §2 lists worktree-exists/pr-exists in the same
-        # refusal-reason-code vocabulary, annotated "dedup keys".
-        if [ -z "$first_refusal_path" ]; then
-          first_refusal_path="$path"
-          first_refusal_reason="$EVAL_REASON"
-          first_refusal_keys="$EVAL_KEYS"
+        # refusal-reason-code vocabulary, annotated "dedup keys". Refusal
+        # dedup is POST-eval, reason-scoped, case-1|2-only — NEVER a pre-eval
+        # slug-only skip (design.md §3 disproof: a pre-eval skip would break
+        # test-ship-flow-scheduler-fullcycle.sh leg 3, where the child
+        # refuses in leg 1 then must dispatch in leg 3 once eligible).
+        if [ -n "${EVENTS_LOG:-}" ] && entity_in_backoff "$slug" "$EVENTS_LOG" "$BACKOFF_WINDOW_SEC" refusal "$EVAL_REASON"; then
+          any_deduped=yes
+        else
+          refusal_slugs+=("$slug")
+          refusal_reasons+=("$EVAL_REASON")
+          refusal_details+=("$(printf '{"keys":%s,"reason":"%s"}' "$EVAL_KEYS" "$EVAL_REASON")")
         fi
         ;;
     esac
   done
 
-  if [ -n "$first_refusal_path" ]; then
-    local detail
-    detail="$(printf '{"keys":%s,"reason":"%s"}' "$first_refusal_keys" "$first_refusal_reason")"
-    emit_event refusal "$(entity_slug_from_path "$first_refusal_path")" refused "$first_refusal_reason" "$detail"
+  # Phase 2 (act): emit every queued refusal in scan order, then the beat's
+  # single primary action.
+  local i
+  for i in "${!refusal_slugs[@]}"; do
+    emit_event refusal "${refusal_slugs[$i]}" refused "${refusal_reasons[$i]}" "${refusal_details[$i]}"
+  done
+  if [ -n "$first_eligible_path" ]; then
+    run_dispatch_action "$first_eligible_path" "$(entity_slug_from_path "$first_eligible_path")" \
+      "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run" "$tick_id"
     return 0
   fi
 
@@ -475,7 +523,11 @@ cmd_tick() {
     return 0
   fi
 
-  emit_event no-op "" ok nothing-eligible '{"reason":"nothing-eligible"}'
+  if [ ${#refusal_slugs[@]} -eq 0 ] && [ "$any_deduped" = yes ]; then
+    emit_event no-op "" ok refusal-deduped '{"reason":"refusal-deduped"}'
+  else
+    emit_event no-op "" ok nothing-eligible '{"reason":"nothing-eligible"}'
+  fi
   return 0
 }
 
@@ -521,7 +573,7 @@ run_dispatch_action() {
         source="run-timeout"
         # AC-3b: name a resume target. Rides the existing `blocked` event's
         # detail (DC-4: NOT a new event value) so the tick's
-        # exactly-one-event-per-tick contract + the rollup's
+        # one-primary-event-per-action contract + the rollup's
         # blocked-counts-as-failure parser both stay intact.
         local resume_stage
         resume_stage="$(read_frontmatter_field "$path" status)"

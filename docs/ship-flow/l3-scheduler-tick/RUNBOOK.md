@@ -22,9 +22,11 @@ Substitute throughout:
   (`awaiting_merge` / `merged`). `--json` for machine reads. Running it twice
   is harmless; it derives, never writes.
 - **Event log:** `tail -20 <ctrl>/.ship-flow-scheduler-events.jsonl` — one JSON
-  line per tick action (`dispatch|advance|reconcile|no-op|refusal|blocked`).
-  The log is an audit cache, never a decision input; deleting it loses history
-  but breaks nothing.
+  line per tick action (`dispatch|advance|reconcile|no-op|refusal|blocked`),
+  plus zero or more `refusal` observability lines per Precedence-2 beat
+  (batched before the action line, see ship-flow-scheduler.sh:6-8). The log
+  is an audit cache, never a decision input; deleting it loses history but
+  breaks nothing.
 - **Lease record:** `cat <ctrl>/.ship-flow-scheduler.lease/record` — shows
   `pid=`, `start_ts=`, `tick_id=`, `entity=`. A held lease with a live pid
   means a run is in flight; every interval tick meanwhile no-ops
