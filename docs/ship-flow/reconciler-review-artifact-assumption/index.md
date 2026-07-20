@@ -76,3 +76,16 @@ Empirical confirmation: `origin/main:docs/ship-flow/missing-canonical-mods/` (th
 
 ### Summary
 The bug is real and reproduced: `merged-pr-closeout-reconciler.sh:1326-1328` and `:1877-1881` hard-reject when `review.md` is absent, but `origin/main:docs/ship-flow/missing-canonical-mods/` (the reconcile-blocked entity from 2026-07-19) has `verify.md` + `ship.md` only. Narrow S-sized fix: (a) make `review.md` optional in both `reconcile_*_bundle` predicates, (b) adjust the D1 receipt `source_hashes` block (:1314) so `proof_hash` stays deterministic when review.md is absent; keep `ship.md` required (it feeds `## Todo Closeout Digest` and `ship_rel`). Two FO flags: (1) the code lives on main-lineage (0.9.0 reconciler is 2171 lines; muscat-v1 has only the 458-line pre-0.9.0 version) — execute must base on the right branch, else the fix ships nowhere the scheduler reads; (2) the receipt schema change is a soft version bump requiring a fixture-pinned schema choice, but no live receipts exist to migrate because closeout is 100% blocked today.
+
+## Stage Report: design
+
+- DONE: Receipt-schema contract choice decided and pinned in design.md (omit vs substitute); proof_hash deterministic; named the fixture assertion pinning the review-absent shape
+  design.md §1 pins OMIT `review` when `review.md` absent (workflow-agnostic — reconciler has zero `verify.md` refs; deterministic via `sort_keys=True`). Named assertion: new `:4917`-modeled `source_hashes:{index,ship}` assertion in test-merged-pr-closeout-reconciler.sh + a test-closeout-receipt.sh validate round-trip.
+- DONE: design.md maps both predicate change sites (:1326-1328 direct, :1877-1881 PR) to exact tests, including 198-test-suite impact and the >=300s standalone runtime constraint
+  design.md §2: predicate reject path is currently UNTESTED (0 hits for closeout-review-missing); all 198 fixtures seed review.md so sites are no-regression (198/198 stay green); risk confined to new review-absent tests; test-merged-pr-closeout-reconciler.sh (5328 lines/198 tests) must run standalone >=300s + CI=true (AC-4).
+- DONE: Confirmed design references the 0.9.0 reconciler (2171 lines) on this worktree base, not muscat-v1's pre-0.9.0 version; ship.md stays required
+  design.md §0: `wc -l` = 2171; ship.md required (feeds `## Todo Closeout Digest` :1151-1152 + `ship_rel` :1148/:1317); only review.md loosened.
+
+### Summary
+Pinned the receipt-schema choice as OMIT-review-when-absent (rejected verify.md-substitute: the generic reconciler must not bake this workflow's taxonomy, and it has no verify.md references). Layer-tracing the closeout path surfaced a finding beyond the shaped scope: the `review.md` requirement is a receipt-schema contract co-enforced at 6 mandatory sites across 3 files (reconciler predicate x2 + writer :1314, validate-closeout-receipt.py:597, apply-closeout-bundle.sh:229-231/:240-242) plus 1 coherence site (validator :530) — a predicate-only fix is a silent failure that still blocks at apply time (`closeout-stage-artifacts-incoherent`). design.md §4 flags the expanded-but-bounded scope (one conceptual change, ~M not S) for FO/captain confirmation before plan/execute. No code changed; design-stage output only.
+
