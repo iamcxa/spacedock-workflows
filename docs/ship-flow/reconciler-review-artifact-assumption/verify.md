@@ -84,15 +84,22 @@ reason strings / DC criteria / commit messages preserved (`abafc27`). Raw
 now 375. `check-invariants.sh --check artifact-verbosity` OK;
 `test-archived-corpus-invariants.sh` now ALL TESTS PASSED (was FAIL).
 
-**PR #92 CI:** `invariants` now PASS (was FAIL on C15); `GitGuardian` PASS.
-`doc_impact` requires a `doc-impact: none — <reason>` PR-body declaration
-(README.md/`doc-sync-context.md` have no content this fix drifts —
-`closeout-receipt-schema.yaml`'s own coupled row already covers it); PR body
-updated with that declaration, but the CI run triggered by this stage's code
-push captured the PR body *before* the edit (webhook snapshot timing) — the
-push accompanying this verify.md commit will re-trigger `synchronize` with
-the now-current body. FO should confirm `doc_impact` shows PASS on the next
-check run after this push before arming auto-merge.
+<details>
+<summary>PR #92 CI status (confirmed; timing gotcha documented)</summary>
+
+**PR #92 CI (confirmed on the run triggered by this stage's final push):**
+`GitGuardian` PASS; `doc_impact` PASS — the `doc-impact: none — <reason>`
+PR-body declaration (README.md/`doc-sync-context.md` have no content this
+fix drifts — `closeout-receipt-schema.yaml`'s own coupled row already covers
+it) needed a second push to be picked up (the first CI run after the body
+edit still read the pre-edit webhook snapshot; documented here as a timing
+gotcha, not a gate weakness) — now green. `invariants` (the full local-parity
+suite, includes C15) confirmed OK against the identical fixture set via this
+session's own `check-invariants.sh` full run (0 FAIL) and dual-env test
+re-runs above; the CI job itself was still in flight at this stage's
+completion — FO should confirm it lands PASS before arming auto-merge.
+
+</details>
 
 ## Runtime UAT
 
