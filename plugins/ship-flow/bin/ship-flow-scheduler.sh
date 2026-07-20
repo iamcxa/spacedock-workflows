@@ -3,9 +3,13 @@
 #
 # design.md is the authority for this file's contract (§1 CLI, §2 JSON events,
 # §3 state projection, §4 idempotence, §5 lease, §6 adapter seam, §7 report,
-# §8 rollup). One `tick` invocation performs exactly ONE bounded action
-# (reconcile > dispatch > advance > no-op, with refusal as a dispatch-scan
-# sub-outcome) and emits exactly one JSON Lines event to stdout + --events-log.
+# §8 rollup). One `tick` invocation performs exactly ONE bounded ACTION
+# (reconcile > dispatch > advance > no-op) and emits one primary event per
+# action taken to stdout + --events-log (a successful reconcile may chain an
+# advance in the same tick). A Precedence-2 dispatch-scan beat additionally
+# emits zero-or-more `refusal` observability records (one per non-eligible,
+# non-deduped entity) BEFORE the beat's primary event; refusals are records,
+# not the beat's action.
 #
 # The tick owns no canonical state (Rule 3): every projection is a fresh read
 # of entity frontmatter + gh (or --gh-provider fixture). It never mutates
@@ -553,7 +557,7 @@ run_dispatch_action() {
         source="run-timeout"
         # AC-3b: name a resume target. Rides the existing `blocked` event's
         # detail (DC-4: NOT a new event value) so the tick's
-        # exactly-one-event-per-tick contract + the rollup's
+        # one-primary-event-per-action contract + the rollup's
         # blocked-counts-as-failure parser both stay intact.
         local resume_stage
         resume_stage="$(read_frontmatter_field "$path" status)"
