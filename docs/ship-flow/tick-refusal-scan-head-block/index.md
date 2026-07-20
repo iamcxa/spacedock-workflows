@@ -36,3 +36,16 @@ prevents; five typed DCs (structural + behavioral + interface) hand off to
 design with recommendations already flagged; ROADMAP now-row move-from-Later
 intent + canonical-doc impact (design.md delta authoring, no
 INVARIANTS/ARCHITECTURE/PRODUCT change) recorded for ship.
+
+## Stage Report: design
+
+- DONE: Contract decision 1 resolved and recorded in design.md — event-cardinality vs one-event-per-tick (script header L1-14): chose (a) revise contract to one-primary-ACTION-event with refusals as observability records; AC-1/AC-3 fixture assertions restated to match
+  design.md §1: rejected (b)/(c) with reasons — (b) aggregation contradicts AC-1's "3 distinct refusal events"; (c) log-only breaks eligibility L64 `"event":"refusal"` on stdout (emit_event writes stdout unconditionally). Header L6-8 revised text named.
+- DONE: Contract decision 2 resolved — rollup interventions semantics: pin current per-line count as intended ("distinct entity-refusal observations", not paused-beats); named the pinning assertion
+  design.md §2: count-distinct-tick_id would regress the multi-entity visibility the fix restores; dedup window bounds inflation. Pin = new `run_multi_refusal_beat_intervention_count_case` in test-ship-flow-scheduler-rollup.sh asserting `interventions (blocked + refusal): 3` for a 2-refusal-same-tick_id + 1-blocked fixture.
+- DONE: design.md names every existing test file/assertion that moves; no existing assertion left contradicting the chosen contract
+  design.md §4: eligibility (single-entity refusal cases compatible via substring), backoff (blocked path unchanged), fullcycle (leg-1 gains child refusal, leg-3 dispatch preserved ONLY by post-eval reason-scoped dedup), rollup, reconcile, idempotence all cited by file:line; new multi-entity fixtures mirror two_entity_workflow. Baseline of all four run green (exit 0) 2026-07-20.
+
+### Summary
+
+Design PROCEED. Both blocking contract decisions resolved: (1) event cardinality → option (a), refusals reclassified as observability records emitted before the single primary ACTION event (the only option consistent with both the shape-authored AC-1/AC-3 fixtures and the existing eligibility suite's stdout assertions); (2) rollup interventions → pin per-line count as "entity-refusal observations" (per-tick_id would re-hide the multi-entity signal the fix exists to restore). Load-bearing design constraint discovered and disproof-verified: refusal dedup MUST be post-eval, reason-scoped, case-1|2-only — a naive pre-eval slug-scoped `entity_in_backoff` refusal skip breaks test-ship-flow-scheduler-fullcycle.sh leg-3 (child refuses `not-shaped` in leg 1, must dispatch in leg 3). design.md written to the entity folder; scope unchanged (scheduler.sh only, no schema).
