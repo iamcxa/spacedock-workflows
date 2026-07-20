@@ -278,3 +278,41 @@ header + archived l3 design), so Decision 1 moves prose, not a test assertion.
   audit-only supersession above) as the live scheduler design authority's
   revision notes.
 - **ROADMAP.md:** Now-row add + Later-row remove per shape (ship-stage).
+
+### Revision note (execute cycle 2 — F2 events-log append-failure adjudication)
+
+Verify feedback cycle 1 (codex adversarial, F2) asked whether the two-phase
+batching rewrite introduces a NEW silent-failure mode: if a queued refusal's
+`--events-log` append fails mid-batch, does the tick lose the whole batch
+without any signal? Adjudicated against `emit_event`'s existing failure
+semantics, per the branching instruction ("if pre-existing, document parity;
+if introduced, make loud"):
+
+- **`emit_event` (script `:59-70`, unmodified by commit `193196f`) already
+  writes its append unchecked** — `printf ... >> "$EVENTS_LOG"` with no exit-
+  status check, no `set -e` (only `-uo pipefail`). Diffed directly: Task 1's
+  commit touched only `entity_in_backoff` and the Precedence-2 loop body: it
+  never touched `emit_event`. This is confirmed pre-existing, not introduced.
+- Empirical repro (`--events-log` pointed at a path whose parent directory
+  does not exist): tick still exits 0, every queued refusal AND the beat's
+  primary event still reach stdout unchanged, and the broken log path is
+  never created (the append genuinely fails every time, silently, for
+  dispatch/blocked/no-op events exactly as it always has).
+- **Decision: document parity, do not add fail-loud behavior.** The two-phase
+  rewrite scales the blast radius of an existing swallow (one line → up to N
+  queued refusal lines) but does not change its KIND — every event type this
+  function emits (`dispatch`, `blocked`, `no-op`, `refusal`) already shares
+  the identical unchecked-append failure mode. Making ONLY the refusal path
+  loud would be an inconsistent, scope-widening special case (DC-1: this
+  entity is a scheduler.sh fix, not an events-log reliability redesign);
+  making `emit_event` itself loud for ALL callers is a legitimate future
+  hardening but is out of this entity's scope and would need its own
+  contract decision (does a failed append abort the tick? degrade the exit
+  code? emit a second stderr-only diagnostic event?) that no shape/design AC
+  here covers.
+- **Pinning test, no RED→GREEN pair** (mirrors Task 2's rollup pin — a new
+  assertion against CURRENT, unmodified behavior, not a fix):
+  `test-ship-flow-scheduler-refusal-batch.sh`'s
+  `run_events_log_append_failure_swallow_case`.
+- Code comment recorded at the append site itself (`ship-flow-scheduler.sh`
+  `emit_event`) so the adjudication is discoverable without this file.

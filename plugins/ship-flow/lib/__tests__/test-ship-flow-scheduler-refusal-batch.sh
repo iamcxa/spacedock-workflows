@@ -196,6 +196,42 @@ run_refusal_dedup_window_case() {
   rm -rf "$wf"
 }
 
+run_events_log_append_failure_swallow_case() {
+  # F2 (verify feedback cycle 1, codex adversarial): pins the deliberate
+  # parity choice documented at emit_event's append site and in design.md
+  # §5 -- events-log append failures are swallowed (pre-existing, unchanged
+  # by the two-phase batching rewrite; not a new failure mode this entity
+  # introduced). Pointing --events-log at a path whose PARENT DIRECTORY
+  # does not exist makes every emit_event append in the beat fail, but the
+  # tick must still complete normally: exit 0, the full refusal batch AND
+  # the trailing primary event still reach stdout unchanged, and the
+  # broken log path is never created (sanity check that the append
+  # genuinely failed rather than being skipped for some other reason).
+  #
+  # No RED->GREEN pair: unlike Task 1's mechanism cases, this pins EXISTING
+  # emit_event behavior with zero code change (mirrors Task 2's rollup pin
+  # -- design.md §5 / execute.md cycle-2 record the adjudication).
+  local wf broken_log
+  wf="$(three_entity_workflow not-shaped-entity issue-closed-entity not-approved-entity)"
+  broken_log="${wf}/no-such-dir/events.jsonl"
+  run_capture "$HELPER" tick --workflow-dir "$wf" --controller-worktree "$wf" \
+    --gh-provider fixture --gh-fixture-dir "${FIXTURE_ROOT}/gh" \
+    --runner fixture --runner-fixture "${FIXTURE_ROOT}/runner/dispatch-success.json" \
+    --events-log "$broken_log"
+  assert_exit "F2 append-failure swallow: tick exit 0 despite broken --events-log" 0 "$EXIT_CODE"
+  local refusal_count
+  refusal_count="$(printf '%s\n' "$OUT" | grep -c '"event":"refusal"')"
+  if [ "$refusal_count" = 3 ]; then record_pass "F2 append-failure swallow: all 3 refusals still on stdout"
+  else record_fail "F2 append-failure swallow: all 3 refusals still on stdout (got ${refusal_count})"; fi
+  assert_contains "F2 append-failure swallow: trailing no-op nothing-eligible still emitted" '"event":"no-op".*"reason":"nothing-eligible"' "$OUT"
+  if [ -f "$broken_log" ]; then
+    record_fail "F2 append-failure swallow: broken log path was NOT created (sanity: append genuinely failed)"
+  else
+    record_pass "F2 append-failure swallow: broken log path was NOT created (sanity: append genuinely failed)"
+  fi
+  rm -rf "$wf"
+}
+
 echo "=== test-ship-flow-scheduler-refusal-batch.sh ==="
 echo ""
 
@@ -206,6 +242,7 @@ else
   run_batch_refusal_no_eligible_case
   run_batch_refusal_with_dispatch_case
   run_refusal_dedup_window_case
+  run_events_log_append_failure_swallow_case
 fi
 
 echo ""

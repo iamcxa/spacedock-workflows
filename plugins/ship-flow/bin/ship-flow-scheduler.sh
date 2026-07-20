@@ -65,6 +65,22 @@ emit_event() {
     "$ts" "$tick_id" "$event" "$(json_str_or_null "$entity")" "$outcome" "$(json_str_or_null "$reason")" "$detail")"
   printf '%s\n' "$line"
   if [ -n "${EVENTS_LOG:-}" ]; then
+    # F2 adjudication (verify feedback cycle 1, codex adversarial, design.md
+    # §5 revision note): this append's exit status is intentionally
+    # unchecked. That is PRE-EXISTING, unchanged by the Precedence-2
+    # two-phase batching rewrite (commit 193196f touched only
+    # entity_in_backoff + the dispatch-scan loop body, never this
+    # function) -- so a failed append (e.g. --events-log's parent directory
+    # missing) silently drops the line from the persisted log while the
+    # tick still completes normally and the SAME line still reaches stdout.
+    # Batching now calls this per queued refusal instead of at most once,
+    # scaling the blast radius from "lose one line" to "lose the whole
+    # batch," but the failure MODE is identical to every other event type
+    # (dispatch/blocked/no-op) this function already emits -- not a new
+    # swallow introduced here. Deliberately left as documented parity
+    # rather than made fail-loud; see
+    # test-ship-flow-scheduler-refusal-batch.sh's
+    # run_events_log_append_failure_swallow_case for the pinning test.
     printf '%s\n' "$line" >> "$EVENTS_LOG"
   fi
 }
