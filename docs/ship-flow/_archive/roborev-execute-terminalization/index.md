@@ -1,14 +1,15 @@
 ---
 title: Terminalize the stuck roborev entity (#80 fix-first)
-status: execute
+status: done
 source: captain batch approval 2026-07-20 (ticket 3 of 5; fix-first decision for PR #80)
 started: 2026-07-20T05:33:47Z
-completed:
-verdict:
+completed: 2026-07-20T06:43:31Z
+verdict: passed
 score:
 worktree:
 issue: "#88"
-pr: "#89"
+pr: pr-merge:89
+archived: 2026-07-20T06:43:31Z
 ---
 
 The historical entity roborev-migration-receipt-merge-semantics (flat file on origin/main) has been stuck in status: execute since 2026-07-13 with a vanished worktree (dir and branch both gone), no issue anchor, and no pre_mortem — its corpus state is what main's check-invariants CI rejects, keeping PR #80 red. Captain decision (fix-first): repair the historical entity honestly — shape judges whether to backfill required fields and complete it, or archive it as parked with correct terminal state — so #80's invariants check turns green and auto-merge arms. Never an allowlist/checker exclusion (captain rejected fake-allowlist).
