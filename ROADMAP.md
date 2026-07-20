@@ -39,6 +39,7 @@
 | reconciler-review-artifact-assumption | S | Reconciler demands review.md this workflow never produces — blocks auto-closeout | (todo) |
 | tick-refusal-scan-head-block | S | Refusal consumes the beat + no dedup — scan never reaches eligible entities | (todo) |
 | plist-installer-placeholder-validation | S | Installer must validate zero remaining @PLACEHOLDER@ tokens | (todo) |
+| check-invariants-ratchet-baseline | S | Ratchet baseline for checker-strengthening PRs (monotonic decrease, owned entries) | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
