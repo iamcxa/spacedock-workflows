@@ -594,7 +594,13 @@ def validate(receipt: dict[str, Any], path: Path | None = None) -> None:
             fail("closeout-owner-not-unique", "participant slugs must be valid and unique")
         slugs.add(slug)
     hashes = require_object(ownership["source_hashes"], "source_hashes")
-    require_exact_keys(hashes, {"index", "review", "ship"}, "source_hashes")
+    _missing = {"index", "ship"} - hashes.keys()
+    _extra = hashes.keys() - {"index", "review", "ship"}
+    if _missing or _extra:
+        fail(
+            "closeout-sentinel-invalid",
+            f"source_hashes keys mismatch; missing={sorted(_missing)}, extra={sorted(_extra)}",
+        )
     for key, value in hashes.items():
         require_hash(value, f"source_hashes.{key}")
 

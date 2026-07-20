@@ -1310,8 +1310,11 @@ arrays={"source_commit_patch_ids","landing_commits","landing_commit_patch_ids"};
 # source_commits is provider/rendering input, not part of the canonical D1 receipt proof.
 landing={key:(value.split(",") if key in arrays else int(value) if key in ints else value) for key,value in env.items() if key != "source_commits"}
 participants=[] if not participants_csv else participants_csv.split(",")
+_review_path=entity.parent/"review.md"
+_source_hashes={"index":h(entity),"ship":h(entity.parent/"ship.md")}
+if _review_path.exists(): _source_hashes["review"]=h(_review_path)
 receipt={"schema_version":1,"kind":"ship-flow.closeout","closeout_id":cid,"identity":identity,
- "ownership_proof":{"unique_entity_matches":int(match_count),"participant_entities":participants,"source_hashes":{"index":h(entity),"review":h(entity.parent/"review.md"),"ship":h(entity.parent/"ship.md")}},
+ "ownership_proof":{"unique_entity_matches":int(match_count),"participant_entities":participants,"source_hashes":_source_hashes},
  "mode":"direct","merge_method_intent":merge_intent or None,"deterministic_closeout_head":"ship-closeout/"+cid,"landing_proof":landing,
  "transaction":{"phase":"applied","generation":2,"closeout_pr":None,"main_commit":env["landing_anchor"]},
  "outputs":{"debrief":{"path":debrief_rel,"sha256":h(debrief_path)},"ship":{"path":ship_rel,"sha256":h(ship_path)},"archived_entity":{"path":archive_rel,"sha256":h(archive_path)},"roadmap_row":{"identity":slug,"sha256":hashlib.sha256(row.encode()).hexdigest()}}}
@@ -1324,7 +1327,6 @@ PY
 
 reconcile_direct_bundle() {
   local review_file="$workflow_dir/$entity_slug/review.md" ship_file="$workflow_dir/$entity_slug/ship.md"
-  [ -f "$review_file" ] || reject_input closeout-review-missing "review.md is required for terminal closeout"
   [ -f "$ship_file" ] || reject_input closeout-ship-missing "ship.md is required for terminal closeout"
   resolve_closeout_ownership
   local merge_intent envelope_file envelope_rc=0 bundle_root receipt_relative render_rc=0 debrief_relative apply_out apply_rc=0 title active_relative active_rc=0
@@ -1877,7 +1879,6 @@ reconcile_pull_request_bundle() {
   local review_file="$workflow_dir/$entity_slug/review.md" ship_file="$workflow_dir/$entity_slug/ship.md"
   local merge_intent title envelope_file envelope_rc=0 bundle_root receipt_relative render_rc=0
   local debrief_relative active_relative deterministic_head prepared_source bound_pr landing_args current_receipt existing_phase existing_pr existing_proof existing_endpoint rendered_proof resolved_pr
-  [ -f "$review_file" ] || reject_input closeout-review-missing "review.md is required for terminal closeout"
   [ -f "$ship_file" ] || reject_input closeout-ship-missing "ship.md is required for terminal closeout"
   [ "$(git -C "$repo_root" symbolic-ref --quiet --short HEAD || true)" = main ] || reject_input closeout-main-not-authoritative "pull-request checkpoint requires authoritative main"
   [ -z "$(git -C "$repo_root" status --porcelain --untracked-files=all)" ] || reject_input closeout-checkpoint-conflict "authoritative main worktree is not clean"

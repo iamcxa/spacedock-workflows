@@ -226,7 +226,7 @@ for relative in "$DEBRIEF_RELATIVE" "$SHIP_RELATIVE" "$ARCHIVE_RELATIVE"; do
   fi
 done
 [ ! -e "$REPO_ROOT/$ARCHIVE_ROOT_RELATIVE" ] || stop closeout-projection-source-drift "terminal archive exists without the matching closeout receipt: $ARCHIVE_ROOT_RELATIVE"
-for source in index.md review.md ship.md; do
+for source in index.md ship.md; do
   [ -f "$REPO_ROOT/$ACTIVE_ENTITY_RELATIVE/$source" ] || stop closeout-stage-artifacts-incoherent "active source is missing: $source"
 done
 validate_tracked_entity_tree "$REPO_ROOT" "$ACTIVE_ENTITY_RELATIVE" || exit $?
@@ -237,8 +237,15 @@ receipt_path,repo,bundle=pathlib.Path(sys.argv[1]),pathlib.Path(sys.argv[2]),pat
 r=json.loads(receipt_path.read_text())
 def h(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 base=repo/r["identity"]["workflow"]/r["identity"]["entity_slug"]
-for key,name in (("index","index.md"),("review","review.md"),("ship","ship.md")):
-    if h(base/name)!=r["ownership_proof"]["source_hashes"][key]:
+review_path=base/"review.md"
+review_exists=review_path.exists()
+expected_keys={"index","ship"} | ({"review"} if review_exists else set())
+actual_keys=set(r["ownership_proof"]["source_hashes"].keys())
+if actual_keys!=expected_keys:
+    print("verdict=STOP\nreason=closeout-stage-artifacts-incoherent\ndetail=source_hashes keys do not match active source presence"); raise SystemExit(1)
+_names={"index":"index.md","review":"review.md","ship":"ship.md"}
+for key in expected_keys:
+    if h(base/_names[key])!=r["ownership_proof"]["source_hashes"][key]:
         print("verdict=STOP\nreason=closeout-projection-source-drift\ndetail=source bytes changed for "+key); raise SystemExit(1)
 for key in ("debrief","ship","archived_entity"):
     out=r["outputs"][key]
