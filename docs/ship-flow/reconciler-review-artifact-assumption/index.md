@@ -124,3 +124,17 @@ Plan re-verified every design.md line citation live against this worktree's chec
 ### Summary
 Cycle 2 completed all T1-T5 implementation and committed the 7-site coherent fix but froze mid-write of execute.md before recording its own evidence. This recovery leg (cycle 3, docs-only, no implementation code touched) re-ran the four decisive dual-env/regression checks fresh — identical to cycle 2's claimed counts — completed execute.md and its verify-stage gate-brief, and corrected one inaccurate claim cycle 2 left behind: `test-archived-corpus-invariants.sh`'s failure in the informational full loop is not the reconciler file's known harness-bound false-negative but a genuine, pre-existing C15 artifact-verbosity violation on this entity's own oversized `plan.md`, flagged Material in the gate-brief for the verify stage to resolve before merge.
 
+## Stage Report: verify
+
+- DONE: verify.md carries per-AC evidence (AC-1..AC-4) with own re-runs of the decisive checks
+  Own foreground re-run (not relayed): dual-mode predicate pair, `--verify-sources`/`--verify-outputs` round-trip, both tamper directions, receipt determinism — all PASS; reconciler suite 204/204 standalone plain-env AND `CI=true` (`>=300s`); receipt 99/99; applier 78/78. See verify.md's Independent Quality Gate Re-Run + Per-AC Evidence.
+- DONE: C15 plan.md verbosity — standing NIT-fix applied, C15/C11/C12 re-run, PR #92 checks confirmed
+  `abafc27` condensed the `<details>` block content (facts/citations preserved), 471→375 raw lines; `check-invariants.sh` C15/C11/C12 all OK locally; PR #92 `invariants` check now PASS (was FAIL). `doc_impact` failed on a stale webhook PR-body snapshot (declaration added via `gh pr edit` after an earlier push) — this stage's final push re-triggers `synchronize` with the current body; FO must confirm PASS before arming.
+- DONE: runtime_uat explicit, verdict + Panel Coverage + Deferred to TODO sections present
+  `runtime_uat: deferred` with the FO-owned post-merge re-tick reason, verbatim per this stage's checklist. Verdict: PASS (PROCEED). `## Panel Coverage` and `## Deferred to TODO` sections present (C11/C12 both OK).
+- DONE (mid-task addition, FO-directed): triaged 4 codex cross-model P2 findings with explicit dispositions
+  P2-2 (`apply-closeout-bundle.sh:241` `.exists()` vs validator's `.is_file()`) and P2-4 (2 stale "review.md required" doc sites) NIT-fixed now (`4b0a0f8`, `0b853d6`) — both squarely in this entity's own net-new code/docs, re-verified zero regressions. P2-1 (pre-existing symlink-following) and P2-3 (missing applier-level Direction-B test, already covered by design's own validator-level test) filed as todos via `ship-flow:add-todos` (`d0fac62`): `symlink-validation-receipt-gap`, `applier-direction-b-tamper-test`.
+
+### Summary
+All 4 ACs independently re-verified with fresh, own evidence — zero regressions across 585 total assertions (204+204+99+78 dual-env legs + 18 check-invariants.sh checks). Self-found C15 gap (plan.md raw-line cap) fixed under the standing precedent; PR #92's `invariants` check now green. Mid-task, the FO relayed a codex adversarial cross-model pass (PASS, zero P1, 4 P2 advisories) for triage: 2 fixed now (in-scope, net-new code/docs from this entity), 2 deferred as todos (pre-existing or already covered by a deliberate design-stage scoping choice the P2-2 fix keeps valid). Verdict: PASS (PROCEED) — auto-merge NOT armed per this stage's dispatch; FO owns arming after confirming `doc_impact` shows PASS on the next CI run.
+
