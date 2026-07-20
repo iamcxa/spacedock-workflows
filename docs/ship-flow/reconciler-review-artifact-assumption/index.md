@@ -89,3 +89,14 @@ The bug is real and reproduced: `merged-pr-closeout-reconciler.sh:1326-1328` and
 ### Summary
 Pinned the receipt-schema choice as OMIT-review-when-absent (rejected verify.md-substitute: the generic reconciler must not bake this workflow's taxonomy, and it has no verify.md references). Layer-tracing the closeout path surfaced a finding beyond the shaped scope: the `review.md` requirement is a receipt-schema contract co-enforced at 6 mandatory sites across 3 files (reconciler predicate x2 + writer :1314, validate-closeout-receipt.py:597, apply-closeout-bundle.sh:229-231/:240-242) plus 1 coherence site (validator :530) — a predicate-only fix is a silent failure that still blocks at apply time (`closeout-stage-artifacts-incoherent`). design.md §4 flags the expanded-but-bounded scope (one conceptual change, ~M not S) for FO/captain confirmation before plan/execute. No code changed; design-stage output only.
 
+## Stage Report: design (cycle 2)
+
+- DONE: Fold gate REVISE feedback (3 codex gaps) into design.md; chosen direction unchanged
+  Gap 1: design.md §1 now pins the bidirectional iff — `review` key present iff an active regular review.md exists — closing the tamper window where a self-rehashed key-omitted receipt would archive an unhashed review.md via copy_tracked_entity_tree (apply-closeout-bundle.sh:100-119, called at :339; verified first-hand). Fixtures named per direction: NEW validator (--verify-sources) + applier direction-A assertions; EXISTING test-closeout-receipt.sh:535 pins direction B. Sites 5/6/7 reformulated to enforce both directions.
+  Gap 2: design.md §3 AC-1 now has TWO independent RED-then-GREEN tests, one per predicate (direct :1327, PR :1880) — a direct-only fix must leave the PR-mode test RED.
+  Gap 3: design.md §1/§3 round-trip is now dual-mode — the review-absent receipt must pass --verify-outputs AND --verify-sources, since verify_source_bytes runs only under --verify-sources (validate-closeout-receipt.py:745-748).
+  Also verified codex's no-action call on apply-closeout-bundle.sh:207 first-hand: preflight_lexical_paths (:38-64) is lexical/symlink-safety only (os.path.lexists gates the symlink check), so missing review.md passes — documented in §2 as a verified non-site. New-test count updated ~3 to ~7.
+
+### Summary
+Bounded revision per gate: direction stands (OMIT review key, 6-site coherent fix, ship.md required); design.md now carries the bidirectional presence constraint with per-direction fixture names, independent AC-1 coverage for both predicates, and a --verify-sources leg on the review-absent round-trip. All three gaps were verified against source before folding in.
+
