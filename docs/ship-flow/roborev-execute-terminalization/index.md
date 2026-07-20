@@ -1,8 +1,8 @@
 ---
 title: Terminalize the stuck roborev entity (#80 fix-first)
-status: draft
+status: execute
 source: captain batch approval 2026-07-20 (ticket 3 of 5; fix-first decision for PR #80)
-started:
+started: 2026-07-20T05:33:47Z
 completed:
 verdict:
 score:
