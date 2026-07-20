@@ -6,6 +6,7 @@
 
 ## Revision History
 
+- **2026-07-20** — **v1.6.0** Principle 18 (refusal is a scan-time observability record, not the tick's action; narrows the events log's audit-only reading to skip-past/dedup only) added from entity `tick-refusal-scan-head-block`/issue #82. C18 (`--check refusal-observability-record`) pins the rule text.
 - **2026-07-18** — **v1.5.0** Principle 17 (the human review surface is the shape/spec, never plan.md) added from entity #60/issue #60. FO Discipline's Autonomous continuation section gained a direction-confirm captain-stop + a plan.md-offer Violation pattern. C16 (`--check review-surface-shape-not-plan`) pins the rule text — Tier B per Principle 17's own framing: discoverability + regression-proofing, not behavioral FO enforcement.
 - **2026-05-30** — **v1.4.0** Principle 16 (Tier-A Validity: M1 provenance-not-structure + M2 fixture-verified) added from the 19-skill rubric-ification audit. First Tier-A-valid instance: `lib/check-cross-review-threshold.sh` + the meta-rubric frame at `rubrics/_meta-rubric.md`. CI wiring of the cross-review gate is deferred (needs the per-skill contract emission + the forward-only stamp decision).
 - **2026-05-28** — **v1.3.0** (T1-3 of SkillLens-derived MEMORY rubric rollout). Success-mode harvest invariant added (see below). Codex pre-discussed + FO-adjudicated; ship-review Step 4.5 + Step 8 gate added; backward-compatible (BLOCKER applies forward-only to new reviews).
@@ -616,6 +617,18 @@ Receipt schema requires **12 top-level keys** (validated at `write-fo-receipt.sh
 **Grep check** (Tier B — text presence, NOT behavior): `check-invariants.sh --check review-surface-shape-not-plan` asserts the two load-bearing rule sentences are present in this file. Per Principle 16 this pins the rule TEXT (discoverability + regression-proofing), not FO runtime behavior — the `manual: true`-only-on-`shape` workflow schema declares the autonomy intent but does not mechanically enforce it (it did not prevent this incident, nor entity #078's over-pausing). FO/captain discipline (Tier B) remains the actual enforcement.
 
 **Source**: entity #60 / issue #60 (2026-07-18). Surfaced during the #49 build — the FO briefly offered the captain a plan.md review and the captain corrected it (recorded in the 2026-07-17 session debrief). Deliberately split from #49's route-back guard to avoid scope drift.
+
+---
+
+### Principle 18: Refusal is a scan-time observability record, not the tick's action
+
+**Rule**: A scheduler tick's single bounded action is reconcile > dispatch > advance > no-op; a Precedence-2 dispatch-scan beat's `refusal` events are scan-time observability records emitted BEFORE the beat's action, never the action itself. The events log (`.ship-flow-scheduler-events.jsonl`) is read only to derive skip-past / dedup windows (blocked-backoff, refusal-dedup); it is never read to compute entity eligibility or to mutate canonical state, and it remains the rollup's only input.
+
+**Failure mode**: a future change re-introducing a `return` on first refusal (re-collapsing the beat's action into the first refusal) or routing new eligibility logic through the events log would silently reintroduce the finale's observability-leak class of bug — only the first-encountered refusal ever surfaced in production for 2h25m, masking every other entity's true block reason — or would turn the audit-only cache into a second source of truth for entity state.
+
+**Grep check** (Tier B — text presence, per Principle 16): `check-invariants.sh --check refusal-observability-record` asserts the two load-bearing rule sentences above are present in this file (`grep -qF`, mirrors `check_review_surface_shape_not_plan` exactly); `FIXTURE_INVARIANTS` override supported identically.
+
+**Source**: entity `tick-refusal-scan-head-block` / issue #82 (2026-07-20). design-gate review panel (decisions.md) — SO-EM PROCEED 88 + codex cross-vendor SAFE, CONVERGED, captain conditional grant.
 
 ---
 

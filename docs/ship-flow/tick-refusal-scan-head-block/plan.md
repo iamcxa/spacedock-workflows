@@ -66,14 +66,11 @@ the queued refusals in scan order, then runs the single primary action
 <details>
 <summary>RED / GREEN mechanics</summary>
 
-**New helper `three_entity_workflow`** in the new test file — mirrors
-`two_entity_workflow` from `test-ship-flow-scheduler-backoff.sh:123-130`
-(same `cp -R` + `git init -q` shape, one more fixture arg). New local
-assertion helper `assert_before <desc> <pattern_a> <pattern_b> <haystack>` —
-`grep -n` each pattern against `$haystack`, compare the first matching line
-numbers; needed because AC-3 pins ORDER (refusals before dispatch) and no
-existing scheduler test asserts cross-line ordering, so `assert_contains`
-alone can't express it.
+**New helper `three_entity_workflow`** — mirrors `two_entity_workflow`
+(`test-ship-flow-scheduler-backoff.sh:123-130`). New local `assert_before`
+helper compares first-match line numbers of two patterns — needed because
+AC-3 pins ORDER (refusals before dispatch), which `assert_contains` alone
+cannot express.
 
 **RED case 1 — `run_batch_refusal_no_eligible_case` (AC-1):**
 `three_entity_workflow not-shaped-entity issue-closed-entity not-approved-entity`
@@ -115,60 +112,20 @@ fallback) and the fixture dir listing (no such file). Tick 4 must emit a
 FRESH `refusal reason=issue-missing` (real state change, not spam) —
 zero new fixture files needed for this sub-case.
 
-**GREEN — `entity_in_backoff` (`:127-138`):** add
-`local match_event="${4:-blocked}" match_reason="${5:-}"` after the existing
-3 positional params; replace `[ "$event" = "blocked" ] || return 1` with
-`[ "$event" = "$match_event" ] || return 1`; when `match_reason` is non-empty,
-extract `reason` with the same `sed -n 's/.*"reason":"\([^"]*\)".*/\1/p'`
-pattern already used for `event`, and require equality before falling
-through to the `ts`/window check. Existing 3-arg call sites (Precedence-1
-`:441`, Precedence-2's own pre-eval blocked-skip) are unchanged — default
-args preserve today's exact behavior.
+**GREEN — `entity_in_backoff` (`:127-138`):** broaden to an optional
+`(match-event, match-reason)` signature, defaults preserving today's exact
+3-arg behavior at existing call sites. Landed verbatim; see the Task 1
+commit for the actual diff.
 
-**GREEN — Precedence-2 rewrite (`:436-470`):**
-
-```
-# Phase 1 (collect, no side effects)
-local first_eligible_path="" any_deduped=no
-local refusal_slugs=() refusal_reasons=() refusal_details=()
-for path in $(list_entities "$workflow_dir"); do
-  slug="$(entity_slug_from_path "$path")"
-  if [ -n "${EVENTS_LOG:-}" ] && entity_in_backoff "$slug" "$EVENTS_LOG" "$BACKOFF_WINDOW_SEC"; then
-    continue
-  fi
-  evaluate_entity "$path" "$controller_worktree"
-  case $? in
-    0)
-      [ -z "$first_eligible_path" ] && first_eligible_path="$path"
-      ;;
-    1 | 2)
-      if [ -n "${EVENTS_LOG:-}" ] && entity_in_backoff "$slug" "$EVENTS_LOG" "$BACKOFF_WINDOW_SEC" refusal "$EVAL_REASON"; then
-        any_deduped=yes
-      else
-        refusal_slugs+=("$slug")
-        refusal_reasons+=("$EVAL_REASON")
-        refusal_details+=("$(printf '{"keys":%s,"reason":"%s"}' "$EVAL_KEYS" "$EVAL_REASON")")
-      fi
-      ;;
-  esac
-done
-
-# Phase 2 (act)
-for i in "${!refusal_slugs[@]}"; do
-  emit_event refusal "${refusal_slugs[$i]}" refused "${refusal_reasons[$i]}" "${refusal_details[$i]}"
-done
-if [ -n "$first_eligible_path" ]; then
-  run_dispatch_action "$first_eligible_path" "$(entity_slug_from_path "$first_eligible_path")" \
-    "$runner" "$runner_fixture" "$timeout_sec" "$controller_worktree" "$dry_run" "$tick_id"
-  return 0
-fi
-```
-
-then fall through UNCHANGED into today's Precedence-3 block (`:472-476`),
-and change the final no-op (`:478`) to:
-`if [ ${#refusal_slugs[@]} -eq 0 ] && [ "$any_deduped" = yes ]; then emit_event no-op "" ok refusal-deduped '{"reason":"refusal-deduped"}'; else emit_event no-op "" ok nothing-eligible '{"reason":"nothing-eligible"}'; fi`.
-This is a literal transcription of design.md §3's Phase-1/Phase-2 mechanism —
-no new decision, only wiring.
+**GREEN — Precedence-2 rewrite (`:436-470`):** two-phase collect-then-act —
+Phase 1 scans every entity with no side effects, queuing every non-deduped
+refusal and remembering the first eligible path; Phase 2 emits all queued
+refusals in scan order, then the beat's one primary action; falls through
+UNCHANGED into today's Precedence-3 block, and the final no-op branches on
+`refusal-deduped` vs `nothing-eligible`. A literal transcription of
+design.md §3's Phase-1/Phase-2 mechanism — no new decision, only wiring.
+Landed verbatim; see the Task 1 commit for the actual diff (execute.md
+Task evidence cites the SHA) rather than duplicating it here.
 
 </details>
 
@@ -311,18 +268,11 @@ Harvest Lifecycle`):
   design-gate review panel (decisions.md) — SO-EM PROCEED 88 + codex
   cross-vendor SAFE, CONVERGED, captain conditional grant.
 
-**GREEN — `check-invariants.sh` wiring:** add `check_refusal_observability_record()`
-(pattern-identical to `check_review_surface_shape_not_plan`, `:1088-1104`,
-echo `"OK C18 refusal-observability-record"`); add
-`refusal-observability-record) check_refusal_observability_record; exit $? ;;`
-to the `--check` dispatch table (after the `ship-shape-design-always-runs`
-row, `:2466`); add `# C18: Principle 18 — refusal is observability, not
-action (2026-07-20) / Source: tick-refusal-scan-head-block, issue #82` +
-`check_refusal_observability_record || FAIL=1` to the full-run section
-(after the C17 call, before `exit $FAIL`). Bump `INVARIANTS.md` Revision
-History top entry: `- **2026-07-20** — **v1.6.0** Principle 18 (refusal is a
-scan-time observability record, not the tick's action; narrows the events
-log's audit-only reading to skip-past/dedup only)`.
+**GREEN — `check-invariants.sh` wiring:** `check_refusal_observability_record()`
+(pattern-identical to `check_review_surface_shape_not_plan`, `:1088-1104`),
+dispatch-table entry, full-run wiring, and the `INVARIANTS.md` Revision
+History bump — landed verbatim; see the Task 4 commit for the actual diff
+rather than duplicating it here.
 
 </details>
 
@@ -347,10 +297,15 @@ exits 0 with `OK C18 ...`; full `bash plugins/ship-flow/bin/check-invariants.sh`
 
 **Both contract-revision notes accounted for (nothing dropped):**
 
+<details>
+<summary>Note → delta-site mapping table</summary>
+
 | Note (design.md §5) | Delta site(s) |
 | --- | --- |
 | Note 1 — one-event-per-tick → one-primary-event-per-action (accommodates reconcile→advance double-emit + refusal batching) | Task 3: `ship-flow-scheduler.sh:6-8` header, `:522-525` comment, `RUNBOOK.md:24-25` |
 | Note 2 — events log narrowed from "audit-only, never read to decide" to "read only for skip-past/dedup, never eligibility/canonical-state" | Task 4: folded into INVARIANTS.md Principle 18's Rule text (no separate script/RUNBOOK edit — design.md §5 names no other live site for this note) |
+
+</details>
 
 **DC:** `git diff` on touched canonical docs shows only the rows above;
 `bash scripts/check-no-dangling.sh` and `bash scripts/check-version-triple.sh`
@@ -360,35 +315,30 @@ both still pass.
 
 ## Verify-gate handoff — worker-drafted gate-brief (explicit deliverable)
 
-The design gate for this entity used a two-reviewer panel (SO-EM +
-codex cross-vendor, decisions.md) that the FO routed and the captain
-conditionally granted. The verify gate should get the same panel treatment,
-and per this plan's dispatch instructions, **the brief that panel reviews is
-a worker deliverable, not an FO-authored one** — the FO's role at verify is
-to forward the brief to the panel, not compose it.
+The design gate used a two-reviewer panel (SO-EM + codex cross-vendor,
+decisions.md); the verify gate gets the same treatment. Per dispatch
+instructions, **the brief that panel reviews is a worker deliverable, not
+FO-authored** — the FO forwards it verbatim, does not compose it (same
+logic as decisions.md's design-gate precedent).
 
-**Deliverable (owned by the execute or verify-stage worker, NOT this plan
-stage — named here so it is not silently dropped):** a `gate-brief` section
-in `verify.md` (or a standalone note verify.md links to) summarizing, for
-the SO-EM + codex panel:
+**Deliverable (execute/verify-stage worker, NOT this plan stage):** a
+`gate-brief` section in `verify.md` (or a note it links to), for the SO-EM +
+codex panel:
 
 - The Task 1 mechanism diff (file:line before/after, two-phase collect-then-act)
 - Full test evidence: every DC above green, plus the Terminal DCs full
   regression sweep below (dual-env)
 - The two execute-stage hard conditions' resolution: INVARIANTS Principle 18
-  text (Task 4) + RUNBOOK.md wording (Task 3), so the panel can confirm both
-  conditions the design gate imposed were actually satisfied, not just
-  claimed
-- Any residual risk found during execute (e.g. if Task 1's GREEN diverges
-  from the pseudocode above for a concrete reason)
-
-The FO forwards this brief to the panel verbatim; authoring it is out of
-FO scope by the same logic decisions.md's design-gate precedent already
-established (a worker produces the technical summary, the FO routes it).
+  text (Task 4) + RUNBOOK.md wording (Task 3), confirming both conditions
+  the design gate imposed were actually satisfied, not just claimed
+- Any residual risk found during execute
 
 ---
 
 ## Cut-list (named, not silently dropped)
+
+<details>
+<summary>3 cut items</summary>
 
 - **Refusal + advance co-occurring in the same beat.** Task 1's rewrite makes
   this newly reachable in principle (old code's `return 0` on any refusal
@@ -405,12 +355,17 @@ established (a worker produces the technical summary, the FO routes it).
 - **Reconciler `closeout-review-missing` fix** — the R1 sibling entity
   (`reconciler-review-artifact-assumption`), not this one.
 
+</details>
+
 ---
 
 ## Terminal DCs (verify-stage, not execute tasks)
 
 Full scheduler regression + dual-env, per the l3/tick-hardening precedent
-(AC-6):
+(AC-6).
+
+<details>
+<summary>Regression commands (normal + CI-sim)</summary>
 
 ```
 for t in test-ship-flow-scheduler-backoff.sh test-ship-flow-scheduler-eligibility.sh \
@@ -429,6 +384,8 @@ env -i PATH=/usr/bin:/bin HOME="$HOME" CI=true timeout 90 bash plugins/ship-flow
 Plus `bash plugins/ship-flow/bin/check-invariants.sh` (full, C1-C18) and the
 full `test-*.sh` suite once more as the regression sweep for the ~15 other
 test files this plan doesn't touch.
+
+</details>
 
 ## Post-merge FO handoff (LIVE proof — not a plan/execute/verify task)
 

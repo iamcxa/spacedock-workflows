@@ -1151,6 +1151,26 @@ check_ship_shape_design_always_runs() {
   return 0
 }
 
+check_refusal_observability_record() {
+  # C18 — INVARIANTS.md Principle 18: pin the load-bearing "refusal is an
+  # observability record, not the tick's action" rule text so it stays
+  # discoverable and cannot silently regress. Tier B per Principle 16 (text
+  # presence, NOT behavior). Fixture override: FIXTURE_INVARIANTS=path.
+  local invariants_file="${FIXTURE_INVARIANTS:-${ROOT}/plugins/ship-flow/INVARIANTS.md}"
+  [ -f "$invariants_file" ] || return 0
+  local s1="A scheduler tick's single bounded action is reconcile > dispatch > advance > no-op; a Precedence-2 dispatch-scan beat's \`refusal\` events are scan-time observability records emitted BEFORE the beat's action, never the action itself."
+  local s2="The events log (\`.ship-flow-scheduler-events.jsonl\`) is read only to derive skip-past / dedup windows (blocked-backoff, refusal-dedup); it is never read to compute entity eligibility or to mutate canonical state, and it remains the rollup's only input."
+  local rule_missing=0
+  grep -qF "$s1" "$invariants_file" || rule_missing=1
+  grep -qF "$s2" "$invariants_file" || rule_missing=1
+  if [ "$rule_missing" = 1 ]; then
+    echo "ERROR [Principle 18/refusal-observability-record]: INVARIANTS.md is missing a load-bearing Principle 18 rule sentence (refusal is a scan-time observability record, not the tick's action; the events log is read only for skip-past/dedup, never eligibility/canonical-state). See plugins/ship-flow/INVARIANTS.md '### Principle 18'." >&2
+    return 1
+  fi
+  echo "OK C18 refusal-observability-record"
+  return 0
+}
+
 # ---- C10-C13: 2026-05-13 Phase 1/2B/3A merge enforcement ----
 # Elevates Hermetic Dependency Policy + Multi-Specialist Panel + FO Receipt
 # contracts from stage-SKILL-internal invariants to plugin-level CI checks.
@@ -2464,6 +2484,7 @@ if [ -n "$SINGLE_CHECK" ]; then
     artifact-verbosity) check_artifact_verbosity; exit $? ;;
     review-surface-shape-not-plan) check_review_surface_shape_not_plan; exit $? ;;
     ship-shape-design-always-runs) check_ship_shape_design_always_runs; exit $? ;;
+    refusal-observability-record) check_refusal_observability_record; exit $? ;;
     *) echo "ERROR: unknown check: $SINGLE_CHECK" >&2; exit 2 ;;
   esac
 fi
@@ -2537,5 +2558,8 @@ check_review_surface_shape_not_plan || FAIL=1
 # C17: Principle 11 — ship-shape must not tell the FO to skip design→plan (2026-07-18)
 # Source: #63
 check_ship_shape_design_always_runs || FAIL=1
+# C18: Principle 18 — refusal is observability, not action (2026-07-20)
+# Source: tick-refusal-scan-head-block, issue #82
+check_refusal_observability_record || FAIL=1
 
 exit $FAIL
