@@ -53,3 +53,11 @@ not-applicable — docs-only change; no UI, CLI, or runtime behavior surface cha
 | `test-scheduler-runner-adapter.sh` (time_budget cases) | PASS — 14 time_budget-specific cases |
 
 Pre-existing failures: 13 failures in test-scheduler-runner-adapter.sh (exit_class, sentinel, TICK_ID tests) — confirmed identical on unmodified main branch. Zero new regressions.
+
+## Panel Coverage
+
+docs-only diff; no code-reviewer panel convened; coverage = verify-stage AC re-run (this file) plus the local FO independent AC re-verification over tailscale recorded in decisions.md (gate approval 9b7ebce)
+
+## Deferred to TODO
+
+none — no deferred findings from this verify
