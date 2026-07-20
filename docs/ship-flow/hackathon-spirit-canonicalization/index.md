@@ -25,3 +25,16 @@ Capture and archive hackathon-2 debrief findings, timeline, scope decisions, and
 ### Summary
 
 Trivial-pass PROCEED. Docs-only: AC-1 → INVARIANTS.md time-box prose, AC-2 → docs/ship-flow/README.md `time_budget` template slot + field row, AC-3 satisfied by landing in existing canon. Load-bearing finding: `time_budget` frontmatter already exists and is honored by the scheduler (`derive_timeout_sec`), so the AC-2 template slot must use the parseable `<N>h<N>m` format (e.g. `2h30m`) — flagged for plan. No test moves and no new test vectors needed; no test pins the added prose and neither target file is a doc-coupling srcGlob.
+
+## Stage Report: plan
+
+- DONE: plan.md written with explicit inline edit specs for INVARIANTS.md and docs/ship-flow/README.md (format constraint: time_budget uses schedulable <N>h<N>m syntax)
+  plan.md at docs/ship-flow/hackathon-spirit-canonicalization/plan.md; Task 1 specifies INVARIANTS.md FO Discipline subsection insertion; Task 2 specifies Feature Template + Field Reference row with explicit `<N>h<N>m` format note citing scheduler-runner-adapter.sh.
+- DONE: Canonical Doc Actions section covers both target files (update) and explicitly skips others with rationale
+  "Canonical Doc Actions" table in plan.md: INVARIANTS.md + docs/ship-flow/README.md marked UPDATE; plugin README, doc-sync, SKILL.md files, new standalone file, references/*.yaml, check-invariants.sh all marked SKIP with one-line rationale each.
+- DONE: No test moves or new vectors — plan confirms why no test additions are needed for this docs-only change
+  "Test Addition Rationale" section in plan.md confirms four reasons (no prose-pinning test exists, runtime contract already covered by scheduler adapter test, doc-impact-gate won't fire); result: zero new test vectors, zero test moves.
+
+### Summary
+
+Wrote plan.md for the docs-only ticket with two task blocks (INVARIANTS.md FO Discipline subsection + docs/ship-flow/README.md Feature Template and Field Reference). The format constraint from design (time_budget must use scheduler-parseable `<N>h<N>m`) is explicit in both task specs and the Canonical Doc Actions table. No test additions or moves are required; the test rationale section names all four reasons and confirms zero new vectors.
