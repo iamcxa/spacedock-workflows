@@ -246,6 +246,37 @@ that cannot silently recur.
   `.ship-flow-scheduler-events.jsonl` schema does not change; rollup counts
   unaffected).
 
+### FO takeover amendment — 2026-07-20 (session 2, captain-directed)
+
+Captain directive: 「幫我關掉它，你接管」 (2026-07-20, after the parallel-session
+collision). This amendment supersedes nothing above — the shape's evidence and
+ACs stand (independently cross-checked by a second L0 subagent + fresh-sonnet
+cross-review, verdict PROCEED). It ADDS two design-stage obligations the shape
+left unresolved:
+
+- **Open contract decision 1 — event-cardinality vs the one-event-per-tick
+  contract (BLOCKING for design; do NOT trivial-pass this axis).**
+  `ship-flow-scheduler.sh` L1-14 header (live authority) states one tick
+  "performs exactly ONE bounded action... and emits exactly one JSON Lines
+  event"; the archived l3 design §2/§4 and tick-hardening DC-4 ("a separate
+  event would break the exactly-one-event-per-tick contract") reaffirm it.
+  AC-1's fixture (3 refusal events + 1 no-op in one beat) contradicts that
+  contract as written. Design must pick and record ONE: (a) revise the
+  contract to "exactly one primary ACTION event; refusals are observability
+  records" (matches AC-3's rationale; requires updating the script header
+  contract text + design.md revision note), or (b) aggregate all refusals
+  into the single beat event's `detail` (tick-hardening DC-4 precedent), or
+  (c) batch-write refusal lines to `--events-log` only while stdout keeps the
+  single primary event. The choice changes AC-1/AC-3's fixture assertions.
+- **Open contract decision 2 — rollup `interventions` semantics under new
+  cardinality.** `cmd_rollup` counts `blocked + refusal` per JSONL line with
+  no per-tick grouping; batching multiplies refusal lines per beat (before
+  dedup shrinks steady-state). "Rollup needs no touch" (Out-of-scope above)
+  holds mechanically but silently changes the metric's meaning
+  (entity-refusals vs paused-beats). Design must either pin the current
+  line-count semantics as intended (record why) or count distinct tick_ids —
+  and AC-3's fixture should assert whichever is chosen.
+
 ### Reverse-recovery discipline check
 
 - OK Layer trace done (six seams above; three WORKING, three EXISTS_BROKEN,
