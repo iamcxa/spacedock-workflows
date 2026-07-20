@@ -42,6 +42,8 @@
 | check-invariants-ratchet-baseline | S | Ratchet baseline for checker-strengthening PRs (monotonic decrease, owned entries) | (todo) |
 | shipflow-docs-and-adoption-report | M | Docs reorg for outsiders + metrics-backed adoption report (draft in .context) | (todo) |
 | rollup-plist-spacedock-bin-leak | S | Fix live rollup.plist @SPACEDOCK_BIN@ leak (tick fixed 04:10, | (todo) |
+| fo-clock-quota-awareness | S | FO clock-and-quota awareness discipline (13:23 incident) | (todo) |
+| worktree-task-slug-resolution | S | spacedock task-by-slug resolution drifts to main checkout | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
