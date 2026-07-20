@@ -1,6 +1,6 @@
 ---
 title: Fix tick refusal scanning head-block
-status: verify
+status: ship
 issue: "#82"
 worktree: .worktrees/spacedock-ensign-tick-refusal-scan-head-block
 started: 2026-07-20T01:59:17Z
