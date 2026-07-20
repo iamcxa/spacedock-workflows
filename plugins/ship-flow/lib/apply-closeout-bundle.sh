@@ -238,7 +238,7 @@ r=json.loads(receipt_path.read_text())
 def h(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 base=repo/r["identity"]["workflow"]/r["identity"]["entity_slug"]
 review_path=base/"review.md"
-review_exists=review_path.exists()
+review_exists=review_path.is_file()
 expected_keys={"index","ship"} | ({"review"} if review_exists else set())
 actual_keys=set(r["ownership_proof"]["source_hashes"].keys())
 if actual_keys!=expected_keys:
