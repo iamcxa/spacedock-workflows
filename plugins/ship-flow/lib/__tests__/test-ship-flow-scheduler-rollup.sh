@@ -67,6 +67,22 @@ run_usage_case() {
   assert_exit "rollup: missing --date -> exit 2 (usage)" 2 "$EXIT_CODE"
 }
 
+run_multi_refusal_beat_intervention_count_case() {
+  # design.md §2 (Decision 2): pins the CURRENT per-line `interventions`
+  # count (blocked+refusal, no tick_id grouping) as the intended reading —
+  # "distinct entity-refusal observations", not "paused beats". Two
+  # `refusal` lines sharing ONE tick_id (batched same-beat refusals,
+  # plan.md Task 1) + one `blocked` line must count as 3, disproving a
+  # count-distinct-tick_id reading (which would render 2 and re-hide the
+  # multi-entity visibility the batching fix restores). No code change in
+  # this task (DC-1: rollup awk is untouched) — this fixture+assertion
+  # freezes the semantics against future drift.
+  local fixture_log="${FIXTURE_ROOT}/rollup/events-multi-refusal-beat.jsonl"
+  run_capture "$HELPER" rollup --events-log "$fixture_log" --date 2026-07-20
+  assert_exit "multi-refusal-beat: rollup exit 0" 0 "$EXIT_CODE"
+  assert_contains "multi-refusal-beat: interventions (blocked + refusal): 3" 'interventions \(blocked \+ refusal\): 3' "$OUT"
+}
+
 echo "=== test-ship-flow-scheduler-rollup.sh ==="
 echo ""
 
@@ -77,6 +93,7 @@ else
   run_determinism_case
   run_no_events_for_date_case
   run_usage_case
+  run_multi_refusal_beat_intervention_count_case
 fi
 
 echo ""
