@@ -409,6 +409,38 @@ Rules for the orchestrator (first-officer role) during pipeline execution. These
 
 ---
 
+### Time-Box Discipline
+
+**Rule**: Every entity MUST carry a `time_budget` field in its frontmatter (format:
+`<N>h<N>m`, e.g. `2h30m`). The FO enforces two checkpoints against elapsed wall-clock:
+
+- **75% consumed** — warn in-channel: surface elapsed vs budget, remaining scope,
+  any at-risk deliverables. Do not pause or wait for captain; continue autonomously.
+- **100% consumed (brake fires)** — park the entity: open findings surface (in-channel
+  summary of done/remaining/blocker), cut remaining scope to a follow-up, and
+  surface to the captain. NEVER compress or skip verification to fit a budget.
+
+**Verification is never optional**: the 100% brake scope-cuts tasks, not quality gates.
+If the remaining un-cut scope would require verification to be shortened, cut the scope
+further until verification can run in full.
+
+**Precedent (hackathon-2, 2026-07-20)**: two time-box brakes fired correctly across two
+nights — scope was cut at 100% twice; verification was never compressed. The finale entity
+was parked with findings instead of compressing verification. Debrief citation:
+`docs/ship-flow/_archive/debriefs/debrief-2026-07-18-02.md` (and session debrief
+2026-07-20-01 "2 time-box brakes").
+
+**Format constraint**: `time_budget` must use the scheduler-parseable `<N>h<N>m` string
+(e.g. `2h30m`, not `2.5h` or `150m`). The scheduler's `derive_timeout_sec` in
+`plugins/ship-flow/lib/scheduler-runner-adapter.sh` reads this field directly; a
+non-parseable value silently falls back to the 5400s default.
+
+**Tier**: judgment (Tier-B). The 75%/100% enforcement seam is prose discipline; code-gate
+enforcement (scheduler warning hook, check-invariants `time_budget` presence check) is the
+`time-budget-code-gate` rabbit hole (out of scope for this ticket).
+
+---
+
 ### Principle 9: Domain Registry — read-as-context, M1-M5 graceful-degradation surface
 
 **Rule**: Cross-stage specialist dispatch (design-stage designer, plan-stage architecture-lens,
