@@ -38,3 +38,16 @@ Trivial-pass PROCEED. Docs-only: AC-1 → INVARIANTS.md time-box prose, AC-2 →
 ### Summary
 
 Wrote plan.md for the docs-only ticket with two task blocks (INVARIANTS.md FO Discipline subsection + docs/ship-flow/README.md Feature Template and Field Reference). The format constraint from design (time_budget must use scheduler-parseable `<N>h<N>m`) is explicit in both task specs and the Canonical Doc Actions table. No test additions or moves are required; the test rationale section names all four reasons and confirms zero new vectors.
+
+## Stage Report: execute
+
+- DONE: INVARIANTS.md edited: `### Time-Box Discipline` subsection added under `## FO Discipline` with all required elements (time_budget field, 75% warning, 100% brake = park+surface+cut scope, never-compress-verification rule, hackathon-2 precedent citations)
+  Commit d41f1ed; AC grep hits `time_budget`, `75%`, `brake` at lines 413–438 with full brake semantics and park-not-compress wording.
+- DONE: docs/ship-flow/README.md edited: `time_budget:` in Feature Template frontmatter block (blank value, after `score:`) + matching Field Reference table row (after `score` row, before `worktree` row) with `<N>h<N>m` format note and semantics pointer
+  Commit d41f1ed; grep confirms line 261 (`time_budget:` in template) and line 104 (Field Reference row with `<N>h<N>m` format note and scheduler-runner-adapter.sh pointer).
+- DONE: Full local gate run passes (check-invariants.sh, node suite, check-version-triple, check-no-dangling) — any failures explained with deviations recorded in execute.md
+  check-invariants.sh: all C1–C17 OK; node suite: 79/79 pass; check-version-triple: 5/5; check-no-dangling: 12/12. Scheduler adapter test has 13 pre-existing failures unrelated to this change (confirmed identical on unmodified main branch, zero new regressions).
+
+### Summary
+
+Implemented the two plan.md doc edits: inserted `### Time-Box Discipline` subsection into `plugins/ship-flow/INVARIANTS.md` under `## FO Discipline` and added the `time_budget:` template field plus Field Reference table row to `docs/ship-flow/README.md`. Full gate suite passes with no regressions; 13 pre-existing scheduler-adapter failures are unchanged from main. All edits match plan.md verbatim with no deviations.
