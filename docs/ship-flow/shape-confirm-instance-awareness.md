@@ -1,12 +1,12 @@
 ---
 title: Make shape-confirm/allocate-id instance-aware
-status: shape
+status: design
 source: todo shape-confirm-instance-awareness (pitch 1 harvest)
 started: 2026-07-12T13:48:06Z
 completed:
 verdict:
 score:
-worktree:
+worktree: .worktrees/spacedock-ensign-shape-confirm-instance-awareness
 issue: "#21"
 pr:
 ---
