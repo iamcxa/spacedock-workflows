@@ -101,6 +101,61 @@ policy, shaped-child entry status, and compatible-frontmatter/body merge.
   compatible-frontmatter/body destination during absorption; rollback when
   any write, ROADMAP patch, validation, or commit step fails.
 
+### Hand-off to Design
+
+```yaml
+affects_ui: false
+domain: schema
+design_required: true
+contract_decision_required: true
+ui_surfaces: []
+open_design_questions: []
+open_contract_decisions:
+  - id: CD-1
+    decision: Define the slug allocator return contract and the race-free sd-b32 minting contract.
+    source_citations:
+      - docs/ship-flow/shape-confirm-instance-awareness.md:51-55
+      - docs/ship-flow/shape-confirm-instance-awareness.md:82-88
+      - docs/ship-flow/shape-confirm-instance-awareness.md:97-102
+  - id: CD-2
+    decision: Define the per-id-style filename policy and the lifecycle entry status for shaped children.
+    source_citations:
+      - docs/ship-flow/shape-confirm-instance-awareness.md:51-61
+      - docs/ship-flow/shape-confirm-instance-awareness.md:75-77
+      - docs/ship-flow/shape-confirm-instance-awareness.md:86-88
+  - id: CD-3
+    decision: Define the compatible-frontmatter merge and the destination for preserved flat-entity body content during absorption.
+    source_citations:
+      - docs/ship-flow/shape-confirm-instance-awareness.md:62-66
+      - docs/ship-flow/shape-confirm-instance-awareness.md:71-72
+      - docs/ship-flow/shape-confirm-instance-awareness.md:86-88
+  - id: CD-4
+    decision: Define rollback semantics when any write, ROADMAP patch, validation, or commit step fails.
+    source_citations:
+      - docs/ship-flow/shape-confirm-instance-awareness.md:62-66
+      - docs/ship-flow/shape-confirm-instance-awareness.md:82-86
+      - docs/ship-flow/shape-confirm-instance-awareness.md:99-102
+approved_boundaries:
+  - boundary: Keep the design as a thin instance adapter inside the existing atomic confirm ceremony.
+    source_citation: docs/ship-flow/shape-confirm-instance-awareness.md:82-86
+  - boundary: Limit core implementation to shape-confirm.sh and allocate-id.sh, with one README id-style reader and one preflight migration plan before writes.
+    source_citation: docs/ship-flow/shape-confirm-instance-awareness.md:70-72
+  - boundary: Cover slug, sequential, and sd-b32 identity; declared lifecycle and dispatch visibility; and lossless atomic flat-to-folder absorption.
+    source_citation: docs/ship-flow/shape-confirm-instance-awareness.md:49-66
+  - boundary: Limit regression and contract-sync work to the focused tests, scanner/schema validation, ship-shape skill, entity-body schema, and live plugin README wording.
+    source_citation: docs/ship-flow/shape-confirm-instance-awareness.md:73-77
+approved_exclusions:
+  - exclusion: Split-root or state-checkout migration and two-root transaction design.
+    source_citation: docs/ship-flow/shape-confirm-instance-awareness.md:78-80
+  - exclusion: Upstream Spacedock task-by-slug or worktree resolution.
+    source_citation: docs/ship-flow/shape-confirm-instance-awareness.md:78-80
+  - exclusion: Historical archive rewrites.
+    source_citation: docs/ship-flow/shape-confirm-instance-awareness.md:78-80
+  - exclusion: General migration between id styles.
+    source_citation: docs/ship-flow/shape-confirm-instance-awareness.md:78-80
+pm_framing_output: docs/ship-flow/shape-confirm-instance-awareness.md:42-102
+```
+
 ## Stage Report: shape
 
 - DONE: Prove slug id-style confirm succeeds without numeric allocation or exit 10, with regression coverage per supported id-style.
