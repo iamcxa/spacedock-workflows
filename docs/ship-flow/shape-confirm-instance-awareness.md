@@ -166,6 +166,8 @@ pm_framing_output: docs/ship-flow/shape-confirm-instance-awareness.md:42-102
   Proof preserves sentinel captain prose byte-for-byte, resolves exactly one folder entity, deletes the flat path in the same commit, and exercises rollback.
 - DONE: Report the narrow implementation boundary and explicitly exclude split-root migration or upstream task-by-slug resolution.
   Boundary is the two confirm/allocation helpers, focused tests, scanner/schema contract sync, and live docs; both exclusions are recorded above.
+- DONE: Add the exact machine-readable Hand-off to Design block with source file-line citations, all four open contract decisions, and the approved boundaries/exclusions; preserve the approved Stage Report and do not advance status.
+  The YAML hand-off records 21 valid source ranges, four decisions, four boundaries, and four exclusions; the original four report bullets remain and frontmatter is still `status: shape`.
 
 ### Summary
 
