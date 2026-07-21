@@ -46,6 +46,9 @@
 | worktree-task-slug-resolution | S | spacedock task-by-slug resolution drifts to main checkout | (todo) |
 | mini-offload-completion-push-channel | S | mini one-shot legs: add completion push atop durable rendezvous | (todo) |
 | scheduler-gate-stop-misclassification | S | tick records gate-stop runs as run-error + backoff delay | (todo) |
+| scheduler-quota-preflight | S | tick spawns blind at quota exhaustion — preflight + reset-aware backoff | (todo) |
+| crewdock-dispatch-observability | M | export tick events + per-run token usage to crewdock fleet view | (todo) |
+| mini-tick-account-isolation | M | background-burn account on mini; interactive account stays clean | (todo) |
 <!-- /section:later -->
 
 ## Not Doing (explicitly rejected with reason)
