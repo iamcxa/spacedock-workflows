@@ -21,3 +21,15 @@ Scope: implement only the exact plan/execute stage-attempt-v1 grammar, FO-issued
 
 Done: contract and clock suites GREEN, completion-v1 exact fixtures remain byte-identical, non-plan/execute and foreign bindings fail closed, missing/unparseable/regressing clock identity cannot regain budget, and the helper is reviewed and committed with explicit paths.
 
+## Stage Report: plan
+
+- DONE: Produce a dependency-safe `plan.md` for only the protocol and clock-authority slice defined by 006.1; reuse the captain-approved parent design and the committed T0 contract/clock RED suites, without pulling in history, route, scheduler, integration, or `#21` scope.
+  Two serial L5 tasks own only the helper plus bounded foreign-binding negatives in the committed contract suite; explicit NARROW guards exclude every W2-W4 path and test.
+- DONE: Pin the durable baselines (`e62bc651ae2f5728a4a13a75bcbb234e26617cb0`, `a575a1f`, `31ec710`) and specify runnable RED/GREEN/REFACTOR steps, explicit-path ownership, completion-v1 byte preservation, and task-level review gates.
+  The plan records exact source/test/completion hashes, two auditable TDD contracts, frozen `completion-v1.sh` SHA-256, serial ownership, and per-task PROCEED/NARROW checks.
+- DONE: Pass the TDD ledger and plan validators plus a fresh adversarial self-review; return `NARROW` or `BLOCKED` if completing W1 requires any W2-W4 behavior.
+  Persisted ledger passes with 2 records; C4/C8/C15, placeholders, ownership, dependency, and diff gates pass after two review iterations. Verdict: PROCEED for independent W1; execute routes NARROW on W2-W4 dependency or BLOCKED on unresolved inherited C14 failure.
+
+### Summary
+
+The 006.1 plan is complete and stays inside the born-shaped W1 protocol/clock boundary. It preserves the reviewed RED baseline and frozen completion bytes, while making the current inherited C14 branch-history signal explicit instead of treating it as a product regression.
