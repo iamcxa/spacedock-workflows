@@ -8,18 +8,23 @@ FAIL=0
 CONTRACT_CASE="${STAGE_ATTEMPT_CONTRACT_CASE:-baseline}"
 MALFORMED_CASE="${STAGE_ATTEMPT_INVALID_CASE:-all}"
 QUALITY_CASE="${STAGE_ATTEMPT_QUALITY_CASE:-all}"
+FEEDBACK_CASE="${STAGE_ATTEMPT_FEEDBACK_CASE:-none}"
 
 case "$CONTRACT_CASE" in
   baseline|foreign-stage-run|foreign-ref|foreign-before|foreign-worker-completion|foreign-worker|foreign-lease|foreign-attempt) ;;
   *) printf 'FAIL unknown STAGE_ATTEMPT_CONTRACT_CASE: %s\n' "$CONTRACT_CASE"; exit 1 ;;
 esac
 case "$MALFORMED_CASE" in
-  all|extra-field|missing-frame|extra-frame|bad-completion-hash|cr-byte|tab-byte|completion-trailing-space|completion-non-ascii|wrong-terminal-event-id) ;;
+  all|none|extra-field|missing-frame|extra-frame|bad-completion-hash|cr-byte|tab-byte|completion-trailing-space|completion-non-ascii|wrong-terminal-event-id) ;;
   *) printf 'FAIL unknown STAGE_ATTEMPT_INVALID_CASE: %s\n' "$MALFORMED_CASE"; exit 1 ;;
 esac
 case "$QUALITY_CASE" in
   all|none|exclusion-lock|bundle-snapshot|returned-state) ;;
   *) printf 'FAIL unknown STAGE_ATTEMPT_QUALITY_CASE: %s\n' "$QUALITY_CASE"; exit 1 ;;
+esac
+case "$FEEDBACK_CASE" in
+  none|lifecycle-open|completion-cross-binding|canonical-entity|canonical-wal|artifact-tree-binding) ;;
+  *) printf 'FAIL unknown STAGE_ATTEMPT_FEEDBACK_CASE: %s\n' "$FEEDBACK_CASE"; exit 1 ;;
 esac
 
 ok() { printf 'OK %s\n' "$1"; }
@@ -308,6 +313,112 @@ if [ "$CONTRACT_CASE" != baseline ]; then
     bad "$CONTRACT_CASE changed WAL or returned state"
   fi
 fi
+
+feedback_validate_rejection() {
+  local label="$1" expected="$2" bundle="$3" before out rc
+  before="$TMP/$label.before.wal"
+  out="$TMP/$label.out"
+  cp "$WAL" "$before"
+  (
+    cd "$REPO" || exit 1
+    bash "$HELPER" validate-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$bundle" > "$out" 2>&1
+  )
+  rc=$?
+  if [ "$rc" != 0 ] && grep -Fxq "$expected" "$out"; then
+    ok "$label rejects with typed authority diagnostic"
+  else
+    bad "$label reaches its authority assertion (rc=$rc output=$(tr '\n' ' ' < "$out"))"
+  fi
+  if cmp -s "$before" "$WAL" && [ ! -e "$RETURNED" ]; then
+    ok "$label preserves WAL bytes and leaves no returned sidecar"
+  else
+    bad "$label changed WAL bytes or created a returned sidecar"
+  fi
+}
+
+case "$FEEDBACK_CASE" in
+  lifecycle-open)
+    reset_folder_open
+    (
+      cd "$REPO" || exit 1
+      bash "$HELPER" suspend --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" > "$TMP/lifecycle-suspend.out" 2>&1
+    )
+    SUSPEND_RC=$?
+    if [ "$SUSPEND_RC" = 0 ] && grep -Fq ' state=suspended ' "$WAL"; then
+      feedback_validate_rejection lifecycle-open 'stage-attempt-v1[2]: attempt is not open' "$BUNDLE"
+    else
+      bad "lifecycle-open fixture reaches suspended authority"
+    fi
+    ;;
+  completion-cross-binding)
+    FOREIGN_OID="$(printf 'foreign completion binding\n' | git -C "$REPO" commit-tree "$(git -C "$REPO" rev-parse 'HEAD^{tree}')")"
+    for FIELD in ref before completion entity stage artifact; do
+      reset_folder_open
+      CROSS="$TMP/completion-cross-$FIELD.bundle"
+      cp "$BUNDLE" "$CROSS"
+      case "$FIELD" in
+        ref) sed "s| ref=$REF | ref=refs/heads/foreign |" "$BUNDLE" > "$CROSS" ;;
+        before) sed "s| before=$HEAD_OID | before=$FOREIGN_OID |" "$BUNDLE" > "$CROSS" ;;
+        completion) sed "s| completion=$HEAD_OID | completion=$FOREIGN_OID |" "$BUNDLE" > "$CROSS" ;;
+        entity) sed "s| entity=$ENTITY | entity=docs/test-flow/other/index.md |" "$BUNDLE" > "$CROSS" ;;
+        stage) sed '/^completion-v1 /s/ stage=plan / stage=execute /' "$BUNDLE" > "$CROSS" ;;
+        artifact) sed '/^completion-v1 /s/ artifact=plan.md$/ artifact=other.md/' "$BUNDLE" > "$CROSS" ;;
+      esac
+      refresh_completion_hash "$CROSS"
+      feedback_validate_rejection "completion-cross-binding-$FIELD" 'stage-attempt-v1[2]: invalid returned bundle: completion-binding' "$CROSS"
+    done
+    ;;
+  canonical-entity)
+    reset_folder_open
+    ALIAS_ENTITY='docs/test-flow/item/./index.md'
+    ALIAS_KEY="$(printf 'stage-attempt-v1-key\0%s\0plan' "$ALIAS_ENTITY" | sha256_stream)"
+    ALIAS_WAL="$GIT_COMMON/spacedock-stage-attempt-v1/$ALIAS_KEY.wal"
+    ALIAS_RETURNED="$GIT_COMMON/spacedock-stage-attempt-v1/$ALIAS_KEY.returned"
+    cp "$WAL" "$TMP/canonical-entity.before.wal"
+    (
+      cd "$REPO" || exit 1
+      STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=5000000000 \
+        bash "$HELPER" begin --entity="$ALIAS_ENTITY" --stage=plan --stage-run-id="$HEAD_OID" \
+          --ref="$REF" --attempt-before="$HEAD_OID" --worker-id=alias-worker \
+          --lease-token=alias-token --attempt-ordinal=0 --fresh-continuations-used=0 \
+          --attempt-started-at="$STARTED" > "$TMP/canonical-entity.out" 2>&1
+    )
+    RC=$?
+    if [ "$RC" != 0 ] && grep -Fxq 'stage-attempt-v1[2]: invalid entity path' "$TMP/canonical-entity.out"; then
+      ok "canonical-entity rejects a dot-segment alias before deriving a second key"
+    else
+      bad "canonical-entity alias reaches its same-key authority assertion (rc=$RC output=$(tr '\n' ' ' < "$TMP/canonical-entity.out"))"
+    fi
+    if cmp -s "$TMP/canonical-entity.before.wal" "$WAL" && [ ! -e "$RETURNED" ] &&
+      [ ! -e "$ALIAS_WAL" ] && [ ! -e "$ALIAS_RETURNED" ]; then
+      ok "canonical-entity preserves the authoritative WAL and creates no alias state or returned sidecar"
+    else
+      bad "canonical-entity changed authoritative bytes or created alias state"
+    fi
+    ;;
+  canonical-wal)
+    reset_folder_open
+    perl -0pi -e 's/ state=open /  state=open /' "$WAL"
+    feedback_validate_rejection canonical-wal 'stage-attempt-v1[2]: invalid attempt WAL' "$BUNDLE"
+    ;;
+  artifact-tree-binding)
+    FOREIGN_BLOB="$(printf 'foreign artifact bytes\n' | git -C "$REPO" hash-object -w --stdin)"
+    for KIND in path oid; do
+      reset_folder_open
+      ARTIFACT_BUNDLE="$TMP/artifact-tree-$KIND.bundle"
+      cp "$BUNDLE" "$ARTIFACT_BUNDLE"
+      case "$KIND" in
+        path)
+          sed -e "s/ artifact_path_hex=$(printf 'plan.md' | hex) / artifact_path_hex=$(printf 'other.md' | hex) /" \
+              -e '/^completion-v1 /s/ artifact=plan.md$/ artifact=other.md/' "$BUNDLE" > "$ARTIFACT_BUNDLE"
+          refresh_completion_hash "$ARTIFACT_BUNDLE"
+          ;;
+        oid) sed "s/ artifact_oid=$(git -C "$REPO" rev-parse HEAD:docs/test-flow/item/plan.md) / artifact_oid=$FOREIGN_BLOB /" "$BUNDLE" > "$ARTIFACT_BUNDLE" ;;
+      esac
+      feedback_validate_rejection "artifact-tree-binding-$KIND" 'stage-attempt-v1[2]: invalid returned bundle: artifact-binding' "$ARTIFACT_BUNDLE"
+    done
+    ;;
+esac
 
 if [ "$QUALITY_CASE" = all ] || [ "$QUALITY_CASE" = exclusion-lock ]; then
   rm -f "$WAL" "$RETURNED" "$GIT_COMMON/spacedock-stage-attempt-v1/$KEY.lock"
