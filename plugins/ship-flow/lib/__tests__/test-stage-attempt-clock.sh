@@ -247,7 +247,7 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
     local head common wal returned history open_wal key attempt_id terminal_id
     local entity_hex ref_hex worker_hex lease_sha artifact_oid completion_line completion_sha
     local boundary_bundle over_bundle ref_before status_before boundary_rc over_rc observed_state sidecar_state
-    local fo_over_rc
+    local fo_over_rc mismatch_rc mismatch_bundle
     mkdir -p "$repo/docs/clock-flow/$label"
     printf '%s\n' '---' "id: $label" "status: $stage" 'stage_outputs: {}' '---' > "$repo/$entity"
     printf '# %s\n' "$stage" > "$repo/$artifact"
@@ -331,6 +331,25 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
     fi
 
     if [ "$CLOCK_CASE" = return-authority ]; then
+      cp "$open_wal" "$wal"
+      rm -f "$returned"
+      mismatch_bundle="$TMP/$stage-return-budget.elapsed-mismatch.bundle"
+      sed "s/attempt_elapsed_seconds=$budget/attempt_elapsed_seconds=$((budget - 1))/" "$boundary_bundle" > "$mismatch_bundle"
+      (
+        cd "$repo" || exit 1
+        STAGE_ATTEMPT_BOOT_ID_SOURCE="$boot" \
+          STAGE_ATTEMPT_MONOTONIC_NS=$((1000000000 + budget * 1000000000)) \
+          bash "$HELPER" accept-return --entity="$entity" --stage="$stage" --lease-token="$token" --bundle="$mismatch_bundle"
+      ) > "$TMP/$stage-return-budget.elapsed-mismatch.out" 2>&1
+      mismatch_rc=$?
+      if [ "$mismatch_rc" != 0 ] &&
+        grep -Fqx 'stage-attempt-v1[2]: invalid returned bundle: elapsed-authority-mismatch' "$TMP/$stage-return-budget.elapsed-mismatch.out" &&
+        cmp -s "$open_wal" "$wal" && [ ! -e "$returned" ]; then
+        ok "$stage worker elapsed must equal the FO monotonic observation without mutation"
+      else
+        bad "$stage worker elapsed cannot diverge from FO monotonic authority (rc=$mismatch_rc)"
+      fi
+
       cp "$open_wal" "$wal"
       rm -f "$returned"
       (
