@@ -134,3 +134,16 @@ Feedback round 1 is intentionally partial: T1 is repaired with durable evidence,
 ### Summary
 
 006.1 execute feedback round 2 is complete and ready for FO completion reconciliation. The exact diff remains three W1 paths; 006.2-006.4 were not run, changed, or started.
+
+## Stage Report: verify
+
+- DONE: Independently replay round-2 blockers R2-G1, R2-TD1, B8, and B9 across durable RED `4232ddb`, GREEN `32a3804`, and exact evidence HEAD `2a23fcc`.
+  Expected RED counts 2+2+8+6 become 42/42, 42/42, 48/48, and 12/12 GREEN with state-preserving rejection at the common W1 authority seams.
+- DONE: Re-run the bounded W1, TDD, Bash 3.2, compatibility, static, and repository evidence without touching deferred children.
+  Protocol and clock matrices, TDD ledger 2/2, frozen completion SHA, compatibility, C1-C18, Node 79/79, version 0.9.0, no-dangling, and diff checks are GREEN; 006.2-006.4 remain untouched.
+- DONE: Close fresh independent panel, SO/EM, and process cross-review with explicit degraded external coverage.
+  Two valid panel owners report NO_FINDINGS; adversarial/cross-model hosts are honestly DEGRADED; SO/EM and final process cross-review both return PROCEED on direct falsifiable evidence.
+
+### Summary
+
+006.1 verify round 3 passes with four required claims VERIFIED and no blocking findings. W10 remains a nonblocking trusted-FO environment clarification for review; only 006.1 may proceed, and 006.2 has not started.
