@@ -2,199 +2,202 @@
 <!-- section:verify -->
 ## Verify
 
-Independent verification of source diff `d63e1842..5ceebf4` at artifact HEAD `d45c59a`; scope is 006.1 W1 only. Deferred 006.2-006.4 suites were not run.
+Round 2 independently verifies 006.1 W1 at evidence HEAD `dcab1b59956eda7e089e434e1b8c49b5e3ab72fd`. Round-1 VETO history remains immutable at `be1e31b`; no 006.2-006.4 suite, path, or dispatch was used. Five unrelated SessionStart-hook commits appended through live HEAD `cef56a6` are parallel contamination and are excluded from every evidence claim.
 <!-- /section:verify -->
 <!-- section:verify-check-manifest -->
 ### Verify Check Manifest
 
-Six evidence owners covered focused gates, panel lenses, cross-model challenge, cross-review, and EM judgment.
-
-<details>
-<summary>Verifier-owned check and reviewer manifest</summary>
-
-| Check/lens | Owner | Input | Evidence |
+| Check/lens | Primary owner | Input | Result |
 |---|---|---|---|
-| focused tests + repository gates | verifier | exact W1 commands | current exit/counts |
-| general + maintainability | independent panel | 3-file source diff | cited matrix |
-| silent-failure + security | independent panel | 3-file source diff | cited matrix |
-| testing + exact-contract + clock | independent panel | plan/TDD/execute/diff | cited matrix |
-| adversarial | independent panel | 3-file source diff | DEGRADED: transport classifier rejected output |
-| cross-model | external read-only reviewer | 3-file source diff | valid self-check; false-green overruled by reproduced evidence |
-| cross-review + EM | verifier + isolated SO/EM | artifact/evidence synthesis | VETO + route=return |
-
-</details>
+| focused quality + TDD history | verifier | 006.1 commands and commits | completed |
+| general + maintainability/type-design | independent reviewer | exact 3-file diff | completed |
+| silent-failure + security | independent reviewer | exact 3-file diff | completed |
+| testing + exact-contract + clock-authority | independent reviewer | plan/ledger/history/diff | completed |
+| cross-model challenge | external read-only hosts | exact 3-file diff | DEGRADED: both hosts timed out without usable output |
+| process cross-review + SO/EM | fresh reviewer + isolated SO/EM | this artifact and immutable evidence | PROCEED on failed route; SO/EM route=return |
 <!-- /section:verify-check-manifest -->
 <!-- section:quality-gate -->
 ### Quality Gate
 
-| Check | Result | Current evidence |
+| Check | Result | Fresh evidence |
 |---|---|---|
-| W1 protocol | PASS | baseline 40/40; seven foreign selectors independently exit 0 |
-| W1 clock | PASS | nonterminal 26/26; return-budget 6/6 |
-| compatibility | PASS | completion review 6/6; frontmatter 46/46; advance-stage 103/103; frozen SHA `a2d15b...4f10` |
-| static/repository | PASS | Bash syntax + ShellCheck; C1-C18; Node 79/79; version 0.9.0; no-dangling 8 patterns |
-| verdict-bearing negative probes | FAIL | lifecycle, authority, binding, identity, and canonical-byte gaps reproduced or independently confirmed |
+| protocol + repaired negatives | PASS | default 40/40; five feedback selectors 109/109 |
+| W1 clock | PASS | nonterminal 26/26; return-budget 6/6; return-authority 10/10; elapsed-sync 1/1 |
+| compatibility/static | PASS | frozen SHA `a2d15b...4f10`; review/frontmatter/advance matrices; Bash syntax; ShellCheck |
+| repository | PASS | C1-C18; Node 79/79; version 0.9.0; no-dangling 8 patterns; diff check clean |
+| verdict-bearing negative paths | FAIL | R2-G1, R2-TD1, B8, and B9 are accepted against current code/design |
 
-The first Node attempt was a verifier argument-transport error; the exact planned glob rerun passed 79/79. No product failure is attributed to that command error.
+The TDD ledger validates with two records. Durable ancestry proves `6271899` and `627a7c5` before `371c2f9`, `353e173` before `d2ad555`, and `c059762` before `b2bdea7`.
 <!-- /section:quality-gate -->
 <!-- section:review-findings -->
 ### Review Findings
 
-All citations were checked against the current 3-file diff. BLOCKING rows are accepted and bounced to execute; the warning is accepted for disposition in that repair.
+All finding citations were checked against current source. Prior B1, B3-B5, B7, and W1 are closed; prior B2/B6 are only partially closed because positive coverage was narrower than the outer-receipt contract.
 
-| ID | Severity | Evidence | Finding | Disposition |
-|---|---|---|---|---|
-| B1 | BLOCKING | `fo-stage-attempt.sh:553` | return admission does not require authoritative state `open` | bounced; Claim C1 |
-| B2 | BLOCKING | `fo-stage-attempt.sh:532` | passed-return timing trusts receipt elapsed instead of FO monotonic authority | bounced; Claim C1 |
-| B3 | BLOCKING | `fo-stage-attempt.sh:514` | nested completion receipt is not cross-bound to outer/WAL authority | bounced; Claim C2 |
-| B4 | BLOCKING | `fo-stage-attempt.sh:199` | entity aliases can derive distinct authority keys | bounced; Claim C2 |
-| B5 | BLOCKING | `fo-stage-attempt.sh:316` | WAL tokenization accepts noncanonical byte forms | bounced; Claim C2 |
-| B6 | BLOCKING | `fo-stage-attempt.sh:470` | artifact path/OID are not bound to the completion tree | bounced; Claim C2 |
-| B7 | BLOCKING | `execute.md:21` | durable output-shaped RED-before-GREEN evidence is absent | bounced; Claim C3 |
-| W1 | WARNING | `fo-stage-attempt.sh:377` | unlocked elapsed read can observe a provisional return transition | accepted; execute to test/disposition |
+| ID | Severity | Evidence | Disposition |
+|---|---|---|---|
+| R2-G1 | BLOCKING | `fo-stage-attempt.sh:270`: begin accepts a branch-shaped string Git rejects and can persist an unusable WAL | accepted; return 006.1 to execute; Claim C1 |
+| R2-TD1 | BLOCKING | `fo-stage-attempt.sh:344`: WAL load shape-checks but does not re-derive `attempt_id` | accepted; return 006.1 to execute; Claim C2 |
+| B8 | BLOCKING | `fo-stage-attempt.sh:562-580`: FO clock/elapsed comparison is passed-only | accepted; return 006.1 to execute; Claim C3 |
+| B9 | BLOCKING | `fo-stage-attempt.sh:527-560`: artifact tree/OID binding is passed-folder-only | accepted; return 006.1 to execute; Claim C4 |
+| W10 | WARNING | `fo-stage-attempt.sh:61-96`: deterministic clock sources are environment-injectable | accepted nonblocking; co-route a test-mode gate or explicit trusted-env contract with 006.1 repair; omitted local claim by isolated-advisory rule |
 
 <details>
-<summary>Required verification claim records C1-C3</summary>
+<summary>Required verification claims C1-C4</summary>
 
-#### Verification Claim: C1 lifecycle and FO clock authority
-
+#### Verification Claim: C1 canonical ref authority
 | Field | Value |
 |---|---|
-| claim_source | `review:general-external-reviewer,silent-failure-reviewer` |
-| condition | returns are admitted only from open authority and timing comes from FO monotonic state |
-| metric_or_observable | typed refusal with unchanged WAL/no sidecar for non-open or over-budget FO time |
-| threshold | all such returns rejected |
-| smallest_disproving_surface | focused scratch diagnostics against current helper |
-| baseline | official focused suites pass |
-| treatment | suspended return and FO-over-budget/receipt-in-budget cases were accepted |
-| comparison | positive suites omit the disputed authority combinations |
+| claim_source | `review:general-external-reviewer` |
+| condition | begin accepts only a Git-valid canonical branch ref before WAL creation |
+| metric_or_observable | invalid ref leaves no authority state |
+| threshold | zero invalid refs admitted |
+| smallest_disproving_surface | begin with a branch-shaped ref rejected by `git check-ref-format` |
+| baseline | focused positive contract green |
+| treatment | invalid ref admitted and WAL created |
+| comparison | semantic validation is deferred until return |
 | verdict | `NOT VERIFIED` |
 | route_to | `execute` |
 
-#### Verification Claim: C2 closed identity, byte, and binding authority
-
+#### Verification Claim: C2 derived attempt identity
 | Field | Value |
 |---|---|
-| claim_source | `review:type_design,security,domain_intent` |
-| condition | one canonical entity/key/WAL and exact cross-record/tree bindings |
-| metric_or_observable | aliases/noncanonical bytes/foreign bindings reject without mutation |
-| threshold | zero ambiguous authority forms accepted |
-| smallest_disproving_surface | cited helper branches plus independent focused diagnostics |
-| baseline | exact happy-path and seven outer-binding selectors pass |
-| treatment | multiple unbound or noncanonical authority forms were accepted |
-| comparison | existing coverage proves outer happy paths, not the missing bindings |
+| claim_source | `review:maintainability,type_design` |
+| condition | loaded `attempt_id` equals the FO derivation from canonical bound inputs |
+| metric_or_observable | coordinated WAL/receipt mutation rejects without sidecar |
+| threshold | zero well-formed foreign derived IDs admitted |
+| smallest_disproving_surface | mutate WAL and receipt to one different well-formed ID |
+| baseline | outer foreign-attempt selector green |
+| treatment | coordinated mutation accepted |
+| comparison | equality to WAL is weaker than re-derivation |
 | verdict | `NOT VERIFIED` |
 | route_to | `execute` |
 
-#### Verification Claim: C3 TDD evidence trail
-
+#### Verification Claim: C3 FO elapsed authority for every outcome
 | Field | Value |
 |---|---|
-| claim_source | `quality-gate:tdd-evidence-audit` |
-| condition | each code task has durable RED output before accepted production edits |
-| metric_or_observable | command, expected failure excerpt, GREEN, and REFACTOR evidence |
-| threshold | T1 and T2 both auditable |
-| smallest_disproving_surface | ledger, commits, and `execute.md` TDD section |
-| baseline | ledger schema passes 2 records |
-| treatment | tests and production share commits; RED results remain prose-only |
-| comparison | runnable commands exist, but historical output/order is not durable |
+| claim_source | `review:silent_failure,testing,clock_authority` |
+| condition | every worker outcome binds returned elapsed to FO monotonic observation |
+| metric_or_observable | non-passed mismatch rejects without mutation |
+| threshold | exact FO observation for every worker return |
+| smallest_disproving_surface | partial return with a foreign elapsed value |
+| baseline | passed-return authority 10/10 green |
+| treatment | non-passed mismatch accepted |
+| comparison | code guard is outcome-specific |
 | verdict | `NOT VERIFIED` |
 | route_to | `execute` |
 
+#### Verification Claim: C4 artifact authority for every outer receipt
+| Field | Value |
+|---|---|
+| claim_source | `review:security,testing,exact_contract` |
+| condition | every returned artifact path/OID is canonical and bound to worker completion tree |
+| metric_or_observable | foreign path/OID rejects without mutation |
+| threshold | zero unbound artifact coordinates admitted |
+| smallest_disproving_surface | non-passed or flat return with foreign coordinates |
+| baseline | passed-folder artifact selectors green |
+| treatment | generic outcome branch accepted foreign coordinates |
+| comparison | completion-frame absence does not prove artifact binding |
+| verdict | `NOT VERIFIED` |
+| route_to | `execute` |
 </details>
+
+<details>
+<summary>TDD Evidence Audit</summary>
 
 #### TDD Evidence Audit
 
-| Task | RED | GREEN/REFACTOR | Severity | route_to |
+| Task | RED evidence | GREEN/REFACTOR | Severity | route_to |
 |---|---|---|---|---|
-| T1 | prose-only sequence | current 40/40 + compatibility green | BLOCKING | execute |
-| T2 | prose-only sequence | current 26/26 + 6/6 + gates green | BLOCKING | execute |
+| T1 | `6271899`, `627a7c5` | `371c2f9`; current focused suites green | none | proceed |
+| T2 | `353e173`, `c059762` | `d2ad555`, `b2bdea7`; current focused suites green | none | proceed |
+</details>
 
-Canonical drift: `ARCHITECTURE.md` update remains correctly assigned to review, but review cannot start until verify passes. No schema-domain trigger; `## Intent Match Findings` is not applicable.
+Domain checklist rows exact-contract and nonterminal-clock-authority are both BLOCKING on B9 and B8 respectively. Schema intent-match is not triggered. Canonical `ARCHITECTURE.md` update remains review-owned and must not start after this VETO.
 
 <details>
 <summary>Independent Science Officer EM upward report</summary>
 
 ```yaml
 science_officer_em_upward_report:
-  em_judgment: "Do not accept: seven W1 authority-boundary gaps outweigh broad positive baseline coverage."
-  evidence_synthesis: ["focused W1 and repository gates are green", "independent cited reviewers plus verifier reproduction confirm acceptance gaps"]
-  risk_tradeoff_call: "Progress now would permit false protocol authority; repair remains entirely inside 006.1."
-  recommendation: "Return only 006.1 to execute, repair and add durable RED evidence, then re-verify."
+  subject: "006.1 verify round 2 at dcab1b5"
+  em_judgment: "Return 006.1 to execute; the four gaps are W1 authority defects, not deferred 006.2 behavior."
+  evidence_synthesis: "Direct source/design comparison confirms invalid-ref admission, non-derived loaded attempt identity, passed-only elapsed authority, and passed-folder-only artifact binding; broad green tests cover narrower paths."
+  risk_tradeoff_call: "Downstream history/continuation work must not consume noncanonical or worker-influenced W1 authority; bounded repair is cheaper before consumers exist."
+  recommendation: "Add durable RED-before-GREEN probes and minimal fixes for R2-G1, R2-TD1, B8, and B9; retain W10 as a nonblocking trusted-env follow-up; do not start 006.2."
   route: return
   confidence: high
-  fo_boundary: "FO owns workflow mechanics; EM owns judgment and recommendation."
+  fo_boundary: "FO owns exact-head reconciliation, state, lease, dispatch, and rerouting; EM owns judgment."
 ```
-
 </details>
 <!-- /section:review-findings -->
 <!-- section:verify-knowledge-captures -->
 ### Knowledge Captures
 
-- [D2-candidate] Exact-byte protocols need negative tests for canonical representation and cross-record semantic equality, not only grammar/hash checks.
+- [D2-candidate] An exact outer receipt needs negative coverage per outcome/layout branch; a strong passed-folder suite does not close generic non-passed authority.
 <!-- /section:verify-knowledge-captures -->
 <!-- section:uat -->
 ### UAT
 
-mode: full-rerun of all 006.1 W1 DCs; deferred child suites excluded.
+mode: full 006.1 W1 evidence review plus focused negative probes; deferred child suites excluded.
 
-| DC | Verify Procedure | Execute 1st | Verify | Evidence |
-|---|---|---|---|---|
-| W1-DC1 | exact contract + selectors | PASS | FAIL | positive 40/40, but Claims C1-C2 disprove closed authority |
-| W1-DC2 | nonterminal + return-budget | PASS | FAIL | 26/26 + 6/6, but FO elapsed authority gap remains |
-| W1-DC3 | frozen SHA + completion matrices | PASS | PASS | SHA and 6/46/103 checks green |
-| W1-DC4 | repository gates | PASS | PASS | C1-C18, Node 79/79, version/no-dangling green |
+| DC | Execute | Verify | Evidence |
+|---|---|---|---|
+| W1-DC1 protocol | PASS | FAIL | positive 40/40 + 109/109, but Claims C1, C2, C4 disprove closed authority |
+| W1-DC2 clock | PASS | FAIL | positive 26/26 + 6/6 + 10/10 + 1/1, but Claim C3 disproves all-outcome authority |
+| W1-DC3 completion | PASS | PASS | frozen SHA and compatibility matrices green |
+| W1-DC4 repository | PASS | PASS | C1-C18, Node 79/79, version/no-dangling green |
 <!-- /section:uat -->
 <!-- section:verify-verdict -->
 ### Verdict
 
 status: failed
-stage_cost: 6 review/judgment invocations plus verifier checks
-claim_records: required VERIFIED=0 NOT VERIFIED=3 INCONCLUSIVE=0; advisory VERIFIED=0 NOT VERIFIED=0 INCONCLUSIVE=1
-auto_fixes: none; verifier made no product/test edits
-started_at: 2026-07-22T10:23:00Z
-completed_at: 2026-07-22T10:49:00Z
-duration_minutes: 26
+stage_cost: verifier checks plus three independent panel assignments, two external challenge attempts, process cross-review, and isolated SO/EM judgment
+claim_records: required VERIFIED=0 NOT VERIFIED=4 INCONCLUSIVE=0; advisory VERIFIED=0 NOT VERIFIED=0 INCONCLUSIVE=0
+auto_fixes: none; verifier made no product/test edit
+started_at: 2026-07-22T13:41:00Z
+completed_at: 2026-07-22T14:05:30Z
+duration_minutes: 25
 route: execute, 006.1 only
 <!-- /section:verify-verdict -->
 <!-- section:verify-verdict-metrics -->
 ### Metrics
 
 status: failed
-duration_minutes: 26
-iteration_count: 1
-claim_records_required_not_verified: 3
-blocking_findings_count: 7
+duration_minutes: 25
+iteration_count: 2
+claim_records_required_not_verified: 4
+blocking_findings_count: 4
 warning_findings_count: 1
 runtime_checks_count: 0
 <!-- /section:verify-verdict-metrics -->
 <!-- section:panel-coverage -->
 ## Panel Coverage
 
-- Tier: cross-model panel; adversarial owner DEGRADED by transport classifier.
-- Specialists: general FAIL, maintainability FAIL, silent-failure FAIL, testing FAIL, security FAIL, exact-contract FAIL, clock PASS.
-- Cross-model: ran with valid context but returned false-green; independently reproduced findings dominate.
-- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; type_design BLOCKING; silent_failure BLOCKING; test_adequacy BLOCKING; security BLOCKING; cross_model_challenge WARNING; runtime_uat NOT-APPLICABLE; domain_intent BLOCKING.
-- PR Quality Score: 0/10. Cross-review: VETO. SO/EM: route=return, confidence=high.
+- Tier: B single-model; external cross-model hosts timed out with no usable result.
+- Specialists: general BLOCKING=1; maintainability/type-design BLOCKING=1; silent-failure BLOCKING=2; testing BLOCKING=2; security BLOCKING=1/WARNING=1; exact-contract BLOCKING=1; clock-authority BLOCKING=1.
+- Adversarial: independent silent/security coverage ran; external adversarial owner DEGRADED by timeout.
+- Pass ownership: verify_agent_worker_ownership PASS; workflow_ci PASS; type_design BLOCKING; silent_failure BLOCKING; test_adequacy BLOCKING; security BLOCKING; cross_model_challenge DEGRADED; runtime_uat NOT-APPLICABLE; domain_intent NOT-APPLICABLE.
+- Semantic packet dimensions: security, type_design, test_adequacy, silent_failure, workflow_ci, verify_agent_worker_ownership, cross_model_challenge.
+- PR Quality Score: 2/10. Process cross-review: PROCEED on the failed/return route. SO/EM: route=return, confidence=high.
+- Cross-model: NO; degradation does not soften the independently reproduced VETO.
 <!-- /section:panel-coverage -->
 <!-- section:runtime-verification -->
 ### Runtime Verification
 
-Not applicable: no UI/API/e2e surface. Direct CLI/library W1 checks are recorded in Quality Gate and UAT; runtime_checks_count: 0.
+Not applicable: no UI/API/e2e surface. Direct CLI/library evidence is recorded in Quality Gate and UAT; runtime_checks_count: 0.
 <!-- /section:runtime-verification -->
 <!-- section:hand-off-to-review -->
 ### Hand-off to Review
 
 - verify_verdict: failed
-- blocking_issues: B1-B7; review must not start
+- blocking_issues: R2-G1, R2-TD1, B8, B9; review must not start
 - canonical_docs_touched: none; planned `ARCHITECTURE.md` update remains review-owned
 - render_fidelity_status: not-applicable
 <!-- /section:hand-off-to-review -->
-
 <!-- section:deferred-to-todo -->
 ## Deferred to TODO
 
-Deferred to TODO: 0 findings this round. All findings remain acceptance-relevant in 006.1 and route to execute; none move to 006.2-006.4.
+Deferred to TODO: 0 findings this round. Four blockers and one co-routed warning remain acceptance-relevant in 006.1; none move to 006.2-006.4.
 <!-- /section:deferred-to-todo -->
-
 <!-- /section:verify-report -->
