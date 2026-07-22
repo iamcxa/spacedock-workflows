@@ -403,7 +403,7 @@ case "$FEEDBACK_CASE" in
     ;;
   artifact-tree-binding)
     FOREIGN_BLOB="$(printf 'foreign artifact bytes\n' | git -C "$REPO" hash-object -w --stdin)"
-    for KIND in path oid; do
+    for KIND in path oid encoding; do
       reset_folder_open
       ARTIFACT_BUNDLE="$TMP/artifact-tree-$KIND.bundle"
       cp "$BUNDLE" "$ARTIFACT_BUNDLE"
@@ -414,6 +414,7 @@ case "$FEEDBACK_CASE" in
           refresh_completion_hash "$ARTIFACT_BUNDLE"
           ;;
         oid) sed "s/ artifact_oid=$(git -C "$REPO" rev-parse HEAD:docs/test-flow/item/plan.md) / artifact_oid=$FOREIGN_BLOB /" "$BUNDLE" > "$ARTIFACT_BUNDLE" ;;
+        encoding) sed "s/ artifact_path_hex=$(printf 'plan.md' | hex) / artifact_path_hex=$(printf 'plan.md\n' | hex) /" "$BUNDLE" > "$ARTIFACT_BUNDLE" ;;
       esac
       feedback_validate_rejection "artifact-tree-binding-$KIND" 'stage-attempt-v1[2]: invalid returned bundle: artifact-binding' "$ARTIFACT_BUNDLE"
     done
