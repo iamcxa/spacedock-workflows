@@ -200,6 +200,10 @@ stage_attempt_entity_ok() {
   case "$1" in ''|/*|*\\*|*//*|./*|*/./*|*/.|../*|*/../*|*/..|.) return 1 ;; *) return 0 ;; esac
 }
 
+stage_attempt_ref_ok() {
+  case "$1" in refs/heads/*) git check-ref-format "$1" >/dev/null 2>&1 ;; *) return 1 ;; esac
+}
+
 stage_attempt_paths() {
   STAGE_ATTEMPT_KEY="$(printf 'stage-attempt-v1-key\0%s\0%s' "$STAGE_ATTEMPT_ENTITY" "$STAGE_ATTEMPT_STAGE" | stage_attempt_sha256_stream)"
   STAGE_ATTEMPT_STORE="$STAGE_ATTEMPT_COMMON_DIR/spacedock-stage-attempt-v1"
@@ -267,7 +271,7 @@ stage_attempt_begin() {
   if ! { stage_attempt_oid_ok "$STAGE_ATTEMPT_STAGE_RUN_ID" && stage_attempt_oid_ok "$STAGE_ATTEMPT_BEFORE"; }; then
     stage_attempt_error 2 'invalid Git OID'; return 2
   fi
-  case "$STAGE_ATTEMPT_REF" in refs/heads/*) ;; *) stage_attempt_error 2 'invalid ref'; return 2 ;; esac
+  stage_attempt_ref_ok "$STAGE_ATTEMPT_REF" || { stage_attempt_error 2 'invalid ref'; return 2; }
   [ -n "$STAGE_ATTEMPT_WORKER" ] && [ -n "$STAGE_ATTEMPT_LEASE_TOKEN" ] || { stage_attempt_error 2 'worker and lease are required'; return 2; }
   if ! { stage_attempt_uint_ok "$STAGE_ATTEMPT_ORDINAL" &&
     case "$STAGE_ATTEMPT_FRESH" in 0|1) true ;; *) false ;; esac &&
@@ -306,7 +310,7 @@ stage_attempt_begin() {
 }
 
 stage_attempt_load_wal() {
-  local require_lease="${1:-yes}" final_byte line canonical_line
+  local require_lease="${1:-yes}" final_byte line canonical_line bound_ref expected_attempt_hash
   local -a fields
   [ -f "$STAGE_ATTEMPT_WAL" ] && [ ! -L "$STAGE_ATTEMPT_WAL" ] || { stage_attempt_error 2 'attempt WAL unavailable'; return 2; }
   [ "$(awk 'END { print NR + 0 }' "$STAGE_ATTEMPT_WAL")" = 1 ] || { stage_attempt_error 2 'invalid attempt WAL'; return 2; }
@@ -354,6 +358,17 @@ stage_attempt_load_wal() {
     "$WAL_STARTED_AT" "$WAL_BOOT_SHA" "$WAL_MONOTONIC_NS" "$WAL_BUDGET" "$WAL_STATE" \
     "$WAL_FRESH" "$WAL_RETURNED_SHA"
   [ "$line" = "$canonical_line" ] || { stage_attempt_error 2 'invalid attempt WAL'; return 2; }
+  if [ "$require_lease" = yes ]; then
+    bound_ref="$(stage_attempt_unhex "$WAL_REF_HEX")" || { stage_attempt_error 2 'invalid attempt WAL'; return 2; }
+    if ! { [ "$(printf '%s' "$bound_ref" | stage_attempt_hex)" = "$WAL_REF_HEX" ] &&
+      stage_attempt_ref_ok "$bound_ref"; }; then
+      stage_attempt_error 2 'invalid attempt WAL'; return 2
+    fi
+    expected_attempt_hash="$(printf 'stage-attempt-v1-attempt\0%s\0%s\0%s\0%s\0%s\0%s' \
+      "$WAL_KEY" "$WAL_STAGE_RUN_ID" "$bound_ref" "$WAL_BEFORE" "$WAL_ORDINAL" \
+      "$STAGE_ATTEMPT_LEASE_TOKEN" | stage_attempt_sha256_stream)"
+    [ "$WAL_ATTEMPT_ID" = "sa1-$expected_attempt_hash" ] || { stage_attempt_error 2 'invalid attempt WAL'; return 2; }
+  fi
   case "$WAL_STATE/$WAL_RETURNED_SHA" in
     open/none|suspended/none)
       [ ! -e "$STAGE_ATTEMPT_RETURNED" ] || { stage_attempt_error 2 'invalid returned state: unexpected-sidecar'; return 2; }
@@ -451,7 +466,7 @@ stage_attempt_completion_line_ok() {
 }
 
 stage_attempt_validate_bundle() {
-  local final_byte first_line line_count expected_line frame_begin completion_line frame_end actual_sha bound_ref observed_completion expected_terminal_id artifact_path artifact_repo_path expected_artifact_oid fo_elapsed
+  local final_byte first_line line_count expected_line frame_begin completion_line frame_end actual_sha bound_ref observed_completion expected_terminal_id artifact_path artifact_repo_path expected_artifact_path expected_artifact_oid fo_elapsed fo_expired
   local -a fields
   final_byte="$(LC_ALL=C tail -c 1 "$STAGE_ATTEMPT_BUNDLE" | od -An -t u1 | tr -d ' ')"
   [ "$final_byte" = 10 ] || { stage_attempt_error 2 'invalid returned bundle: grammar'; return 2; }
@@ -524,6 +539,26 @@ stage_attempt_validate_bundle() {
     [ "$RECEIPT_STARTED_AT" = "$WAL_STARTED_AT" ] && [ "$RECEIPT_BUDGET" = "$WAL_BUDGET" ] &&
     [ "$RECEIPT_FRESH" = "$WAL_FRESH" ] || { stage_attempt_error 2 'invalid returned bundle: attempt metadata'; return 2; }
 
+  artifact_path="$(stage_attempt_unhex "$RECEIPT_ARTIFACT_HEX")" || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
+  [ "$(printf '%s' "$artifact_path" | stage_attempt_hex)" = "$RECEIPT_ARTIFACT_HEX" ] || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
+  case "$STAGE_ATTEMPT_ENTITY" in
+    */index.md)
+      expected_artifact_path="$RECEIPT_STAGE.md"
+      artifact_repo_path="${STAGE_ATTEMPT_ENTITY%/index.md}/$expected_artifact_path"
+      ;;
+    *.md)
+      artifact_repo_path="${STAGE_ATTEMPT_ENTITY%.md}-$RECEIPT_STAGE.md"
+      expected_artifact_path="${artifact_repo_path##*/}"
+      ;;
+    *) stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2 ;;
+  esac
+  [ "$artifact_path" = "$expected_artifact_path" ] || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
+  if ! { expected_artifact_oid="$(git rev-parse --verify "$RECEIPT_COMPLETION:$artifact_repo_path" 2>/dev/null)" &&
+    [ "$(git cat-file -t "$expected_artifact_oid" 2>/dev/null)" = blob ] &&
+    [ "$RECEIPT_ARTIFACT_OID" = "$expected_artifact_oid" ]; }; then
+    stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2
+  fi
+
   case "$RECEIPT_OUTCOME/$STAGE_ATTEMPT_ENTITY" in
     passed/*/index.md)
       [ "$RECEIPT_COMPLETION_SHA" != none ] && [ "$line_count" = 4 ] || { stage_attempt_error 2 'invalid returned bundle: completion-frame'; return 2; }
@@ -534,8 +569,6 @@ stage_attempt_validate_bundle() {
         stage_attempt_completion_line_ok "$completion_line"; }; then
         stage_attempt_error 2 'invalid returned bundle: completion-frame'; return 2
       fi
-      artifact_path="$(stage_attempt_unhex "$RECEIPT_ARTIFACT_HEX")" || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
-      [ "$(printf '%s' "$artifact_path" | stage_attempt_hex)" = "$RECEIPT_ARTIFACT_HEX" ] || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
       if ! { [ "$STAGE_ATTEMPT_COMPLETION_REF" = "$bound_ref" ] &&
         [ "$STAGE_ATTEMPT_COMPLETION_BEFORE" = "$RECEIPT_BEFORE" ] &&
         [ "$STAGE_ATTEMPT_COMPLETION_OID" = "$RECEIPT_COMPLETION" ] &&
@@ -543,13 +576,6 @@ stage_attempt_validate_bundle() {
         [ "$STAGE_ATTEMPT_COMPLETION_STAGE" = "$RECEIPT_STAGE" ] &&
         [ "$STAGE_ATTEMPT_COMPLETION_ARTIFACT" = "$artifact_path" ]; }; then
         stage_attempt_error 2 'invalid returned bundle: completion-binding'; return 2
-      fi
-      [ "$artifact_path" = "$RECEIPT_STAGE.md" ] || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
-      artifact_repo_path="${STAGE_ATTEMPT_ENTITY%/index.md}/$artifact_path"
-      if ! { expected_artifact_oid="$(git rev-parse --verify "$RECEIPT_COMPLETION:$artifact_repo_path" 2>/dev/null)" &&
-        [ "$(git cat-file -t "$expected_artifact_oid" 2>/dev/null)" = blob ] &&
-        [ "$RECEIPT_ARTIFACT_OID" = "$expected_artifact_oid" ]; }; then
-        stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2
       fi
       actual_sha="$(printf '%s\n' "$completion_line" | stage_attempt_sha256_stream)"
       [ "$actual_sha" = "$RECEIPT_COMPLETION_SHA" ] || { stage_attempt_error 2 'invalid returned bundle: completion-hash'; return 2; }
@@ -562,22 +588,25 @@ stage_attempt_validate_bundle() {
   if [ "$RECEIPT_OUTCOME" = passed ]; then
     stage_attempt_uint_gt "$RECEIPT_ELAPSED" "$WAL_BUDGET" || { stage_attempt_error 2 'invalid returned bundle: elapsed-budget-evaluation'; return 2; }
     [ "$STAGE_ATTEMPT_UINT_GT" = no ] || { stage_attempt_error 2 'invalid returned bundle: elapsed-budget-exceeded'; return 2; }
-    stage_attempt_boot_identity || { stage_attempt_error 2 "invalid returned bundle: $STAGE_ATTEMPT_CLOCK_REASON"; return 2; }
-    actual_sha="$(printf '%s' "$STAGE_ATTEMPT_BOOT_VALUE" | stage_attempt_sha256_stream)"
-    [ "$actual_sha" = "$WAL_BOOT_SHA" ] || { stage_attempt_error 2 'invalid returned bundle: boot-identity-mismatch'; return 2; }
-    stage_attempt_monotonic_now || { stage_attempt_error 2 'invalid returned bundle: monotonic-clock-unavailable'; return 2; }
-    stage_attempt_monotonic_eval "$STAGE_ATTEMPT_NOW_NS" "$WAL_MONOTONIC_NS" "$WAL_BUDGET" || { stage_attempt_error 2 'invalid returned bundle: monotonic-clock-unavailable'; return 2; }
-    [ "$STAGE_ATTEMPT_CLOCK_EVAL" != regression ] || { stage_attempt_error 2 'invalid returned bundle: monotonic-regression'; return 2; }
-    case "$STAGE_ATTEMPT_CLOCK_EVAL" in
-      *' expired=no')
-        fo_elapsed="${STAGE_ATTEMPT_CLOCK_EVAL#elapsed_seconds=}"
-        fo_elapsed="${fo_elapsed%% expired=*}"
-        [ "$RECEIPT_ELAPSED" = "$fo_elapsed" ] || { stage_attempt_error 2 'invalid returned bundle: elapsed-authority-mismatch'; return 2; }
-        ;;
-      *' expired=yes') stage_attempt_error 2 'invalid returned bundle: elapsed-budget-exceeded'; return 2 ;;
-      *) stage_attempt_error 2 'invalid returned bundle: elapsed-budget-evaluation'; return 2 ;;
-    esac
   fi
+  stage_attempt_boot_identity || { stage_attempt_error 2 "invalid returned bundle: $STAGE_ATTEMPT_CLOCK_REASON"; return 2; }
+  actual_sha="$(printf '%s' "$STAGE_ATTEMPT_BOOT_VALUE" | stage_attempt_sha256_stream)"
+  [ "$actual_sha" = "$WAL_BOOT_SHA" ] || { stage_attempt_error 2 'invalid returned bundle: boot-identity-mismatch'; return 2; }
+  stage_attempt_monotonic_now || { stage_attempt_error 2 'invalid returned bundle: monotonic-clock-unavailable'; return 2; }
+  stage_attempt_monotonic_eval "$STAGE_ATTEMPT_NOW_NS" "$WAL_MONOTONIC_NS" "$WAL_BUDGET" || { stage_attempt_error 2 'invalid returned bundle: monotonic-clock-unavailable'; return 2; }
+  [ "$STAGE_ATTEMPT_CLOCK_EVAL" != regression ] || { stage_attempt_error 2 'invalid returned bundle: monotonic-regression'; return 2; }
+  case "$STAGE_ATTEMPT_CLOCK_EVAL" in
+    'elapsed_seconds='*' expired='*)
+      fo_elapsed="${STAGE_ATTEMPT_CLOCK_EVAL#elapsed_seconds=}"
+      fo_expired="${fo_elapsed#* expired=}"
+      fo_elapsed="${fo_elapsed%% expired=*}"
+      if [ "$RECEIPT_OUTCOME" = passed ] && [ "$fo_expired" = yes ]; then
+        stage_attempt_error 2 'invalid returned bundle: elapsed-budget-exceeded'; return 2
+      fi
+      [ "$RECEIPT_ELAPSED" = "$fo_elapsed" ] || { stage_attempt_error 2 'invalid returned bundle: elapsed-authority-mismatch'; return 2; }
+      ;;
+    *) stage_attempt_error 2 'invalid returned bundle: elapsed-budget-evaluation'; return 2 ;;
+  esac
 }
 
 stage_attempt_return() {
