@@ -50,3 +50,7 @@ The 006.1 plan is complete and stays inside the born-shaped W1 protocol/clock bo
 ### Summary
 
 Route judgment: **PROCEED** for independent SO/EM re-review of the bounded W1 plan. Execute must return **NARROW** before durable interruption/history/continuation/route work, and **BLOCKED** if clean-lineage C14 or another assigned repository gate regresses.
+
+### Feedback Cycles
+
+- Cycle 2, plan re-gate at `691e1d6`: SO/EM route `return` with high confidence. The persisted T1 ledger decodes to `STAGE_ATTEMPT_CONTRACT_CASE=\"$CASE\"`, so shell evaluation can pass literal quote bytes and make every selector fail as unknown. Repair only command serialization, regenerate the ledger, and prove the seven decoded selector tokens reach their named cases without helper/fixture/unknown-selector masking. Preserve lineage, T2 scope, and frozen completion bytes.
