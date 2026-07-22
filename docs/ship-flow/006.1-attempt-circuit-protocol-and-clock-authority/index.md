@@ -108,3 +108,16 @@ The W1 product result remains intact, but the original 181-minute execute receip
 ### Summary
 
 Feedback round 1 is intentionally partial: T1 is repaired with durable evidence, while T2 remains pending in 006.1. No 006.2-006.4 scope was started.
+
+## Stage Report: execute
+
+- DONE: Preserve the T1 RED/GREEN history and finish only pending T2 authority and synchronization work.
+  Durable T2 REDs `353e173` and `c059762` precede GREEN commits `d2ad555` and `b2bdea7`; T1 commits are unchanged.
+- DONE: Re-run the bounded W1 and repository evidence at final HEAD while leaving 006.2-006.4 deferred.
+  Contract 40/40, five selectors 109/109, clock 26/26 + 6/6 + 10/10 + 1/1, compatibility, C1-C18, Node 79/79, version, and no-dangling are GREEN.
+- DONE: Close fresh independent spec, quality, and cross-review and publish a truthful continuation epoch below the breaker.
+  Spec and quality returned APPROVED; cross-review's elapsed-binding VETO received its own RED/GREEN and returned PROCEED.
+
+### Summary
+
+006.1 execute feedback is complete and ready for FO completion reconciliation. Current FO monotonic authority owns returned elapsed, reads synchronize with attempt transitions, and no 006.2-006.4 work was started.

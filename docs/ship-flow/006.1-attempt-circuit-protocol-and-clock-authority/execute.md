@@ -75,6 +75,31 @@ tasks_done: 2
 tasks_blocked: 0
 commit_count: 3
 
+## Verify Feedback Round 1 — Continuation Epoch
+
+continuation_result: passed
+continuation_started: 2026-07-22T13:18:57Z
+continuation_completed: 2026-07-22T13:41:14Z
+continuation_duration_minutes: 23
+
+- T2 durable REDs: `353e173` reproduced current-FO threshold authority and elapsed/read synchronization; cross-review residue `c059762` proved an arbitrary lower in-budget receipt elapsed could still diverge from FO authority.
+- T2 GREEN: `d2ad555` added locked elapsed reads and current FO admission; `b2bdea7` bound the receipt observation exactly to FO-computed elapsed. Contract 40/40, five T1 selectors 109/109, nonterminal 26/26, return-budget 6/6, return-authority 10/10, and elapsed-sync 1/1 are fresh GREEN.
+- Compatibility/repository evidence: frozen completion SHA; completion review 6/6, frontmatter 44/44, advance-stage 103/103; Bash syntax/ShellCheck; C1-C18; Node 79/79; version 0.9.0; no-dangling 8 patterns.
+- Independent review: spec APPROVED; quality APPROVED; cross-review VETO was closed by `c059762`/`b2bdea7` and returned PROCEED. No 006.2-006.4 suite, behavior, or path was run or changed.
+
+## Stage Report: execute
+
+- DONE: Preserve T1 history and close only pending T2 with durable RED-before-GREEN evidence.
+  T1 commits remain unchanged; T2 authority/synchronization REDs precede minimal GREEN commits.
+- DONE: Prove exact W1 behavior and compatibility at final HEAD without executing deferred child scope.
+  Focused, compatibility, static, invariant, Node, version, and no-dangling checks are GREEN; deferred full/history/route/#21 suites were not run.
+- DONE: Obtain fresh spec, quality, and cross-review and publish a separately timed continuation receipt.
+  Final verdicts are APPROVED, APPROVED, and PROCEED; the continuation stayed below the execute breaker.
+
+### Summary
+
+Execute feedback round 1 is complete for 006.1. FO monotonic authority now owns both passed admission and the exact returned elapsed observation, elapsed reads synchronize with transitions, and all 006.2-006.4 behavior remains deferred.
+
 ### Hand-off to Verify
 
 - commits: implementation range `git log d63e184..5ceebf4`; T1=`920d950`, T2=`5ceebf4`; required execute-artifact commit follows
