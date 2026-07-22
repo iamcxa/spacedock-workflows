@@ -23,7 +23,8 @@ Ratio: not available
 
 ### Verdict
 
-status: awaiting-pr-create
+status: awaiting-pr-review
+pr: "#93"
 tasks: 006.1 execute, final verify, canonical sync, and exact-head review complete
 verify: PASS — 4 required claims VERIFIED, 0 unresolved
 review: PROCEED — exact-head artifact review and PR-readiness gates passed
