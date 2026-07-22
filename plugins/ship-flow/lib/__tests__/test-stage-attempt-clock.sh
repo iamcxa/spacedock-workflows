@@ -9,7 +9,7 @@ ok() { printf 'OK %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; FAIL=1; }
 
 case "$CLOCK_CASE" in
-  full|nonterminal|return-budget) ;;
+  full|nonterminal|return-budget|return-authority|elapsed-sync) ;;
   *) printf 'FAIL unknown STAGE_ATTEMPT_CLOCK_CASE: %s\n' "$CLOCK_CASE"; exit 1 ;;
 esac
 
@@ -22,7 +22,8 @@ if [ ! -x "$HELPER" ]; then bad "fo-stage-attempt.sh is not executable"; exit "$
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/stage-attempt-clock.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
-if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ]; then
+if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
+  [ "$CLOCK_CASE" = return-authority ] || [ "$CLOCK_CASE" = elapsed-sync ]; then
   CASE_REPO=''
   CASE_ENTITY=''
   CASE_BOOT=''
@@ -246,6 +247,7 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ]; then
     local head common wal returned history open_wal key attempt_id terminal_id
     local entity_hex ref_hex worker_hex lease_sha artifact_oid completion_line completion_sha
     local boundary_bundle over_bundle ref_before status_before boundary_rc over_rc observed_state sidecar_state
+    local fo_over_rc
     mkdir -p "$repo/docs/clock-flow/$label"
     printf '%s\n' '---' "id: $label" "status: $stage" 'stage_outputs: {}' '---' > "$repo/$entity"
     printf '# %s\n' "$stage" > "$repo/$artifact"
@@ -293,7 +295,9 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ]; then
     status_before="$(git -C "$repo" status --porcelain=v1 --untracked-files=all)"
     (
       cd "$repo" || exit 1
-      bash "$HELPER" accept-return --entity="$entity" --stage="$stage" --lease-token="$token" --bundle="$boundary_bundle"
+      STAGE_ATTEMPT_BOOT_ID_SOURCE="$boot" \
+        STAGE_ATTEMPT_MONOTONIC_NS=$((1000000000 + budget * 1000000000)) \
+        bash "$HELPER" accept-return --entity="$entity" --stage="$stage" --lease-token="$token" --bundle="$boundary_bundle"
     ) > "$TMP/$stage-return-budget.boundary.out" 2>&1
     boundary_rc=$?
     if [ "$boundary_rc" = 0 ] && cmp -s "$boundary_bundle" "$returned" &&
@@ -311,7 +315,9 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ]; then
     sed "s/attempt_elapsed_seconds=$budget/attempt_elapsed_seconds=$over/" "$boundary_bundle" > "$over_bundle"
     (
       cd "$repo" || exit 1
-      bash "$HELPER" accept-return --entity="$entity" --stage="$stage" --lease-token="$token" --bundle="$over_bundle"
+      STAGE_ATTEMPT_BOOT_ID_SOURCE="$boot" \
+        STAGE_ATTEMPT_MONOTONIC_NS=$((1000000000 + budget * 1000000000)) \
+        bash "$HELPER" accept-return --entity="$entity" --stage="$stage" --lease-token="$token" --bundle="$over_bundle"
     ) > "$TMP/$stage-return-budget.over.out" 2>&1
     over_rc=$?
     observed_state="$(sed -n 's/.* state=\([^ ]*\) .*/\1/p' "$wal")"
@@ -323,6 +329,25 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ]; then
     else
       bad "$stage threshold-plus-one passed return rejection/preservation (rc=$over_rc state=$observed_state sidecar=$sidecar_state)"
     fi
+
+    if [ "$CLOCK_CASE" = return-authority ]; then
+      cp "$open_wal" "$wal"
+      rm -f "$returned"
+      (
+        cd "$repo" || exit 1
+        STAGE_ATTEMPT_BOOT_ID_SOURCE="$boot" \
+          STAGE_ATTEMPT_MONOTONIC_NS=$((1000000000 + (budget + 1) * 1000000000)) \
+          bash "$HELPER" accept-return --entity="$entity" --stage="$stage" --lease-token="$token" --bundle="$boundary_bundle"
+      ) > "$TMP/$stage-return-budget.fo-over.out" 2>&1
+      fo_over_rc=$?
+      if [ "$fo_over_rc" != 0 ] &&
+        grep -Fqx 'stage-attempt-v1[2]: invalid returned bundle: elapsed-budget-exceeded' "$TMP/$stage-return-budget.fo-over.out" &&
+        cmp -s "$open_wal" "$wal" && [ ! -e "$returned" ]; then
+        ok "$stage FO monotonic threshold plus one rejects an in-budget worker receipt without mutation"
+      else
+        bad "$stage FO monotonic authority over worker receipt (rc=$fo_over_rc)"
+      fi
+    fi
     if [ ! -e "$history" ] && [ "$ref_before" = "$(git -C "$repo" rev-parse refs/heads/main)" ] &&
       [ "$status_before" = "$(git -C "$repo" status --porcelain=v1 --untracked-files=all)" ]; then
       ok "$stage return-budget cases create no terminal history, CAS, route, continuation, or worktree mutation"
@@ -331,8 +356,40 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ]; then
     fi
   }
 
-  return_budget_case plan 1200
-  return_budget_case execute 1800
+  if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
+    [ "$CLOCK_CASE" = return-authority ]; then
+    return_budget_case plan 1200
+    return_budget_case execute 1800
+  fi
+
+  elapsed_sync_case() {
+    prepare_nonterminal_case elapsed-sync plan 1000000000 || return
+    local open_wal="$TMP/elapsed-sync.open.wal" provisional="$TMP/elapsed-sync.provisional"
+    local lock="${CASE_WAL%.wal}.lock" rc
+    cp "$CASE_WAL" "$open_wal"
+    printf '%s\n' provisional-return > "$CASE_RETURNED"
+    cp "$CASE_RETURNED" "$provisional"
+    mkdir "$lock" || { bad "elapsed-sync transition lock fixture"; return; }
+    (
+      cd "$CASE_REPO" || exit 1
+      STAGE_ATTEMPT_BOOT_ID_SOURCE="$CASE_BOOT" STAGE_ATTEMPT_MONOTONIC_NS=2000000000 \
+        bash "$HELPER" elapsed --entity="$CASE_ENTITY" --stage=plan
+    ) > "$TMP/elapsed-sync.out" 2>&1
+    rc=$?
+    rmdir "$lock"
+    if [ "$rc" = 2 ] &&
+      grep -Fqx 'stage-attempt-v1[2]: attempt transition locked' "$TMP/elapsed-sync.out" &&
+      cmp -s "$open_wal" "$CASE_WAL" && cmp -s "$provisional" "$CASE_RETURNED"; then
+      ok "elapsed query respects the transition lock before reading provisional return state"
+    else
+      bad "elapsed query synchronization with provisional return transition (rc=$rc)"
+      sed 's/^/  observed: /' "$TMP/elapsed-sync.out"
+    fi
+  }
+
+  if [ "$CLOCK_CASE" = elapsed-sync ]; then
+    elapsed_sync_case
+  fi
 
   clock_fault_refusal() {
     local label="$1" source_mode="$2" resume_ns="$3" reason="$4"
