@@ -1,6 +1,6 @@
 ---
 title: Make stage circuits attempt-scoped and recoverable
-status: design
+status: plan
 source: SO/EM narrow verdict on shape-confirm-instance-awareness plan recovery
 started: 2026-07-22T02:05:16Z
 completed:
