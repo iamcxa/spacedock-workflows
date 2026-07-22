@@ -33,3 +33,7 @@ Done: contract and clock suites GREEN, completion-v1 exact fixtures remain byte-
 ### Summary
 
 The 006.1 plan is complete and stays inside the born-shaped W1 protocol/clock boundary. It preserves the reviewed RED baseline and frozen completion bytes, while making the current inherited C14 branch-history signal explicit instead of treating it as a product regression.
+
+### Feedback Cycles
+
+- Cycle 1, plan gate at `654ab19`: SO/EM route `block` with high confidence. FO repaired the inherited C14 lineage non-destructively at `8142856`; `CI=true bash plugins/ship-flow/bin/check-invariants.sh` is now GREEN. Return to plan for the two remaining defects: make every new foreign-binding negative demonstrate an independent RED rather than being masked by the missing-helper guard, and narrow T2 clock-loss claims so durable interruption/history/route behavior remains owned by 006.2/006.3.
