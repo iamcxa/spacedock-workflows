@@ -57,3 +57,19 @@ dispatch, worktree, or product-code change was made.
 **Approval token — captain verbatim**
 
 > 同意：這個 part 的「更 agent-native」限定為 W1–W4；approve
+
+## Stage Report: design
+
+- DONE: Resolve CD-1 through CD-4 into captain-decision-anchored design constraints that preserve legacy receipt bytes, FO-only attempt and timing authority, crash-safe append-only terminal semantics, and bounded no-dispatch route-out.
+  `design.md` records D1-D4, freezes `completion-v1`, fixes plan/execute identity and clock ownership, defines entity+stage exclusion across sibling worktrees, and specifies exact WAL, returned-bundle, terminal-history, replay, and route-out contracts.
+- DONE: Produce schema/contract design output plus a complete Hand-off to Plan that remains limited to plan and execute and keeps #21's technical plan and 32/61-minute receipts unchanged.
+  The schema section covers authority/projection layers, additive migration, rebuild, and plan/execute report fields; the hand-off has no open decisions and makes #21 byte-preservation plus one typed fresh revalidation an explicit D4 constraint.
+- DONE: Complete the required readiness and adversarial review evidence with no unresolved decisions; route narrow if the design needs generic scheduling, unrelated-stage migration, cross-workflow coordination, or exceeds the three-day appetite.
+  Schema and fmodel readiness are PASS, the final fresh seven-factor review says PROCEED, D-reference and hand-off validators pass, and the design explicitly excludes every narrow/return trigger.
+
+### Summary
+
+Designed a plan/execute-only attempt circuit with per-attempt ref and clock
+authority, exact crash-recoverable return evidence, one bounded fresh
+continuation, and pre-dispatch route-out. The final review is PASS with no open
+decisions; the First Officer still owns stage advancement.
