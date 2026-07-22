@@ -54,3 +54,16 @@ Route judgment: **PROCEED** for independent SO/EM re-review of the bounded W1 pl
 ### Feedback Cycles
 
 - Cycle 2, plan re-gate at `691e1d6`: SO/EM route `return` with high confidence. The persisted T1 ledger decodes to `STAGE_ATTEMPT_CONTRACT_CASE=\"$CASE\"`, so shell evaluation can pass literal quote bytes and make every selector fail as unknown. Repair only command serialization, regenerate the ledger, and prove the seven decoded selector tokens reach their named cases without helper/fixture/unknown-selector masking. Preserve lineage, T2 scope, and frozen completion bytes.
+
+## Stage Report: plan
+
+- DONE: Correct only the persisted T1 RED command serialization so decoded shell receives the seven exact selector tokens without literal quote bytes; keep safe handling for the fixed allowlist.
+  T1 now persists `STAGE_ATTEMPT_CONTRACT_CASE=$CASE` inside the closed seven-token `for` list; no T2, task-topology, or implementation command changed.
+- DONE: Regenerate and validate the TDD ledger, then demonstrate from decoded output or an equivalent hermetic probe that all seven selectors reach their named cases rather than an unknown-selector, helper, or fixture guard.
+  Both ledger validators report `status=pass records=2`; the decoded-command probe reaches baseline plus all seven named cases in order and reports `0 unknown/helper/fixture guards`.
+- DONE: Preserve clean lineage, T2's nonterminal-only boundary, frozen completion-v1 hash, and W2-W4 exclusions; append a fresh final `Stage Report: plan` and commit only plan-owned paths.
+  C4/C8/C14/C15 and full invariants pass, Node tests are 79/79, version/no-dangling gates pass, completion-v1 remains `a2d15b8281995e9bad82a472030b18ba0b427a29194d41f1729603ceb6f64f10`, and product/W2-W4 paths are unchanged.
+
+### Summary
+
+Route judgment: **PROCEED** for independent SO/EM re-review of the repaired W1 plan. Execute must still return **NARROW** before durable interruption/history/continuation/route work and **BLOCKED** if clean-lineage C14 or another assigned repository gate regresses.
