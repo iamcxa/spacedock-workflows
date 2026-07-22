@@ -1,8 +1,8 @@
 ---
 title: Make stage circuits attempt-scoped and recoverable
-status: draft
+status: shape
 source: SO/EM narrow verdict on shape-confirm-instance-awareness plan recovery
-started:
+started: 2026-07-22T02:05:16Z
 completed:
 verdict:
 score: 0.95
