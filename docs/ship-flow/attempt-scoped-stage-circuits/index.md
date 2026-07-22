@@ -1,14 +1,18 @@
 ---
 title: Make stage circuits attempt-scoped and recoverable
-status: shape
+status: design
 source: SO/EM narrow verdict on shape-confirm-instance-awareness plan recovery
 started: 2026-07-22T02:05:16Z
 completed:
 verdict:
 score: 0.95
-worktree:
+worktree: .worktrees/spacedock-ensign-attempt-scoped-stage-circuits
 issue:
 pr:
+domain: schema
+design_required: true
+contract_decision_required: true
+affects_ui: false
 ---
 
 Ship-Flow's plan circuit breaker measures an accumulated stage clock but has no durable attempt identity or fresh-versus-resume semantics. After a truthful partial receipt, a newly dispatched continuation inherits an already-expired duration and can never legitimately pass, producing deterministic recovery livelock and forcing agents to infer lifecycle from prose.
