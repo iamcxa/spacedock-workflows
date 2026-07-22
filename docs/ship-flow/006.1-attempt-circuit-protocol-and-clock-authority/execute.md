@@ -2,6 +2,8 @@
 
 The bounded W1 protocol and nonterminal clock-authority slice is implemented in two serial commits. Exact attempt/return bytes, all FO bindings, strict passed-return budgets, portable monotonic authority, and fail-closed same-boot resume are GREEN; durable interruption, history/replay, continuation/route, integration wiring, scheduler, and `#21` remain deliberately deferred.
 
+> ⚠️ Receipt correction: the original 181-minute execute epoch exceeded the 30-minute circuit breaker and is therefore `partial` / **INCOMPLETE**. The W1 product commits and evidence remain intact; the bounded receipt-repair epoch below rechecks current state without reimplementing product scope.
+
 ## Execute Dispatch Manifest
 
 | Task | Parallel Group | Depends On | Owned Paths | Integration Owner | Dispatch Mode |
@@ -26,7 +28,7 @@ The bounded W1 protocol and nonterminal clock-authority slice is implemented in 
 
 - WARNING: `.claude/ship-flow/skill-routing.yaml` is absent. This matches the plan's legacy routing warning; resolver reported no folder guidance and the root context boundary remained authoritative.
 - RESOLVED: task spec/quality reviews found exact-byte grammar, exclusion-lock, immutable snapshot, returned-WAL, terminal-ID, signed-uint, and passed-budget gaps. Every blocking finding received an independent RED, minimal fix, and re-review approval.
-- OBSERVATION: the full standalone shell suite ran 138 tests: 133 passed. Four failures are the plan-deferred full clock/history/route/`#21` surfaces owned by 006.2-006.4; `test-merged-pr-closeout-reconciler.sh` separately hit its 90-second cap after many passing subcases. Neither observation was treated as W1 success or absorbed into scope.
+- OBSERVATION: the prior full standalone shell run reported 133/138 passed. Its deferred failures remain the default/full `test-stage-attempt-clock.sh` interrupt surface and `test-stage-attempt-history.sh` (006.2), `test-stage-attempt-route.sh` (006.3), and `test-attempt-scoped-stage-circuits-21.sh` (006.4); `test-merged-pr-closeout-reconciler.sh` separately hit its 90-second cap. The receipt-repair epoch did not rerun these non-W1 suites.
 - Deviation from plan: none. Review-derived hardening stayed inside the original T1/T2 owned paths and fixed design constraints.
 
 ## Critical-Pass Self-Check Findings
@@ -56,7 +58,8 @@ The bounded W1 protocol and nonterminal clock-authority slice is implemented in 
 
 ## Execute Report
 
-status: passed
+status: partial
+⚠️ INCOMPLETE: the original execute epoch exceeded the 30-minute circuit breaker; its product evidence is preserved, but its completion receipt cannot be `passed`.
 stage_cost: 7 Codex worker/reviewer dispatches plus controller verification
 tasks_summary: 2 planned, 2 completed, 0 blocked
 knowledge_captures: 0 confirmed, 1 candidate
@@ -81,3 +84,16 @@ commit_count: 3
 - skills_needed_used: T1/T2 used test, best-practices, and test-driven-development; execute also used requesting/receiving review and verification-before-completion
 - context_read_receipts: none — resolver reported no `folder_guidance_files`; root instructions applied
 - deferred: full `interrupt`/history/replay to 006.2; continuation/route to 006.3; wiring/scheduler/`#21` to 006.4
+
+## Receipt-Repair Epoch
+
+repair_result: passed
+repair_started: 2026-07-22T10:16:42Z
+repair_completed: 2026-07-22T10:20:11Z
+repair_duration_minutes: 4
+repair_scope: reporting truth surface only; T1 `920d950` and T2 `5ceebf4` preserved with zero production/test changes
+- fresh W1: contract baseline 40/40; nonterminal 26/26; return-budget 6/6
+- fresh compatibility: frozen SHA `a2d15b8281995e9bad82a472030b18ba0b427a29194d41f1729603ceb6f64f10`; completion review, frontmatter, and advance-stage matrices exit 0
+- fresh repository gates: invariants C1-C18; Node 79/79; version triple 0.9.0; no-dangling 8 patterns
+- scope hygiene: epoch began clean; final `git diff --check` and explicit two-path status are recorded before the receipt-only commit
+- deferred/not run: default/full clock + history (006.2), route (006.3), and attempt-scoped `#21` (006.4)

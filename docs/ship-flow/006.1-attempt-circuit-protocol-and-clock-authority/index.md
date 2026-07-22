@@ -82,3 +82,16 @@ Route judgment: **PROCEED** for independent SO/EM re-review of the repaired W1 p
 ### Summary
 
 Execute completed the bounded W1 protocol and nonterminal clock-authority slice with exact-byte, concurrency, unsigned-clock, and strict-budget hardening. The handoff remains NARROW at the 006.1 boundary: all durable terminal/history/continuation/route/integration behavior stays with 006.2-006.4.
+
+## Stage Report: execute
+
+- DONE: Preserve the product history and exact two implementation commits (`920d950` T1, `5ceebf4` T2); make zero production/test changes.
+  Receipt repair changes only this entity index and `execute.md`; the implementation range and frozen completion helper are unchanged.
+- DONE: Repair only `execute.md` and the final `## Stage Report: execute` truth surface: explicitly mark the prior 181-minute receipt partial/INCOMPLETE, then add a fresh bounded receipt-repair epoch with its own start/end/duration and truthful result.
+  The prior epoch is now `status: partial` with an explicit INCOMPLETE marker; the fresh epoch records independent timing and `repair_result: passed`.
+- DONE: In this fresh epoch, run the smallest sufficient current checks that prove W1 and record actual outputs/counts; name deferred 006.2-006.4 failures without running their full suites.
+  Fresh evidence: 40/40 contract, 26/26 nonterminal, 6/6 return-budget, frozen SHA + compatibility, C1-C18, Node 79/79, version 0.9.0, no-dangling 8 patterns, and clean diff/scope checks; deferred suites are named in `execute.md`.
+
+### Summary
+
+The W1 product result remains intact, but the original 181-minute execute receipt is process-incomplete and no longer claims `passed`. This bounded repair publishes a separately timed, evidence-backed receipt without completion registration or verify advancement.
