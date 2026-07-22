@@ -253,3 +253,33 @@ model_split: 5 sonnet
 | ARCHITECTURE.md | update | design | Attempt authority/recovery. |
 - **folder_guidance**: T0-T4 no non-root guidance; root instructions remain session context.
 <!-- /section:hand-off-to-execute -->
+
+<details>
+<summary>Plan Report: gate-repair continuation</summary>
+
+## Plan Report: gate-repair continuation
+
+The expired 21-minute attempt above remains `partial` and unchanged. This is a
+separate fresh continuation receipt over immutable input commit
+`48c814bc86dfc1650d6763a09ad4ac38a744f309`.
+
+status: passed
+started: 2026-07-22T04:14:32Z
+completed: 2026-07-22T04:23:00Z
+duration_seconds: 508
+duration_minutes: 9
+iteration_count: 0
+task_count: 5
+verification_spec_count: 4
+reviewer_verdict: PROCEED
+dimensions: 7/7 pass
+skill-coverage: PASS
+scope_anchoring: 5/5 tasks mapped; plan/execute only; 15 unique owned paths
+
+Fresh evidence: persisted ledger `status=pass records=5`; design readiness,
+hand-off schema, D-reference, 10/10 design import, C4, C8, C15, placeholder,
+and diff gates pass. Pinned #21 hashes remain `23aa88f981b8182a1600199bc4e572df508c4ecd00f1befc62f1d60070b57ffc`,
+`c6cd94e5e8e60443286297193fdff62612a12b67b860b4e5768b82cc08afd00c`,
+and `cf0ee9f001554c8d26216130a40fe6ecf7f39450022c68bf264cdef24cfadffb`.
+
+</details>
