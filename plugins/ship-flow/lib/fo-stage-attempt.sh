@@ -54,6 +54,94 @@ stage_attempt_timestamp_ok() {
   LC_ALL=C printf '%s' "$1" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
 }
 
+stage_attempt_boot_uuid_ok() {
+  LC_ALL=C printf '%s' "$1" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+}
+
+stage_attempt_boot_identity() {
+  local source raw normalized
+  STAGE_ATTEMPT_BOOT_VALUE=''
+  STAGE_ATTEMPT_CLOCK_REASON='clock-identity-loss'
+  if [ "${STAGE_ATTEMPT_BOOT_ID_SOURCE+x}" = x ]; then
+    source="$STAGE_ATTEMPT_BOOT_ID_SOURCE"
+    [ -n "$source" ] && [ -f "$source" ] && [ ! -L "$source" ] || return 1
+    raw="$(sed -n '1p' "$source")"
+    STAGE_ATTEMPT_CLOCK_REASON='clock-identity-unparseable'
+    stage_attempt_boot_uuid_ok "$raw" || return 1
+    normalized="$(LC_ALL=C printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+  elif [ -r /proc/sys/kernel/random/boot_id ]; then
+    raw="$(sed -n '1p' /proc/sys/kernel/random/boot_id)"
+    STAGE_ATTEMPT_CLOCK_REASON='clock-identity-unparseable'
+    stage_attempt_boot_uuid_ok "$raw" || return 1
+    normalized="$(LC_ALL=C printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+  elif command -v sysctl >/dev/null 2>&1; then
+    raw="$(sysctl -n kern.boottime 2>/dev/null)" || return 1
+    normalized="$(LC_ALL=C printf '%s\n' "$raw" |
+      sed -n 's/.*{ sec = \([0-9][0-9]*\), usec = \([0-9][0-9]*\) }.*/kern.boottime:sec=\1,usec=\2/p')"
+    STAGE_ATTEMPT_CLOCK_REASON='clock-identity-unparseable'
+    [ -n "$normalized" ] || return 1
+  else
+    return 1
+  fi
+  STAGE_ATTEMPT_BOOT_VALUE="$normalized"
+}
+
+stage_attempt_monotonic_now() {
+  STAGE_ATTEMPT_NOW_NS=''
+  if [ "${STAGE_ATTEMPT_MONOTONIC_NS+x}" = x ]; then
+    STAGE_ATTEMPT_NOW_NS="$STAGE_ATTEMPT_MONOTONIC_NS"
+  else
+    STAGE_ATTEMPT_NOW_NS="$(node -e 'process.stdout.write(process.hrtime.bigint().toString())' 2>/dev/null)" || return 1
+  fi
+  stage_attempt_uint_ok "$STAGE_ATTEMPT_NOW_NS"
+}
+
+stage_attempt_monotonic_eval() {
+  local now="$1" started="$2" budget="${3:-}" result elapsed expired
+  result="$(node -e '
+    const now = BigInt(process.argv[1]);
+    const started = BigInt(process.argv[2]);
+    const budget = process.argv[3];
+    if (now < started) {
+      process.stdout.write("regression");
+    } else if (budget === "") {
+      process.stdout.write("continuous");
+    } else {
+      const elapsed = (now - started) / 1000000000n;
+      const expired = elapsed > BigInt(budget) ? "yes" : "no";
+      process.stdout.write("elapsed_seconds=" + elapsed.toString() + " expired=" + expired);
+    }
+  ' "$now" "$started" "$budget" 2>/dev/null)" || return 1
+  case "$result" in
+    continuous|regression) ;;
+    'elapsed_seconds='*' expired='*)
+      elapsed="${result#elapsed_seconds=}"
+      expired="${elapsed#* expired=}"
+      elapsed="${elapsed%% expired=*}"
+      stage_attempt_uint_ok "$elapsed" || return 1
+      case "$expired" in yes|no) ;; *) return 1 ;; esac
+      ;;
+    *) return 1 ;;
+  esac
+  STAGE_ATTEMPT_CLOCK_EVAL="$result"
+}
+
+stage_attempt_uint_gt() {
+  local left="$1" right="$2" result
+  result="$(node -e '
+    const left = BigInt(process.argv[1]);
+    const right = BigInt(process.argv[2]);
+    process.stdout.write(left > right ? "yes" : "no");
+  ' "$left" "$right" 2>/dev/null)" || return 1
+  case "$result" in yes|no) ;; *) return 1 ;; esac
+  STAGE_ATTEMPT_UINT_GT="$result"
+}
+
+stage_attempt_resume_refused() {
+  printf 'stage-attempt-v1 disposition=resume-refused reason=%s\n' "$1"
+  return 5
+}
+
 stage_attempt_field() {
   local token="$1" name="$2"
   case "$token" in
@@ -186,10 +274,9 @@ stage_attempt_begin() {
     stage_attempt_timestamp_ok "$STAGE_ATTEMPT_STARTED_AT"; }; then
     stage_attempt_error 2 'invalid attempt metadata'; return 2
   fi
-  [ -n "${STAGE_ATTEMPT_BOOT_ID_SOURCE:-}" ] && [ -f "$STAGE_ATTEMPT_BOOT_ID_SOURCE" ] || { stage_attempt_error 2 'boot identity unavailable'; return 2; }
-  boot_value="$(sed -n '1p' "$STAGE_ATTEMPT_BOOT_ID_SOURCE")"
-  [ -n "$boot_value" ] || { stage_attempt_error 2 'boot identity unavailable'; return 2; }
-  stage_attempt_uint_ok "${STAGE_ATTEMPT_MONOTONIC_NS:-}" || { stage_attempt_error 2 'monotonic start unavailable'; return 2; }
+  stage_attempt_boot_identity || { stage_attempt_error 2 'boot identity unavailable or unparseable'; return 2; }
+  boot_value="$STAGE_ATTEMPT_BOOT_VALUE"
+  stage_attempt_monotonic_now || { stage_attempt_error 2 'monotonic start unavailable'; return 2; }
 
   stage_attempt_paths
   mkdir -p "$STAGE_ATTEMPT_STORE" || return 1
@@ -211,14 +298,15 @@ stage_attempt_begin() {
   WAL_ORDINAL="$STAGE_ATTEMPT_ORDINAL"
   WAL_STARTED_AT="$STAGE_ATTEMPT_STARTED_AT"
   WAL_BOOT_SHA="$(printf '%s' "$boot_value" | stage_attempt_sha256_stream)"
-  WAL_MONOTONIC_NS="$STAGE_ATTEMPT_MONOTONIC_NS"
+  WAL_MONOTONIC_NS="$STAGE_ATTEMPT_NOW_NS"
   WAL_BUDGET="$budget"
   WAL_FRESH="$STAGE_ATTEMPT_FRESH"
-  stage_attempt_write_wal "$STAGE_ATTEMPT_WAL" open none
+  stage_attempt_write_wal "$STAGE_ATTEMPT_WAL" open none || return 1
+  printf 'stage-attempt-v1 disposition=open attempt_id=%s budget_seconds=%s\n' "$WAL_ATTEMPT_ID" "$WAL_BUDGET"
 }
 
 stage_attempt_load_wal() {
-  local final_byte line
+  local require_lease="${1:-yes}" final_byte line
   local -a fields
   [ -f "$STAGE_ATTEMPT_WAL" ] && [ ! -L "$STAGE_ATTEMPT_WAL" ] || { stage_attempt_error 2 'attempt WAL unavailable'; return 2; }
   [ "$(awk 'END { print NR + 0 }' "$STAGE_ATTEMPT_WAL")" = 1 ] || { stage_attempt_error 2 'invalid attempt WAL'; return 2; }
@@ -273,7 +361,62 @@ stage_attempt_load_wal() {
       ;;
     *) stage_attempt_error 2 'invalid attempt WAL'; return 2 ;;
   esac
-  [ "$(printf '%s' "$STAGE_ATTEMPT_LEASE_TOKEN" | stage_attempt_sha256_stream)" = "$WAL_LEASE_SHA" ] || { stage_attempt_error 2 'foreign lease token'; return 2; }
+  if [ "$require_lease" = yes ]; then
+    [ "$(printf '%s' "$STAGE_ATTEMPT_LEASE_TOKEN" | stage_attempt_sha256_stream)" = "$WAL_LEASE_SHA" ] || { stage_attempt_error 2 'foreign lease token'; return 2; }
+  fi
+}
+
+stage_attempt_elapsed() {
+  local boot_sha
+  stage_attempt_parse_options "$@" || return $?
+  stage_attempt_repo_context || { stage_attempt_error 2 'not a supported Git repository'; return 2; }
+  if ! { stage_attempt_stage_ok "$STAGE_ATTEMPT_STAGE" && stage_attempt_entity_ok "$STAGE_ATTEMPT_ENTITY"; }; then
+    stage_attempt_error 2 'invalid elapsed request'; return 2
+  fi
+  stage_attempt_paths
+  stage_attempt_load_wal no || return $?
+  stage_attempt_boot_identity || { stage_attempt_error 5 "$STAGE_ATTEMPT_CLOCK_REASON"; return 5; }
+  boot_sha="$(printf '%s' "$STAGE_ATTEMPT_BOOT_VALUE" | stage_attempt_sha256_stream)"
+  [ "$boot_sha" = "$WAL_BOOT_SHA" ] || { stage_attempt_error 5 'boot-identity-mismatch'; return 5; }
+  stage_attempt_monotonic_now || { stage_attempt_error 5 'monotonic-clock-unavailable'; return 5; }
+  stage_attempt_monotonic_eval "$STAGE_ATTEMPT_NOW_NS" "$WAL_MONOTONIC_NS" "$WAL_BUDGET" || { stage_attempt_error 5 'monotonic-clock-unavailable'; return 5; }
+  [ "$STAGE_ATTEMPT_CLOCK_EVAL" != regression ] || { stage_attempt_error 5 'monotonic-regression'; return 5; }
+  printf 'stage-attempt-v1 %s\n' "$STAGE_ATTEMPT_CLOCK_EVAL"
+}
+
+stage_attempt_suspend() {
+  stage_attempt_parse_options "$@" || return $?
+  stage_attempt_repo_context || { stage_attempt_error 2 'not a supported Git repository'; return 2; }
+  if ! { stage_attempt_stage_ok "$STAGE_ATTEMPT_STAGE" && stage_attempt_entity_ok "$STAGE_ATTEMPT_ENTITY" &&
+    [ -n "$STAGE_ATTEMPT_LEASE_TOKEN" ]; }; then
+    stage_attempt_error 2 'invalid suspend request'; return 2
+  fi
+  stage_attempt_paths
+  stage_attempt_lock_acquire || return $?
+  stage_attempt_load_wal || return $?
+  [ "$WAL_STATE" = open ] || { stage_attempt_error 2 'attempt is not open'; return 2; }
+  stage_attempt_write_wal "$STAGE_ATTEMPT_WAL" suspended none
+}
+
+stage_attempt_resume() {
+  local boot_sha
+  stage_attempt_parse_options "$@" || return $?
+  stage_attempt_repo_context || { stage_attempt_error 2 'not a supported Git repository'; return 2; }
+  if ! { stage_attempt_stage_ok "$STAGE_ATTEMPT_STAGE" && stage_attempt_entity_ok "$STAGE_ATTEMPT_ENTITY" &&
+    [ -n "$STAGE_ATTEMPT_LEASE_TOKEN" ]; }; then
+    stage_attempt_error 2 'invalid resume request'; return 2
+  fi
+  stage_attempt_paths
+  stage_attempt_lock_acquire || return $?
+  stage_attempt_load_wal || return $?
+  [ "$WAL_STATE" = suspended ] || { stage_attempt_error 2 'attempt is not suspended'; return 2; }
+  stage_attempt_boot_identity || { stage_attempt_resume_refused "$STAGE_ATTEMPT_CLOCK_REASON"; return $?; }
+  boot_sha="$(printf '%s' "$STAGE_ATTEMPT_BOOT_VALUE" | stage_attempt_sha256_stream)"
+  [ "$boot_sha" = "$WAL_BOOT_SHA" ] || { stage_attempt_resume_refused boot-identity-mismatch; return $?; }
+  stage_attempt_monotonic_now || { stage_attempt_resume_refused monotonic-clock-unavailable; return $?; }
+  stage_attempt_monotonic_eval "$STAGE_ATTEMPT_NOW_NS" "$WAL_MONOTONIC_NS" || { stage_attempt_resume_refused monotonic-clock-unavailable; return $?; }
+  [ "$STAGE_ATTEMPT_CLOCK_EVAL" = continuous ] || { stage_attempt_resume_refused monotonic-regression; return $?; }
+  stage_attempt_write_wal "$STAGE_ATTEMPT_WAL" open none
 }
 
 stage_attempt_completion_line_ok() {
@@ -386,6 +529,10 @@ stage_attempt_validate_bundle() {
       [ "$line_count" = 1 ] || { stage_attempt_error 2 'invalid returned bundle: forbidden-completion-frame'; return 2; }
       ;;
   esac
+  if [ "$RECEIPT_OUTCOME" = passed ]; then
+    stage_attempt_uint_gt "$RECEIPT_ELAPSED" "$WAL_BUDGET" || { stage_attempt_error 2 'invalid returned bundle: elapsed-budget-evaluation'; return 2; }
+    [ "$STAGE_ATTEMPT_UINT_GT" = no ] || { stage_attempt_error 2 'invalid returned bundle: elapsed-budget-exceeded'; return 2; }
+  fi
 }
 
 stage_attempt_return() {
@@ -423,8 +570,11 @@ stage_attempt_main() {
   [ "$#" -gt 0 ] && shift
   case "$command" in
     begin) stage_attempt_begin "$@" ;;
+    elapsed) stage_attempt_elapsed "$@" ;;
+    suspend) stage_attempt_suspend "$@" ;;
+    resume) stage_attempt_resume "$@" ;;
     validate-return|accept-return) stage_attempt_return "$command" "$@" ;;
-    *) stage_attempt_error 2 'command must be begin, validate-return, or accept-return' ;;
+    *) stage_attempt_error 2 'command must be begin, elapsed, suspend, resume, validate-return, or accept-return' ;;
   esac
 }
 
