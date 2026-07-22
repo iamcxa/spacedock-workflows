@@ -9,7 +9,7 @@ affects_ui: false
 layout: folder
 status: plan
 stage_outputs: {}
-worktree: .worktrees/spacedock-ensign-006.1-attempt-circuit-protocol-and-clock-authority
+worktree: .worktrees/spacedock-ensign-006.1-attempt-circuit-protocol-and-clock-authority-lineage
 started: 2026-07-22T05:53:21Z
 ---
 
