@@ -73,3 +73,24 @@ Designed a plan/execute-only attempt circuit with per-attempt ref and clock
 authority, exact crash-recoverable return evidence, one bounded fresh
 continuation, and pre-dispatch route-out. The final review is PASS with no open
 decisions; the First Officer still owns stage advancement.
+
+## Stage Report: plan
+
+⚠️ INCOMPLETE — this plan attempt crossed the 21-minute circuit while fresh
+semantic review was still running. The delayed review's one RED-harness veto is
+repaired and later APPROVED, but the expired receipt remains partial; FO must
+run one bounded fresh receipt/gate-repair continuation before stage advance.
+
+- DONE: Import every D1-D4 hand-off constraint mechanically and produce runnable TDD tasks for exact completion-v1 preservation, attempt identity/timing, crash/replay transitions, bounded route-out, and #21 byte preservation.
+  `plan.md` imports 10/10 design rows and defines W0 RED-first tests plus four serial implementation waves; the persisted ledger validates five records.
+- DONE: Produce dependency-safe plan/execute-only task waves with exact file paths, RED/GREEN commands, verification evidence, worker skills, and reviewer questions; do not expand into generic scheduling, unrelated stages, cross-workflow coordination, or #21 product redesign.
+  W0→W4 owns disjoint explicit paths, four skills lists, runnable DC-1–DC-4 procedures, a 15-path M boundary, and the exact no-expansion constraints.
+- FAILED: Pass the TDD ledger, design-readiness, hand-off schema, D-reference, and design-import validators plus fresh adversarial cross-review within the attempt circuit; leave no open decisions or placeholders, and return to narrow if the full fault matrix cannot fit the captain's hard three-day appetite.
+  Ledger, readiness, hand-off, D-reference, C4/C8, placeholder, C15, and diff gates pass. The delayed reviewer returned APPROVED after one narrow RED-harness repair, but only after the attempt circuit expired, so the receipt cannot claim passage.
+
+### Summary
+
+Published a mechanically valid, RED-first five-task plan with independently
+observable RED suites, exact fault ordering, and pinned #21 evidence. Late
+review evidence is durable, but this expired attempt returns partial to the
+First Officer without stage advancement.
