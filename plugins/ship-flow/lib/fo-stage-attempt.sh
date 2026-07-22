@@ -197,7 +197,7 @@ stage_attempt_stage_ok() {
 }
 
 stage_attempt_entity_ok() {
-  case "$1" in ''|/*|*\\*|*//*|../*|*/../*|*/..|.) return 1 ;; *) return 0 ;; esac
+  case "$1" in ''|/*|*\\*|*//*|./*|*/./*|*/.|../*|*/../*|*/..|.) return 1 ;; *) return 0 ;; esac
 }
 
 stage_attempt_paths() {
@@ -306,7 +306,7 @@ stage_attempt_begin() {
 }
 
 stage_attempt_load_wal() {
-  local require_lease="${1:-yes}" final_byte line
+  local require_lease="${1:-yes}" final_byte line canonical_line
   local -a fields
   [ -f "$STAGE_ATTEMPT_WAL" ] && [ ! -L "$STAGE_ATTEMPT_WAL" ] || { stage_attempt_error 2 'attempt WAL unavailable'; return 2; }
   [ "$(awk 'END { print NR + 0 }' "$STAGE_ATTEMPT_WAL")" = 1 ] || { stage_attempt_error 2 'invalid attempt WAL'; return 2; }
@@ -348,6 +348,12 @@ stage_attempt_load_wal() {
     case "$WAL_FRESH" in 0|1) true ;; *) false ;; esac; }; then
     stage_attempt_error 2 'invalid attempt WAL'; return 2
   fi
+  printf -v canonical_line 'stage-attempt-wal-v1 entity_stage_key=%s entity_path_hex=%s stage=%s stage_run_id=%s ref_hex=%s attempt_before_oid=%s worker_id_hex=%s lease_sha256=%s attempt_id=%s attempt_ordinal=%s attempt_started_at=%s boot_id_sha256=%s monotonic_started_ns=%s budget_seconds=%s state=%s fresh_continuations_used=%s returned_bundle_sha256=%s' \
+    "$WAL_KEY" "$WAL_ENTITY_HEX" "$WAL_STAGE" "$WAL_STAGE_RUN_ID" "$WAL_REF_HEX" \
+    "$WAL_BEFORE" "$WAL_WORKER_HEX" "$WAL_LEASE_SHA" "$WAL_ATTEMPT_ID" "$WAL_ORDINAL" \
+    "$WAL_STARTED_AT" "$WAL_BOOT_SHA" "$WAL_MONOTONIC_NS" "$WAL_BUDGET" "$WAL_STATE" \
+    "$WAL_FRESH" "$WAL_RETURNED_SHA"
+  [ "$line" = "$canonical_line" ] || { stage_attempt_error 2 'invalid attempt WAL'; return 2; }
   case "$WAL_STATE/$WAL_RETURNED_SHA" in
     open/none|suspended/none)
       [ ! -e "$STAGE_ATTEMPT_RETURNED" ] || { stage_attempt_error 2 'invalid returned state: unexpected-sidecar'; return 2; }
@@ -434,11 +440,17 @@ stage_attempt_completion_line_ok() {
   printf -v canonical '%s %s %s %s %s %s %s %s' \
     "${fields[0]}" "${fields[1]}" "${fields[2]}" "${fields[3]}" \
     "${fields[4]}" "${fields[5]}" "${fields[6]}" "${fields[7]}"
-  [ "$line" = "$canonical" ]
+  [ "$line" = "$canonical" ] || return 1
+  STAGE_ATTEMPT_COMPLETION_REF="${fields[2]#*=}"
+  STAGE_ATTEMPT_COMPLETION_BEFORE="${fields[3]#*=}"
+  STAGE_ATTEMPT_COMPLETION_OID="${fields[4]#*=}"
+  STAGE_ATTEMPT_COMPLETION_ENTITY="${fields[5]#*=}"
+  STAGE_ATTEMPT_COMPLETION_STAGE="${fields[6]#*=}"
+  STAGE_ATTEMPT_COMPLETION_ARTIFACT="${fields[7]#*=}"
 }
 
 stage_attempt_validate_bundle() {
-  local final_byte first_line line_count expected_line frame_begin completion_line frame_end actual_sha bound_ref observed_completion expected_terminal_id
+  local final_byte first_line line_count expected_line frame_begin completion_line frame_end actual_sha bound_ref observed_completion expected_terminal_id artifact_path artifact_repo_path expected_artifact_oid
   local -a fields
   final_byte="$(LC_ALL=C tail -c 1 "$STAGE_ATTEMPT_BUNDLE" | od -An -t u1 | tr -d ' ')"
   [ "$final_byte" = 10 ] || { stage_attempt_error 2 'invalid returned bundle: grammar'; return 2; }
@@ -521,6 +533,23 @@ stage_attempt_validate_bundle() {
         stage_attempt_completion_line_ok "$completion_line"; }; then
         stage_attempt_error 2 'invalid returned bundle: completion-frame'; return 2
       fi
+      artifact_path="$(stage_attempt_unhex "$RECEIPT_ARTIFACT_HEX")" || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
+      [ "$(printf '%s' "$artifact_path" | stage_attempt_hex)" = "$RECEIPT_ARTIFACT_HEX" ] || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
+      if ! { [ "$STAGE_ATTEMPT_COMPLETION_REF" = "$bound_ref" ] &&
+        [ "$STAGE_ATTEMPT_COMPLETION_BEFORE" = "$RECEIPT_BEFORE" ] &&
+        [ "$STAGE_ATTEMPT_COMPLETION_OID" = "$RECEIPT_COMPLETION" ] &&
+        [ "$STAGE_ATTEMPT_COMPLETION_ENTITY" = "$STAGE_ATTEMPT_ENTITY" ] &&
+        [ "$STAGE_ATTEMPT_COMPLETION_STAGE" = "$RECEIPT_STAGE" ] &&
+        [ "$STAGE_ATTEMPT_COMPLETION_ARTIFACT" = "$artifact_path" ]; }; then
+        stage_attempt_error 2 'invalid returned bundle: completion-binding'; return 2
+      fi
+      [ "$artifact_path" = "$RECEIPT_STAGE.md" ] || { stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2; }
+      artifact_repo_path="${STAGE_ATTEMPT_ENTITY%/index.md}/$artifact_path"
+      if ! { expected_artifact_oid="$(git rev-parse --verify "$RECEIPT_COMPLETION:$artifact_repo_path" 2>/dev/null)" &&
+        [ "$(git cat-file -t "$expected_artifact_oid" 2>/dev/null)" = blob ] &&
+        [ "$RECEIPT_ARTIFACT_OID" = "$expected_artifact_oid" ]; }; then
+        stage_attempt_error 2 'invalid returned bundle: artifact-binding'; return 2
+      fi
       actual_sha="$(printf '%s\n' "$completion_line" | stage_attempt_sha256_stream)"
       [ "$actual_sha" = "$RECEIPT_COMPLETION_SHA" ] || { stage_attempt_error 2 'invalid returned bundle: completion-hash'; return 2; }
       ;;
@@ -557,6 +586,7 @@ stage_attempt_return() {
     fi
     stage_attempt_error 2 'conflicting returned bundle'; return 2
   fi
+  [ "$WAL_STATE" = open ] || { stage_attempt_error 2 'attempt is not open'; return 2; }
   stage_attempt_validate_bundle || return $?
   [ "$mode" = accept-return ] || return 0
   chmod 600 "$STAGE_ATTEMPT_SNAPSHOT" || return 1
