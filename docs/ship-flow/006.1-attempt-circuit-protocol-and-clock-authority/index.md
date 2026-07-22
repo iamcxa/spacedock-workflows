@@ -15,6 +15,7 @@ stage_outputs:
   execute: execute.md
   verify: verify.md
   review: review.md
+  ship: ship.md
 ---
 
 Inherited slice of the captain-approved W1-W4 prerequisite after EM route=narrow at parent HEAD e800e54a68d06ef5bbdddbf238398b85a61b2645.
