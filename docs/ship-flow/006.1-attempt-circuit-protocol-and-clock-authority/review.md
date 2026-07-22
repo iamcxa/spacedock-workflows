@@ -112,6 +112,9 @@ started_at: 2026-07-22T15:38:26Z
 completed_at: 2026-07-22T15:42:26Z
 duration_minutes: 4
 
+<details>
+<summary>Initial partial review epoch</summary>
+
 ### Initial Review Epoch — Partial / INCOMPLETE
 
 status: partial
@@ -124,6 +127,8 @@ iteration_count: 2
 - VETO 1: the executable canonical checker rejected the plan's `## Canonical Doc Actions` heading; bounded one-line schema repair `4141658` closed it.
 - VETO 2: exact-base `git diff --check` rejected three inherited scaffold EOF blanks; bounded formatting-only repair `a5a6075` closed it without sibling execution or semantic change.
 - No review completion, stage registration, PR publication, or sibling start was claimed in this epoch.
+
+</details>
 
 ### Final Exact-Head Continuation
 
