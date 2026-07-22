@@ -26,3 +26,19 @@ Ship-Flow's plan circuit breaker measures an accumulated stage clock but has no 
 In: attempt lifecycle schema/prose, FO dispatch envelope/lease integration, receipt publication and validators, recovery/idempotency tests, and bounded escalation.
 
 Out: redesigning #21's allocator plan, changing product code in its preserved diff, generic distributed scheduling, split-root expansion unrelated to attempt identity, or silently treating partial as passed.
+
+## Stage Report: shape
+
+- DONE: Produce a small-batch Shape Up proposal whose end value is that a post-partial fresh attempt can complete under its own budget without weakening resume/replay accounting or requiring a general dispatch/state rewrite.
+  `shape.md` defines two plan/execute vertical slices totaling 2.3/3 days, with paired fresh, resume/replay, bounded-route, and #21-preservation dogfood checks.
+- DONE: Ground the proposal in fresh L0 code research, current #21 partial-receipt evidence, canonical docs, the captain articulation trail, and a bounded architecture/contract impact with explicit exclusions.
+  Fresh L0 cites the 20-minute breaker, exact completion lease/receipt seam, schema gap, 32/61-minute #21 receipts, debrief crash warnings, canonical skips, and schema-domain architecture intent.
+- DONE: Complete appetite-fit, critical-assumption verification, PM-skill receipts, domain/contract routing, and independent cross-review; return a captain-facing Layer 1 gate with a truthful Stage Report, without approving or advancing it.
+  Appetite fit is 77%; PM delegates record valid unavailable/inline fallbacks; schema validation passed; review warnings were incorporated and the captain Bet remains unfilled.
+
+### Summary
+
+Shaped a two-slice prerequisite that makes plan/execute attempts explicit,
+lease-bound, replay-safe, and bounded without changing #21 or introducing a
+scheduler. The artifact stops at the captain gate: frontmatter remains `shape`,
+the Bet is unfilled, and no gate state or product code was changed.
