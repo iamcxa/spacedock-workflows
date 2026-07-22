@@ -5,6 +5,22 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB="${HERE}/.."
 HELPER="${LIB}/fo-stage-attempt.sh"
 FAIL=0
+CONTRACT_CASE="${STAGE_ATTEMPT_CONTRACT_CASE:-baseline}"
+MALFORMED_CASE="${STAGE_ATTEMPT_INVALID_CASE:-all}"
+QUALITY_CASE="${STAGE_ATTEMPT_QUALITY_CASE:-all}"
+
+case "$CONTRACT_CASE" in
+  baseline|foreign-stage-run|foreign-ref|foreign-before|foreign-worker-completion|foreign-worker|foreign-lease|foreign-attempt) ;;
+  *) printf 'FAIL unknown STAGE_ATTEMPT_CONTRACT_CASE: %s\n' "$CONTRACT_CASE"; exit 1 ;;
+esac
+case "$MALFORMED_CASE" in
+  all|extra-field|missing-frame|extra-frame|bad-completion-hash|cr-byte|tab-byte|completion-trailing-space|completion-non-ascii|wrong-terminal-event-id) ;;
+  *) printf 'FAIL unknown STAGE_ATTEMPT_INVALID_CASE: %s\n' "$MALFORMED_CASE"; exit 1 ;;
+esac
+case "$QUALITY_CASE" in
+  all|none|exclusion-lock|bundle-snapshot|returned-state) ;;
+  *) printf 'FAIL unknown STAGE_ATTEMPT_QUALITY_CASE: %s\n' "$QUALITY_CASE"; exit 1 ;;
+esac
 
 ok() { printf 'OK %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; FAIL=1; }
@@ -135,7 +151,14 @@ reset_folder_open() {
   rm -f "$RETURNED"
 }
 
-for KIND in extra-field missing-frame extra-frame bad-completion-hash cr-byte tab-byte; do
+refresh_completion_hash() {
+  local bundle="$1" receipt_sha
+  receipt_sha="$(sed -n '3p' "$bundle" | sha256_stream)"
+  perl -0pi -e "s/completion_receipt_sha256=[0-9a-f]{64}/completion_receipt_sha256=$receipt_sha/" "$bundle"
+}
+
+for KIND in extra-field missing-frame extra-frame bad-completion-hash cr-byte tab-byte completion-trailing-space completion-non-ascii wrong-terminal-event-id; do
+  [ "$MALFORMED_CASE" = all ] || [ "$MALFORMED_CASE" = "$KIND" ] || continue
   reset_folder_open
   CASE="$TMP/$KIND.bundle"
   cp "$BUNDLE" "$CASE"
@@ -146,6 +169,9 @@ for KIND in extra-field missing-frame extra-frame bad-completion-hash cr-byte ta
     bad-completion-hash) perl -0pi -e 's/completion_receipt_sha256=[0-9a-f]{64}/completion_receipt_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/' "$CASE"; REASON=completion-hash ;;
     cr-byte) perl -0pi -e 's/stage=plan/stage=plan\r/' "$CASE"; REASON=ascii-grammar ;;
     tab-byte) perl -0pi -e 's/stage=plan/stage=\tplan/' "$CASE"; REASON=ascii-grammar ;;
+    completion-trailing-space) perl -0pi -e 's/(completion-v1 disposition=[^\n]+)\ncompletion-v1-end\n/$1 \ncompletion-v1-end\n/' "$CASE"; refresh_completion_hash "$CASE"; REASON=completion-frame ;;
+    completion-non-ascii) perl -0pi -e 's/(completion-v1 disposition=[^\n]* artifact=plan)\.md\n/$1\xC3\xA9.md\n/' "$CASE"; refresh_completion_hash "$CASE"; REASON=ascii-grammar ;;
+    wrong-terminal-event-id) perl -0pi -e 's/terminal_event_id=sev1-[0-9a-f]{64}/terminal_event_id=sev1-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc/' "$CASE"; REASON=terminal-event-id ;;
   esac
   (
     cd "$REPO" || exit 1
@@ -155,6 +181,15 @@ for KIND in extra-field missing-frame extra-frame bad-completion-hash cr-byte ta
   if [ "$RC" != 0 ] && grep -Fq "stage-attempt-v1[2]: invalid returned bundle: $REASON" "$TMP/$KIND.out" && cmp -s "$EXPECTED_WAL" "$WAL" && [ ! -e "$RETURNED" ]; then
     ok "open-WAL return parser rejects $KIND for $REASON and preserves state"
   else bad "return parser fail-closed for $KIND/$REASON (rc=$RC)"; fi
+  case "$KIND" in
+    completion-trailing-space|completion-non-ascii|wrong-terminal-event-id)
+      if cmp -s "$EXPECTED_WAL" "$WAL" && [ ! -e "$RETURNED" ]; then
+        ok "$KIND leaves WAL bytes unchanged and creates no returned sidecar"
+      else
+        bad "$KIND changed WAL or returned state"
+      fi
+      ;;
+  esac
 done
 
 reset_folder_open
@@ -216,5 +251,232 @@ if [ "$RC" != 0 ] && grep -Fq 'stage-attempt-v1[2]: invalid returned bundle: for
 
 COMPLETION_AFTER="$(sha256_file "$LIB/completion-v1.sh")"
 if [ "$COMPLETION_BEFORE" = "$COMPLETION_AFTER" ]; then ok "completion-v1 implementation bytes remain frozen"; else bad "completion-v1 implementation bytes changed"; fi
+
+if [ "$CONTRACT_CASE" != baseline ]; then
+  reset_folder_open
+  FOREIGN_BUNDLE="$TMP/$CONTRACT_CASE.bundle"
+  cp "$BUNDLE" "$FOREIGN_BUNDLE"
+  FOREIGN_OID="$(printf 'foreign attempt binding\n' | git -C "$REPO" commit-tree "$(git -C "$REPO" rev-parse 'HEAD^{tree}')")"
+  case "$CONTRACT_CASE" in
+    foreign-stage-run)
+      sed "s/ stage_run_id=$HEAD_OID / stage_run_id=$FOREIGN_OID /" "$BUNDLE" > "$FOREIGN_BUNDLE"
+      EXPECTED_REASON=foreign-stage-run
+      ;;
+    foreign-ref)
+      FOREIGN_REF_HEX="$(printf '%s' 'refs/heads/foreign' | hex)"
+      sed "s/ ref_hex=$REF_HEX / ref_hex=$FOREIGN_REF_HEX /" "$BUNDLE" > "$FOREIGN_BUNDLE"
+      EXPECTED_REASON=foreign-ref
+      ;;
+    foreign-before)
+      sed "s/ attempt_before_oid=$HEAD_OID / attempt_before_oid=$FOREIGN_OID /" "$BUNDLE" > "$FOREIGN_BUNDLE"
+      EXPECTED_REASON=foreign-before
+      ;;
+    foreign-worker-completion)
+      sed "s/ worker_completion_oid=$HEAD_OID / worker_completion_oid=$FOREIGN_OID /" "$BUNDLE" > "$FOREIGN_BUNDLE"
+      EXPECTED_REASON=foreign-worker-completion
+      ;;
+    foreign-worker)
+      FOREIGN_WORKER_HEX="$(printf '%s' foreign-worker | hex)"
+      sed "s/ worker_id_hex=$WORKER_HEX / worker_id_hex=$FOREIGN_WORKER_HEX /" "$BUNDLE" > "$FOREIGN_BUNDLE"
+      EXPECTED_REASON=foreign-worker
+      ;;
+    foreign-lease)
+      FOREIGN_LEASE_SHA="$(printf '%s' foreign-token | sha256_stream)"
+      sed "s/ lease_sha256=$LEASE_SHA / lease_sha256=$FOREIGN_LEASE_SHA /" "$BUNDLE" > "$FOREIGN_BUNDLE"
+      EXPECTED_REASON=foreign-lease
+      ;;
+    foreign-attempt)
+      FOREIGN_ATTEMPT_ID="sa1-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      sed "s/ attempt_id=$ATTEMPT_ID / attempt_id=$FOREIGN_ATTEMPT_ID /" "$BUNDLE" > "$FOREIGN_BUNDLE"
+      EXPECTED_REASON=foreign-attempt
+      ;;
+  esac
+  cp "$WAL" "$TMP/$CONTRACT_CASE.before.wal"
+  (
+    cd "$REPO" || exit 1
+    bash "$HELPER" validate-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$FOREIGN_BUNDLE" > "$TMP/$CONTRACT_CASE.out" 2>&1
+  )
+  RC=$?
+  if [ "$RC" != 0 ] && grep -Fq "stage-attempt-v1[2]: invalid returned bundle: $EXPECTED_REASON" "$TMP/$CONTRACT_CASE.out"; then
+    ok "$CONTRACT_CASE rejects its foreign binding with the named diagnostic"
+  else
+    bad "$CONTRACT_CASE expected named foreign-binding rejection (rc=$RC)"
+  fi
+  if cmp -s "$TMP/$CONTRACT_CASE.before.wal" "$WAL" && [ ! -e "$RETURNED" ]; then
+    ok "$CONTRACT_CASE preserves WAL bytes and leaves no returned sidecar"
+  else
+    bad "$CONTRACT_CASE changed WAL or returned state"
+  fi
+fi
+
+if [ "$QUALITY_CASE" = all ] || [ "$QUALITY_CASE" = exclusion-lock ]; then
+  rm -f "$WAL" "$RETURNED" "$GIT_COMMON/spacedock-stage-attempt-v1/$KEY.lock"
+  LOCK_HOOK_BIN="$TMP/lock-hook-bin"
+  LOCK_BARRIER="$TMP/lock-barrier"
+  mkdir -p "$LOCK_HOOK_BIN" "$LOCK_BARRIER"
+  REAL_MV="$(command -v mv)"
+  cat > "$LOCK_HOOK_BIN/mv" <<EOF
+#!/usr/bin/env bash
+if [ "\${2:-}" = "$WAL" ]; then
+  : > "$LOCK_BARRIER/\$\$"
+  hook_wait=0
+  while [ "\$(find "$LOCK_BARRIER" -type f | wc -l | tr -d ' ')" -lt 2 ] && [ "\$hook_wait" -lt 30 ]; do
+    sleep 0.1
+    hook_wait=\$((hook_wait + 1))
+  done
+fi
+exec "$REAL_MV" "\$@"
+EOF
+  chmod +x "$LOCK_HOOK_BIN/mv"
+  for SLOT in a b; do
+    (
+      cd "$REPO" || exit 1
+      PATH="$LOCK_HOOK_BIN:$PATH" STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=4000000000 \
+        bash "$HELPER" begin --entity="$ENTITY" --stage=plan --stage-run-id="$HEAD_OID" \
+          --ref="$REF" --attempt-before="$HEAD_OID" --worker-id="lock-worker-$SLOT" \
+          --lease-token="lock-token-$SLOT" --attempt-ordinal=0 --fresh-continuations-used=0 \
+          --attempt-started-at="$STARTED" > "$TMP/lock-$SLOT.out" 2>&1
+      printf '%s\n' "$?" > "$TMP/lock-$SLOT.rc"
+    ) &
+  done
+  wait
+  LOCK_A_RC="$(sed -n '1p' "$TMP/lock-a.rc")"
+  LOCK_B_RC="$(sed -n '1p' "$TMP/lock-b.rc")"
+  LOCK_SUCCESS_COUNT=0
+  [ "$LOCK_A_RC" = 0 ] && LOCK_SUCCESS_COUNT=$((LOCK_SUCCESS_COUNT + 1))
+  [ "$LOCK_B_RC" = 0 ] && LOCK_SUCCESS_COUNT=$((LOCK_SUCCESS_COUNT + 1))
+  if [ "$LOCK_SUCCESS_COUNT" = 1 ]; then
+    ok "canonical exclusion lock permits exactly one same-key begin"
+  else
+    bad "canonical exclusion lock admitted $LOCK_SUCCESS_COUNT same-key begins (a=$LOCK_A_RC b=$LOCK_B_RC)"
+  fi
+  LOCK_A_WORKER_HEX="$(printf '%s' lock-worker-a | hex)"
+  LOCK_B_WORKER_HEX="$(printf '%s' lock-worker-b | hex)"
+  LOCK_A_LEASE_SHA="$(printf '%s' lock-token-a | sha256_stream)"
+  LOCK_B_LEASE_SHA="$(printf '%s' lock-token-b | sha256_stream)"
+  if [ -f "$WAL" ] && { grep -Fq "worker_id_hex=$LOCK_A_WORKER_HEX lease_sha256=$LOCK_A_LEASE_SHA " "$WAL" || grep -Fq "worker_id_hex=$LOCK_B_WORKER_HEX lease_sha256=$LOCK_B_LEASE_SHA " "$WAL"; }; then
+    ok "exclusion winner leaves one exact authoritative WAL"
+  else
+    bad "exclusion winner WAL is missing or mixed"
+  fi
+  if [ ! -e "$GIT_COMMON/spacedock-stage-attempt-v1/$KEY.lock" ] && [ ! -e "$RETURNED" ]; then
+    ok "exclusion lock is trap-released and creates no returned sidecar"
+  else
+    bad "exclusion lock or returned sidecar leaked"
+  fi
+fi
+
+if [ "$QUALITY_CASE" = all ] || [ "$QUALITY_CASE" = bundle-snapshot ]; then
+  reset_folder_open
+  SNAPSHOT_BUNDLE="$TMP/snapshot-caller.bundle"
+  SNAPSHOT_ORIGINAL="$TMP/snapshot-original.bundle"
+  cp "$BUNDLE" "$SNAPSHOT_BUNDLE"
+  cp "$BUNDLE" "$SNAPSHOT_ORIGINAL"
+  SNAPSHOT_HOOK_BIN="$TMP/snapshot-hook-bin"
+  SNAPSHOT_HOOK_MARKER="$TMP/snapshot-hook-fired"
+  mkdir -p "$SNAPSHOT_HOOK_BIN"
+  REAL_SHASUM="$(command -v shasum)"
+  cat > "$SNAPSHOT_HOOK_BIN/sha256sum" <<EOF
+#!/usr/bin/env bash
+if [ "\$#" = 0 ]; then
+  exec "$REAL_SHASUM" -a 256
+fi
+hook_output="\$("$REAL_SHASUM" -a 256 "\$1")" || exit \$?
+if [ ! -e "$SNAPSHOT_HOOK_MARKER" ]; then
+  printf 'caller-mutated-after-hash\n' >> "$SNAPSHOT_BUNDLE"
+  : > "$SNAPSHOT_HOOK_MARKER"
+fi
+printf '%s\n' "\$hook_output"
+EOF
+  chmod +x "$SNAPSHOT_HOOK_BIN/sha256sum"
+  (
+    cd "$REPO" || exit 1
+    PATH="$SNAPSHOT_HOOK_BIN:$PATH" bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan \
+      --lease-token="$TOKEN" --bundle="$SNAPSHOT_BUNDLE" > "$TMP/snapshot.out" 2>&1
+  )
+  SNAPSHOT_RC=$?
+  if [ -e "$SNAPSHOT_HOOK_MARKER" ] && ! cmp -s "$SNAPSHOT_ORIGINAL" "$SNAPSHOT_BUNDLE"; then
+    ok "snapshot fixture mutates caller bytes after the authoritative hash boundary"
+  else
+    bad "snapshot synchronization hook did not mutate caller bytes"
+  fi
+  if [ "$SNAPSHOT_RC" = 0 ] && cmp -s "$SNAPSHOT_ORIGINAL" "$RETURNED" &&
+    grep -Fq " state=returned fresh_continuations_used=0 returned_bundle_sha256=$(sha256_file "$RETURNED")" "$WAL"; then
+    ok "accept-return persists one validated private snapshot with matching WAL digest"
+  else
+    bad "accept-return reopened caller bundle bytes or persisted a mismatched digest (rc=$SNAPSHOT_RC)"
+  fi
+fi
+
+if [ "$QUALITY_CASE" = all ] || [ "$QUALITY_CASE" = returned-state ]; then
+  reset_folder_open
+  (
+    cd "$REPO" || exit 1
+    bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$BUNDLE" > "$TMP/returned-initial.out" 2>&1
+  )
+  RETURNED_INITIAL_RC=$?
+  RETURNED_SHA="$(sha256_file "$BUNDLE")"
+  cp "$WAL" "$TMP/returned-authoritative.wal"
+  cp "$RETURNED" "$TMP/returned-authoritative.sidecar"
+  (
+    cd "$REPO" || exit 1
+    bash "$HELPER" validate-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$BUNDLE" > "$TMP/returned-exact.out" 2>&1
+  )
+  RETURNED_EXACT_RC=$?
+  if [ "$RETURNED_INITIAL_RC" = 0 ] && [ "$RETURNED_EXACT_RC" = 0 ] &&
+    grep -Fxq "stage-attempt-v1 disposition=already-returned returned_bundle_sha256=$RETURNED_SHA" "$TMP/returned-exact.out" &&
+    cmp -s "$TMP/returned-authoritative.wal" "$WAL" && cmp -s "$TMP/returned-authoritative.sidecar" "$RETURNED"; then
+    ok "exact returned-state retry is typed, idempotent, and byte-preserving"
+  else
+    bad "exact returned-state retry is not typed already-returned (initial=$RETURNED_INITIAL_RC retry=$RETURNED_EXACT_RC)"
+  fi
+  if cmp -s "$TMP/returned-authoritative.wal" "$WAL" && cmp -s "$TMP/returned-authoritative.sidecar" "$RETURNED"; then
+    ok "exact returned-state retry preserves authoritative WAL and sidecar bytes"
+  else
+    bad "exact returned-state retry changed authoritative bytes"
+  fi
+
+  cp "$TMP/returned-authoritative.wal" "$WAL"
+  cp "$TMP/returned-authoritative.sidecar" "$RETURNED"
+  RETURNED_CONFLICT="$TMP/returned-conflict.bundle"
+  sed 's/attempt_elapsed_seconds=17/attempt_elapsed_seconds=18/' "$BUNDLE" > "$RETURNED_CONFLICT"
+  (
+    cd "$REPO" || exit 1
+    bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$RETURNED_CONFLICT" > "$TMP/returned-conflict.out" 2>&1
+  )
+  RETURNED_CONFLICT_RC=$?
+  if [ "$RETURNED_CONFLICT_RC" != 0 ] && grep -Fxq 'stage-attempt-v1[2]: conflicting returned bundle' "$TMP/returned-conflict.out" &&
+    cmp -s "$TMP/returned-authoritative.wal" "$WAL" && cmp -s "$TMP/returned-authoritative.sidecar" "$RETURNED"; then
+    ok "conflicting returned-state retry is typed and preserves authority"
+  else
+    bad "conflicting returned-state retry is not fail-closed (rc=$RETURNED_CONFLICT_RC)"
+  fi
+  if cmp -s "$TMP/returned-authoritative.wal" "$WAL" && cmp -s "$TMP/returned-authoritative.sidecar" "$RETURNED"; then
+    ok "conflicting returned-state retry preserves authoritative WAL and sidecar bytes"
+  else
+    bad "conflicting returned-state retry changed authoritative bytes"
+  fi
+
+  cp "$TMP/returned-authoritative.wal" "$WAL"
+  cp "$TMP/returned-authoritative.sidecar" "$RETURNED"
+  printf 'corrupt\n' >> "$RETURNED"
+  cp "$RETURNED" "$TMP/returned-corrupt.sidecar"
+  (
+    cd "$REPO" || exit 1
+    bash "$HELPER" validate-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$BUNDLE" > "$TMP/returned-malformed.out" 2>&1
+  )
+  RETURNED_MALFORMED_RC=$?
+  if [ "$RETURNED_MALFORMED_RC" != 0 ] && grep -Fxq 'stage-attempt-v1[2]: invalid returned state: sidecar-digest' "$TMP/returned-malformed.out" &&
+    cmp -s "$TMP/returned-authoritative.wal" "$WAL" && cmp -s "$TMP/returned-corrupt.sidecar" "$RETURNED"; then
+    ok "malformed returned state is typed and preserves observed bytes"
+  else
+    bad "malformed returned state is not distinguished from conflict (rc=$RETURNED_MALFORMED_RC)"
+  fi
+  if cmp -s "$TMP/returned-authoritative.wal" "$WAL" && cmp -s "$TMP/returned-corrupt.sidecar" "$RETURNED"; then
+    ok "malformed returned-state retry preserves the observed inconsistent bytes"
+  else
+    bad "malformed returned-state retry changed observed bytes"
+  fi
+fi
 
 exit "$FAIL"
