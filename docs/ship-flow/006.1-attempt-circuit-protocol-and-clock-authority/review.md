@@ -21,6 +21,9 @@ Risks accepted: none — all blocking findings were bounced and fixed; W10 is a 
 
 **What Almost Failed**: earlier happy-path coverage omitted common authority checks for non-passed outcomes and alternate artifact layouts.
 
+<details>
+<summary>Structured harvest and evidence boundary</summary>
+
 ## What Worked
 
 Status: captured
@@ -57,6 +60,8 @@ Clock-source override variables are test and FO-process inputs, not worker autho
 ### Verification Coverage Boundary
 
 Verify round 3 records four required claims VERIFIED and no blocking findings at evidence HEAD `2a23fcc`. Same-model adversarial review was safety-refused and the external Claude host timed out, so cross-model coverage remains honestly DEGRADED rather than being presented as complete.
+
+</details>
 
 ## Canonical Docs Update
 
@@ -129,6 +134,9 @@ duration_minutes: 4
 exact_head: `a5a60759b8599dcdf9907936a109838bd67c67f8`
 cross_review: PROCEED with no findings
 
+<details>
+<summary>Structured Science Officer judgment</summary>
+
 ### Science Officer (EM) Upward Report
 
 ```yaml
@@ -152,6 +160,8 @@ science_officer_em_upward_report:
   confidence: "high"
   fo_boundary: "FO owns review-artifact mutation, stage registration, worktree and PR lifecycle, and captain routing; EM owns this exact-head judgment and recommendation and performs no mutation."
 ```
+
+</details>
 
 ### Metrics
 
