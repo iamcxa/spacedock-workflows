@@ -103,7 +103,7 @@ repair_scope: reporting truth surface only; T1 `920d950` and T2 `5ceebf4` preser
 status: partial
 ⚠️ INCOMPLETE: the bounded feedback epoch closed T1 authority/binding findings but reached the execute circuit breaker before T2 could record and repair current-FO clock authority plus the elapsed/read concurrency disposition. No completion registration is claimed.
 feedback_started: 2026-07-22T11:01:17Z
-feedback_completed: 2026-07-22T11:27:00Z
+feedback_completed: 2026-07-22T11:26:27Z
 feedback_duration_minutes: 26
 
 - T1 durable RED checkpoints: `6271899` independently reproduced lifecycle-open, six nested completion bindings, dot-segment entity aliasing, noncanonical WAL bytes, and artifact path/OID tree gaps; `627a7c5` reproduced the artifact hex trailing-LF alias found by quality review.
