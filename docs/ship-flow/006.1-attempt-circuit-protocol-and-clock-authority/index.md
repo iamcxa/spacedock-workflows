@@ -11,7 +11,7 @@ worktree: .worktrees/spacedock-ensign-006.1-attempt-circuit-protocol-and-clock-a
 started: 2026-07-22T05:53:21Z
 status: execute
 stage_outputs:
-    plan: plan.md
+  plan: plan.md
 ---
 
 Inherited slice of the captain-approved W1-W4 prerequisite after EM route=narrow at parent HEAD e800e54a68d06ef5bbdddbf238398b85a61b2645.
