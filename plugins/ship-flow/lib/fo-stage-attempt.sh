@@ -380,6 +380,7 @@ stage_attempt_elapsed() {
     stage_attempt_error 2 'invalid elapsed request'; return 2
   fi
   stage_attempt_paths
+  stage_attempt_lock_acquire || return $?
   stage_attempt_load_wal no || return $?
   stage_attempt_boot_identity || { stage_attempt_error 5 "$STAGE_ATTEMPT_CLOCK_REASON"; return 5; }
   boot_sha="$(printf '%s' "$STAGE_ATTEMPT_BOOT_VALUE" | stage_attempt_sha256_stream)"
@@ -561,6 +562,17 @@ stage_attempt_validate_bundle() {
   if [ "$RECEIPT_OUTCOME" = passed ]; then
     stage_attempt_uint_gt "$RECEIPT_ELAPSED" "$WAL_BUDGET" || { stage_attempt_error 2 'invalid returned bundle: elapsed-budget-evaluation'; return 2; }
     [ "$STAGE_ATTEMPT_UINT_GT" = no ] || { stage_attempt_error 2 'invalid returned bundle: elapsed-budget-exceeded'; return 2; }
+    stage_attempt_boot_identity || { stage_attempt_error 2 "invalid returned bundle: $STAGE_ATTEMPT_CLOCK_REASON"; return 2; }
+    actual_sha="$(printf '%s' "$STAGE_ATTEMPT_BOOT_VALUE" | stage_attempt_sha256_stream)"
+    [ "$actual_sha" = "$WAL_BOOT_SHA" ] || { stage_attempt_error 2 'invalid returned bundle: boot-identity-mismatch'; return 2; }
+    stage_attempt_monotonic_now || { stage_attempt_error 2 'invalid returned bundle: monotonic-clock-unavailable'; return 2; }
+    stage_attempt_monotonic_eval "$STAGE_ATTEMPT_NOW_NS" "$WAL_MONOTONIC_NS" "$WAL_BUDGET" || { stage_attempt_error 2 'invalid returned bundle: monotonic-clock-unavailable'; return 2; }
+    [ "$STAGE_ATTEMPT_CLOCK_EVAL" != regression ] || { stage_attempt_error 2 'invalid returned bundle: monotonic-regression'; return 2; }
+    case "$STAGE_ATTEMPT_CLOCK_EVAL" in
+      *' expired=no') ;;
+      *' expired=yes') stage_attempt_error 2 'invalid returned bundle: elapsed-budget-exceeded'; return 2 ;;
+      *) stage_attempt_error 2 'invalid returned bundle: elapsed-budget-evaluation'; return 2 ;;
+    esac
   fi
 }
 
