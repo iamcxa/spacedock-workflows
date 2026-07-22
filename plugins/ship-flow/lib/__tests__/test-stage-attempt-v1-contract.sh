@@ -145,7 +145,7 @@ printf 'stage-attempt-v1 entity_stage_key=%s entity_path_hex=%s stage=plan stage
   "$(printf 'plan.md' | hex)" "$(git -C "$REPO" rev-parse HEAD:docs/test-flow/item/plan.md)" "$COMPLETION_SHA" "$TERMINAL_ID" "$COMPLETION_LINE" > "$BUNDLE"
 (
   cd "$REPO" || exit 1
-  STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=2000000000 \
+  STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=18000000000 \
     bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$BUNDLE" > "$TMP/return.out" 2> "$TMP/return.err"
 )
 RC=$?
@@ -504,7 +504,7 @@ EOF
   chmod +x "$SNAPSHOT_HOOK_BIN/sha256sum"
   (
     cd "$REPO" || exit 1
-    PATH="$SNAPSHOT_HOOK_BIN:$PATH" STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=2000000000 \
+    PATH="$SNAPSHOT_HOOK_BIN:$PATH" STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=18000000000 \
       bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan \
         --lease-token="$TOKEN" --bundle="$SNAPSHOT_BUNDLE" > "$TMP/snapshot.out" 2>&1
   )
@@ -526,7 +526,7 @@ if [ "$QUALITY_CASE" = all ] || [ "$QUALITY_CASE" = returned-state ]; then
   reset_folder_open
   (
     cd "$REPO" || exit 1
-    STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=2000000000 \
+    STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=18000000000 \
       bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$BUNDLE" > "$TMP/returned-initial.out" 2>&1
   )
   RETURNED_INITIAL_RC=$?

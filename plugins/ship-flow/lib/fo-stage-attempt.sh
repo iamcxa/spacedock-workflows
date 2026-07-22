@@ -451,7 +451,7 @@ stage_attempt_completion_line_ok() {
 }
 
 stage_attempt_validate_bundle() {
-  local final_byte first_line line_count expected_line frame_begin completion_line frame_end actual_sha bound_ref observed_completion expected_terminal_id artifact_path artifact_repo_path expected_artifact_oid
+  local final_byte first_line line_count expected_line frame_begin completion_line frame_end actual_sha bound_ref observed_completion expected_terminal_id artifact_path artifact_repo_path expected_artifact_oid fo_elapsed
   local -a fields
   final_byte="$(LC_ALL=C tail -c 1 "$STAGE_ATTEMPT_BUNDLE" | od -An -t u1 | tr -d ' ')"
   [ "$final_byte" = 10 ] || { stage_attempt_error 2 'invalid returned bundle: grammar'; return 2; }
@@ -569,7 +569,11 @@ stage_attempt_validate_bundle() {
     stage_attempt_monotonic_eval "$STAGE_ATTEMPT_NOW_NS" "$WAL_MONOTONIC_NS" "$WAL_BUDGET" || { stage_attempt_error 2 'invalid returned bundle: monotonic-clock-unavailable'; return 2; }
     [ "$STAGE_ATTEMPT_CLOCK_EVAL" != regression ] || { stage_attempt_error 2 'invalid returned bundle: monotonic-regression'; return 2; }
     case "$STAGE_ATTEMPT_CLOCK_EVAL" in
-      *' expired=no') ;;
+      *' expired=no')
+        fo_elapsed="${STAGE_ATTEMPT_CLOCK_EVAL#elapsed_seconds=}"
+        fo_elapsed="${fo_elapsed%% expired=*}"
+        [ "$RECEIPT_ELAPSED" = "$fo_elapsed" ] || { stage_attempt_error 2 'invalid returned bundle: elapsed-authority-mismatch'; return 2; }
+        ;;
       *' expired=yes') stage_attempt_error 2 'invalid returned bundle: elapsed-budget-exceeded'; return 2 ;;
       *) stage_attempt_error 2 'invalid returned bundle: elapsed-budget-evaluation'; return 2 ;;
     esac
