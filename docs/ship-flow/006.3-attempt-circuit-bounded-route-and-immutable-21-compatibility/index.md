@@ -18,4 +18,3 @@ Source of truth: parent design D4 and pinned #21 commit d939cf9ba5794640a5830440
 Scope: implement one fresh continuation after typed or legacy partial/interrupted; blocked/failed immediate return; second continuation request idempotently route=return reason=attempt-count-exhausted before lease, attempt, envelope, or dispatch; legacy-unscoped #21 seed=5580 cumulative seconds without rewriting evidence. Out: #21 allocator/product diff changes, generic scheduling, breaker waiver, integration prose/schema.
 
 Done: route and #21 suites GREEN with side-effect counters; first typed #21 continuation dispatches exactly once, exhausted request dispatches zero; all three hashes and product diff remain exact; reviewed explicit-path commit.
-
