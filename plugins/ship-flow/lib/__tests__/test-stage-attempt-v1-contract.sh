@@ -23,7 +23,7 @@ case "$QUALITY_CASE" in
   *) printf 'FAIL unknown STAGE_ATTEMPT_QUALITY_CASE: %s\n' "$QUALITY_CASE"; exit 1 ;;
 esac
 case "$FEEDBACK_CASE" in
-  none|lifecycle-open|completion-cross-binding|canonical-entity|canonical-wal|artifact-tree-binding) ;;
+  none|lifecycle-open|completion-cross-binding|canonical-entity|canonical-wal|artifact-tree-binding|canonical-ref|derived-attempt|artifact-all-outcomes) ;;
   *) printf 'FAIL unknown STAGE_ATTEMPT_FEEDBACK_CASE: %s\n' "$FEEDBACK_CASE"; exit 1 ;;
 esac
 
@@ -206,7 +206,8 @@ sed -e 's/attempt_elapsed_seconds=17/attempt_elapsed_seconds=18/' \
     "$BUNDLE" | sed '/^completion-v1-begin$/,$d' > "$PARTIAL"
 (
   cd "$REPO" || exit 1
-  bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$PARTIAL" > "$TMP/partial.out" 2>&1
+  STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=19000000000 \
+    bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" --bundle="$PARTIAL" > "$TMP/partial.out" 2>&1
 )
 RC=$?
 if [ "$RC" = 0 ] && cmp -s "$PARTIAL" "$RETURNED" && grep -q 'completion_receipt_sha256=none ' "$RETURNED"; then ok "non-passed folder accepts none with no completion frame"; else bad "non-passed folder no-frame acceptance (rc=$RC)"; fi
@@ -242,7 +243,8 @@ printf 'stage-attempt-v1 entity_stage_key=%s entity_path_hex=%s stage=plan stage
   "$FLAT_KEY" "$FLAT_ENTITY_HEX" "$HEAD_OID" "$REF_HEX" "$HEAD_OID" "$HEAD_OID" "$(printf flat-worker | hex)" "$(printf flat-token | sha256_stream)" "$FLAT_ATTEMPT_ID" "$STARTED" "$(printf flat-plan.md | hex)" "$(git -C "$REPO" rev-parse HEAD:docs/test-flow/flat-plan.md)" "$FLAT_TERMINAL_ID" > "$FLAT_BUNDLE"
 (
   cd "$REPO" || exit 1
-  bash "$HELPER" accept-return --entity="$FLAT_ENTITY" --stage=plan --lease-token=flat-token --bundle="$FLAT_BUNDLE" > "$TMP/flat.return.out" 2>&1
+  STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=22000000000 \
+    bash "$HELPER" accept-return --entity="$FLAT_ENTITY" --stage=plan --lease-token=flat-token --bundle="$FLAT_BUNDLE" > "$TMP/flat.return.out" 2>&1
 )
 ACCEPT_RC=$?
 if [ "$RC" = 0 ] && [ "$ACCEPT_RC" = 0 ] && cmp -s "$FLAT_BUNDLE" "$FLAT_RETURNED"; then ok "flat entity accepts none with no completion frame"; else bad "flat no-frame acceptance (begin=$RC accept=$ACCEPT_RC)"; fi
@@ -418,6 +420,118 @@ case "$FEEDBACK_CASE" in
         encoding) sed "s/ artifact_path_hex=$(printf 'plan.md' | hex) / artifact_path_hex=$(printf 'plan.md\n' | hex) /" "$BUNDLE" > "$ARTIFACT_BUNDLE" ;;
       esac
       feedback_validate_rejection "artifact-tree-binding-$KIND" 'stage-attempt-v1[2]: invalid returned bundle: artifact-binding' "$ARTIFACT_BUNDLE"
+    done
+    ;;
+  canonical-ref)
+    INVALID_ENTITY='docs/test-flow/ref-item/index.md'
+    INVALID_REF='refs/heads/topic..invalid'
+    INVALID_KEY="$(printf 'stage-attempt-v1-key\0%s\0plan' "$INVALID_ENTITY" | sha256_stream)"
+    INVALID_WAL="$GIT_COMMON/spacedock-stage-attempt-v1/$INVALID_KEY.wal"
+    INVALID_RETURNED="$GIT_COMMON/spacedock-stage-attempt-v1/$INVALID_KEY.returned"
+    (
+      cd "$REPO" || exit 1
+      STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=5000000000 \
+        bash "$HELPER" begin --entity="$INVALID_ENTITY" --stage=plan --stage-run-id="$HEAD_OID" \
+          --ref="$INVALID_REF" --attempt-before="$HEAD_OID" --worker-id=invalid-ref-worker \
+          --lease-token=invalid-ref-token --attempt-ordinal=0 --fresh-continuations-used=0 \
+          --attempt-started-at="$STARTED" > "$TMP/canonical-ref.out" 2>&1
+    )
+    RC=$?
+    if [ "$RC" != 0 ] && grep -Fxq 'stage-attempt-v1[2]: invalid ref' "$TMP/canonical-ref.out"; then
+      ok "canonical-ref rejects a prefix-shaped Git-invalid branch ref"
+    else
+      bad "canonical-ref admits a Git-invalid branch ref (rc=$RC output=$(tr '\n' ' ' < "$TMP/canonical-ref.out"))"
+    fi
+    if [ ! -e "$INVALID_WAL" ] && [ ! -e "$INVALID_RETURNED" ]; then
+      ok "canonical-ref creates no WAL or returned sidecar"
+    else
+      bad "canonical-ref created authority state before Git ref validation"
+    fi
+    ;;
+  derived-attempt)
+    reset_folder_open
+    FOREIGN_ATTEMPT_ID='sa1-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
+    DERIVED_WAL="$TMP/derived-attempt.wal"
+    DERIVED_BUNDLE="$TMP/derived-attempt.bundle"
+    sed "s/ attempt_id=$ATTEMPT_ID / attempt_id=$FOREIGN_ATTEMPT_ID /" "$WAL" > "$DERIVED_WAL"
+    mv "$DERIVED_WAL" "$WAL"
+    FOREIGN_TERMINAL_ID="sev1-$(printf 'stage-attempt-v1-terminal\0%s\0%s\0%s' "$KEY" "$HEAD_OID" "$FOREIGN_ATTEMPT_ID" | sha256_stream)"
+    sed -e "s/ attempt_id=$ATTEMPT_ID / attempt_id=$FOREIGN_ATTEMPT_ID /" \
+        -e "s/ terminal_event_id=$TERMINAL_ID$/ terminal_event_id=$FOREIGN_TERMINAL_ID/" \
+        "$BUNDLE" > "$DERIVED_BUNDLE"
+    cp "$WAL" "$TMP/derived-attempt.before.wal"
+    (
+      cd "$REPO" || exit 1
+      STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=18000000000 \
+        bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" \
+          --bundle="$DERIVED_BUNDLE" > "$TMP/derived-attempt.out" 2>&1
+    )
+    RC=$?
+    if [ "$RC" != 0 ] && grep -Fxq 'stage-attempt-v1[2]: invalid attempt WAL' "$TMP/derived-attempt.out"; then
+      ok "derived-attempt rejects a coordinated well-formed foreign attempt identity"
+    else
+      bad "derived-attempt does not re-derive identity from canonical inputs (rc=$RC output=$(tr '\n' ' ' < "$TMP/derived-attempt.out"))"
+    fi
+    if cmp -s "$TMP/derived-attempt.before.wal" "$WAL" && [ ! -e "$RETURNED" ]; then
+      ok "derived-attempt preserves WAL bytes and leaves no returned sidecar"
+    else
+      bad "derived-attempt admitted coordinated WAL/receipt mutation"
+    fi
+    ;;
+  artifact-all-outcomes)
+    FOREIGN_BLOB="$(printf 'foreign all-outcome artifact bytes\n' | git -C "$REPO" hash-object -w --stdin)"
+    for KIND in folder-path folder-oid; do
+      reset_folder_open
+      ARTIFACT_BUNDLE="$TMP/artifact-all-outcomes-$KIND.bundle"
+      case "$KIND" in
+        folder-path) sed "s/ artifact_path_hex=$(printf 'plan.md' | hex) / artifact_path_hex=$(printf 'other.md' | hex) /" "$PARTIAL" > "$ARTIFACT_BUNDLE" ;;
+        folder-oid) sed "s/ artifact_oid=$(git -C "$REPO" rev-parse HEAD:docs/test-flow/item/plan.md) / artifact_oid=$FOREIGN_BLOB /" "$PARTIAL" > "$ARTIFACT_BUNDLE" ;;
+      esac
+      cp "$WAL" "$TMP/$KIND.before.wal"
+      (
+        cd "$REPO" || exit 1
+        STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=19000000000 \
+          bash "$HELPER" accept-return --entity="$ENTITY" --stage=plan --lease-token="$TOKEN" \
+            --bundle="$ARTIFACT_BUNDLE" > "$TMP/$KIND.out" 2>&1
+      )
+      RC=$?
+      if [ "$RC" != 0 ] && grep -Fxq 'stage-attempt-v1[2]: invalid returned bundle: artifact-binding' "$TMP/$KIND.out"; then
+        ok "$KIND rejects foreign artifact coordinates"
+      else
+        bad "$KIND admits foreign artifact coordinates (rc=$RC output=$(tr '\n' ' ' < "$TMP/$KIND.out"))"
+      fi
+      if cmp -s "$TMP/$KIND.before.wal" "$WAL" && [ ! -e "$RETURNED" ]; then
+        ok "$KIND preserves WAL bytes and leaves no returned sidecar"
+      else
+        bad "$KIND mutated authority state"
+      fi
+    done
+    for KIND in flat-path flat-oid; do
+      cp "$FLAT_OPEN" "$FLAT_WAL"
+      rm -f "$FLAT_RETURNED"
+      ARTIFACT_BUNDLE="$TMP/artifact-all-outcomes-$KIND.bundle"
+      case "$KIND" in
+        flat-path) sed "s/ artifact_path_hex=$(printf 'flat-plan.md' | hex) / artifact_path_hex=$(printf 'other.md' | hex) /" "$FLAT_BUNDLE" > "$ARTIFACT_BUNDLE" ;;
+        flat-oid) sed "s/ artifact_oid=$(git -C "$REPO" rev-parse HEAD:docs/test-flow/flat-plan.md) / artifact_oid=$FOREIGN_BLOB /" "$FLAT_BUNDLE" > "$ARTIFACT_BUNDLE" ;;
+      esac
+      cp "$FLAT_WAL" "$TMP/$KIND.before.wal"
+      (
+        cd "$REPO" || exit 1
+        STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT" STAGE_ATTEMPT_MONOTONIC_NS=22000000000 \
+          bash "$HELPER" accept-return --entity="$FLAT_ENTITY" --stage=plan --lease-token=flat-token \
+            --bundle="$ARTIFACT_BUNDLE" > "$TMP/$KIND.out" 2>&1
+      )
+      RC=$?
+      if [ "$RC" != 0 ] && grep -Fxq 'stage-attempt-v1[2]: invalid returned bundle: artifact-binding' "$TMP/$KIND.out"; then
+        ok "$KIND rejects foreign artifact coordinates"
+      else
+        bad "$KIND admits foreign artifact coordinates (rc=$RC output=$(tr '\n' ' ' < "$TMP/$KIND.out"))"
+      fi
+      if cmp -s "$TMP/$KIND.before.wal" "$FLAT_WAL" && [ ! -e "$FLAT_RETURNED" ]; then
+        ok "$KIND preserves WAL bytes and leaves no returned sidecar"
+      else
+        bad "$KIND mutated authority state"
+      fi
     done
     ;;
 esac

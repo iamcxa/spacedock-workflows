@@ -9,7 +9,7 @@ ok() { printf 'OK %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; FAIL=1; }
 
 case "$CLOCK_CASE" in
-  full|nonterminal|return-budget|return-authority|elapsed-sync) ;;
+  full|nonterminal|return-budget|return-authority|return-outcome-authority|elapsed-sync) ;;
   *) printf 'FAIL unknown STAGE_ATTEMPT_CLOCK_CASE: %s\n' "$CLOCK_CASE"; exit 1 ;;
 esac
 
@@ -23,7 +23,8 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/stage-attempt-clock.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
 if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
-  [ "$CLOCK_CASE" = return-authority ] || [ "$CLOCK_CASE" = elapsed-sync ]; then
+  [ "$CLOCK_CASE" = return-authority ] || [ "$CLOCK_CASE" = return-outcome-authority ] ||
+  [ "$CLOCK_CASE" = elapsed-sync ]; then
   CASE_REPO=''
   CASE_ENTITY=''
   CASE_BOOT=''
@@ -247,7 +248,7 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
     local head common wal returned history open_wal key attempt_id terminal_id
     local entity_hex ref_hex worker_hex lease_sha artifact_oid completion_line completion_sha
     local boundary_bundle over_bundle ref_before status_before boundary_rc over_rc observed_state sidecar_state
-    local fo_over_rc mismatch_rc mismatch_bundle
+    local fo_over_rc mismatch_rc mismatch_bundle outcome outcome_bundle outcome_rc
     mkdir -p "$repo/docs/clock-flow/$label"
     printf '%s\n' '---' "id: $label" "status: $stage" 'stage_outputs: {}' '---' > "$repo/$entity"
     printf '# %s\n' "$stage" > "$repo/$artifact"
@@ -367,6 +368,31 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
         bad "$stage FO monotonic authority over worker receipt (rc=$fo_over_rc)"
       fi
     fi
+    if [ "$CLOCK_CASE" = return-outcome-authority ]; then
+      for outcome in partial blocked failed; do
+        cp "$open_wal" "$wal"
+        rm -f "$returned"
+        outcome_bundle="$TMP/$stage-return-budget.$outcome-elapsed-mismatch.bundle"
+        sed -e "s/attempt_elapsed_seconds=$budget/attempt_elapsed_seconds=$((budget - 1))/" \
+            -e "s/outcome=passed/outcome=$outcome/" \
+            -e "s/completion_receipt_sha256=$completion_sha/completion_receipt_sha256=none/" \
+            "$boundary_bundle" | sed '/^completion-v1-begin$/,$d' > "$outcome_bundle"
+        (
+          cd "$repo" || exit 1
+          STAGE_ATTEMPT_BOOT_ID_SOURCE="$boot" \
+            STAGE_ATTEMPT_MONOTONIC_NS=$((1000000000 + budget * 1000000000)) \
+            bash "$HELPER" accept-return --entity="$entity" --stage="$stage" --lease-token="$token" --bundle="$outcome_bundle"
+        ) > "$TMP/$stage-return-budget.$outcome-elapsed-mismatch.out" 2>&1
+        outcome_rc=$?
+        if [ "$outcome_rc" != 0 ] &&
+          grep -Fqx 'stage-attempt-v1[2]: invalid returned bundle: elapsed-authority-mismatch' "$TMP/$stage-return-budget.$outcome-elapsed-mismatch.out" &&
+          cmp -s "$open_wal" "$wal" && [ ! -e "$returned" ]; then
+          ok "$stage $outcome return elapsed must equal the FO monotonic observation without mutation"
+        else
+          bad "$stage $outcome return can diverge from FO monotonic authority (rc=$outcome_rc)"
+        fi
+      done
+    fi
     if [ ! -e "$history" ] && [ "$ref_before" = "$(git -C "$repo" rev-parse refs/heads/main)" ] &&
       [ "$status_before" = "$(git -C "$repo" status --porcelain=v1 --untracked-files=all)" ]; then
       ok "$stage return-budget cases create no terminal history, CAS, route, continuation, or worktree mutation"
@@ -376,7 +402,7 @@ if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
   }
 
   if [ "$CLOCK_CASE" = nonterminal ] || [ "$CLOCK_CASE" = return-budget ] ||
-    [ "$CLOCK_CASE" = return-authority ]; then
+    [ "$CLOCK_CASE" = return-authority ] || [ "$CLOCK_CASE" = return-outcome-authority ]; then
     return_budget_case plan 1200
     return_budget_case execute 1800
   fi
