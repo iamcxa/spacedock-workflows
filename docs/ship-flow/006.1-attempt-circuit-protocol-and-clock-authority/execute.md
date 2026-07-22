@@ -1,0 +1,83 @@
+# Execute — Attempt Circuit Protocol and Clock Authority
+
+The bounded W1 protocol and nonterminal clock-authority slice is implemented in two serial commits. Exact attempt/return bytes, all FO bindings, strict passed-return budgets, portable monotonic authority, and fail-closed same-boot resume are GREEN; durable interruption, history/replay, continuation/route, integration wiring, scheduler, and `#21` remain deliberately deferred.
+
+## Execute Dispatch Manifest
+
+| Task | Parallel Group | Depends On | Owned Paths | Integration Owner | Dispatch Mode |
+|---|---|---|---|---|---|
+| T1 | serial | none | `fo-stage-attempt.sh`, `test-stage-attempt-v1-contract.sh` | executer@006.1 | serial |
+| T2 | serial | T1 | `fo-stage-attempt.sh`, `test-stage-attempt-clock.sh` | executer@006.1 | serial |
+
+## Execution Log
+
+| Task | Wave | Model | Status | Files | Verification | Commit |
+|---|---|---|---|---|---|---|
+| T1 exact protocol | W1 | Codex | DONE | helper + contract test | contract 40/40; 7 binding selectors; grammar, lock, snapshot, returned-state, and terminal-ID negatives | `920d950` |
+| T2 nonterminal clock | W2 | Codex | DONE | helper + clock test | nonterminal 26/26; return-budget 6/6; unsigned BigInt resume/elapsed | `5ceebf4` |
+
+### TDD Evidence
+
+- T1 RED: missing-helper baseline exited 1; after baseline GREEN, each of seven foreign-binding selectors independently exited 1 at its named assertion while preserving WAL/no sidecar. Review REDs additionally reproduced noncanonical completion bytes, double-begin admission, caller-bundle replacement, unreadable returned state, and a non-derived terminal event ID. Removing the corresponding validation makes these tests fail.
+- T2 RED: protocol baseline stayed 38/38 while focused nonterminal mode exposed ten missing budget/lifecycle/refusal assertions. Review REDs reproduced signed-range clock misclassification and passed returns at 1201/1801 seconds. Removing BigInt clock/budget authority makes these tests fail.
+- GREEN/REFACTOR: final contract 40/40, nonterminal 26/26, return-budget 6/6, Bash syntax and ShellCheck clean, and `completion-v1.sh` unchanged.
+
+## Issues Found
+
+- WARNING: `.claude/ship-flow/skill-routing.yaml` is absent. This matches the plan's legacy routing warning; resolver reported no folder guidance and the root context boundary remained authoritative.
+- RESOLVED: task spec/quality reviews found exact-byte grammar, exclusion-lock, immutable snapshot, returned-WAL, terminal-ID, signed-uint, and passed-budget gaps. Every blocking finding received an independent RED, minimal fix, and re-review approval.
+- OBSERVATION: the full standalone shell suite ran 138 tests: 133 passed. Four failures are the plan-deferred full clock/history/route/`#21` surfaces owned by 006.2-006.4; `test-merged-pr-closeout-reconciler.sh` separately hit its 90-second cap after many passing subcases. Neither observation was treated as W1 success or absorbed into scope.
+- Deviation from plan: none. Review-derived hardening stayed inside the original T1/T2 owned paths and fixed design constraints.
+
+## Critical-Pass Self-Check Findings
+
+- No SQL/data, LLM trust, shell injection, race/concurrency, or enum/value-completeness blocker remains. The same-key lock, private snapshot, exact lifecycle IDs, closed state/digest pairs, and typed clock refusal directly cover the applicable categories.
+
+## Self-Check
+
+- typecheck: N/A — Bash/Node helper surface; Bash syntax PASS
+- lint: PASS — ShellCheck on helper and both focused tests
+- unit tests: PASS — W1 focused 40/40 + 26/26 + 6/6; Node 79/79
+- qa-only: N/A — non-UI entity
+- critical-pass lite: PASS
+
+## Knowledge Captures
+
+- D2-candidate: monotonic values use unsigned decimal grammar, so Bash signed arithmetic is never authoritative; Node BigInt owns comparison, subtraction, floor division, and expiry.
+
+## Execute UAT
+
+| DC | Verify Procedure | Result | Evidence |
+|---|---|---|---|
+| W1-DC1 | baseline/default contract plus seven named binding selectors | PASS | default 40/40; all selectors GREEN; invalid returns preserve WAL/no sidecar |
+| W1-DC2 | `STAGE_ATTEMPT_CLOCK_CASE=nonterminal ...` and `return-budget` | PASS | nonterminal 26/26; boundary 1200/1800 accepted; 1201/1801 typed rejected |
+| W1-DC3 | frozen SHA plus completion review/frontmatter/advance-stage | PASS | SHA `a2d15b8281995e9bad82a472030b18ba0b427a29194d41f1729603ceb6f64f10`; compatibility matrices GREEN |
+| W1-DC4 | invariants, Node tests, version triple, no-dangling | PASS | C1-C18; Node 79/79; 0.9.0; 8-pattern no-dangling PASS |
+
+## Execute Report
+
+status: passed
+stage_cost: 7 Codex worker/reviewer dispatches plus controller verification
+tasks_summary: 2 planned, 2 completed, 0 blocked
+knowledge_captures: 0 confirmed, 1 candidate
+started: 2026-07-22T07:05:00Z
+completed: 2026-07-22T10:05:41Z
+
+### Metrics
+
+duration_minutes: 181
+iteration_count: 5
+task_count: 2
+tasks_done: 2
+tasks_blocked: 0
+commit_count: 3
+
+### Hand-off to Verify
+
+- commits: implementation range `git log d63e184..5ceebf4`; T1=`920d950`, T2=`5ceebf4`; required execute-artifact commit follows
+- dc_status: W1-DC1 PASS (40/40); W1-DC2 PASS (26/26 + 6/6); W1-DC3 PASS (frozen SHA); W1-DC4 PASS (C1-C18, Node 79/79, version/no-dangling)
+- deviations: none; review findings hardened the exact planned contracts without adding surfaces
+- render_fidelity_evidence: N/A — non-UI entity
+- skills_needed_used: T1/T2 used test, best-practices, and test-driven-development; execute also used requesting/receiving review and verification-before-completion
+- context_read_receipts: none — resolver reported no `folder_guidance_files`; root instructions applied
+- deferred: full `interrupt`/history/replay to 006.2; continuation/route to 006.3; wiring/scheduler/`#21` to 006.4

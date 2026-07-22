@@ -68,3 +68,16 @@ Route judgment: **PROCEED** for independent SO/EM re-review of the bounded W1 pl
 ### Summary
 
 Route judgment: **PROCEED** for independent SO/EM re-review of the repaired W1 plan. Execute must still return **NARROW** before durable interruption/history/continuation/route work and **BLOCKED** if clean-lineage C14 or another assigned repository gate regresses.
+
+## Stage Report: execute
+
+- DONE: Deliver only the exact 006.1 W1 protocol and nonterminal clock-authority slice with independently observed RED-before-GREEN evidence for T1 and T2.
+  T1=`920d950` and T2=`5ceebf4`; controller-observed REDs precede final contract 40/40, nonterminal 26/26, and return-budget 6/6 GREEN.
+- DONE: Preserve completion-v1 bytes and keep durable interruption, history/replay, continuation accounting, route policy, integration wiring, scheduler, and #21 out of scope.
+  Frozen SHA remains `a2d15b8281995e9bad82a472030b18ba0b427a29194d41f1729603ceb6f64f10`; full-suite deferred failures are named in `execute.md`, with no owning path added.
+- DONE: Land one explicit-path commit per serial task, produce truthful execute.md evidence, and return NARROW/BLOCKED instead of absorbing 006.2-006.4 behavior.
+  Implementation history contains exactly two commits with T1/T2 path ownership, followed only by the required execute artifact/report commit; cross-review returned PROCEED.
+
+### Summary
+
+Execute completed the bounded W1 protocol and nonterminal clock-authority slice with exact-byte, concurrency, unsigned-clock, and strict-budget hardening. The handoff remains NARROW at the 006.1 boundary: all durable terminal/history/continuation/route/integration behavior stays with 006.2-006.4.
