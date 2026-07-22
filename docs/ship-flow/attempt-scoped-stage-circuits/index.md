@@ -110,3 +110,18 @@ Revalidated the immutable plan and ledger without changing technical content,
 topology, implementation, or workflow state. Every fresh gate passed within
 this continuation's own 20-minute budget, so the plan gate is repaired to
 passed while the expired attempt remains durable partial history.
+
+## Stage Report: execute
+
+- DONE: Validate the committed five-record TDD ledger, then execute W0/T0 first: create all five test suites, prove each named behavior RED independently (never syntax/setup-only and never hidden by shell short-circuit), review it, and commit only its owned paths with an explicit pathspec.
+  Ledger validation passed; five syntax-clean, ShellCheck-clean suites fail independently on named missing-helper behavior, passed spec and quality review after two repair rounds, and landed alone in `a575a1f`.
+- SKIPPED: Execute T1 -> T2 -> T3 serially under one integration owner. Before each production edit, rerun and record its focused RED; minimally mature the single helper through exact protocol/clock, crash-safe return-history-replay, and bounded/#21 routing while preserving completion-v1 bytes, pinned #21 hashes, unrelated dirt, and every specified fault boundary.
+  The 30-minute execute circuit expired after reviewed T0; no production edit began, completion-v1 and #21 remain untouched, and T1-T3 return unstarted.
+- SKIPPED: Execute T4 only after T3 is reviewed and committed: add plan/execute-only lifecycle/skill/schema wiring, run focused plus full regression/invariant/version/no-dangling gates, perform independent task and execute cross-reviews, and emit a truthful execute artifact/receipt. If complete crash coverage or full gates cannot fit the three-day appetite, or this attempt hits its circuit, stop with durable partial/return evidence rather than cutting tests, parallelizing shared-helper waves, expanding scope, or claiming completion.
+  T3 was not started, so T4 and execute cross-review were not eligible; this partial receipt preserves the exact serial boundary instead of cutting tests or claiming completion.
+
+### Summary
+
+Completed and committed the reviewed W0 RED contract with exact path ownership.
+The attempt then reached its 30-minute circuit, so all production waves remain
+truthfully unstarted and execute returns partial without workflow advancement.
