@@ -41,7 +41,7 @@ D3 history/CAS/replay and D4 exhaustion/#21 constraints remain fixed but are own
 | W1-DC3 completion compatibility | `test "$(shasum -a 256 plugins/ship-flow/lib/completion-v1.sh | awk '{print $1}')" = a2d15b8281995e9bad82a472030b18ba0b427a29194d41f1729603ceb6f64f10 && bash plugins/ship-flow/lib/__tests__/test-completion-v1-review.sh && bash plugins/ship-flow/lib/__tests__/test-completion-v1-frontmatter.sh && bash plugins/ship-flow/lib/__tests__/test-advance-stage.sh` | Frozen implementation bytes and existing completion lifecycle matrices remain unchanged. |
 | W1-DC4 repository gates | `CI=true bash plugins/ship-flow/bin/check-invariants.sh && node --test plugins/ship-flow/bin/*.test.mjs && bash scripts/check-version-triple.sh && bash scripts/check-no-dangling.sh` | All four assigned CI gates pass from repository root. |
 
-## Canonical Doc Actions
+### Canonical Doc Actions
 
 | Doc | Action | Source | Rationale |
 |---|---|---|---|
