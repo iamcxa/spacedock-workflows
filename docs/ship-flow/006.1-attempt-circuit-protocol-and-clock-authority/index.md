@@ -121,3 +121,16 @@ Feedback round 1 is intentionally partial: T1 is repaired with durable evidence,
 ### Summary
 
 006.1 execute feedback is complete and ready for FO completion reconciliation. Current FO monotonic authority owns returned elapsed, reads synchronize with attempt transitions, and no 006.2-006.4 work was started.
+
+## Stage Report: execute
+
+- DONE: Reproduce verify round-2 blockers R2-G1, R2-TD1, B8, and B9 in durable test-only commit `4232ddb` before production edits.
+  Four independently selectable RED surfaces prove invalid ref admission, non-derived attempt identity, all-outcome elapsed divergence, and non-passed/flat artifact authority gaps.
+- DONE: Close the four W1 authority gaps in `32a3804` and rerun focused, compatibility, Bash 3.2, static, and repository evidence.
+  Contract 40/40, prior feedback 109/109, new feedback 82/82, clock 26/26 + 6/6 + 10/10 + 1/1 + 12/12, completion compatibility, C1-C18, Node 79/79, version, and no-dangling are GREEN.
+- DONE: Obtain fresh exact-head spec, quality, and cross-review and publish the bounded round-2 execute receipt.
+  Spec and quality returned APPROVED; cross-review returned PROCEED with SO/EM route proceed/high confidence. W10 is nonblocking at the trusted FO process/environment and raw-lease boundary.
+
+### Summary
+
+006.1 execute feedback round 2 is complete and ready for FO completion reconciliation. The exact diff remains three W1 paths; 006.2-006.4 were not run, changed, or started.
