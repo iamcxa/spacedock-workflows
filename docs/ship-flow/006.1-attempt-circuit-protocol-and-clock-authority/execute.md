@@ -97,3 +97,27 @@ repair_scope: reporting truth surface only; T1 `920d950` and T2 `5ceebf4` preser
 - fresh repository gates: invariants C1-C18; Node 79/79; version triple 0.9.0; no-dangling 8 patterns
 - scope hygiene: epoch began clean; final `git diff --check` and explicit two-path status are recorded before the receipt-only commit
 - deferred/not run: default/full clock + history (006.2), route (006.3), and attempt-scoped `#21` (006.4)
+
+## Verify Feedback Round 1 — Execute Epoch
+
+status: partial
+⚠️ INCOMPLETE: the bounded feedback epoch closed T1 authority/binding findings but reached the execute circuit breaker before T2 could record and repair current-FO clock authority plus the elapsed/read concurrency disposition. No completion registration is claimed.
+feedback_started: 2026-07-22T11:01:17Z
+feedback_completed: 2026-07-22T11:27:00Z
+feedback_duration_minutes: 26
+
+- T1 durable RED checkpoints: `6271899` independently reproduced lifecycle-open, six nested completion bindings, dot-segment entity aliasing, noncanonical WAL bytes, and artifact path/OID tree gaps; `627a7c5` reproduced the artifact hex trailing-LF alias found by quality review.
+- T1 GREEN: `371c2f9` closes all T1 findings. Five focused selectors report 109 OK / 0 FAIL after the encoding addition; default contract reports 40/40; completion review/frontmatter/advance-stage report 6/6, 44/44, and 103/103; frozen completion-v1 SHA remains `a2d15b8281995e9bad82a472030b18ba0b427a29194d41f1729603ceb6f64f10`.
+- T1 reviews: spec APPROVED; quality NEEDS_FIX on noncanonical artifact hex, then resolved by the second RED/GREEN cycle. A fresh quality re-review remains required in the continuation epoch.
+- T2 pending: B2 authoritative FO monotonic return timing and W1 elapsed/read synchronization were not edited or claimed. Resume from `371c2f9`; create executable RED before the next production change.
+- Scope: no 006.2-006.4 implementation or tests were run or changed.
+
+### Feedback-Round Metrics
+
+duration_minutes: 26
+iteration_count: 2
+task_count: 2
+tasks_done: 1
+tasks_blocked: 0
+tasks_pending: 1
+commit_count: 3

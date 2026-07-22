@@ -95,3 +95,16 @@ Execute completed the bounded W1 protocol and nonterminal clock-authority slice 
 ### Summary
 
 The W1 product result remains intact, but the original 181-minute execute receipt is process-incomplete and no longer claims `passed`. This bounded repair publishes a separately timed, evidence-backed receipt without completion registration or verify advancement.
+
+## Stage Report: execute
+
+- DONE: Turn verify feedback B1 and B3-B7 into independently executable, durable RED surfaces before production repair.
+  Test-only checkpoints `6271899` and `627a7c5` preserve the failing authority and artifact-encoding cases; helper GREEN is `371c2f9`.
+- DONE: Close only the 006.1 T1 lifecycle, identity, exact-byte, nested-receipt, and artifact-tree bindings with spec and quality review.
+  Focused T1 selectors and compatibility matrices are GREEN; completion-v1 bytes remain frozen. Quality's trailing-LF alias finding received its own RED/GREEN cycle.
+- SKIPPED: Repair B2 current-FO monotonic return timing and disposition the W1 elapsed/read concurrency warning in this epoch.
+  The execute circuit breaker was reached before a truthful T2 RED/GREEN cycle could complete. Resume from `371c2f9`; no completion registration or verify advancement occurred.
+
+### Summary
+
+Feedback round 1 is intentionally partial: T1 is repaired with durable evidence, while T2 remains pending in 006.1. No 006.2-006.4 scope was started.
