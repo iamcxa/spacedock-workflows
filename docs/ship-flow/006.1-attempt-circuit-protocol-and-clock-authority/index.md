@@ -16,6 +16,7 @@ stage_outputs:
   verify: verify.md
   review: review.md
   ship: ship.md
+pr: "#93"
 ---
 
 Inherited slice of the captain-approved W1-W4 prerequisite after EM route=narrow at parent HEAD e800e54a68d06ef5bbdddbf238398b85a61b2645.
