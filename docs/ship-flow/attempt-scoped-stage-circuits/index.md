@@ -34,11 +34,22 @@ Out: redesigning #21's allocator plan, changing product code in its preserved di
 - DONE: Ground the proposal in fresh L0 code research, current #21 partial-receipt evidence, canonical docs, the captain articulation trail, and a bounded architecture/contract impact with explicit exclusions.
   Fresh L0 cites the 20-minute breaker, exact completion lease/receipt seam, schema gap, 32/61-minute #21 receipts, debrief crash warnings, canonical skips, and schema-domain architecture intent.
 - DONE: Complete appetite-fit, critical-assumption verification, PM-skill receipts, domain/contract routing, and independent cross-review; return a captain-facing Layer 1 gate with a truthful Stage Report, without approving or advancing it.
-  Appetite fit is 77%; PM delegates record valid unavailable/inline fallbacks; schema validation passed; review warnings were incorporated and the captain Bet remains unfilled.
+  Appetite fit is 77%; PM delegates record valid unavailable/inline fallbacks; schema validation passed; review warnings were incorporated, and the captain's W1–W4 approval and Bet are recorded verbatim.
 
 ### Summary
 
 Shaped a two-slice prerequisite that makes plan/execute attempts explicit,
 lease-bound, replay-safe, and bounded without changing #21 or introducing a
 scheduler. The artifact stops at the captain gate: frontmatter remains `shape`,
-the Bet is unfilled, and no gate state or product code was changed.
+the captain approved W1–W4 and supplied the Bet, and no stage transition,
+dispatch, worktree, or product-code change was made.
+
+## Captain Bet (gate approval 2026-07-22)
+
+**Bet substance — captain verbatim**
+
+> 我希望在 ship 後下一次 dogfood 自我實作時就會立即看到更 agnet-native 的行為，如果沒有則代表方法論不對。
+
+**Approval token — captain verbatim**
+
+> 同意：這個 part 的「更 agent-native」限定為 W1–W4；approve

@@ -30,7 +30,7 @@ refactoring the whole dispatch/state model?
 
 ### Why this scope
 
-This slice extends the completion seam; a scheduler and #21 redesign cannot solve the typed-attempt gap.
+This extends the completion seam; schedulers and #21 redesign cannot supply typed attempts.
 
 ### Will get
 
@@ -41,11 +41,17 @@ This slice extends the completion seam; a scheduler and #21 redesign cannot solv
 
 ### Won't get
 
-- A scheduler, cross-workflow coordination, split-root work, timer migration, or redesign or waiver of #21.
+- No scheduler, cross-workflow coordination, split-root work, timer migration, or #21 redesign/waiver.
 
-### Captain Bet (mandatory before approve)
+### Captain Bet (approved 2026-07-22)
 
-`Bet: when this ships, captain expects [observable outcome] within [time window]. If not, this pitch was wrong about [Layer 1 line].`
+**Bet (verbatim)**
+
+> 我希望在 ship 後下一次 dogfood 自我實作時就會立即看到更 agnet-native 的行為，如果沒有則代表方法論不對。
+
+**Approval token (verbatim)**
+
+> 同意：這個 part 的「更 agent-native」限定為 W1–W4；approve
 
 ## Layer 2 — Detail
 
@@ -247,7 +253,7 @@ All four schema choices remain design-owned; no planner may choose them silently
 
 - status: passed
 - reviewer_verdict: PROCEED
-- captain_gate: pending
+- captain_gate: approved 2026-07-22
 - stage_cost: one fresh L0 fallback plus one independent cross-review
 - appetite_fit: 2.3/3 days (77%, passed)
 - canonical_sync: ARCHITECTURE decision intent required; PRODUCT and root README deliberate skips
