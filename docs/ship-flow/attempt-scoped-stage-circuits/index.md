@@ -94,3 +94,19 @@ Published a mechanically valid, RED-first five-task plan with independently
 observable RED suites, exact fault ordering, and pinned #21 evidence. Late
 review evidence is durable, but this expired attempt returns partial to the
 First Officer without stage advancement.
+
+## Stage Report: plan (cycle 2)
+
+- DONE: Treat exact commit 48c814bc86dfc1650d6763a09ad4ac38a744f309 as immutable plan input: recompute the pinned #21 hashes and rerun the persisted-ledger, C4/C8/C15, readiness, hand-off, D-reference, design-import, placeholder, and diff gates without redoing research or changing task topology.
+  The five-record ledger reports `status=pass`; all named gates pass, 15 unique owned paths remain the M upper bound, and the #21 hashes reproduce as `23aa88f…`, `c6cd94e…`, and `cf0ee9f…`.
+- DONE: Obtain a fresh independent semantic cross-review of the exact committed plan and ledger, explicitly checking all D1-D4 fault ordering, independently observable REDs, plan/execute-only scope, 15-path M upper bound, and the hard three-day return condition.
+  A fresh read-only reviewer returned `PROCEED`, 7/7 factors pass, `skill-coverage: PASS`, and the coaching condition is to return narrow rather than cut crash coverage if the exact fault matrix threatens three days.
+- DONE: Preserve the expired 21-minute attempt as truthful partial history. If and only if every fresh gate passes within this continuation's own 20-minute window, append exact continuation evidence and repair the current Plan Report and Stage Report to passed; otherwise return partial/blocked without entering execute.
+  The prior partial report is unchanged; this continuation ran 2026-07-22T04:14:32Z–04:23:00Z (508 seconds, 9 minutes), appends a passed Plan Report and this passed cycle, and leaves frontmatter/status plus execute transition to FO.
+
+### Summary
+
+Revalidated the immutable plan and ledger without changing technical content,
+topology, implementation, or workflow state. Every fresh gate passed within
+this continuation's own 20-minute budget, so the plan gate is repaired to
+passed while the expired attempt remains durable partial history.
