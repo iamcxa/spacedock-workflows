@@ -92,10 +92,10 @@ Ratio: not available
 
 ## Review Report
 
-status: pending-live-canonical-gate
+status: passed
 stage_cost: local review orchestration, one canonical-doc planner, and one fresh cross-review; token accounting unavailable
 verify_result: PASS — 4 required claims VERIFIED, 0 unresolved; Tier B and degraded external coverage preserved
-canonical_sync_status: pending executable checker after artifact write
+canonical_sync_status: PASS — live checker at pending artifact HEAD `7dbbec5` passes 7/7 required outcomes
 contribution_contract: PASS — explicit `origin/main`, plugin-default source checker, no waiver
 exact_range_diff_check: PASS — `origin/main...a5a6075` exits 0 after bounded scaffold EOF hygiene
 w10_disposition: nonblocking trusted-FO environment clarification; no 006.2 scope transfer
@@ -104,8 +104,8 @@ cross_review_verdict: PROCEED at exact clean HEAD `a5a6075`
 cross_review_coaching: keep PR readiness anchored to the complete merge-base-to-HEAD range, including inherited scaffold paths
 harvest_gate: exempt (forward-only)
 started_at: 2026-07-22T15:38:26Z
-completed_at: pending live canonical gate
-duration_minutes: pending live canonical gate
+completed_at: 2026-07-22T15:42:26Z
+duration_minutes: 4
 
 ### Initial Review Epoch — Partial / INCOMPLETE
 
@@ -122,10 +122,10 @@ iteration_count: 2
 
 ### Final Exact-Head Continuation
 
-status: pending-live-canonical-gate
+status: passed
 started_at: 2026-07-22T15:38:26Z
-completed_at: pending live canonical gate
-duration_minutes: pending live canonical gate
+completed_at: 2026-07-22T15:42:26Z
+duration_minutes: 4
 exact_head: `a5a60759b8599dcdf9907936a109838bd67c67f8`
 cross_review: PROCEED with no findings
 
@@ -155,8 +155,8 @@ science_officer_em_upward_report:
 
 ### Metrics
 
-status: pending-live-canonical-gate
-duration_minutes: pending live canonical gate
+status: passed
+duration_minutes: 4
 iteration_count: 3
 canonical_docs_updated_count: 1
 canonical_docs_skipped_count: 3
@@ -165,7 +165,7 @@ pr_number: not-created
 ### Hand-off to Ship
 
 - `pr_url`: not-created — repo-local captain approval is required before push or PR creation
-- `review_verdict`: PENDING live canonical gate after exact-head cross-review PROCEED
+- `review_verdict`: PROCEED
 - `captain_ack_stubs`: none; plan stub flags are empty
 - `roadmap_row_ready`: false — parent umbrella remains open through 006.2-006.4
 - `umbrella_closeout`: no — 006 is not closing in this child
