@@ -56,3 +56,16 @@ Checklist accounting: **3 DONE, 0 SKIPPED, 0 FAILED**.
 ### Summary
 
 The reviewed plan and persisted TDD ledger completed successful completion reconciliation at `ae470adf`. The executable hand-off covers one bounded fresh plan attempt through typed caller-owned authority and focused integration proof, with changed surfaces verified first and the Phase A exclusions preserved.
+
+## Stage Report: verify
+
+- DONE: Prove AC-1 and AC-2 at the real plan caller with independent focused checks: exactly one fresh attempt, dispatch, authoritative return, terminal contribution, and typed caller-owned authority across the lifecycle seam.
+  Fresh `test-stage-wiring.sh --plan-attempt` produced exact 1/1/1 counts plus one history duration, one byte-exact sidecar, and clean private state; adjacent authority/fault probes all exited 0.
+- DONE: Verify completion lifecycle and faults, materially affected attempt contract and clock selectors, C14/history invariants, frozen completion-v1 bytes, and diff cleanliness without repeating the full repository suite already green at 0b7d2133.
+  Focused lifecycle/fault, attempt grammar, five retained clock-selector, C14/corpus, Bash syntax, ShellCheck, frozen-byte, and diff checks passed; only report/state commits follow `0b7d2133`.
+- DONE: Judge scope/minimality: treat clock cleanup and dormant-future test deletions as inventory hygiene; reject any crash/replay, recovery, execute generalization, scheduler, dispatcher, #21 behavior, sibling, or automatic-wave follow-up scope.
+  The exact nine-path execute set contains only four owned seam surfaces, the execute report, and four authorized test-inventory changes; excluded product paths are untouched.
+
+### Summary
+
+Independent bounded verification passed AC-1 through AC-3 with no current-scope defect. `verify.md` records PROCEED, explicit non-UI runtime-UAT not-applicability, reused full-suite evidence at unchanged product/test HEAD `0b7d2133`, and the dispatch-required no-fan-out panel degradation.
