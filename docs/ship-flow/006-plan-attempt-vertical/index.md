@@ -40,3 +40,18 @@ Make one real plan caller consume the bounded attempt seam from fresh dispatch t
 ### Summary
 
 The already-validated Phase 0 trivial-pass design completed successful completion reconciliation at `230531e5`. The hand-off remains bounded to one real plan caller and preserves the `548b338` protocol/clock evidence without widening into recovery, execute, scheduler, dispatcher, `#21`, or sibling scope.
+
+## Stage Report: plan
+
+Checklist accounting: **3 DONE, 0 SKIPPED, 0 FAILED**.
+
+- DONE: Produce an executable `plan.md` for one real plan caller consuming one bounded fresh attempt end to end, with typed caller-owned authority and a focused integration test.
+  Evidence: `plan.md` defines one serial T1 across the real FO caller, completion lifecycle, attempt helper, and `test-stage-wiring.sh --plan-attempt`; `tdd-ledger.txt` and `tdd-ledger.jsonl` persist `status=pass records=1` for that RED/GREEN contract.
+- DONE: Name exact owned files and changed-surface RED/GREEN checks first; reserve one full suite for final integrated HEAD and classify unrelated failures without widening scope.
+  Evidence: `plan.md` names the four exact owned paths, focused RED/GREEN and refactor commands, then reserves the all-gates command for final integrated HEAD with unrelated failures recorded and deferred.
+- DONE: Include Canonical Doc Actions and preserve the Phase A boundary: no recovery, execute generalization, scheduler, dispatcher, `#21`, XFAIL/future-RED, sibling, or unrelated repair work.
+  Evidence: `plan.md` carries the three-row Canonical Doc Actions table and an explicit NARROW boundary excluding every deferred surface above.
+
+### Summary
+
+The reviewed plan and persisted TDD ledger completed successful completion reconciliation at `ae470adf`. The executable hand-off covers one bounded fresh plan attempt through typed caller-owned authority and focused integration proof, with changed surfaces verified first and the Phase A exclusions preserved.
