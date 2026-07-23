@@ -88,6 +88,9 @@ render_fidelity_status: not-applicable — `affects_ui: false`.
 <!-- section:science-officer-em-upward-report -->
 ### Science Officer (EM) Upward Report
 
+<details>
+<summary>Structured EM judgment</summary>
+
 ```yaml
 science_officer_em_upward_report:
   em_judgment: "The real plan caller now closes one fresh typed attempt end to end without widening the lifecycle."
@@ -98,6 +101,8 @@ science_officer_em_upward_report:
   confidence: high
   fo_boundary: "FO owns completion receipt and stage transition; verifier owns this technical verdict."
 ```
+
+</details>
 <!-- /section:science-officer-em-upward-report -->
 
 <!-- section:verdict -->
