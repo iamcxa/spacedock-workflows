@@ -8,18 +8,20 @@ affects_ui: false
 harvest_required: true
 time_budget: 4h
 layout: folder
-worktree: .worktrees/spacedock-ensign-006-plan-attempt-vertical
+worktree:
 started: 2026-07-23T00:13:19Z
-status: ship
+status: done
 stage_outputs:
-  shape: shape.md
-  design: design.md
-  plan: plan.md
-  execute: execute.md
-  verify: verify.md
-  review: review.md
-  ship: ship.md
+    shape: shape.md
+    design: design.md
+    plan: plan.md
+    execute: execute.md
+    verify: verify.md
+    review: review.md
+    ship: ship.md
 pr: "#94"
+verdict: PASSED
+completed: 2026-07-23T05:07:22Z
 ---
 
 ### Vertical Slice
