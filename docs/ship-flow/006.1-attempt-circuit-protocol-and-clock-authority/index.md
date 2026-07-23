@@ -4,7 +4,7 @@ title: "Attempt circuit protocol and clock authority"
 pattern: shaped-child
 parent_pitch: "006"
 external_id: "ASC-W1-PROTOCOL-CLOCK"
-depends-on: []
+depends-on: ["006-execute-attempt-generalization"]
 affects_ui: false
 layout: folder
 worktree: .worktrees/spacedock-ensign-006.1-attempt-circuit-protocol-and-clock-authority-lineage

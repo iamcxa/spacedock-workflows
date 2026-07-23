@@ -4,7 +4,7 @@ title: "Attempt circuit bounded route and immutable #21 compatibility"
 pattern: shaped-child
 parent_pitch: "006"
 external_id: "ASC-W3-ROUTE-21"
-depends-on: ["006.2"]
+depends-on: ["006.2", "006-execute-attempt-generalization"]
 affects_ui: false
 layout: folder
 status: plan

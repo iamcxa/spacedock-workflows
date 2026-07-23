@@ -4,7 +4,7 @@ title: "Attempt circuit plan-execute integration and full regression"
 pattern: shaped-child
 parent_pitch: "006"
 external_id: "ASC-W4-INTEGRATION"
-depends-on: ["006.3"]
+depends-on: ["006.3", "006-execute-attempt-generalization"]
 affects_ui: false
 layout: folder
 status: plan

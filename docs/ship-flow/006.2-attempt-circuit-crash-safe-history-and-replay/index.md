@@ -4,7 +4,7 @@ title: "Attempt circuit crash-safe history and replay"
 pattern: shaped-child
 parent_pitch: "006"
 external_id: "ASC-W2-HISTORY-REPLAY"
-depends-on: ["006.1"]
+depends-on: ["006.1", "006-execute-attempt-generalization"]
 affects_ui: false
 layout: folder
 status: plan
