@@ -31,13 +31,11 @@ Make one real plan caller consume the bounded attempt seam from fresh dispatch t
 
 ## Stage Report: design
 
-- DONE: Emit the ship-design Phase 0 trivial-pass artifact and hand-off without inventing new contract decisions.
-  `design.md` records `status: trivial-pass`, unconditional `PROCEED`, and the canonical single-field `design-skipped: true` hand-off.
-- FAILED: Register design completion through the canonical completion helper and preserve the first-child-only scope.
-  Completion registration was not attempted because `SHIP_FLOW_COMPLETION_LEASE_FILE`, `SHIP_FLOW_COMPLETION_LEASE_TOKEN`, and `SHIP_FLOW_COMPLETION_WORKER_ID` are absent; no lease was fabricated.
-- DONE: Report focused validation and a durable commit; do not touch implementation, tests, PRs, or sibling entities.
-  Focused design-artifact validators and the final changed-path audit cover only this child; the durable commit is reported in the worker completion signal.
+- DONE: Register the already-validated Phase 0 trivial-pass design through completion-v1 at the repaired eligible child HEAD.
+  Completion registration published the canonical `design.md` stage output at `230531e5` after the bounded frontmatter repair restored exact eligibility.
+- DONE: Keep the one-plan-caller boundary explicit; preserve `548b338` protocol/clock evidence without pulling recovery, execute, scheduler, dispatcher, `#21`, or sibling scope.
+  The durable receipt repair changed only this child index; implementation, tests, product code, lease state, and sibling entities remain outside this report update.
 
 ### Summary
 
-The design stage took the Phase 0 trivial-pass fast path because the shaped child has no UI, domain, design-required, contract-decision-required, or open-contract-decision signal. It emitted only the minimal Plan hand-off and stopped before plan; the missing completion lease is the sole registration blocker.
+The already-validated Phase 0 trivial-pass design completed successful completion reconciliation at `230531e5`. The hand-off remains bounded to one real plan caller and preserves the `548b338` protocol/clock evidence without widening into recovery, execute, scheduler, dispatcher, `#21`, or sibling scope.
