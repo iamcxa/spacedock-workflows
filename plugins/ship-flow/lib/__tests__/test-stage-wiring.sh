@@ -37,7 +37,7 @@ if ! type fo_completion_begin >/dev/null 2>&1 || ! type fo_completion_checkpoint
   exit 1
 fi
 COMPLETION_LIFECYCLE_ONLY=0
-case "${1:-}" in --completion-lifecycle|--completion-lifecycle-faults) COMPLETION_LIFECYCLE_ONLY=1 ;; esac
+case "${1:-}" in --completion-lifecycle|--completion-lifecycle-faults|--plan-attempt) COMPLETION_LIFECYCLE_ONLY=1 ;; esac
 
 assert_ship_completion_wiring() {
   if type fo_completion_begin >/dev/null 2>&1 && type fo_completion_checkpoint >/dev/null 2>&1; then
@@ -219,6 +219,199 @@ EOF
   )
   echo "$dir"
 }
+
+if [ "${1:-}" = --plan-attempt ]; then
+  echo "=== Production plan attempt lifecycle seam ==="
+  if ! type fo_plan_attempt_begin >/dev/null 2>&1 || ! type fo_plan_attempt_checkpoint >/dev/null 2>&1; then
+    echo "FAIL production plan-attempt lifecycle functions unavailable"
+    exit 1
+  fi
+
+  SHIP_SKILL="$REPO_ROOT/plugins/ship-flow/skills/ship/SKILL.md"
+  FO_DISPATCH_SECTION="$(awk '
+    /^### Completion-v1 FO dispatch seam \(mandatory\)$/ { capture=1 }
+    capture && /^### / && !/^### Completion-v1 FO dispatch seam \(mandatory\)$/ { exit }
+    capture { print }
+  ' "$SHIP_SKILL")"
+  FO_DISPATCH_BLOCK="$(printf '%s\n' "$FO_DISPATCH_SECTION" | awk '
+    /^```bash$/ { in_code=1; next }
+    in_code && /^```$/ { exit }
+    in_code { print }
+  ')"
+  PLAN_CALLER_BRANCH="$(printf '%s\n' "$FO_DISPATCH_BLOCK" | awk '
+    /^[[:space:]]*plan\)$/ { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*;;[[:space:]]*$/ { exit }
+  ')"
+  COMPLETION_CALLER_BRANCH="$(printf '%s\n' "$FO_DISPATCH_BLOCK" | awk '
+    /^[[:space:]]*design\|execute\|verify\|review\|ship\)$/ { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*;;[[:space:]]*$/ { exit }
+  ')"
+  PLAN_ENV_TOKEN="\$FO_PLAN_ATTEMPT_ENV_BLOCK"
+  COMPLETION_ENV_TOKEN="\$FO_COMPLETION_ENV_BLOCK"
+  PLAN_LABELS="$(printf '%s\n' "$FO_DISPATCH_BLOCK" | grep -Ec '^[[:space:]]*plan\)[[:space:]]*$' || true)"
+  COMPLETION_LABELS="$(printf '%s\n' "$FO_DISPATCH_BLOCK" | grep -Ec '^[[:space:]]*design\|execute\|verify\|review\|ship\)[[:space:]]*$' || true)"
+  if [ "$PLAN_LABELS" = 1 ] && \
+     [ "$(printf '%s\n' "$PLAN_CALLER_BRANCH" | grep -Ec '^[[:space:]]*fo_plan_attempt_begin[[:space:]]' || true)" = 1 ] && \
+     [ "$(printf '%s\n' "$PLAN_CALLER_BRANCH" | grep -Fc "$PLAN_ENV_TOKEN" || true)" = 1 ] && \
+     [ "$(printf '%s\n' "$PLAN_CALLER_BRANCH" | grep -Ec '^[[:space:]]*fo_plan_attempt_checkpoint[[:space:]]' || true)" = 1 ] && \
+     ! printf '%s\n' "$PLAN_CALLER_BRANCH" | grep -Eq 'fo_completion_(begin|checkpoint)' && \
+     ! printf '%s\n' "$PLAN_CALLER_BRANCH" | grep -Fq "$COMPLETION_ENV_TOKEN"; then
+    echo "OK ship plan caller uses only the bounded plan-attempt lifecycle"
+  else
+    echo "FAIL ship plan caller routing is not the exact bounded plan-attempt lifecycle"; FAIL=1
+  fi
+  if [ "$COMPLETION_LABELS" = 1 ] && \
+     [ "$(printf '%s\n' "$COMPLETION_CALLER_BRANCH" | grep -Ec '^[[:space:]]*fo_completion_begin[[:space:]]' || true)" = 1 ] && \
+     [ "$(printf '%s\n' "$COMPLETION_CALLER_BRANCH" | grep -Fc "$COMPLETION_ENV_TOKEN" || true)" = 1 ] && \
+     [ "$(printf '%s\n' "$COMPLETION_CALLER_BRANCH" | grep -Ec '^[[:space:]]*fo_completion_checkpoint[[:space:]]' || true)" = 1 ] && \
+     ! printf '%s\n' "$COMPLETION_CALLER_BRANCH" | grep -Eq 'fo_plan_attempt_(begin|checkpoint)' && \
+     ! printf '%s\n' "$COMPLETION_CALLER_BRANCH" | grep -Fq "$PLAN_ENV_TOKEN"; then
+    echo "OK ship non-plan callers retain only the bounded completion lifecycle"
+  else
+    echo "FAIL ship non-plan caller routing is not the exact bounded completion lifecycle"; FAIL=1
+  fi
+  if printf '%s\n' "$FO_DISPATCH_SECTION" | grep -Fq 'Sequence: begin; prepend env; dispatch; checkpoint the verbatim worker return; then separate Contract 1.'; then
+    echo "OK ship caller keeps Contract 1 separate after lifecycle checkpoint"
+  else
+    echo "FAIL ship caller sequence does not keep Contract 1 separate after lifecycle checkpoint"; FAIL=1
+  fi
+
+  BEGIN_FAULT_TMP="$(setup_fo_completion_fixture)"
+  BEGIN_FAULT_ENTITY=docs/test-wf/example-stage-wiring/index.md
+  sed -i.bak 's/^status: shape$/status: plan/' "$BEGIN_FAULT_TMP/$BEGIN_FAULT_ENTITY"
+  rm -f "$BEGIN_FAULT_TMP/$BEGIN_FAULT_ENTITY.bak"
+  (cd "$BEGIN_FAULT_TMP" && git add -- "$BEGIN_FAULT_ENTITY" && git commit -qm "advance: begin-fault entering plan")
+  if (
+    cd "$BEGIN_FAULT_TMP" || exit 1
+    printf '%s\n' '11111111-2222-3333-4444-555555555555' > .git/plan-attempt.boot-id
+    # shellcheck disable=SC2030,SC2031 # each disposable-repo case owns its clock environment
+    export STAGE_ATTEMPT_BOOT_ID_SOURCE="$BEGIN_FAULT_TMP/.git/plan-attempt.boot-id"
+    # shellcheck disable=SC2030,SC2031 # each disposable-repo case owns its clock environment
+    export STAGE_ATTEMPT_MONOTONIC_NS=1000000000
+    fo_plan_attempt_begin "$BEGIN_FAULT_ENTITY" ensign-plan-fixture invalid-start >/dev/null 2>&1
+    rc=$?
+    gitdir="$(git rev-parse --absolute-git-dir)"
+    private_count="$(find "$gitdir/spacedock-stage-attempt-v1" -type f \( -name '*.wal' -o -name '*.returned' \) 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$rc" = 2 ] && [ ! -e "$gitdir/completion-v1.lease" ] && [ "$private_count" = 0 ]
+  ); then
+    echo "OK rejected plan-attempt begin preserves rc and releases only its exact delegated lease"
+  else
+    echo "FAIL rejected plan-attempt begin leaked or masked its exact delegated lease"; FAIL=1
+  fi
+  rm -rf "$BEGIN_FAULT_TMP"
+
+  TERMINAL_FAULT_TMP="$(setup_fo_completion_fixture)"
+  TERMINAL_FAULT_ENTITY=docs/test-wf/example-stage-wiring/index.md
+  sed -i.bak 's/^status: shape$/status: plan/' "$TERMINAL_FAULT_TMP/$TERMINAL_FAULT_ENTITY"
+  rm -f "$TERMINAL_FAULT_TMP/$TERMINAL_FAULT_ENTITY.bak"
+  (cd "$TERMINAL_FAULT_TMP" && git add -- "$TERMINAL_FAULT_ENTITY" && git commit -qm "advance: terminal-fault entering plan")
+  if (
+    cd "$TERMINAL_FAULT_TMP" || exit 1
+    printf '%s\n' '11111111-2222-3333-4444-555555555555' > .git/plan-attempt.boot-id
+    # shellcheck disable=SC2030,SC2031 # each disposable-repo case owns its clock environment
+    export STAGE_ATTEMPT_BOOT_ID_SOURCE="$TERMINAL_FAULT_TMP/.git/plan-attempt.boot-id"
+    # shellcheck disable=SC2030,SC2031 # each disposable-repo case owns its clock environment
+    export STAGE_ATTEMPT_MONOTONIC_NS=1000000000
+    fo_plan_attempt_begin "$TERMINAL_FAULT_ENTITY" ensign-plan-fixture 2026-07-23T01:00:00Z >/dev/null || exit
+    receipt="$(bash "$LIB_DIR/advance-stage.sh" \
+      --entity="$TERMINAL_FAULT_ENTITY" --new-status=plan --stage-name=plan --stage-file=plan.md \
+      --if-hash="$(sha256_of "$TERMINAL_FAULT_ENTITY")" \
+      --commit-as='plan(terminal-fault): register completion' \
+      --lease-file="$SHIP_FLOW_COMPLETION_LEASE_FILE" --lease-token="$SHIP_FLOW_COMPLETION_LEASE_TOKEN" \
+      --worker-id="$SHIP_FLOW_COMPLETION_WORKER_ID")" || exit
+    export STAGE_ATTEMPT_MONOTONIC_NS=8000000000
+    fo_plan_attempt_checkpoint "$receipt" invalid-finish >/dev/null 2>&1
+    rc=$?
+    gitdir="$(git rev-parse --absolute-git-dir)"
+    wal_count="$(find "$gitdir/spacedock-stage-attempt-v1" -type f -name '*.wal' 2>/dev/null | wc -l | tr -d ' ')"
+    returned_count="$(find "$gitdir/spacedock-stage-attempt-v1" -type f -name '*.returned' 2>/dev/null | wc -l | tr -d ' ')"
+    tracked_count="$(find docs/test-wf/example-stage-wiring -maxdepth 1 -type f -name 'attempt-return-v1.*.receipt' | wc -l | tr -d ' ')"
+    [ "$rc" = 2 ] && [ "$wal_count" = 1 ] && [ "$returned_count" = 1 ] &&
+      [ "$tracked_count" = 0 ] && [ ! -e docs/test-wf/example-stage-wiring/attempt-history-v1.log ]
+  ); then
+    echo "OK terminal helper failure preserves exact rc and authoritative return evidence"
+  else
+    echo "FAIL terminal helper failure rc/evidence was masked or discarded"; FAIL=1
+  fi
+  rm -rf "$TERMINAL_FAULT_TMP"
+
+  TMP="$(setup_fo_completion_fixture)"
+  ENTITY_REL=docs/test-wf/example-stage-wiring/index.md
+  ENTITY="$TMP/$ENTITY_REL"
+  DISPATCH_COUNT="$TMP/.git/plan-attempt.dispatch-count"
+  : > "$DISPATCH_COUNT"
+  BOOT_ID="$TMP/.git/plan-attempt.boot-id"
+  printf '%s\n' '11111111-2222-3333-4444-555555555555' > "$BOOT_ID"
+  sed -i.bak 's/^status: shape$/status: plan/' "$ENTITY"
+  rm -f "$ENTITY.bak"
+  (cd "$TMP" && git add -- "$ENTITY_REL" && git commit -qm "advance: example-stage-wiring entering plan")
+
+  PLAN_OUTPUT="$({
+    cd "$TMP" || exit 1
+    # shellcheck disable=SC2030,SC2031 # success case owns its disposable-repo clock environment
+    export STAGE_ATTEMPT_BOOT_ID_SOURCE="$BOOT_ID"
+    # shellcheck disable=SC2030,SC2031 # success case owns its disposable-repo clock environment
+    export STAGE_ATTEMPT_MONOTONIC_NS=1000000000
+    fo_plan_attempt_begin "$ENTITY_REL" ensign-plan-fixture 2026-07-23T01:00:00Z || exit
+    printf 'dispatch\n' >> "$DISPATCH_COUNT"
+    receipt="$(bash "$LIB_DIR/advance-stage.sh" \
+      --entity="$ENTITY_REL" \
+      --new-status=plan \
+      --stage-name=plan \
+      --stage-file=plan.md \
+      --if-hash="$(sha256_of "$ENTITY_REL")" \
+      --commit-as='plan(example-stage-wiring): register completion' \
+      --lease-file="$SHIP_FLOW_COMPLETION_LEASE_FILE" \
+      --lease-token="$SHIP_FLOW_COMPLETION_LEASE_TOKEN" \
+      --worker-id="$SHIP_FLOW_COMPLETION_WORKER_ID")" || exit
+    export STAGE_ATTEMPT_MONOTONIC_NS=8000000000
+    fo_plan_attempt_checkpoint "$receipt" 2026-07-23T01:00:07Z
+  } 2>&1)" || {
+    echo "FAIL production plan-attempt lifecycle: $PLAN_OUTPUT"
+    rm -rf "$TMP"
+    exit 1
+  }
+
+  DISPATCHES="$(wc -l < "$DISPATCH_COUNT" | tr -d ' ')"
+  ACCEPTED="$(printf '%s\n' "$PLAN_OUTPUT" | grep -c '^stage-attempt-v1 disposition=returned ' || true)"
+  TERMINAL="$(printf '%s\n' "$PLAN_OUTPUT" | grep -c '^stage-attempt-v1 disposition=terminal ' || true)"
+  if [ "$DISPATCHES" = 1 ] && [ "$ACCEPTED" = 1 ] && [ "$TERMINAL" = 1 ]; then
+    echo "OK plan attempt has exactly 1 dispatch, 1 authoritative return, and 1 terminal contribution"
+  else
+    echo "FAIL plan attempt counts dispatch=$DISPATCHES accepted=$ACCEPTED terminal=$TERMINAL output=$PLAN_OUTPUT"
+    FAIL=1
+  fi
+
+  HISTORY="$TMP/docs/test-wf/example-stage-wiring/attempt-history-v1.log"
+  TRACKED_COUNT="$(find "$TMP/docs/test-wf/example-stage-wiring" -maxdepth 1 -type f -name 'attempt-return-v1.sev1-*.receipt' | wc -l | tr -d ' ')"
+  TRACKED="$(find "$TMP/docs/test-wf/example-stage-wiring" -maxdepth 1 -type f -name 'attempt-return-v1.sev1-*.receipt' -print -quit)"
+  RETURNED_SHA="$(printf '%s\n' "$PLAN_OUTPUT" | sed -n 's/^stage-attempt-v1 disposition=returned returned_bundle_sha256=\([0-9a-f][0-9a-f]*\)$/\1/p')"
+  if [ -f "$HISTORY" ] && [ "$(wc -l < "$HISTORY" | tr -d ' ')" = 1 ] && \
+     [ "$(grep -c ' elapsed_seconds=7 cumulative_elapsed_seconds=7 ' "$HISTORY" || true)" = 1 ]; then
+    echo "OK plan attempt records one terminal-history line and one duration"
+  else
+    echo "FAIL plan attempt terminal history/duration"; FAIL=1
+  fi
+  if [ "$TRACKED_COUNT" = 1 ] && [ -n "$TRACKED" ] && [ "$(sha256_of "$TRACKED")" = "$RETURNED_SHA" ]; then
+    echo "OK plan attempt tracks one exact returned-bundle sidecar"
+  else
+    echo "FAIL plan attempt tracked sidecar count=$TRACKED_COUNT expected_sha=$RETURNED_SHA"; FAIL=1
+  fi
+
+  GIT_COMMON="$(cd "$TMP" && git rev-parse --git-common-dir)"
+  case "$GIT_COMMON" in /*) ;; *) GIT_COMMON="$TMP/$GIT_COMMON" ;; esac
+  PRIVATE_COUNT="$(find "$GIT_COMMON/spacedock-stage-attempt-v1" -type f \( -name '*.wal' -o -name '*.returned' \) 2>/dev/null | wc -l | tr -d ' ')"
+  PLAN_OUTPUT_COUNT="$(grep -cE '^[[:space:]]+plan:[[:space:]]*plan\.md$' "$ENTITY" || true)"
+  if [ "$PRIVATE_COUNT" = 0 ] && grep -q '^status: plan$' "$ENTITY" && [ "$PLAN_OUTPUT_COUNT" = 1 ]; then
+    echo "OK plan attempt cleans private authority and preserves one plan stage output at plan status"
+  else
+    echo "FAIL plan attempt cleanup/status private=$PRIVATE_COUNT plan_outputs=$PLAN_OUTPUT_COUNT"; FAIL=1
+  fi
+  rm -rf "$TMP"
+  exit "$FAIL"
+fi
 
 # shellcheck disable=SC2329 # invoked indirectly through assert_exit/eval below
 run_c14() {

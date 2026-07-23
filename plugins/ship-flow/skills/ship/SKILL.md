@@ -124,16 +124,27 @@ Then dispatch each stage to its assigned teammate via SendMessage (hot-context ~
 
 ### Completion-v1 FO dispatch seam (mandatory)
 
-For `design|plan|execute|verify|review|ship`, call `fo_completion_begin`, prepend `$FO_COMPLETION_ENV_BLOCK` to the assignment, and pass the entire worker return unchanged to `fo_completion_checkpoint`. Any uncertainty stops and preserves state; only zero permits the next Contract 1. Shape and legacy flat entities (including current flat C14) are Contract-1-only.
+For `plan`, call `fo_plan_attempt_begin`, prepend `$FO_PLAN_ATTEMPT_ENV_BLOCK` to the assignment, preserve the worker's unchanged `completion-v1` return, and pass it to `fo_plan_attempt_checkpoint` with a caller-owned UTC finish timestamp. The First Officer constructs and accepts the outer `stage-attempt-v1` bundle from begin/WAL authority, checkpoints completion, and contributes the terminal record. For `design|execute|verify|review|ship`, retain the raw completion-only path: call `fo_completion_begin`, prepend `$FO_COMPLETION_ENV_BLOCK`, and pass the entire worker return unchanged to `fo_completion_checkpoint`. Any uncertainty stops and preserves state; only zero permits the next Contract 1. Shape and legacy flat entities (including current flat C14) are Contract-1-only.
 
 ```bash
 # shellcheck disable=SC1090 # helper path is supplied by the installed plugin
 source "${CLAUDE_PLUGIN_ROOT:-plugins/ship-flow}/lib/fo-completion-lifecycle.sh"
-fo_completion_begin "$INDEX_MD" "$NEW_STATUS" "$STAGE_NAME" "$STAGE_FILE" "$WORKER_ID" || return
-# Prepend $FO_COMPLETION_ENV_BLOCK to the worker assignment and preserve its return verbatim.
-fo_completion_checkpoint "$WORKER_RETURN" || return
+case "$STAGE_NAME" in
+  plan)
+    ATTEMPT_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return
+    fo_plan_attempt_begin "$INDEX_MD" "$WORKER_ID" "$ATTEMPT_STARTED_AT" || return
+    # Prepend $FO_PLAN_ATTEMPT_ENV_BLOCK, dispatch the plan worker, and preserve its completion-v1 return unchanged in $WORKER_RETURN.
+    ATTEMPT_FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return
+    fo_plan_attempt_checkpoint "$WORKER_RETURN" "$ATTEMPT_FINISHED_AT" || return
+    ;;
+  design|execute|verify|review|ship)
+    fo_completion_begin "$INDEX_MD" "$NEW_STATUS" "$STAGE_NAME" "$STAGE_FILE" "$WORKER_ID" || return
+    # Prepend $FO_COMPLETION_ENV_BLOCK to the worker assignment and preserve its return verbatim.
+    fo_completion_checkpoint "$WORKER_RETURN" || return
+    ;;
+esac
 ```
-Sequence: begin; prepend env; dispatch; checkpoint verbatim return; then separate Contract 1. `ship-final` uses the same functions inline.
+Sequence: begin; prepend env; dispatch; checkpoint the verbatim worker return; then separate Contract 1. Plan alone adds the outer attempt acceptance and terminal contribution around that unchanged receipt. `ship-final` uses the completion-only functions inline.
 
 **Mandatory Science Officer (EM) charter injection for direct dispatch**:
 Before every direct FO-to-stage-worker dispatch, build the stage assignment body

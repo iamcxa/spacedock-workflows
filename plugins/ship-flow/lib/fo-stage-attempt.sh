@@ -172,6 +172,7 @@ stage_attempt_parse_options() {
   STAGE_ATTEMPT_ORDINAL=''
   STAGE_ATTEMPT_FRESH=''
   STAGE_ATTEMPT_STARTED_AT=''
+  STAGE_ATTEMPT_FINISHED_AT=''
   STAGE_ATTEMPT_BUNDLE=''
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -185,6 +186,7 @@ stage_attempt_parse_options() {
       --attempt-ordinal=*) STAGE_ATTEMPT_ORDINAL="${1#*=}" ;;
       --fresh-continuations-used=*) STAGE_ATTEMPT_FRESH="${1#*=}" ;;
       --attempt-started-at=*) STAGE_ATTEMPT_STARTED_AT="${1#*=}" ;;
+      --finished-at=*) STAGE_ATTEMPT_FINISHED_AT="${1#*=}" ;;
       --bundle=*) STAGE_ATTEMPT_BUNDLE="${1#*=}" ;;
       *) stage_attempt_error 2 "unknown option: $1"; return 2 ;;
     esac
@@ -637,7 +639,132 @@ stage_attempt_return() {
   chmod 600 "$STAGE_ATTEMPT_SNAPSHOT" || return 1
   mv "$STAGE_ATTEMPT_SNAPSHOT" "$STAGE_ATTEMPT_RETURNED" || return 1
   STAGE_ATTEMPT_SNAPSHOT=''
-  stage_attempt_write_wal "$STAGE_ATTEMPT_WAL" returned "$returned_sha"
+  stage_attempt_write_wal "$STAGE_ATTEMPT_WAL" returned "$returned_sha" || return 1
+  printf 'stage-attempt-v1 disposition=returned returned_bundle_sha256=%s\n' "$returned_sha"
+}
+
+stage_attempt_read_returned_fields() {
+  local first_line
+  local -a fields
+  first_line="$(sed -n '1p' "$STAGE_ATTEMPT_RETURNED")"
+  IFS=' ' read -r -a fields <<< "$first_line"
+  [ "${#fields[@]}" = 21 ] && [ "${fields[0]}" = stage-attempt-v1 ] || {
+    stage_attempt_error 2 'invalid returned state: grammar'; return 2
+  }
+  RECEIPT_KEY="${fields[1]#entity_stage_key=}"
+  RECEIPT_ENTITY_HEX="${fields[2]#entity_path_hex=}"
+  RECEIPT_STAGE="${fields[3]#stage=}"
+  RECEIPT_STAGE_RUN_ID="${fields[4]#stage_run_id=}"
+  RECEIPT_REF_HEX="${fields[5]#ref_hex=}"
+  RECEIPT_BEFORE="${fields[6]#attempt_before_oid=}"
+  RECEIPT_COMPLETION="${fields[7]#worker_completion_oid=}"
+  RECEIPT_ATTEMPT_ID="${fields[10]#attempt_id=}"
+  RECEIPT_ORDINAL="${fields[11]#attempt_ordinal=}"
+  RECEIPT_STARTED_AT="${fields[12]#attempt_started_at=}"
+  RECEIPT_BUDGET="${fields[13]#budget_seconds=}"
+  RECEIPT_ELAPSED="${fields[14]#attempt_elapsed_seconds=}"
+  RECEIPT_FRESH="${fields[15]#fresh_continuations_used=}"
+  RECEIPT_OUTCOME="${fields[16]#outcome=}"
+  RECEIPT_COMPLETION_SHA="${fields[19]#completion_receipt_sha256=}"
+  RECEIPT_TERMINAL_ID="${fields[20]#terminal_event_id=}"
+  if ! { [ "$RECEIPT_KEY" = "$WAL_KEY" ] && [ "$RECEIPT_ENTITY_HEX" = "$WAL_ENTITY_HEX" ] &&
+    [ "$RECEIPT_STAGE" = "$WAL_STAGE" ] && [ "$RECEIPT_STAGE_RUN_ID" = "$WAL_STAGE_RUN_ID" ] &&
+    [ "$RECEIPT_REF_HEX" = "$WAL_REF_HEX" ] && [ "$RECEIPT_BEFORE" = "$WAL_BEFORE" ] &&
+    [ "$RECEIPT_ATTEMPT_ID" = "$WAL_ATTEMPT_ID" ] && [ "$RECEIPT_ORDINAL" = "$WAL_ORDINAL" ] &&
+    [ "$RECEIPT_STARTED_AT" = "$WAL_STARTED_AT" ] && [ "$RECEIPT_BUDGET" = "$WAL_BUDGET" ] &&
+    [ "$RECEIPT_FRESH" = "$WAL_FRESH" ]; }; then
+    stage_attempt_error 2 'invalid returned state: authority-binding'; return 2
+  fi
+}
+
+stage_attempt_terminal_paths() {
+  STAGE_ATTEMPT_HISTORY="${STAGE_ATTEMPT_ENTITY%/index.md}/attempt-history-v1.log"
+  STAGE_ATTEMPT_TRACKED_RETURN="${STAGE_ATTEMPT_ENTITY%/index.md}/attempt-return-v1.${RECEIPT_TERMINAL_ID}.receipt"
+}
+
+stage_attempt_terminal() {
+  local bound_ref observed history_tmp index_file history_blob returned_blob tree terminal_commit history_line changed
+  stage_attempt_parse_options "$@" || return $?
+  stage_attempt_repo_context || { stage_attempt_error 2 'not a supported Git repository'; return 2; }
+  if ! { [ "$STAGE_ATTEMPT_STAGE" = plan ] && stage_attempt_entity_ok "$STAGE_ATTEMPT_ENTITY" &&
+    case "$STAGE_ATTEMPT_ENTITY" in */index.md) true ;; *) false ;; esac &&
+    [ -n "$STAGE_ATTEMPT_LEASE_TOKEN" ] && stage_attempt_timestamp_ok "$STAGE_ATTEMPT_FINISHED_AT"; }; then
+    stage_attempt_error 2 'invalid terminal request'; return 2
+  fi
+  stage_attempt_paths
+  stage_attempt_lock_acquire || return $?
+  stage_attempt_load_wal || return $?
+  [ "$WAL_STATE" = returned ] || { stage_attempt_error 2 'attempt is not returned'; return 2; }
+  stage_attempt_read_returned_fields || return $?
+  if ! { [ "$RECEIPT_OUTCOME" = passed ] && [ "$RECEIPT_ORDINAL" = 0 ] && [ "$RECEIPT_FRESH" = 0 ] &&
+    stage_attempt_oid_ok "$RECEIPT_COMPLETION" && stage_attempt_uint_ok "$RECEIPT_ELAPSED" &&
+    stage_attempt_hex64_ok "$RECEIPT_COMPLETION_SHA"; }; then
+    stage_attempt_error 2 'terminal supports only one fresh passed plan attempt'; return 2
+  fi
+  bound_ref="$(stage_attempt_unhex "$RECEIPT_REF_HEX")" || return 2
+  if ! { [ "$(printf '%s' "$bound_ref" | stage_attempt_hex)" = "$RECEIPT_REF_HEX" ] &&
+    stage_attempt_ref_ok "$bound_ref"; }; then
+    stage_attempt_error 2 'invalid returned state: ref-binding'; return 2
+  fi
+  if [ -z "${STAGE_ATTEMPT_COMPLETION_CHECKPOINT_CMD:-}" ] ||
+     [ ! -x "$STAGE_ATTEMPT_COMPLETION_CHECKPOINT_CMD" ] || [ -L "$STAGE_ATTEMPT_COMPLETION_CHECKPOINT_CMD" ]; then
+    stage_attempt_error 2 'completion checkpoint unavailable'; return 2
+  fi
+  export STAGE_ATTEMPT_WAL STAGE_ATTEMPT_RETURNED STAGE_ATTEMPT_HISTORY
+  STAGE_ATTEMPT_BUNDLE="$STAGE_ATTEMPT_RETURNED"
+  STAGE_ATTEMPT_REF="$bound_ref"
+  STAGE_ATTEMPT_WORKER_COMPLETION="$RECEIPT_COMPLETION"
+  export STAGE_ATTEMPT_BUNDLE STAGE_ATTEMPT_REF STAGE_ATTEMPT_WORKER_COMPLETION
+  "$STAGE_ATTEMPT_COMPLETION_CHECKPOINT_CMD" || return $?
+
+  observed="$(git rev-parse --verify "$bound_ref^{commit}" 2>/dev/null)" || return 5
+  [ "$observed" = "$RECEIPT_COMPLETION" ] || { stage_attempt_error 5 'completion checkpoint ref mismatch'; return 5; }
+  stage_attempt_terminal_paths
+  if [ -n "$(git status --porcelain=v1 --untracked-files=all -- "$STAGE_ATTEMPT_HISTORY" "$STAGE_ATTEMPT_TRACKED_RETURN")" ]; then
+    stage_attempt_error 5 'terminal paths are dirty'; return 5
+  fi
+  if git cat-file -e "$observed:$STAGE_ATTEMPT_TRACKED_RETURN" 2>/dev/null; then
+    stage_attempt_error 5 'terminal contribution already exists'; return 5
+  fi
+  history_tmp="$(mktemp "$STAGE_ATTEMPT_STORE/$STAGE_ATTEMPT_KEY.history.XXXXXX")" || return 1
+  if git cat-file -e "$observed:$STAGE_ATTEMPT_HISTORY" 2>/dev/null; then
+    git show "$observed:$STAGE_ATTEMPT_HISTORY" > "$history_tmp" || return 5
+    if grep -Fq " terminal_event_id=$RECEIPT_TERMINAL_ID " "$history_tmp"; then
+      stage_attempt_error 5 'terminal event already exists'; return 5
+    fi
+  else
+    : > "$history_tmp"
+  fi
+  printf -v history_line 'stage-attempt-v1 disposition=terminal terminal_event_id=%s entity_stage_key=%s entity_path_hex=%s stage=%s stage_run_id=%s ref_hex=%s attempt_before_oid=%s worker_completion_oid=%s attempt_id=%s attempt_ordinal=%s attempt_started_at=%s attempt_finished_at=%s budget_seconds=%s elapsed_seconds=%s cumulative_elapsed_seconds=%s fresh_continuations_used=%s returned_bundle_sha256=%s completion_receipt_sha256=%s outcome=%s' \
+    "$RECEIPT_TERMINAL_ID" "$RECEIPT_KEY" "$RECEIPT_ENTITY_HEX" "$RECEIPT_STAGE" "$RECEIPT_STAGE_RUN_ID" \
+    "$RECEIPT_REF_HEX" "$RECEIPT_BEFORE" "$RECEIPT_COMPLETION" "$RECEIPT_ATTEMPT_ID" "$RECEIPT_ORDINAL" \
+    "$RECEIPT_STARTED_AT" "$STAGE_ATTEMPT_FINISHED_AT" "$RECEIPT_BUDGET" "$RECEIPT_ELAPSED" \
+    "$RECEIPT_ELAPSED" "$RECEIPT_FRESH" "$WAL_RETURNED_SHA" "$RECEIPT_COMPLETION_SHA" "$RECEIPT_OUTCOME"
+  printf '%s\n' "$history_line" >> "$history_tmp" || return 1
+  history_blob="$(git hash-object -w "$history_tmp")" || return 1
+  returned_blob="$(git hash-object -w "$STAGE_ATTEMPT_RETURNED")" || return 1
+  index_file="$(mktemp "$STAGE_ATTEMPT_STORE/$STAGE_ATTEMPT_KEY.index.XXXXXX")" || return 1
+  rm -f "$index_file"
+  GIT_INDEX_FILE="$index_file" git read-tree "$observed" || return 1
+  GIT_INDEX_FILE="$index_file" git update-index --add --cacheinfo "100644,$history_blob,$STAGE_ATTEMPT_HISTORY" || return 1
+  GIT_INDEX_FILE="$index_file" git update-index --add --cacheinfo "100644,$returned_blob,$STAGE_ATTEMPT_TRACKED_RETURN" || return 1
+  tree="$(GIT_INDEX_FILE="$index_file" git write-tree)" || return 1
+  terminal_commit="$(printf 'attempt(%s): record passed plan terminal\n' "$RECEIPT_ATTEMPT_ID" |
+    git -c user.email="${GIT_AUTHOR_EMAIL:-fo@ship-flow}" -c user.name="${GIT_AUTHOR_NAME:-Ship-flow First Officer}" commit-tree "$tree" -p "$observed")" || return 1
+  changed="$(git diff-tree --no-commit-id --name-only -r "$observed" "$terminal_commit" | sort)" || return 1
+  [ "$changed" = "$(printf '%s\n%s\n' "$STAGE_ATTEMPT_HISTORY" "$STAGE_ATTEMPT_TRACKED_RETURN" | sort)" ] || {
+    stage_attempt_error 5 'terminal commit changed unexpected paths'; return 5
+  }
+  git update-ref "$bound_ref" "$terminal_commit" "$observed" || { stage_attempt_error 9 'terminal ref CAS lost'; return 9; }
+  git restore --source="$terminal_commit" --staged --worktree -- "$STAGE_ATTEMPT_HISTORY" "$STAGE_ATTEMPT_TRACKED_RETURN" || {
+    stage_attempt_error 8 'terminal path reconcile failed'; return 8
+  }
+  cmp -s "$STAGE_ATTEMPT_RETURNED" "$STAGE_ATTEMPT_TRACKED_RETURN" || {
+    stage_attempt_error 8 'tracked return reconcile mismatch'; return 8
+  }
+  rm -f "$STAGE_ATTEMPT_WAL" "$STAGE_ATTEMPT_RETURNED" "$history_tmp" "$index_file" || return 8
+  printf 'stage-attempt-v1 disposition=terminal terminal_event_id=%s returned_bundle_sha256=%s elapsed_seconds=%s\n' \
+    "$RECEIPT_TERMINAL_ID" "$WAL_RETURNED_SHA" "$RECEIPT_ELAPSED"
 }
 
 stage_attempt_main() {
@@ -649,7 +776,8 @@ stage_attempt_main() {
     suspend) stage_attempt_suspend "$@" ;;
     resume) stage_attempt_resume "$@" ;;
     validate-return|accept-return) stage_attempt_return "$command" "$@" ;;
-    *) stage_attempt_error 2 'command must be begin, elapsed, suspend, resume, validate-return, or accept-return' ;;
+    terminal) stage_attempt_terminal "$@" ;;
+    *) stage_attempt_error 2 'command must be begin, elapsed, suspend, resume, validate-return, accept-return, or terminal' ;;
   esac
 }
 
