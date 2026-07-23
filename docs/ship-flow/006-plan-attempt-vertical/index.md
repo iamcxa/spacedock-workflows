@@ -15,6 +15,7 @@ stage_outputs:
   shape: shape.md
   design: design.md
   plan: plan.md
+  execute: execute.md
 ---
 
 ### Vertical Slice
