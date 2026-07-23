@@ -12,11 +12,11 @@ worktree: .worktrees/spacedock-ensign-006-plan-attempt-vertical
 started: 2026-07-23T00:13:19Z
 status: ship
 stage_outputs:
-    shape: shape.md
-    design: design.md
-    plan: plan.md
-    execute: execute.md
-    verify: verify.md
+  shape: shape.md
+  design: design.md
+  plan: plan.md
+  execute: execute.md
+  verify: verify.md
 ---
 
 ### Vertical Slice
