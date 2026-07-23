@@ -177,6 +177,13 @@ once. Discipline clauses:
 - **Spike the riskiest unverified mechanism first**, and record the result in
   the task body — or record "no spike needed: {proven mechanisms relied on}"
   so the determination is auditable.
+- **Size the implementation dispatch here.** Default is ONE worker session —
+  every extra dispatch pays a cold-start (re-reading the README, task body,
+  and surrounding code). Split only when the estimate exceeds ~90 minutes,
+  the work has 3+ independent behaviors, or parallel worktree lanes buy real
+  wall-clock — and always split along behavior boundaries, each slice a
+  complete RED→GREEN loop (never "tests in one dispatch, code in the next").
+  Record the sizing decision in the task body so implementation inherits it.
 
 ### `implementation` — build in a worktree, test-first
 
