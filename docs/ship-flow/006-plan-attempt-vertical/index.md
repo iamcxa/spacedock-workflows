@@ -86,3 +86,16 @@ Independent bounded verification passed AC-1 through AC-3 with no current-scope 
 ### Summary
 
 The plan-attempt vertical is PR-ready with no current-scope finding and no product/test drift after the valid full-suite receipt. Canonical sync is complete, excluded future work remains dormant, and FO retains all PR, merge, and completion-publication authority.
+
+## Stage Report: ship (cycle 2)
+
+- DONE: Resolve live origin/main and remote-head state, then push the exact child lineage without force; if the historical branch ref conflicts, push to a new remote head ref without renaming the local branch.
+  Live `origin/main` resolved to `2ffee4b0` and is an ancestor of the child lineage; the live child ref was absent, so the exact local lineage was pushed normally to `spacedock-ensign/006-plan-attempt-vertical` without force or branch renaming.
+- DONE: Compose the PR body once from canonical shape/verify/execute/review sources, pass privacy/title/coherence/citation gates, and create a PR to main with the exact gated body file.
+  The 59-line body passed zero-hit privacy, title, section, verbatim-source, SHA-citation, coherence, lint, and C15 gates at SHA-256 `74e38f09`; GitHub created PR #94 against `main` from those exact bytes.
+- DONE: Confirm body/head/base remotely, persist PR metadata and finalize ship.md, push the final exact HEAD, run read-only mergeability/status checks, and stop PR-ready without merge or auto-merge.
+  `persist-pr-metadata.sh` confirmed PR #94 and its body before writing the active child only; `ship.md` records `awaiting-pr-review` and `#94`; the remote head matched the pushed local head, while the read-only merge helper reported `BLOCKED` because invariants remained in progress, so no Ready/reviewer/merge automation ran.
+
+### Summary
+
+PR #94 now carries the exact reviewed plan-attempt vertical against `main`, with active-child metadata and the compact ship artifact synchronized to the confirmed remote PR. Publication stopped at the open, unmerged PR-ready boundary: contribution-contract and GitGuardian checks passed, invariants were still running, and no merge, auto-merge, closeout, archive, controller mutation, or post-merge work occurred.
