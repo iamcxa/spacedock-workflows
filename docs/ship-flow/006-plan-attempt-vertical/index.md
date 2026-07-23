@@ -70,3 +70,16 @@ The reviewed plan and persisted TDD ledger completed successful completion recon
 ### Summary
 
 Independent bounded verification passed AC-1 through AC-3 with no current-scope defect. `verify.md` records PROCEED, explicit non-UI runtime-UAT not-applicability, reused full-suite evidence at unchanged product/test HEAD `0b7d2133`, and the dispatch-required no-fan-out panel degradation.
+
+## Stage Report: ship
+
+- DONE: Confirm verify is legitimately green at the exact child head, the origin/main-to-head diff matches the shaped vertical scope, and every excluded recovery/generalization/sibling surface remains absent.
+  Focused caller/lifecycle/authority, static, frozen-byte, diff, and C14 checks pass; `0b7d2133` remains the unchanged product/test receipt, while only shaped sibling scaffolds exist.
+- DONE: Consume Canonical Doc Actions narrowly: update ARCHITECTURE.md only if the planned decision-row change is still required; give explicit skip rationales for PRODUCT.md, README.md, ROADMAP.md, and umbrella closeout without starting sibling work.
+  `041db600` adds the one required decision row; `review.md` records all three canonical skips, README skip, and open-umbrella rationale, with the canonical checker passing 7/7 outcomes.
+- DONE: Produce a compliant review.md with PROCEED only if contribution/canonical-sync checks pass, a slim PR draft reference, exact head/base evidence, and a clear ship-final handoff; do not push or create/merge a PR.
+  `c67db74f` records PROCEED after the contribution gate and exact-range review, keeps PR publication unperformed, and hands composition/publication back to FO ship-final.
+
+### Summary
+
+The plan-attempt vertical is PR-ready with no current-scope finding and no product/test drift after the valid full-suite receipt. Canonical sync is complete, excluded future work remains dormant, and FO retains all PR, merge, and completion-publication authority.
