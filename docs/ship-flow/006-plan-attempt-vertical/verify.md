@@ -24,19 +24,25 @@
 | format | PASS | `git diff --check 5aca782c..0b7d2133` and current-tree `git diff --check`. |
 | frozen contract | PASS | `completion-v1.sh` is byte-identical to `548b338`; history replacement tree equals backup `1c2b4926`. |
 
-Required verification claims:
+<details>
+<summary>Required verification claims</summary>
 
 | claim_source | condition | metric_or_observable | threshold | smallest_disproving_surface | baseline | treatment | comparison | verdict | route_to |
 |---|---|---|---|---|---|---|---|---|---|
 | `AC-1` | one uninterrupted fresh plan attempt | dispatch / accepted return / terminal counts plus durable history | exactly 1 / 1 / 1; one sidecar; private state clean | `test-stage-wiring.sh --plan-attempt` | lifecycle functions absent at `5aca782c` | focused probe exits 0 | fresh caller now contributes one authoritative terminal record | VERIFIED | proceed |
 | `AC-2` | authority remains caller-owned and typed | attempt grammar, lease/ref/OID, budget/clock, outcome, completion bytes | every focused contract exits 0; frozen bytes unchanged | attempt contract or any named clock selector | protocol lineage `548b338` | all focused authority/fault probes exit 0 | typed outer bundle wraps unchanged completion receipt | VERIFIED | proceed |
 | `AC-3` | verification and implementation remain bounded | changed-path allowlist and post-receipt diff | nine allowed paths; no product/test change after `0b7d2133` | `git diff --name-status` / C14 / corpus | full suite rc 0 at `0b7d2133` | focused checks plus history/scope audit exit 0 | full-suite receipt remains valid; excluded paths untouched | VERIFIED | proceed |
+
+</details>
 <!-- /section:quality-gate -->
 
 <!-- section:review-findings -->
 ### Review Findings
 
 Scope: 9 execute paths, 607 insertions / 594 deletions. Inline critical pass found no BLOCKING, WARNING, or NIT findings.
+
+<details>
+<summary>TDD and canonical/scope audit</summary>
 
 #### TDD Evidence Audit
 
@@ -51,6 +57,8 @@ Scope: 9 execute paths, 607 insertions / 594 deletions. Inline critical pass fou
 | `ARCHITECTURE.md` | update at review | no execute change | Intent is explicit; review owns the decision-row update. | none | review |
 | dormant future tests | inventory hygiene | three deleted test registries plus interrupt/continuation clock cases | No recovery, route, execute-generalization, scheduler, dispatcher, or #21 product behavior changed. | none | proceed |
 | completion-v1 / Contract 1 | preserve | helper/caller seam only | Completion bytes frozen; non-plan callers and separate Contract 1 ordering remain pinned. | none | proceed |
+
+</details>
 <!-- /section:review-findings -->
 
 <!-- section:uat -->
@@ -108,8 +116,8 @@ claim_records: required VERIFIED=3 NOT VERIFIED=0 INCONCLUSIVE=0; advisory VERIF
 cross_review_verdict: PROCEED — dispatch-approved serial continuation; nested cross-review was prohibited
 auto_fixes: none
 started_at: 2026-07-23T03:31:03Z
-completed_at: 2026-07-23T03:41:00Z
-duration_minutes: 10
+completed_at: 2026-07-23T03:45:00Z
+duration_minutes: 14
 <!-- /section:verdict -->
 
 <!-- section:panel-coverage -->
@@ -139,7 +147,7 @@ Preflight: not applicable; the changed surface is a local Bash/Git orchestration
 ### Metrics
 
 status: passed
-duration_minutes: 10
+duration_minutes: 14
 iteration_count: 1
 claim_records_required_not_verified: 0
 blocking_findings_count: 0
