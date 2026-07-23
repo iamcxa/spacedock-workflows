@@ -7,16 +7,19 @@ external_id: "ASC-W1-PROTOCOL-CLOCK"
 depends-on: ["006-execute-attempt-generalization"]
 affects_ui: false
 layout: folder
-worktree: .worktrees/spacedock-ensign-006.1-attempt-circuit-protocol-and-clock-authority-lineage
+worktree:
 started: 2026-07-22T05:53:21Z
-status: ship
+status: done
 stage_outputs:
-  plan: plan.md
-  execute: execute.md
-  verify: verify.md
-  review: review.md
-  ship: ship.md
+    plan: plan.md
+    execute: execute.md
+    verify: verify.md
+    review: review.md
+    ship: ship.md
 pr: "#93"
+verdict: PASSED
+completed: 2026-07-23T05:07:23Z
+archived: 2026-07-23T05:25:39Z
 ---
 
 Inherited slice of the captain-approved W1-W4 prerequisite after EM route=narrow at parent HEAD e800e54a68d06ef5bbdddbf238398b85a61b2645.

@@ -7,8 +7,11 @@ external_id: "ASC-W3-ROUTE-21"
 depends-on: ["006.2", "006-execute-attempt-generalization"]
 affects_ui: false
 layout: folder
-status: plan
+status: done
 stage_outputs: {}
+verdict: REJECTED
+completed: 2026-07-23T05:19:50Z
+archived: 2026-07-23T05:25:49Z
 ---
 
 Dependent W3 slice of the captain-approved W1-W4 prerequisite. Start only from the merged W2 output and record its predecessor OID.

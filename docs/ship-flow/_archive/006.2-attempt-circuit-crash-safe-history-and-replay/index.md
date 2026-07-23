@@ -7,8 +7,11 @@ external_id: "ASC-W2-HISTORY-REPLAY"
 depends-on: ["006.1", "006-execute-attempt-generalization"]
 affects_ui: false
 layout: folder
-status: plan
+status: done
 stage_outputs: {}
+verdict: REJECTED
+completed: 2026-07-23T05:19:50Z
+archived: 2026-07-23T05:25:49Z
 ---
 
 Dependent W2 slice of the same approved design. Start only from the merged predecessor output and bind its exact predecessor commit OID in plan/execute evidence.
