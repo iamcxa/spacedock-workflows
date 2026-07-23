@@ -48,14 +48,36 @@
 | DC-1 real caller | `test-stage-wiring.sh --plan-attempt` | PASS | caller routing pinned; exact 1 dispatch / 1 returned / 1 terminal; history, duration, tracked receipt, cleanup, and plan output all OK |
 | DC-2 typed authority | plan-attempt + protocol contract + nonterminal clock selector | PASS | fresh ordinal/count, attempt ID, 1200s budget, lease/ref/before, worker/artifact/outcome/terminal bindings pass |
 | DC-3 scoped verification | completion lifecycle/faults, Bash syntax, ShellCheck, frozen completion diff, `git diff --check` | PASS | all commands exit 0 at implementation HEAD; failure-path regressions also pass |
-| Final integrated HEAD | reserved all-gates command, once, log `/tmp/006-plan-attempt-vertical-full-suite.log` | CLASSIFIED | rc 1; Node 79/79, version 0.9.0, no-dangling pass; only historical C14 and excluded interrupt/continuation recovery failures remain |
+| Final integrated HEAD | reserved all-gates command, once; durable excerpt below | BLOCKED | rc 1; Node 79/79, version 0.9.0, no-dangling pass; historical C14 and tracked default interrupt/continuation recovery failures remain |
+
+### Reserved Full-Suite Durable Receipt
+
+- HEAD: `2c14af6080a1af8a1c8d6279af035f75cd8cc7ed`; command: `bash -c 'rc=0; for t in plugins/ship-flow/lib/__tests__/test-*.sh; do bash "$t" || rc=1; done; CI=true bash plugins/ship-flow/bin/check-invariants.sh || rc=1; node --test plugins/ship-flow/bin/*.test.mjs || rc=1; bash scripts/check-version-triple.sh || rc=1; bash scripts/check-no-dangling.sh || rc=1; exit "$rc"'`.
+- Result: rc 1, 4,781 raw output lines. The session-local raw log was `/tmp/006-plan-attempt-vertical-full-suite.log`; the complete blocking output is preserved here:
+
+```text
+FAIL corpus-invariants-pass (exit 1)
+FAIL C14 entity-status-via-advance-stage-only: commit 68e82172 used undeclared transition sharp->design for docs/ship-flow/006-plan-attempt-vertical/index.md.
+FAIL plan fixture interrupt
+FAIL execute fixture interrupt
+FAIL fresh continuation identity (rc=2)
+FAIL same-boot suspend/resume exact preservation
+FAIL missing-clock-source interrupted clock contract (rc=5)
+FAIL unparseable-clock-source interrupted clock contract (rc=5)
+FAIL changed-boot-identity interrupted clock contract (rc=5)
+FAIL monotonic-regression interrupted clock contract (rc=5)
+FAIL C14 entity-status-via-advance-stage-only: commit 68e82172 used undeclared transition sharp->design for docs/ship-flow/006-plan-attempt-vertical/index.md.
+```
+
+- Passing terminal receipts from the same run: Node `tests 79 / pass 79 / fail 0`; version triple `0.9.0`; repository URL clean; root README version-independent; no-dangling `PASS: no dangling references found (8 patterns checked)`.
+- Classification: C14 is historical/unowned; the eight clock failures are the tracked default interrupt/continuation recovery gate. Neither is claimed green, and no completion registration is authorized.
 
 ## Self-Check
 
 - typecheck: N/A — Bash/Markdown surface
 - lint: PASS — Bash syntax and ShellCheck on all three shell paths
 - unit/integration: PASS — complete focused GREEN chain at `aeefd402`
-- full suite: CLASSIFIED — one reserved run at `2c14af60`, 4,781 log lines, deferred failures listed above
+- full suite: BLOCKED — one reserved run at `2c14af60`; exact command, complete blocking lines, and passing terminal receipts are preserved above
 - UI/qa-only: N/A — `affects_ui: false`
 - critical-pass lite: PASS
 - worktree hygiene: clean after both commits
@@ -80,7 +102,6 @@ tasks_blocked: 0
 commit_count: 2
 spec_review_verdict: PASS
 quality_review_verdict: APPROVED
-cross_review_verdict: VETO — tracked default clock gate remains RED
 
 ### Hand-off to Verify
 
@@ -92,6 +113,7 @@ cross_review_verdict: VETO — tracked default clock gate remains RED
 - skills_needed_used: test, best-practices, test-driven-development, ship-execute, subagent-driven-development, verification-before-completion
 - context_read_receipts: no non-root guidance, domain pack, or routing config; root instructions and the plan context manifest applied
 - completion boundary: execute work is committed and clean, but no execute-completion registration is authorized while the explicit tracked-default gate is RED; First Officer must choose recovery-scope ownership or another bounded disposition
+
 
 
 <!-- /section:execute-report -->
