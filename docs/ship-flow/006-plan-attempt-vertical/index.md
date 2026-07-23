@@ -8,11 +8,11 @@ affects_ui: false
 harvest_required: true
 time_budget: 4h
 layout: folder
-status: design
-stage_outputs:
-    shape: shape.md
 worktree: .worktrees/spacedock-ensign-006-plan-attempt-vertical
 started: 2026-07-23T00:13:19Z
+status: design
+stage_outputs:
+  shape: shape.md
 ---
 
 ### Vertical Slice
