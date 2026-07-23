@@ -1,21 +1,3 @@
-<!--
-  LEAN SD WORKFLOW — canonical template (draft for captain review)
-
-  Provenance: distilled from ship-flow methodology (2026-07-23 scope-cut ruling:
-  freeze Epic 006 remainder, extract essence) + spacedock docs/dev/README.md
-  proof policy + subspace-v0 lean replication pattern.
-
-  Per-repo setup: copy to <repo>/docs/dev/README.md, fill every <angle-bracket>
-  placeholder, run `spacedock` commission/refit to scaffold state checkout.
-  Runtime concerns (gates, worktrees, state, dispatch, exactly-once) belong to
-  the spacedock binary — this README carries METHODOLOGY ONLY.
-
-  Litmus test for what belongs here: if correctness must survive a process
-  crash, concurrent worktrees, or duplicate delivery, it belongs in the binary.
-  If it describes how an agent should reason or what evidence it must produce,
-  it belongs here.
--->
-
 ---
 commissioned-by: spacedock@<version>
 entity-type: task
@@ -44,6 +26,25 @@ stages:
     - name: done
       terminal: true
 ---
+
+<!--
+  LEAN SD WORKFLOW — canonical template (draft for captain review)
+
+  Provenance: distilled from ship-flow methodology (2026-07-23 scope-cut ruling:
+  freeze Epic 006 remainder, extract essence) + spacedock docs/dev/README.md
+  proof policy + subspace-v0 lean replication pattern.
+
+  Per-repo setup: copy to <repo>/docs/dev/README.md, fill every <angle-bracket>
+  placeholder, run `spacedock` commission/refit to scaffold state checkout.
+  Runtime concerns (gates, worktrees, state, dispatch, exactly-once) belong to
+  the spacedock binary — this README carries METHODOLOGY ONLY.
+
+  Litmus test for what belongs here: if correctness must survive a process
+  crash, concurrent worktrees, or duplicate delivery, it belongs in the binary.
+  If it describes how an agent should reason or what evidence it must produce,
+  it belongs here.
+-->
+
 
 # <Repo Name> — Development Workflow
 
