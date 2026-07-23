@@ -14,6 +14,7 @@ status: plan
 stage_outputs:
   shape: shape.md
   design: design.md
+  plan: plan.md
 ---
 
 ### Vertical Slice
