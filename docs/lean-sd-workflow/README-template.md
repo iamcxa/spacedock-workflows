@@ -248,6 +248,15 @@ validator checks what was produced; it never finishes the work.
 - Rejection routes back to implementation (`feedback-to`) with concrete,
   file-anchored fixes. Two consecutive rejections on the same finding →
   escalate to the captain instead of a third round.
+- **Every correction round carries a budget record.** Each rework round
+  appends one entry: the round's actual effort against the ideation-declared
+  estimate, the deviation, and the findings disposition. Past the declared
+  tolerance, record a design-reset decision (back to ideation to re-cut)
+  before opening any further round — the counter-based escalation above and
+  this budget-based brake are independent circuit breakers. A round whose
+  findings are all declined records `0 fixed` with every decline named:
+  "nothing was found" and "everything found was declined" must never read
+  alike.
 - **Rework re-anchors on the source requirement.** On any route-back, the
   rework agent re-reads the original requirement and diffs it against the
   current ACs before touching code — rework loops naturally optimize
