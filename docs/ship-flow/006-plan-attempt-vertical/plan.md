@@ -20,7 +20,12 @@ Reviewer assessment: GAPS_ADDRESSED — corrected the returned-versus-terminal d
 
 ## Size Re-evaluation
 
-Sharp estimate S remains S: one serial implementation task, four modified files, one focused real-caller selector, and the smallest happy-path completion of the existing helper lifecycle. Any need to edit `completion-v1.sh`, schema, worker skills, execute, recovery tests, scheduler, dispatcher, or siblings returns **NARROW** rather than expanding.
+- Sharp estimate: S.
+- Research evidence: four modified implementation/test/caller files plus the plan artifact place the slice in the mechanical 4-10-file band.
+- Adjusted size: M, delivered as one serial task because all four files share one authority seam.
+- Token budget: unchanged; bounded child cap and 60m/90m/120m dispatch contract govern execution.
+
+Any need to edit `completion-v1.sh`, schema, worker skills, execute, recovery tests, scheduler, dispatcher, or siblings returns **NARROW** rather than expanding.
 
 ## Plan Imported Design DCs
 
@@ -76,6 +81,25 @@ steps: 1. Add `--plan-attempt` to the existing disposable-repo harness. Count ex
 review_gate: PROCEED only with exact 1/1/1 dispatch/authoritative-return/terminal-contribution evidence, fresh-vs-resume distinction, typed authority across the same seam, unchanged completion bytes, protocol/clock regressions GREEN, and no crash/replay/execute/generalization/scheduler/dispatcher/#21/XFAIL/sibling/unrelated repair; otherwise NARROW.
 model: sonnet
 
+<!-- section:context-routing-manifest -->
+```yaml
+context-routing-manifest:
+  domain_matches: []
+  knowledge_modules: []
+  required_skills: []
+  stage_hints: {plan: []}
+  consumer_obligations: [preserve typed FO authority, keep completion-v1 frozen, keep Contract-1 entry separate, stop before recovery or execute]
+  future_provider_boundary: "Optional provider hints are non-authoritative; no provider is configured for this workflow-local seam."
+```
+<!-- /section:context-routing-manifest -->
+
+## Context Routing Receipt
+
+| Manifest row | Plan task skill mapping | Reviewer questions | domain_acceptance_checklist row |
+|---|---|---|---|
+| empty domain/knowledge/required-skills/stage-hints | T1 uses repository test/TDD skills, not a domain pack | T1 exact FO contract question | T1 row below |
+| consumer obligations/provider boundary | T1 owns every obligation; no provider mapping | T1 scope and authority question | T1 row below |
+
 ## Context Manifest
 
 - **Skills loaded:** spacedock:ensign, ship-flow:ship-plan, superpowers:writing-plans, ship-flow:test-driven-development, ship-flow:ship-runtime-detect, reverse-recovery-audit.
@@ -84,7 +108,7 @@ model: sonnet
 - **Domains touched:** workflow-local FO plan caller and completion lifecycle; no schema, application, scheduler, dispatcher, or event-saga domain.
 - **Lens dispatched:** none; architecture-lens registry has no trigger for this workflow-local shell seam.
 - **Lens findings integrated:** 0 integrated, 0 deferred, 0 ignored.
-- **Folder guidance:** touched production/test/entity paths have no non-root `AGENTS.md` or `CLAUDE.md`; folder_guidance_skills=[]; root instructions remain Codex session context and are excluded from folder guidance.
+- **Folder guidance:** files=`plugins/ship-flow/lib/__tests__/test-stage-wiring.sh`, `plugins/ship-flow/lib/fo-stage-attempt.sh`, `plugins/ship-flow/lib/fo-completion-lifecycle.sh`, `plugins/ship-flow/skills/ship/SKILL.md`, `docs/ship-flow/006-plan-attempt-vertical/**` -> folder_guidance_files=[]; folder_guidance_skills=[]; codex_context_boundary=root AGENTS.md/CLAUDE.md intentionally excluded from folder_guidance_files.
 
 ## Plan Report
 
@@ -115,6 +139,7 @@ model_split: 1 sonnet
 - **critical_assumptions:** source lineage `548b338` remains reachable; protocol/clock behavior stays compatible and `completion-v1.sh` stays byte-identical; the entity remains at `status: plan`; Bash 3.2+/Node 18+ exist.
 - **architecture_context:** review updates `ARCHITECTURE.md`; `PRODUCT.md` and `ROADMAP.md` skip with recorded rationale.
 - **stub_flags:** none.
+- **skills_needed_summary:** T1 uses `[test, best-practices, test-driven-development]`; no domain pack, framework lens, or folder-guidance skill applies.
 
 #### Plan Parallelization Manifest
 
