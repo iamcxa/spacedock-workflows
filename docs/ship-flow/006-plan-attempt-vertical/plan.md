@@ -116,7 +116,7 @@ status: passed
 stage_cost: $0.00 (3 read-only dispatches: research producer, research reviewer, plan cross-review)
 iterations: 4 (two author/research reviews plus two cross-review repair rounds)
 dimensions: requirement coverage, exact files, dependency safety, minimality, TDD, reverse recovery, verification ordering, scope boundary, context manifest, and skill coverage
-reviewer_verdict: REVISE_FIXED — size/routing and durable-ledger handoff findings repaired; final exact-HEAD re-review required before completion
+reviewer_verdict: REVISE_FIXED — final exact-HEAD cross-review PROCEED; size/routing and durable-ledger handoff findings repaired
 scope_anchoring: 1/1 task maps to the plan-caller vertical; all later-child and unrelated surfaces excluded
 task_count: 1
 model_split: 1 sonnet
