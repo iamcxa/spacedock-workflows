@@ -113,20 +113,20 @@ context-routing-manifest:
 ## Plan Report
 
 status: passed
-stage_cost: bounded local research plus one producer, one research reviewer, and one plan cross-review
-iterations: PENDING
+stage_cost: $0.00 (3 read-only dispatches: research producer, research reviewer, plan cross-review)
+iterations: 4 (two author/research reviews plus two cross-review repair rounds)
 dimensions: requirement coverage, exact files, dependency safety, minimality, TDD, reverse recovery, verification ordering, scope boundary, context manifest, and skill coverage
-reviewer_verdict: PENDING
+reviewer_verdict: REVISE_FIXED — size/routing and durable-ledger handoff findings repaired; final exact-HEAD re-review required before completion
 scope_anchoring: 1/1 task maps to the plan-caller vertical; all later-child and unrelated surfaces excluded
 task_count: 1
 model_split: 1 sonnet
-skill-coverage: PENDING
+skill-coverage: PASS
 
 ### Metrics
 
 status: passed
-duration_minutes: PENDING
-iteration_count: PENDING
+duration_minutes: 48
+iteration_count: 4
 task_count: 1
 verification_spec_count: 4
 model_split: 1 sonnet
@@ -134,7 +134,7 @@ model_split: 1 sonnet
 ### Hand-off to Execute
 
 <!-- section:hand-off-to-execute -->
-- **tdd-ledger:** `docs/ship-flow/006-plan-attempt-vertical/tdd-ledger.jsonl`; validate it before dispatch.
+- **tdd-ledger:** `docs/ship-flow/006-plan-attempt-vertical/tdd-ledger.jsonl`; `python3 plugins/ship-flow/lib/validate-tdd-ledger.py --plan docs/ship-flow/006-plan-attempt-vertical/plan.md` -> `status=pass records=1`; `python3 plugins/ship-flow/lib/validate-tdd-ledger.py --plan docs/ship-flow/006-plan-attempt-vertical/plan.md --require-ledger-jsonl docs/ship-flow/006-plan-attempt-vertical/tdd-ledger.jsonl` -> `status=pass records=1` persisted-ledger proof.
 - **wave_order:** W1 T1 -> explicit-path review/commit -> one reserved final integrated suite.
 - **critical_assumptions:** source lineage `548b338` remains reachable; protocol/clock behavior stays compatible and `completion-v1.sh` stays byte-identical; the entity remains at `status: plan`; Bash 3.2+/Node 18+ exist.
 - **architecture_context:** review updates `ARCHITECTURE.md`; `PRODUCT.md` and `ROADMAP.md` skip with recorded rationale.
