@@ -28,23 +28,24 @@ Ratio: not available
 
 ### Verdict
 
-status: awaiting-pr-create
+status: awaiting-pr-review
+pr: "#94"
 stage_cost: not recorded by the current FO runtime; one bounded artifact write and focused validation
-tasks: plan-attempt vertical execute, verify, exact-head review, and canonical architecture sync complete
+tasks: plan-attempt vertical execute, verify, exact-head review, canonical architecture sync, and PR publication complete
 verify: PASS — AC-1 through AC-3 verified; unchanged product/test receipt at `0b7d2133`
 review: PROCEED — exact-head review registered with no findings
 release_consideration: no in-branch version bump; release batching remains a separate maintainer action
 started_at: 2026-07-23T04:10:15Z
-completed_at: 2026-07-23T04:10:30Z
-duration_minutes: 1
+completed_at: 2026-07-23T04:21:08Z
+duration_minutes: 11
 
 ### Stage Checklist
 
 - DONE: customer summary, Todo Closeout Digest, token metrics, and verdict metrics
   fit the C15 ship-artifact cap.
-- DONE: no PR reference, placeholder, or external PR-body duplication is
-  committed in this skeleton.
-- DONE: no push, PR creation, merge, auto-merge, lease acquisition, or ship
-  registration occurred; the First Officer owns lease/reconcile and publication.
+- DONE: confirmed PR #94 is persisted only after exact body confirmation; the
+  external PR body is not duplicated in this artifact.
+- DONE: publication stopped at the open PR-ready boundary; no merge, auto-merge,
+  closeout, archive, or post-merge work occurred.
 
 <!-- /section:ship-report -->
