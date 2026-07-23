@@ -13,6 +13,7 @@ started: 2026-07-23T00:13:19Z
 status: design
 stage_outputs:
   shape: shape.md
+  design: design.md
 ---
 
 ### Vertical Slice
