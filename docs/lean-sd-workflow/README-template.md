@@ -165,6 +165,12 @@ once. Discipline clauses:
   re-verifies the audit's load-bearing MISSING claims against a fresh
   merge target before building, and escalates instead of building when a
   premise has collapsed.
+  **Enforcement facts are read live, never inferred from repo files**:
+  what CI actually requires (required checks, branch protection) comes
+  from the platform API (e.g. `gh api .../branches/<trunk>/protection`),
+  and a change touching a required job treats the job `name:` as that
+  protection's identity — adding steps is identity-safe; renaming the job
+  silently drops the protection.
 - **AC are end-state properties with falsifiable proof.** Each AC names a
   property of the finished task (not a stage action) plus a `Verified by:`
   clause citing proof outside the task's own prose. At least one AC measures
@@ -259,6 +265,13 @@ validator checks what was produced; it never finishes the work.
   claim-breaking edit (revert a guard, flip a boundary) in a scratch copy and
   confirm the suite goes red. A suite that stays green under a claim-breaking
   edit is a hole — route back with that evidence.
+- **Live-CI red evidence short-circuits per step.** When an AC requires
+  proving a required check actually fails on bad input, use a non-draft
+  probe PR observed red on live CI — and plan one probe commit per step:
+  steps within a CI job short-circuit, so a single red run proves only the
+  first failing step, and proving N steps each go red takes N sequential
+  probe commits. Close the probe PR without merging, delete its branch,
+  and record the run URLs as gate evidence.
 - Rejection routes back to implementation (`feedback-to`) with concrete,
   file-anchored fixes. Two consecutive rejections on the same finding →
   escalate to the captain instead of a third round.
