@@ -159,6 +159,12 @@ once. Discipline clauses:
   is allowed only after proof of absence (multi-strategy, multi-language
   search). A single broken seam means repair scoped to that seam, not a
   rebuild. Full procedure: `_mods/reverse-recovery-audit.md`.
+  **Audit against the merge target** (fetch `origin/<trunk>` first), never
+  only the working branch — a stale branch shows stale infrastructure, and
+  a MISSING verdict read off it can be seven weeks wrong. Implementation
+  re-verifies the audit's load-bearing MISSING claims against a fresh
+  merge target before building, and escalates instead of building when a
+  premise has collapsed.
 - **AC are end-state properties with falsifiable proof.** Each AC names a
   property of the finished task (not a stage action) plus a `Verified by:`
   clause citing proof outside the task's own prose. At least one AC measures
